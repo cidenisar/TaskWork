@@ -1,0 +1,169 @@
+// Handler de `consolas/{id}/eventos` — orquesta lógica pura (src/logic) +
+// base de datos (src/lib/db) + publicaciones MQTT derivadas.
+
+import type { MqttClient } from "mqtt";
+import type { Db } from "../lib/db.js";
+import { publicarEventoActivo, publicarAccountability } from "../lib/mqtt.js";
+import { planificarEvento, crearConfirmacionesIniciales, activarPuntosParaEvento } from "../logic/eventos.js";
+import { calcularAccountability } from "../logic/accountability.js";
+import { resolverConsolasParaEventoActivo } from "../logic/eventoActivo.js";
+import type { PayloadEventoMqtt, PayloadEventoActivoMqtt } from "../types.js";
+
+export async function manejarEvento(db: Db, mqttClient: MqttClient, payload: PayloadEventoMqtt): Promise<void> {
+  const consola = await db.getConsolaPorId(payload.consolaId);
+  if (!consola) {
+    console.error(`[eventos] consola desconocida: ${payload.consolaId} — se ignora el mensaje`);
+    return;
+  }
+  const sitioId = consola.sitio_id;
+
+  // organizacion_id no viaja en el payload MQTT (ver contrato) — se resuelve
+  // una sola vez acá y se reusa para todo lo que sigue de este mensaje.
+  const organizacionId = await db.getSitioOrganizacionId(sitioId);
+
+  const tipoEvento = await db.getTipoEventoPorNombre(organizacionId, payload.tipo);
+  if (!tipoEvento) {
+    console.error(`[eventos] tipo de evento desconocido: "${payload.tipo}" — se ignora el mensaje`);
+    return;
+  }
+
+  const yaExiste = await db.existeEvento(payload.eventoId);
+  const eventoEnCursoId = await db.getEventoEnCursoDeSitio(sitioId);
+
+  const plan = planificarEvento(payload, yaExiste, tipoEvento, eventoEnCursoId);
+
+  switch (plan.accion) {
+    case "ignorar_duplicado":
+      console.log(`[eventos] duplicado ignorado: ${plan.eventoId}`);
+      return;
+
+    case "registrar_cancelado":
+      // Ver "OK vs. CANCELAR — resuelto": nunca dispara nada, solo auditoría.
+      // No hay tabla dedicada a intentos cancelados en el modelo actual — se
+      // deja como TODO explícito en vez de inventar una tabla no pedida por
+      // ninguna ficha (ver README, "Decisiones pendientes").
+      console.log(`[eventos] CANCELADO auditado (sin efecto): ${plan.eventoId}`);
+      return;
+
+    case "abrir_evento": {
+      await db.insertEvento({
+        id: plan.eventoId,
+        organizacion_id: organizacionId,
+        sitio_id: sitioId,
+        consola_id: payload.consolaId,
+        operador_id: payload.operadorId,
+        tipo_evento_id: tipoEvento.id,
+        modo: payload.modo === "REAL" ? "real" : "simulacro",
+        simulacro_programado_id: payload.simulacroProgramadoId,
+        notificacion_enviada: payload.notificacionEnviada,
+      });
+
+      if (!plan.esCierre) {
+        // Evento real (no OK): activar puntos + crear confirmaciones para
+        // todo el personal activo del sitio (ver ficha, "Padrón de Personas").
+        const [personas, puntos] = await Promise.all([
+          db.getPersonasActivasDeSitio(sitioId),
+          db.getPuntosActivosDeSitio(sitioId),
+        ]);
+        await db.insertConfirmacionesIniciales(crearConfirmacionesIniciales(personas, plan.eventoId));
+        await db.insertEventosPuntosEstado(activarPuntosParaEvento(puntos, plan.eventoId));
+
+        // TODO (ver "Próximos pasos" de la ficha): acá va el despacho real de
+        // push/SMS una vez elegido el proveedor — por ahora queda como log
+        // explícito, ver README "Qué falta para producción".
+        console.log(
+          `[eventos] evento ${plan.eventoId} abierto en sitio ${sitioId} — ${personas.length} destinatarios a notificar (dispatch real: pendiente, ver Próximos pasos)`
+        );
+      }
+
+      await publicarEventoActivoParaSitio(db, mqttClient, sitioId, {
+        eventoId: plan.eventoId,
+        tipo: payload.tipo,
+        modo: payload.modo,
+        consolaOrigenId: payload.consolaId,
+      });
+      return;
+    }
+
+    case "cerrar_evento_existente": {
+      await db.cerrarEvento(plan.eventoAbiertoId);
+
+      // Registrar el propio evento OK también, para el historial (ver ficha:
+      // "OK ... es un tipo de evento real más, con despacho completo").
+      await db.insertEvento({
+        id: plan.eventoId,
+        organizacion_id: organizacionId,
+        sitio_id: sitioId,
+        consola_id: payload.consolaId,
+        operador_id: payload.operadorId,
+        tipo_evento_id: tipoEvento.id,
+        modo: payload.modo === "REAL" ? "real" : "simulacro",
+        simulacro_programado_id: payload.simulacroProgramadoId,
+        notificacion_enviada: payload.notificacionEnviada,
+      });
+
+      // Al cerrar, no queda ningún evento activo relevante para el sitio.
+      await publicarEventoActivoParaSitio(db, mqttClient, sitioId, null);
+      return;
+    }
+  }
+}
+
+async function publicarEventoActivoParaSitio(
+  db: Db,
+  mqttClient: MqttClient,
+  sitioId: string,
+  info: { eventoId: string; tipo: string; modo: "REAL" | "SIMULACRO"; consolaOrigenId: string } | null
+): Promise<void> {
+  const vecinos = await db.getSitiosVecinos(sitioId);
+  const consolasPorSitio = new Map<string, string[]>();
+  consolasPorSitio.set(sitioId, await db.getConsolasActivasDeSitio(sitioId));
+  for (const vecinoId of vecinos) {
+    consolasPorSitio.set(vecinoId, await db.getConsolasActivasDeSitio(vecinoId));
+  }
+
+  const destinos = resolverConsolasParaEventoActivo(sitioId, vecinos, consolasPorSitio);
+  if (destinos.length === 0) return;
+
+  let payloadBase: Omit<PayloadEventoActivoMqtt, "relacion"> | null = null;
+  if (info !== null) {
+    const [sitioNombre, consolaOrigenNombre] = await Promise.all([
+      db.getSitioNombre(sitioId),
+      db.getConsolaNombre(info.consolaOrigenId),
+    ]);
+    payloadBase = {
+      eventoId: info.eventoId,
+      tipo: info.tipo,
+      modo: info.modo,
+      sitioNombre,
+      consolaOrigenNombre,
+      ts: Date.now(),
+    };
+  }
+
+  for (const destino of destinos) {
+    if (payloadBase === null) {
+      publicarEventoActivo(mqttClient, destino.consolaId, null);
+    } else {
+      const payload: PayloadEventoActivoMqtt = { ...payloadBase, relacion: destino.relacion };
+      publicarEventoActivo(mqttClient, destino.consolaId, payload);
+    }
+  }
+}
+
+export async function publicarAccountabilityDeEvento(
+  db: Db,
+  mqttClient: MqttClient,
+  eventoId: string,
+  sitioId: string
+): Promise<void> {
+  const [confirmaciones, puntos, consolas] = await Promise.all([
+    db.getConfirmacionesDeEvento(eventoId),
+    db.getPuntosActivosDeSitio(sitioId),
+    db.getConsolasActivasDeSitio(sitioId),
+  ]);
+  const resumen = calcularAccountability(eventoId, confirmaciones, puntos);
+  for (const consolaId of consolas) {
+    publicarAccountability(mqttClient, consolaId, eventoId, resumen);
+  }
+}

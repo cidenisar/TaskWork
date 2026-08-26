@@ -1,0 +1,28 @@
+{
+  "name": "backend-online",
+  "version": "0.1.0",
+  "description": "Backend Online — Sistema de Emergencias Refinería. Recibe eventos de las Consolas Disparadoras por MQTT, resuelve a quién avisar, despacha alertas y procesa confirmaciones.",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "dev": "tsx watch src/index.ts",
+    "test": "tsx --test test/*.test.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.0",
+    "dotenv": "^16.4.5",
+    "mqtt": "^5.10.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.7.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
