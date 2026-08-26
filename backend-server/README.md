@@ -31,6 +31,11 @@ Postgres y MQTT.
 
 ## Limitación de red de este sandbox (importante)
 
+> Actualización: ver "Validado de punta a punta" más abajo — `npm install`
+> y el borrado del stub de tipos ya se hicieron en una máquina con
+> internet. Esta sección queda como registro histórico de por qué el
+> código se escribió como se escribió originalmente.
+
 Este código se escribió en un entorno de Claude sin acceso a los registries
 de `npm` ni `pip` (bloqueados por política de red del sandbox — no es una
 limitación del código en sí). Por eso:
@@ -77,6 +82,78 @@ Para probar sin las consolas físicas: instalar Mosquitto local
 `id` real de una fila de la tabla `consolas` en Supabase (ver "Cómo se
 prueba sin la consola física" en `05.3-programacion.md`, que sugiere el
 mismo enfoque para el lado de la Pi).
+
+## Validado de punta a punta — 2026-08-26 (en curso)
+
+Primera corrida real de este código, en un entorno con internet, contra
+Mosquitto local y el proyecto real de Supabase (`emergencias-refineria`,
+`lskqdgplpulrplhkneab`). Estado a la fecha: **parcial**, interrumpido por un
+bloqueo de infraestructura ajeno al código (ver abajo) — se retoma la
+próxima sesión.
+
+**Lo que sí se corrió y quedó validado tal cual el código, sin cambios:**
+
+- `npm install` (59 paquetes, 0 vulnerabilidades).
+- Se borró `src/types/vendor-stubs.d.ts` como estaba planeado. `npm run
+  typecheck` quedó limpio con los tipos reales de `@supabase/supabase-js`,
+  `mqtt` y `@types/node` — **el stub estaba bien armado, no hizo falta
+  tocar ningún archivo fuente** para que el type-check pasara.
+- `npm run test`: **18/18 tests verdes**, sin tocar nada — confirma que la
+  lógica pura documentada como "100% testeada" efectivamente lo estaba.
+- Mosquitto local (`mosquitto -v -p 1883`, sin auth) levantado y
+  respondiendo a pub/sub de prueba.
+- `npm run dev` conecta al broker y se suscribe a los 4 tópicos entrantes
+  sin errores (`[mqtt] conectado — suscribiendo tópicos entrantes`).
+- Se publicó un evento real de INCENDIO/DISPARADO por `mosquitto_pub` en
+  `consolas/{id}/eventos` (consola real `Bomberos`,
+  `0d72961f-ef3f-4724-9e93-ca2fbaeeb9ed`, sitio "Planta de Refinación
+  Principal") — el mensaje llegó al broker y el servidor lo levantó de la
+  suscripción (confirmado con un `mosquitto_sub -t 'consolas/#' -v` de
+  control corriendo en paralelo).
+
+**Dónde se cortó — no es un bug de código:**
+
+Al intentar resolver la consola contra Supabase (`db.getConsolaPorId`), el
+proceso Node no pudo alcanzar `lskqdgplpulrplhkneab.supabase.co`:
+
+```
+Host not in allowlist: lskqdgplpulrplhkneab.supabase.co.
+Add this host to your network egress settings to allow access.
+```
+
+Se confirmó que esto es una restricción de red del entorno de ejecución
+remoto (allowlist de egress a nivel de contenedor), no del proxy de
+herramientas ni del código: un `curl` directo al mismo host, evitando por
+completo el proxy de la sesión (`--noproxy '*'`), también devolvió `403`.
+El conector MCP de Supabase sí funciona porque usa un canal separado,
+fuera de ese firewall — pero el servidor Node real, que es lo que hay que
+validar acá, corre dentro del contenedor y queda bloqueado.
+
+**Qué falta retomar la próxima sesión** (una vez que la política de red del
+entorno permita salir a `*.supabase.co`, lo cual requiere una sesión nueva
+para tomar efecto):
+
+1. Reconfirmar que el servidor llega a Supabase (`getConsolaPorId` ya no
+   debería tirar el error de arriba).
+2. Volver a publicar el evento de INCENDIO/DISPARADO y confirmar en la
+   base: `eventos.estado = 'en_curso'`, filas `pendiente` en
+   `confirmaciones` para el personal activo del sitio (2 personas activas
+   en este sitio de prueba), puntos de encuentro activados en
+   `eventos_puntos_estado`, y publicación retenida de `evento-activo` a las
+   consolas del sitio (no hay sitios vecinos configurados todavía —
+   `sitios_vecinos` está vacía — así que por ahora solo se espera el propio
+   sitio).
+3. Publicar un evento de tipo OK/DISPARADO con un `eventoId` nuevo y
+   confirmar que cierra el evento anterior en vez de abrir uno nuevo.
+4. Reenviar el mensaje original del INCENDIO con el mismo `eventoId` (redelivery QoS 1 simulada) y confirmar que no se duplica nada.
+5. Si aparece algún bug real de código en estos pasos, corregirlo acá y
+   documentarlo en esta misma sección.
+
+Nota aparte sobre el payload de prueba: el contrato real de
+`PayloadEventoMqtt` en `types.ts` pide `ts` como epoch ms (`number`), no
+ISO string, y `origen: "consola" | "ss2000"` (no `"boton_fisico"`) — el
+payload de prueba usado acá sigue el tipo real, no un ejemplo previo que
+no coincidía con él.
 
 ## Qué está implementado
 
