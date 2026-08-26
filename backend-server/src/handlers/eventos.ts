@@ -46,6 +46,11 @@ export async function manejarEvento(db: Db, mqttClient: MqttClient, payload: Pay
       return;
 
     case "abrir_evento": {
+      // esCierre = true es el caso raro de OK sin ningún evento en curso que
+      // cerrar (ver planificarEvento) — igual hay que insertarlo ya
+      // resuelto, nunca "en_curso": si no, queda como el evento en_curso más
+      // reciente del sitio para siempre (nadie lo va a cerrar nunca, porque
+      // un OK no es algo que en sí mismo se cierre).
       await db.insertEvento({
         id: plan.eventoId,
         organizacion_id: organizacionId,
@@ -56,6 +61,7 @@ export async function manejarEvento(db: Db, mqttClient: MqttClient, payload: Pay
         modo: payload.modo === "REAL" ? "real" : "simulacro",
         simulacro_programado_id: payload.simulacroProgramadoId,
         notificacion_enviada: payload.notificacionEnviada,
+        ...(plan.esCierre ? { estado: "cerrado" as const, cerrado_at: new Date().toISOString() } : {}),
       });
 
       if (!plan.esCierre) {
@@ -76,12 +82,17 @@ export async function manejarEvento(db: Db, mqttClient: MqttClient, payload: Pay
         );
       }
 
-      await publicarEventoActivoParaSitio(db, mqttClient, sitioId, {
-        eventoId: plan.eventoId,
-        tipo: payload.tipo,
-        modo: payload.modo,
-        consolaOrigenId: payload.consolaId,
-      });
+      // Un OK nunca es, en sí mismo, un evento activo — ni siquiera en este
+      // caso raro sin nada que cerrar (mismo criterio que el cierre normal,
+      // más abajo, que también publica null).
+      await publicarEventoActivoParaSitio(
+        db,
+        mqttClient,
+        sitioId,
+        plan.esCierre
+          ? null
+          : { eventoId: plan.eventoId, tipo: payload.tipo, modo: payload.modo, consolaOrigenId: payload.consolaId }
+      );
       return;
     }
 
@@ -89,7 +100,12 @@ export async function manejarEvento(db: Db, mqttClient: MqttClient, payload: Pay
       await db.cerrarEvento(plan.eventoAbiertoId);
 
       // Registrar el propio evento OK también, para el historial (ver ficha:
-      // "OK ... es un tipo de evento real más, con despacho completo").
+      // "OK ... es un tipo de evento real más, con despacho completo"). Se
+      // inserta ya "cerrado" — es un registro de algo ya resuelto, no una
+      // emergencia en curso (mismo motivo que en el caso "abrir_evento" de
+      // arriba: dejarlo en el default "en_curso" lo deja colgado para
+      // siempre como si el sitio siguiera en emergencia).
+      const ahora = new Date().toISOString();
       await db.insertEvento({
         id: plan.eventoId,
         organizacion_id: organizacionId,
@@ -100,6 +116,8 @@ export async function manejarEvento(db: Db, mqttClient: MqttClient, payload: Pay
         modo: payload.modo === "REAL" ? "real" : "simulacro",
         simulacro_programado_id: payload.simulacroProgramadoId,
         notificacion_enviada: payload.notificacionEnviada,
+        estado: "cerrado",
+        cerrado_at: ahora,
       });
 
       // Al cerrar, no queda ningún evento activo relevante para el sitio.

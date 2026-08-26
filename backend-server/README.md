@@ -155,6 +155,57 @@ ISO string, y `origen: "consola" | "ss2000"` (no `"boton_fisico"`) — el
 payload de prueba usado acá sigue el tipo real, no un ejemplo previo que
 no coincidía con él.
 
+### Bugs encontrados por revisión de código (sin esperar la sesión con Supabase)
+
+Mientras se resolvía el acceso de red, se revisó a fondo el resto de
+`handlers/` y `logic/` (antes solo se había mirado `logic/eventos.ts` y
+`handlers/eventos.ts` al pasar). Encontrados y corregidos:
+
+- **El evento OK quedaba "en_curso" para siempre.** Tanto al cerrar un
+  evento en curso (`cerrar_evento_existente`) como en el caso raro de un OK
+  sin nada que cerrar (`abrir_evento` con `esCierre: true`), el propio
+  registro del evento OK se insertaba sin especificar `estado`, así que
+  tomaba el default de la columna (`'en_curso'`) — y como un OK nunca se
+  cierra en ningún otro lado del código, ese registro quedaba colgado como
+  "en curso" para siempre. Cualquier vista/query que filtre
+  `eventos.estado = 'en_curso'` para ese sitio (fuera de
+  `getEventoEnCursoDeSitio`, que por casualidad no lo mostraba gracias al
+  `order by iniciado_at desc limit 1`) iba a ver una emergencia activa
+  fantasma. Los 18 tests no lo agarraban porque `planificarEvento` es lógica
+  pura — solo devuelve el plan, la conversión a filas reales es cosa del
+  handler, sin tests. Arreglado: `Db.insertEvento` ahora acepta
+  `estado`/`cerrado_at` opcionales, y ambos casos del evento OK los pasan
+  explícitamente (`"cerrado"` + timestamp).
+- **Decisión de diseño confirmada con el usuario:** en el caso raro de OK
+  sin nada que cerrar, el código publicaba igual un `evento-activo` hacia
+  las consolas del sitio y sus vecinas, anunciando el propio OK
+  (`tipo: "OK"`) como si fuera el evento activo. Se confirmó que esto está
+  mal — un OK no es, en sí mismo, una emergencia en curso — y ahora ese
+  caso publica `null`, igual que el cierre normal.
+
+No se encontraron más bugs en el resto del código revisado
+(`handlers/auth.ts`, `handlers/estadoConsola.ts`, `handlers/padron.ts`,
+`logic/auth.ts`, `logic/eventoActivo.ts`, `logic/accountability.ts`) — se
+verificaron además todos los enums de la base real (`estado_persona`,
+`estado_confirmacion`, `canal_confirmacion`, `rol_operador`,
+`alcance_tipo`, `estado_operador`, `estado_consola_config`, `tipo_persona`,
+`modo_evento`, `estado_evento`) contra los tipos de `types.ts` — coinciden
+exactamente, sin desajustes de nombres ni de valores.
+
+### Simulador de Consola
+
+Se armó `../consola-simulador/` — una página web standalone (sin build,
+sin frameworks, sin CDN externo) que reemplaza a `mosquitto_pub` a mano:
+botones para disparar DISPARADO/CANCELADO con los IDs reales de
+consolas/operador/tipos de evento, más un log en vivo de lo que el backend
+responde. Verificado con Playwright + un `mosquitto_sub` de control
+independiente: el navegador publica sobre un listener WebSocket de
+Mosquitto (puerto 9001, agregado además del 1883 nativo), el broker se lo
+entrega al `backend-server` real por su suscripción MQTT normal, y el
+backend lo procesa hasta el mismo punto exacto del bloqueo de red a
+Supabase (ni antes ni en otro lado) — confirma que el cableado
+frontend → broker → backend está bien, independiente de ese bloqueo.
+
 ## Qué está implementado
 
 - Ciclo completo de un evento: DISPARADO abre el evento, resuelve

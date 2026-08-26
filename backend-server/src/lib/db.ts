@@ -99,6 +99,13 @@ export class Db {
     modo: "real" | "simulacro";
     simulacro_programado_id: string | null;
     notificacion_enviada: boolean;
+    // Solo para el propio evento OK (ver handlers/eventos.ts): se inserta ya
+    // resuelto, nunca "en_curso" — si no, se queda colgado para siempre como
+    // el evento en_curso más reciente del sitio (bug real, ver commit que
+    // agregó esto). Se omite en el alta normal de un evento real, donde el
+    // default de la columna ('en_curso') es lo correcto.
+    estado?: "cerrado";
+    cerrado_at?: string;
   }): Promise<void> {
     const { error } = await this.client.from("eventos").insert(evento);
     if (error) throw error;
