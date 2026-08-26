@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<title>Simulador de Consola — Emergencias Refinería</title>
+<script src="mqtt.min.js"></script>
+<style>
+  :root {
+    --bg: #0f1115; --panel: #171a21; --border: #2a2f3a; --text: #e6e8eb;
+    --muted: #8b93a1; --accent: #d64545; --accent2: #2f80ed; --ok: #2ecc71;
+  }
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg); color: var(--text); font-family: -apple-system, Segoe UI, Roboto, sans-serif;
+    margin: 0; padding: 24px; display: flex; gap: 24px; flex-wrap: wrap;
+  }
+  h1 { font-size: 18px; margin: 0 0 4px; }
+  .sub { color: var(--muted); font-size: 13px; margin-bottom: 20px; }
+  .panel {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+    padding: 20px; min-width: 340px; flex: 1;
+  }
+  label { display: block; font-size: 12px; color: var(--muted); margin: 12px 0 4px; }
+  select, input {
+    width: 100%; padding: 8px 10px; background: #0f1115; color: var(--text);
+    border: 1px solid var(--border); border-radius: 6px; font-size: 14px;
+  }
+  .row { display: flex; gap: 12px; }
+  .row > div { flex: 1; }
+  button {
+    margin-top: 18px; width: 100%; padding: 12px; border: none; border-radius: 8px;
+    font-size: 14px; font-weight: 600; cursor: pointer;
+  }
+  #btn-disparar { background: var(--accent); color: white; }
+  #btn-disparar:disabled { opacity: 0.4; cursor: not-allowed; }
+  #btn-redelivery { background: #333; color: var(--text); margin-top: 8px; }
+  #estado-conexion { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; margin-bottom: 16px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: #666; }
+  .dot.on { background: var(--ok); }
+  .dot.off { background: var(--accent); }
+  #log {
+    font-family: "SF Mono", Consolas, monospace; font-size: 12px; background: #0a0b0e;
+    border: 1px solid var(--border); border-radius: 8px; padding: 12px; height: 480px;
+    overflow-y: auto; white-space: pre-wrap;
+  }
+  .entry { margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px dashed var(--border); }
+  .entry .tag { font-weight: 700; }
+  .tag.pub { color: var(--accent2); }
+  .tag.sub { color: var(--ok); }
+  .tag.err { color: var(--accent); }
+</style>
+</head>
+<body>
+
+<div class="panel" style="max-width: 420px;">
+  <h1>🔥 Simulador de Consola Disparadora</h1>
+  <div class="sub">Publica en <code>consolas/{id}/eventos</code> — reemplaza a mosquitto_pub para probar el backend a mano. IDs reales del proyecto Supabase <code>emergencias-refineria</code>.</div>
+
+  <div id="estado-conexion"><span class="dot" id="dot"></span> <span id="estado-texto">conectando…</span></div>
+
+  <label>Consola de origen</label>
+  <select id="consola">
+    <option value="0d72961f-ef3f-4724-9e93-ca2fbaeeb9ed">Bomberos — Planta de Refinación Principal</option>
+    <option value="ef14ab25-5dcf-4346-8ff2-fa5365dd4c8f">Bunker — Planta de Refinación Principal</option>
+    <option value="efc967ba-ca67-4ef5-8b78-300e611f5e24">Comité de Crisis — Planta de Refinación Principal</option>
+    <option value="90b658e9-cc6e-43ae-8391-7e0426dd8bc9">Portería — Predio de Despacho de Combustible</option>
+    <option value="f522e328-2310-482e-95f9-472fdddbb2dd">Sala de Control — Planta de Despacho de GLP</option>
+  </select>
+
+  <label>Operador</label>
+  <select id="operador">
+    <option value="32694dd4-3c1e-491f-97f7-4b11b3507360|admin">Legajo 9001 (admin)</option>
+  </select>
+
+  <div class="row">
+    <div>
+      <label>Tipo de evento</label>
+      <select id="tipo">
+        <option value="INCENDIO">Incendio</option>
+        <option value="SISMO">Sismo</option>
+        <option value="MÉDICO">Médico</option>
+        <option value="TÓXICO">Tóxico</option>
+        <option value="OK">OK (cierra el evento en curso)</option>
+      </select>
+    </div>
+    <div>
+      <label>Estado</label>
+      <select id="estado">
+        <option value="DISPARADO">DISPARADO</option>
+        <option value="CANCELADO">CANCELADO</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="row">
+    <div>
+      <label>Modo</label>
+      <select id="modo">
+        <option value="REAL">REAL</option>
+        <option value="SIMULACRO">SIMULACRO</option>
+      </select>
+    </div>
+    <div>
+      <label>Notificación enviada</label>
+      <select id="notif">
+        <option value="true">true</option>
+        <option value="false">false</option>
+      </select>
+    </div>
+  </div>
+
+  <button id="btn-disparar">Disparar evento</button>
+  <button id="btn-redelivery" title="Reenvía el último payload con el mismo eventoId, simulando una redelivery de MQTT QoS 1">
+    ↻ Reenviar último (test idempotencia)
+  </button>
+</div>
+
+<div class="panel">
+  <h1>Actividad del broker</h1>
+  <div class="sub">Publicaciones propias (azul) + lo que el backend responde en <code>evento-activo</code> / <code>accountability/#</code> (verde), retenido incluido.</div>
+  <div id="log"></div>
+</div>
+
+<script>
+  const log = document.getElementById("log");
+  function addEntry(tag, cls, obj) {
+    const div = document.createElement("div");
+    div.className = "entry";
+    const ts = new Date().toLocaleTimeString();
+    div.innerHTML = `<span class="tag ${cls}">[${ts}] ${tag}</span>\n` +
+      (typeof obj === "string" ? obj : JSON.stringify(obj, null, 2));
+    log.prepend(div);
+  }
+
+  const dot = document.getElementById("dot");
+  const estadoTexto = document.getElementById("estado-texto");
+  const btnDisparar = document.getElementById("btn-disparar");
+  let ultimoPayload = null;
+  let ultimoTopic = null;
+
+  const client = mqtt.connect("ws://localhost:9001");
+
+  client.on("connect", () => {
+    dot.className = "dot on";
+    estadoTexto.textContent = "conectado a ws://localhost:9001";
+    btnDisparar.disabled = false;
+    client.subscribe("consolas/#", { qos: 1 });
+  });
+
+  client.on("reconnect", () => {
+    dot.className = "dot off";
+    estadoTexto.textContent = "reconectando…";
+  });
+
+  client.on("close", () => {
+    dot.className = "dot off";
+    estadoTexto.textContent = "desconectado";
+  });
+
+  client.on("error", (err) => {
+    addEntry("ERROR MQTT", "err", err.message || String(err));
+  });
+
+  client.on("message", (topic, payload) => {
+    // No mostrar el eco de lo que publicamos nosotros mismos (ya queda logueado al publicar).
+    if (topic.endsWith("/eventos") || topic.endsWith("/auth")) return;
+    let parsed;
+    try { parsed = JSON.parse(payload.toString()); } catch { parsed = payload.toString(); }
+    addEntry(`RECIBIDO ${topic}`, "sub", parsed);
+  });
+
+  function uuid() {
+    return crypto.randomUUID();
+  }
+
+  function armarPayload(eventoId) {
+    const [operadorId, operadorRol] = document.getElementById("operador").value.split("|");
+    return {
+      eventoId: eventoId || uuid(),
+      tipo: document.getElementById("tipo").value,
+      estado: document.getElementById("estado").value,
+      notificacionEnviada: document.getElementById("notif").value === "true",
+      origen: "consola",
+      consolaId: document.getElementById("consola").value,
+      operadorId,
+      operadorRol,
+      modo: document.getElementById("modo").value,
+      simulacroProgramadoId: null,
+      ts: Date.now(),
+    };
+  }
+
+  function publicar(payload) {
+    const consolaId = payload.consolaId;
+    const topic = `consolas/${consolaId}/eventos`;
+    client.publish(topic, JSON.stringify(payload), { qos: 1 }, (err) => {
+      if (err) { addEntry("ERROR AL PUBLICAR", "err", err.message); return; }
+      addEntry(`PUBLICADO ${topic}`, "pub", payload);
+      ultimoPayload = payload;
+      ultimoTopic = topic;
+    });
+  }
+
+  document.getElementById("btn-disparar").addEventListener("click", () => {
+    publicar(armarPayload());
+  });
+
+  document.getElementById("btn-redelivery").addEventListener("click", () => {
+    if (!ultimoPayload) {
+      addEntry("REDELIVERY", "err", "Todavía no publicaste ningún evento — no hay nada que reenviar.");
+      return;
+    }
+    // Mismo eventoId, mismo payload — exactamente lo que haría un broker
+    // reintentando la entrega QoS 1 que no recibió PUBACK a tiempo.
+    client.publish(ultimoTopic, JSON.stringify(ultimoPayload), { qos: 1 }, (err) => {
+      if (err) { addEntry("ERROR AL REENVIAR", "err", err.message); return; }
+      addEntry(`REDELIVERY ${ultimoTopic}`, "pub", ultimoPayload);
+    });
+  });
+</script>
+
+</body>
+</html>
