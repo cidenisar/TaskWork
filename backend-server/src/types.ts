@@ -71,6 +71,22 @@ export interface TipoEvento {
   es_ok: boolean;
 }
 
+export type EstadoSimulacro = "programado" | "pendiente_confirmacion" | "realizado" | "no_realizado";
+
+/**
+ * Subconjunto de `simulacros_programados` que necesita la lógica de "cuál
+ * es el próximo simulacro de este sitio" (ver src/logic/simulacro.ts).
+ * `tipoEventoNombre` viene resuelto por join en la query — evita un N+1.
+ */
+export interface SimulacroProgramado {
+  id: string;
+  sitioId: string;
+  tipoEventoNombre: string;
+  puntual: boolean;
+  fechaHora: string | null; // ISO; null en los recurrentes (ver logic/simulacro.ts)
+  estado: EstadoSimulacro;
+}
+
 // ---------------------------------------------------------------------------
 // Contrato MQTT (ver ficha Programación)
 // ---------------------------------------------------------------------------

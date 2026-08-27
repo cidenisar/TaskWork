@@ -14,6 +14,7 @@ import type {
   Consola,
   Confirmacion,
   EstadoEvento,
+  SimulacroProgramado,
 } from "../types.js";
 import type { ConfirmacionInicial, EventoPuntoInicial } from "../logic/eventos.js";
 import type { RegistroAuditoriaPin } from "../logic/auth.js";
@@ -217,6 +218,32 @@ export class Db {
       .eq("evento_id", eventoId);
     if (error) throw error;
     return (data ?? []) as Confirmacion[];
+  }
+
+  /** Filas `programado` de simulacros_programados de un sitio — ver logic/simulacro.ts. */
+  async getSimulacrosProgramadosDeSitio(sitioId: string): Promise<SimulacroProgramado[]> {
+    const { data, error } = await this.client
+      .from("simulacros_programados")
+      .select("id, sitio_id, puntual, fecha_hora, estado, tipos_evento(nombre)")
+      .eq("sitio_id", sitioId)
+      .eq("estado", "programado");
+    if (error) throw error;
+    type Fila = {
+      id: string;
+      sitio_id: string;
+      puntual: boolean;
+      fecha_hora: string | null;
+      estado: SimulacroProgramado["estado"];
+      tipos_evento: { nombre: string } | null;
+    };
+    return ((data ?? []) as unknown as Fila[]).map((f) => ({
+      id: f.id,
+      sitioId: f.sitio_id,
+      tipoEventoNombre: f.tipos_evento?.nombre ?? "(tipo desconocido)",
+      puntual: f.puntual,
+      fechaHora: f.fecha_hora,
+      estado: f.estado,
+    }));
   }
 
   async getSitiosVecinos(sitioId: string): Promise<string[]> {

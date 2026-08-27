@@ -17,6 +17,7 @@ src/
     eventoActivo.ts         A qué consolas (propio sitio + vecinos) avisar
     auth.ts                 Armado del registro de auditoría de PIN
     confirmar.ts            Validación del body de POST /confirmaciones (Mobile)
+    simulacro.ts             Elige "el próximo simulacro" puntual de un sitio
   lib/
     db.ts                  Acceso a Supabase (service_role — bypasea RLS)
     mqtt.ts                Cliente MQTT y helpers de tópicos
@@ -230,6 +231,11 @@ frontend → broker → backend está bien, independiente de ese bloqueo.
   (HTTP, no MQTT; ver "Endpoint para las confirmaciones de Mobile" más
   abajo). Actualiza la fila `pendiente` ya existente para (evento, persona)
   y dispara `publicarAccountabilityDeEvento` después de cada escritura.
+- **Publicación de `consolas/{id}/simulacro`** — `sincronizarSimulacroDeSitio`
+  (mismo patrón que `sincronizarPadronDeSitio`: se publica retained, y
+  todavía no está enganchada a ningún disparador — ver "Decisiones
+  pendientes"). Alcance actual: solo simulacros **puntuales**; ver esa
+  sección para los recurrentes.
 
 ### Endpoint para las confirmaciones de Mobile
 
@@ -276,10 +282,6 @@ evento con OK) — ver sesión 2026-08-27.
   pide ninguna credencial (mismo estado que el Mosquitto local, `allow_anonymous
   true`); antes de producción hace falta decidir el mecanismo (JWT del login
   de Mobile, lo más probable) — ver "Decisiones pendientes".
-- **Publicación de `consolas/{id}/simulacro`** — la función de
-  `handlers/padron.ts` para el padrón de operadores está armada; falta la
-  equivalente para el próximo simulacro programado (mismo patrón, tabla
-  `simulacros_programados`).
 - **Marcar un simulacro como "no_realizado"** tras pasar un tiempo
   prudencial sin dispararse (ver ficha, "Programador de simulacros") — no
   hay todavía un job periódico para esto.
@@ -303,6 +305,10 @@ evento con OK) — ver sesión 2026-08-27.
 - Autenticación de `POST /confirmaciones` (probablemente JWT del login de
   Mobile, pero no está decidido) — hoy queda abierto, sin verificar siquiera
   que quien confirma es realmente esa `personaId`.
+- Formato de la columna `recurrencia` (jsonb) de `simulacros_programados` —
+  hasta que se defina, `elegirProximoSimulacro` (`src/logic/simulacro.ts`)
+  no calcula la próxima ocurrencia de los simulacros recurrentes
+  (`puntual: false`); esas filas simplemente no entran en la selección.
 - Frecuencia de sincronización del padrón hacia las consolas (¿cada cuánto
   se llama `sincronizarPadronDeSitio`? ¿poll a intervalo fijo, o
   suscripción a cambios de Supabase Realtime sobre `operadores`?).
