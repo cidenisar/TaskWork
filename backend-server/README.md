@@ -293,9 +293,9 @@ solo no lo justifica (`src/lib/http.ts`, con el módulo `http` nativo).
 ```
 POST /confirmaciones
 Content-Type: application/json
+Authorization: Bearer <JWT de Supabase Auth>
 
 {
-  "personaId": "<uuid>",
   "eventoId": "<uuid>",
   "estado": "ok" | "ayuda",
   "puntoId": "<uuid> | null",       // opcional
@@ -305,23 +305,61 @@ Content-Type: application/json
 }
 ```
 
+Nótese que **no hay `personaId` en el body** — se deriva del JWT (ver
+"Autenticación" abajo), justamente para que nadie pueda confirmar en
+nombre de otra persona con solo cambiar un campo del request.
+
 Respuestas: `200` con la fila de `confirmaciones` actualizada · `400` si el
-body no valida (campo faltante/tipo incorrecto) · `404` si el evento no
-existe, o si la persona no fue notificada de ese evento (no hay fila
-`pendiente` para ese par) · `409` si el evento ya no está `en_curso` (no
-tiene sentido de negocio seguir confirmando contra una emergencia cerrada).
+body no valida (campo faltante/tipo incorrecto) · `401` si falta el header
+`Authorization` o el token es inválido/expiró · `403` si el token es válido
+pero esa cuenta no está vinculada a ninguna persona del padrón · `404` si
+el evento no existe, o si la persona no fue notificada de ese evento (no
+hay fila `pendiente` para ese par) · `409` si el evento ya no está
+`en_curso` (no tiene sentido de negocio seguir confirmando contra una
+emergencia cerrada).
 
 Probado de punta a punta contra el Supabase y el Mosquitto reales
 (`test/confirmar.test.ts` para la validación pura + un ciclo manual con
-`curl` cubriendo los 4 casos de respuesta, incluido el `409` tras cerrar el
-evento con OK) — ver sesión 2026-08-27.
+`curl` cubriendo los 6 casos de respuesta posibles, incluido el `409` tras
+cerrar el evento con OK) — ver sesión 2026-08-27.
+
+#### Autenticación de `POST /confirmaciones`
+
+**Decisión tomada (2026-08-27): JWT de Supabase Auth.** El backend no
+verifica la firma a mano (evita depender de si el proyecto usa un secreto
+HS256 compartido o claves asimétricas/JWKS — de hecho este proyecto ya usa
+claves asimétricas, `alg: ES256`, se confirmó al probarlo): en cambio llama
+a `auth.getUser(token)` con el cliente `service_role` ya existente, que
+valida contra el propio servidor de Auth de Supabase (`Db.verificarJwtMobile`).
+
+Encontrado al implementar esto: la tabla `personas` (el padrón grande, a
+diferencia de `operadores` que sí tenía `auth_user_id`) no tenía forma de
+mapear una cuenta de Supabase Auth a una fila de `personas`. Se agregó
+esta migración (aplicada directamente sobre el proyecto, no hay carpeta de
+migraciones en este repo):
+
+```sql
+alter table public.personas
+  add column auth_user_id uuid references auth.users(id);
+
+create unique index personas_auth_user_id_key on public.personas (auth_user_id);
+```
+
+Nullable a propósito: no todas las personas tienen cuenta de Mobile
+todavía (ej. `origen: alta_manual` sin autoregistro). `Db.getPersonaPorAuthUserId`
+resuelve el `auth_user_id` del token a la fila de `personas` — si no hay
+ninguna, `403`.
+
+Validado de punta a punta con un usuario real: creado con
+`admin.auth.admin.createUser` + `signInWithPassword` (vía el cliente
+`anon`) para obtener un JWT real, vinculado a una persona de prueba, y
+probados los 4 casos (sin header → `401`, token basura → `401`, token
+válido sin persona vinculada → `403`, token válido + persona vinculada +
+evento real → `200` con el `persona_id` correcto). Usuario y vínculo de
+prueba borrados al terminar.
 
 ## Qué NO está implementado todavía (a propósito, ver la ficha)
 
-- **Autenticación del endpoint de Mobile** — hoy `POST /confirmaciones` no
-  pide ninguna credencial (mismo estado que el Mosquitto local, `allow_anonymous
-  true`); antes de producción hace falta decidir el mecanismo (JWT del login
-  de Mobile, lo más probable) — ver "Decisiones pendientes".
 - **Marcar un simulacro como "no_realizado"** tras pasar un tiempo
   prudencial sin dispararse (ver ficha, "Programador de simulacros") — no
   hay todavía un job periódico para esto.
@@ -342,9 +380,6 @@ evento con OK) — ver sesión 2026-08-27.
 - Autenticación de cada consola contra el broker MQTT (usuario/contraseña
   por consola vs. certificado por dispositivo) — ver "Próximos pasos" de la
   ficha de Programación, todavía sin elegir.
-- Autenticación de `POST /confirmaciones` (probablemente JWT del login de
-  Mobile, pero no está decidido) — hoy queda abierto, sin verificar siquiera
-  que quien confirma es realmente esa `personaId`.
 - Formato de la columna `recurrencia` (jsonb) de `simulacros_programados` —
   hasta que se defina, `elegirProximoSimulacro` (`src/logic/simulacro.ts`)
   no calcula la próxima ocurrencia de los simulacros recurrentes

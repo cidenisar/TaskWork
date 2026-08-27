@@ -1,10 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { validarConfirmacion } from "../src/logic/confirmar.js";
+import { validarConfirmacion, extraerBearerToken } from "../src/logic/confirmar.js";
 
 function bodyValido(overrides: Record<string, unknown> = {}) {
   return {
-    personaId: "p1",
     eventoId: "evt1",
     estado: "ok",
     ...overrides,
@@ -16,7 +15,6 @@ test("validarConfirmacion acepta un body mínimo válido con estado ok", () => {
   assert.equal(resultado.ok, true);
   if (resultado.ok) {
     assert.deepEqual(resultado.payload, {
-      personaId: "p1",
       eventoId: "evt1",
       estado: "ok",
       puntoId: null,
@@ -53,11 +51,6 @@ test("validarConfirmacion rechaza body que no es un objeto", () => {
   assert.equal(validarConfirmacion(42).ok, false);
 });
 
-test("validarConfirmacion rechaza personaId faltante o vacío", () => {
-  assert.equal(validarConfirmacion(bodyValido({ personaId: undefined })).ok, false);
-  assert.equal(validarConfirmacion(bodyValido({ personaId: "" })).ok, false);
-});
-
 test("validarConfirmacion rechaza eventoId faltante o vacío", () => {
   assert.equal(validarConfirmacion(bodyValido({ eventoId: undefined })).ok, false);
   assert.equal(validarConfirmacion(bodyValido({ eventoId: "" })).ok, false);
@@ -74,4 +67,17 @@ test("validarConfirmacion rechaza tipos incorrectos en los campos opcionales", (
   assert.equal(validarConfirmacion(bodyValido({ notaAyuda: 123 })).ok, false);
   assert.equal(validarConfirmacion(bodyValido({ ubicacionLat: "no-es-numero" })).ok, false);
   assert.equal(validarConfirmacion(bodyValido({ ubicacionLng: "no-es-numero" })).ok, false);
+});
+
+test("extraerBearerToken: extrae el token de un header bien formado", () => {
+  assert.equal(extraerBearerToken("Bearer abc.def.ghi"), "abc.def.ghi");
+  assert.equal(extraerBearerToken("  Bearer abc.def.ghi  "), "abc.def.ghi"); // tolera espacios de más alrededor
+});
+
+test("extraerBearerToken: null si falta el header o no tiene el prefijo Bearer", () => {
+  assert.equal(extraerBearerToken(undefined), null);
+  assert.equal(extraerBearerToken(null), null);
+  assert.equal(extraerBearerToken(""), null);
+  assert.equal(extraerBearerToken("abc.def.ghi"), null); // sin "Bearer "
+  assert.equal(extraerBearerToken("Basic dXNlcjpwYXNz"), null);
 });

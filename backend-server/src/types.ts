@@ -169,9 +169,14 @@ export interface PayloadEventoActivoMqtt {
  * endpoint HTTP normal (ver README, "Endpoint para las confirmaciones de
  * Mobile"): un teléfono no mantiene una conexión de broker persistente en
  * background, así que el flujo es push-out / REST-in, no push-out / MQTT-in.
+ *
+ * Sin personaId: lo deriva el backend del JWT de Supabase Auth (header
+ * `Authorization: Bearer <token>`) vía `personas.auth_user_id` — que el
+ * body lo mandara directamente permitiría confirmar en nombre de cualquier
+ * otra persona con solo cambiar un campo (ver README, "Autenticación de
+ * POST /confirmaciones").
  */
 export interface PayloadConfirmacionHttp {
-  personaId: string;
   eventoId: string;
   estado: "ok" | "ayuda";
   puntoId: string | null;

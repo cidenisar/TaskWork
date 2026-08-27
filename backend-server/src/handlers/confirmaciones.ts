@@ -5,26 +5,49 @@
 
 import type { MqttClient } from "mqtt";
 import type { Db } from "../lib/db.js";
-import { validarConfirmacion } from "../logic/confirmar.js";
+import { validarConfirmacion, extraerBearerToken } from "../logic/confirmar.js";
 import { publicarAccountabilityDeEvento } from "./eventos.js";
 import type { Confirmacion } from "../types.js";
 
 export type ResultadoConfirmacion =
   | { status: 200; body: Confirmacion }
   | { status: 400; body: { error: string } }
+  | { status: 401; body: { error: string } }
+  | { status: 403; body: { error: string } }
   | { status: 404; body: { error: string } }
   | { status: 409; body: { error: string } };
 
+/**
+ * `authorizationHeader` es el header crudo (`Authorization: Bearer <jwt>`)
+ * — la identidad de quién confirma se deriva de ahí, nunca de un campo del
+ * body (ver types.ts, PayloadConfirmacionHttp, y README "Autenticación de
+ * POST /confirmaciones" para por qué).
+ */
 export async function manejarConfirmacion(
   db: Db,
   mqttClient: MqttClient,
+  authorizationHeader: string | undefined | null,
   rawBody: unknown
 ): Promise<ResultadoConfirmacion> {
+  const token = extraerBearerToken(authorizationHeader);
+  if (!token) {
+    return { status: 401, body: { error: "falta el header Authorization: Bearer <token>" } };
+  }
+  const authUserId = await db.verificarJwtMobile(token);
+  if (!authUserId) {
+    return { status: 401, body: { error: "token inválido o expirado" } };
+  }
+  const persona = await db.getPersonaPorAuthUserId(authUserId);
+  if (!persona) {
+    return { status: 403, body: { error: "esta cuenta no está vinculada a ninguna persona del padrón" } };
+  }
+  const personaId = persona.id;
+
   const validacion = validarConfirmacion(rawBody);
   if (!validacion.ok) {
     return { status: 400, body: { error: validacion.error } };
   }
-  const { personaId, eventoId, estado, puntoId, notaAyuda, ubicacionLat, ubicacionLng } = validacion.payload;
+  const { eventoId, estado, puntoId, notaAyuda, ubicacionLat, ubicacionLng } = validacion.payload;
 
   const evento = await db.getEventoParaConfirmar(eventoId);
   if (!evento) {

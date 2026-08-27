@@ -171,6 +171,31 @@ export class Db {
     if (error) throw error;
   }
 
+  /**
+   * Verifica un JWT de Supabase Auth (el que manda Mobile en
+   * `Authorization: Bearer <token>`) contra el propio servidor de Auth del
+   * proyecto — no se valida la firma a mano acá para no depender de qué
+   * esquema de firma use el proyecto (HS256 con secreto compartido vs.
+   * claves asimétricas/JWKS); `auth.getUser` ya lo resuelve. Devuelve el
+   * `auth_user_id`, o null si el token es inválido o expiró.
+   */
+  async verificarJwtMobile(token: string): Promise<string | null> {
+    const { data, error } = await this.client.auth.getUser(token);
+    if (error || !data.user) return null;
+    return data.user.id;
+  }
+
+  /** La persona vinculada a esa cuenta de Mobile (ver migración personas.auth_user_id) — null si ninguna. */
+  async getPersonaPorAuthUserId(authUserId: string): Promise<{ id: string } | null> {
+    const { data, error } = await this.client
+      .from("personas")
+      .select("id")
+      .eq("auth_user_id", authUserId)
+      .maybeSingle();
+    if (error) throw error;
+    return data as { id: string } | null;
+  }
+
   /** Para el handler de POST /confirmaciones: a qué sitio pertenece el evento y si sigue en curso. */
   async getEventoParaConfirmar(eventoId: string): Promise<{ sitio_id: string; estado: EstadoEvento } | null> {
     const { data, error } = await this.client

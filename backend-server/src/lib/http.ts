@@ -20,8 +20,8 @@ function leerBody(req: IncomingMessage): Promise<string> {
 function responderJson(res: ServerResponse, status: number, body: unknown): void {
   res.writeHead(status, {
     "Content-Type": "application/json",
-    // Sin auth de por medio todavía (ver "Decisiones pendientes" del
-    // README) — CORS abierto es coherente con eso, no una laxitud aparte.
+    // El origin abierto es solo para no bloquear al cliente por CORS — la
+    // seguridad real la hace el JWT de Authorization, no esto.
     "Access-Control-Allow-Origin": "*",
   });
   res.end(JSON.stringify(body));
@@ -33,7 +33,7 @@ export function crearServidorHttp(db: Db, mqttClient: MqttClient): Server {
       res.writeHead(204, {
         "Access-Control-Allow-Origin": "*",
         "Access-Control-Allow-Methods": "POST, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization",
       });
       res.end();
       return;
@@ -50,7 +50,7 @@ export function crearServidorHttp(db: Db, mqttClient: MqttClient): Server {
             responderJson(res, 400, { error: "body no es JSON válido" });
             return;
           }
-          const resultado = await manejarConfirmacion(db, mqttClient, body);
+          const resultado = await manejarConfirmacion(db, mqttClient, req.headers.authorization, body);
           responderJson(res, resultado.status, resultado.body);
         } catch (err) {
           console.error("[http] error procesando POST /confirmaciones:", err);
