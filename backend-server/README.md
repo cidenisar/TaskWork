@@ -217,6 +217,13 @@ backend lo procesa hasta el mismo punto exacto del bloqueo de red a
 Supabase (ni antes ni en otro lado) — confirma que el cableado
 frontend → broker → backend está bien, independiente de ese bloqueo.
 
+> **Actualización (2026-08-27):** se le agregó un panel "Estado en vivo de
+> la consola" — lámpara de relé/sirena, escenario del evento activo y
+> próximo simulacro programado, más un campo para ligar el disparo a un
+> `simulacroProgramadoId` real — así se puede probar de punta a punta
+> simulacro sorpresa/escenario/relé desde el navegador, no solo con
+> `mosquitto_pub`/`curl` a mano. Ver `../consola-simulador/README.md`.
+
 ## Qué está implementado
 
 - Ciclo completo de un evento: DISPARADO abre el evento, resuelve

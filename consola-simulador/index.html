@@ -48,6 +48,43 @@
   .tag.pub { color: var(--accent2); }
   .tag.sub { color: var(--ok); }
   .tag.err { color: var(--accent); }
+
+  /* Rélé/sirena y escenario — ver README "Simulacro sorpresa, escenario y
+     relé/sirena" en backend-server: esto visualiza en el navegador lo que
+     en una consola física sería una salida de relé conectada a una sirena
+     o a una entrada del SS2000, más el texto de la narrativa. */
+  .estado-box {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+    padding: 20px; min-width: 340px; flex: 1;
+  }
+  .rele {
+    display: flex; align-items: center; gap: 12px; padding: 14px; border-radius: 8px;
+    background: #0f1115; border: 1px solid var(--border); margin-bottom: 16px;
+  }
+  .rele-lampara {
+    width: 22px; height: 22px; border-radius: 50%; background: #333;
+    box-shadow: inset 0 0 4px rgba(0,0,0,0.6); flex-shrink: 0;
+  }
+  .rele.activo .rele-lampara {
+    background: var(--accent);
+    box-shadow: 0 0 14px 4px rgba(214, 69, 69, 0.7);
+    animation: parpadeo 1s infinite;
+  }
+  .rele-texto { font-size: 13px; font-weight: 600; }
+  .rele-sub { font-size: 11px; color: var(--muted); font-weight: 400; margin-top: 2px; }
+  @keyframes parpadeo { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
+
+  .escenario-box {
+    background: #241a10; border: 1px solid #6b4a1f; border-radius: 8px;
+    padding: 12px 14px; margin-bottom: 12px; font-size: 13px; line-height: 1.5;
+  }
+  .escenario-box .titulo { color: #e0a746; font-weight: 700; font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; margin-bottom: 4px; }
+  .sin-dato { color: var(--muted); font-size: 13px; }
+  .estado-box h2 { font-size: 13px; margin: 18px 0 8px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.03em; }
+  .estado-box h2:first-of-type { margin-top: 0; }
+  .ficha-evento { font-size: 13px; }
+  .ficha-evento div { margin-bottom: 4px; }
+  .ficha-evento b { color: var(--muted); font-weight: 500; }
 </style>
 </head>
 <body>
@@ -118,10 +155,40 @@
     </div>
   </div>
 
+  <label>ID de simulacro programado (opcional)</label>
+  <input type="text" id="simulacro-programado-id" placeholder="uuid de simulacros_programados — vacío = evento suelto" autocomplete="off" />
+  <div class="sub" style="margin-bottom: 0;">
+    Si se completa, el backend liga el evento a esa fila: la marca
+    <code>realizado</code>, genera la próxima ocurrencia si es recurrente,
+    y usa su <code>escenario</code>/tipo para el despacho y para
+    <code>evento-activo</code> (activa el relé si el tipo lo tiene
+    configurado). Así se prueba el flujo completo de un simulacro
+    programado disparándose de verdad, no solo un evento suelto.
+  </div>
+
   <button id="btn-disparar" disabled>Disparar evento</button>
   <button id="btn-redelivery" title="Reenvía el último payload con el mismo eventoId, simulando una redelivery de MQTT QoS 1">
     ↻ Reenviar último (test idempotencia)
   </button>
+</div>
+
+<div class="estado-box">
+  <h1>🚨 Estado en vivo de la consola</h1>
+  <div class="sub">Lo que la Pi real mostraría/haría con lo que publica el backend — no un log crudo, ver más abajo.</div>
+
+  <div class="rele" id="rele-box">
+    <div class="rele-lampara" id="rele-lampara"></div>
+    <div>
+      <div class="rele-texto" id="rele-texto">Relé / sirena: apagado</div>
+      <div class="rele-sub">Simula la salida física que se conectaría a una sirena o a una entrada del SS2000 (ver <code>TipoEvento.activa_rele</code>).</div>
+    </div>
+  </div>
+
+  <h2>Evento activo</h2>
+  <div id="evento-activo-box"><span class="sin-dato">Ninguno — esperando <code>evento-activo</code>.</span></div>
+
+  <h2>Próximo simulacro programado</h2>
+  <div id="simulacro-box"><span class="sin-dato">Esperando <code>consolas/{id}/simulacro</code> (retained — llega solo al conectar si ya se sincronizó antes).</span></div>
 </div>
 
 <div class="panel">
@@ -198,8 +265,71 @@
       let parsed;
       try { parsed = JSON.parse(payload.toString()); } catch { parsed = payload.toString(); }
       addEntry(`RECIBIDO ${topic}`, "sub", parsed);
+
+      if (topic.endsWith("/evento-activo")) actualizarEventoActivo(parsed);
+      else if (topic.endsWith("/simulacro")) actualizarProximoSimulacro(parsed);
     });
   });
+
+  // --- Estado en vivo: relé/sirena, evento activo, próximo simulacro ---
+  // Traduce los payloads MQTT crudos a lo que una consola física haría con
+  // ellos, en vez de dejar que solo se lean como JSON en el log de abajo.
+
+  const releBox = document.getElementById("rele-box");
+  const releTexto = document.getElementById("rele-texto");
+  const eventoActivoBox = document.getElementById("evento-activo-box");
+  const simulacroBox = document.getElementById("simulacro-box");
+
+  function escapeHtml(s) {
+    const d = document.createElement("div");
+    d.textContent = s;
+    return d.innerHTML;
+  }
+
+  function actualizarEventoActivo(evento) {
+    if (!evento) {
+      releBox.className = "rele";
+      releTexto.textContent = "Relé / sirena: apagado";
+      eventoActivoBox.innerHTML = '<span class="sin-dato">Ninguno — el sitio no tiene un evento activo.</span>';
+      return;
+    }
+
+    releBox.className = evento.activarRele ? "rele activo" : "rele";
+    releTexto.textContent = evento.activarRele
+      ? "Relé / sirena: ACTIVADO"
+      : "Relé / sirena: apagado (este tipo de evento no lo activa)";
+
+    const escenarioHtml = evento.escenario
+      ? `<div class="escenario-box"><div class="titulo">Escenario</div>${escapeHtml(evento.escenario)}</div>`
+      : "";
+    eventoActivoBox.innerHTML = `
+      ${escenarioHtml}
+      <div class="ficha-evento">
+        <div><b>Tipo:</b> ${escapeHtml(evento.tipo)} (${escapeHtml(evento.modo)})</div>
+        <div><b>Sitio:</b> ${escapeHtml(evento.sitioNombre)} — <b>origen:</b> ${escapeHtml(evento.consolaOrigenNombre)} (${escapeHtml(evento.relacion)})</div>
+        <div><b>Evento:</b> ${escapeHtml(evento.eventoId)}</div>
+      </div>`;
+  }
+
+  function actualizarProximoSimulacro(simulacro) {
+    if (!simulacro) {
+      simulacroBox.innerHTML = '<span class="sin-dato">Sin simulacro programado para este sitio.</span>';
+      return;
+    }
+    // Los simulacro "sorpresa" nunca llegan por acá (ver
+    // elegirProximoSimulacro en el backend) — si algo aparece, es porque
+    // no es sorpresa y mostrarlo con anticipación no arruina nada.
+    const escenarioHtml = simulacro.escenario
+      ? `<div class="escenario-box"><div class="titulo">Escenario</div>${escapeHtml(simulacro.escenario)}</div>`
+      : "";
+    const fecha = simulacro.fechaHora ? new Date(simulacro.fechaHora).toLocaleString() : "sin fecha calculada aún";
+    simulacroBox.innerHTML = `
+      ${escenarioHtml}
+      <div class="ficha-evento">
+        <div><b>Tipo:</b> ${escapeHtml(simulacro.tipo)}</div>
+        <div><b>Fecha:</b> ${escapeHtml(fecha)}</div>
+      </div>`;
+  }
 
   function uuid() {
     return crypto.randomUUID();
@@ -207,6 +337,7 @@
 
   function armarPayload(eventoId) {
     const [operadorId, operadorRol] = document.getElementById("operador").value.split("|");
+    const simulacroProgramadoId = document.getElementById("simulacro-programado-id").value.trim();
     return {
       eventoId: eventoId || uuid(),
       tipo: document.getElementById("tipo").value,
@@ -217,7 +348,7 @@
       operadorId,
       operadorRol,
       modo: document.getElementById("modo").value,
-      simulacroProgramadoId: null,
+      simulacroProgramadoId: simulacroProgramadoId || null,
       ts: Date.now(),
     };
   }
