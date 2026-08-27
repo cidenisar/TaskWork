@@ -232,7 +232,9 @@ frontend → broker → backend está bien, independiente de ese bloqueo.
 - Heartbeat y estado online/offline de cada consola (incluido lo que
   publica el broker por Last Will and Testament).
 - Sincronización del padrón de operadores hacia las consolas de un sitio
-  (alcance puntual + alcance organización).
+  (alcance puntual + alcance organización) — **enganchada a un barrido
+  periódico (cada 5 min) además del disparo puntual**, ver "Sincronización
+  periódica del padrón" más abajo.
 - Agregación de Accountability en vivo (ok/ayuda/pendiente, total y por
   punto de encuentro).
 - **Endpoint para las confirmaciones de Mobile** — `POST /confirmaciones`
@@ -647,6 +649,37 @@ barrido lo marcó `no_realizado` y generó la fila siguiente con tipo
 **Sismo** (el que sigue en la lista, no Incendio de nuevo), fecha +1 mes
 exacto, misma rotación heredada. Datos de prueba limpiados.
 
+### Sincronización periódica del padrón
+
+`sincronizarPadronDeSitio` (`src/handlers/padron.ts`) existía desde antes y
+publicaba correctamente el padrón de un sitio hacia sus consolas — pero
+nunca se llamaba desde ningún lado. En la práctica el padrón solo se
+actualizaba si algo puntual lo disparaba (nada lo hacía todavía), así que
+una consola podía quedar arbitrariamente desactualizada frente a altas,
+bajas o reseteos de PIN.
+
+**Decisión tomada (2026-08-27): barrido cada 5 minutos, mismo criterio que
+el barrido de simulacros vencidos.** El padrón cambia con poca frecuencia
+(altas/bajas de operadores, reset de PIN) — 5 min de rezago es más que
+suficiente y no vale la pena algo más fino (ej. Supabase Realtime sobre
+`operadores`/`operadores_sitios`) para el volumen actual; queda anotado
+como mejora futura en "Decisiones pendientes" de más arriba si hiciera
+falta reaccionar en tiempo real.
+
+`sincronizarPadronDeTodosLosSitios` (nueva, `src/handlers/padron.ts`) itera
+todos los sitios (`Db.getTodosLosSitiosIds`, nuevo) y llama a
+`sincronizarPadronDeSitio` para cada uno; un fallo en un sitio se loguea y
+no frena a los demás — un sitio con problemas no debería dejar sin padrón
+actualizado al resto. Enganchada en `index.ts` con el mismo patrón que el
+barrido de simulacros: corre una vez al arrancar (para no esperar 5 min
+tras un restart) y después cada 5 min vía `setInterval`.
+
+Validado contra Supabase y Mosquitto reales: suscripto como la consola
+"Bunker" a `consolas/{id}/padron`, reiniciado el backend para forzar la
+corrida de arranque, y capturado el mensaje retained publicado con el
+operador real de prueba ("Admin Test", legajo 9001, rol admin) — el
+padrón llegó solo, sin ningún disparo manual.
+
 ## Qué NO está implementado todavía (a propósito, ver la ficha)
 
 - **Contador incremental de Accountability** — `calcularAccountability`
@@ -707,9 +740,6 @@ typecheck limpio.
 
 ## Decisiones pendientes (para no perderlas de vista)
 
-- Frecuencia de sincronización del padrón hacia las consolas (¿cada cuánto
-  se llama `sincronizarPadronDeSitio`? ¿poll a intervalo fijo, o
-  suscripción a cambios de Supabase Realtime sobre `operadores`?).
 - Auto-disparo de un simulacro sorpresa por el propio backend (sin que un
   humano tenga que apretar nada en la consola a la hora exacta) — quedó
   descartado por ahora por ser un cambio de arquitectura más grande (hoy

@@ -14,6 +14,7 @@ import { manejarEvento } from "./handlers/eventos.js";
 import { manejarAuth } from "./handlers/auth.js";
 import { manejarHeartbeat, manejarEstado } from "./handlers/estadoConsola.js";
 import { marcarSimulacrosVencidosComoNoRealizados } from "./handlers/simulacro.js";
+import { sincronizarPadronDeTodosLosSitios } from "./handlers/padron.js";
 import type {
   PayloadEventoMqtt,
   PayloadAuthMqtt,
@@ -83,5 +84,19 @@ function chequearSimulacrosVencidos(): void {
 }
 chequearSimulacrosVencidos();
 setInterval(chequearSimulacrosVencidos, INTERVALO_CHEQUEO_SIMULACROS_MS);
+
+// Sincronización periódica del padrón hacia todas las consolas — decisión
+// tomada (2026-08-27): cada 5 minutos, ver handlers/padron.ts. Corre una
+// vez al arrancar, mismo criterio que el chequeo de simulacros: no esperar
+// el intervalo completo tras un restart antes de que las consolas tengan
+// el padrón al día.
+const INTERVALO_SYNC_PADRON_MS = 5 * 60 * 1000;
+function sincronizarPadron(): void {
+  void sincronizarPadronDeTodosLosSitios(db, mqttClient).catch((err) => {
+    console.error("[padron] error en la sincronización periódica:", err);
+  });
+}
+sincronizarPadron();
+setInterval(sincronizarPadron, INTERVALO_SYNC_PADRON_MS);
 
 console.log("[backend-online] arrancando…");

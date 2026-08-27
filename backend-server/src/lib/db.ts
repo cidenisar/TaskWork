@@ -413,6 +413,13 @@ export class Db {
     if (error) throw error;
   }
 
+  /** Todos los sitios — para el barrido periódico de sincronización de padrón (ver handlers/padron.ts). */
+  async getTodosLosSitiosIds(): Promise<string[]> {
+    const { data, error } = await this.client.from("sitios").select("id");
+    if (error) throw error;
+    return (data ?? []).map((r: { id: string }) => r.id);
+  }
+
   async getSitiosVecinos(sitioId: string): Promise<string[]> {
     const { data, error } = await this.client.from("sitios_vecinos").select("vecino_id").eq("sitio_id", sitioId);
     if (error) throw error;
