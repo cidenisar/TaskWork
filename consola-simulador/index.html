@@ -56,7 +56,7 @@
   <h1>🔥 Simulador de Consola Disparadora</h1>
   <div class="sub">Publica en <code>consolas/{id}/eventos</code> — reemplaza a mosquitto_pub para probar el backend a mano. IDs reales del proyecto Supabase <code>emergencias-refineria</code>.</div>
 
-  <div id="estado-conexion"><span class="dot" id="dot"></span> <span id="estado-texto">conectando…</span></div>
+  <div id="estado-conexion"><span class="dot" id="dot"></span> <span id="estado-texto">desconectado</span></div>
 
   <label>Consola de origen</label>
   <select id="consola">
@@ -66,6 +66,15 @@
     <option value="90b658e9-cc6e-43ae-8391-7e0426dd8bc9">Portería — Predio de Despacho de Combustible</option>
     <option value="f522e328-2310-482e-95f9-472fdddbb2dd">Sala de Control — Planta de Despacho de GLP</option>
   </select>
+
+  <label>Contraseña MQTT de esta consola</label>
+  <input type="password" id="mqtt-password" placeholder="la que dio scripts/provisionar-consola.sh" autocomplete="off" />
+  <div class="sub" style="margin-bottom: 0;">
+    El usuario MQTT es el id de la consola elegida arriba — Mosquitto ahora
+    exige credenciales (dynamic-security) y solo deja publicar en el tópico
+    de la propia consola. Para simular otra consola, recargá la página.
+  </div>
+  <button id="btn-conectar">Conectar</button>
 
   <label>Operador</label>
   <select id="operador">
@@ -109,7 +118,7 @@
     </div>
   </div>
 
-  <button id="btn-disparar">Disparar evento</button>
+  <button id="btn-disparar" disabled>Disparar evento</button>
   <button id="btn-redelivery" title="Reenvía el último payload con el mismo eventoId, simulando una redelivery de MQTT QoS 1">
     ↻ Reenviar último (test idempotencia)
   </button>
@@ -135,38 +144,61 @@
   const dot = document.getElementById("dot");
   const estadoTexto = document.getElementById("estado-texto");
   const btnDisparar = document.getElementById("btn-disparar");
+  const btnConectar = document.getElementById("btn-conectar");
+  const selectConsola = document.getElementById("consola");
+  const inputPassword = document.getElementById("mqtt-password");
   let ultimoPayload = null;
   let ultimoTopic = null;
+  let client = null;
 
-  const client = mqtt.connect("ws://localhost:9001");
+  // Mosquitto ya no acepta anónimos (dynamic-security, ver README) — cada
+  // consola es su propia identidad MQTT (usuario = su id) y solo puede
+  // publicar/suscribirse a SUS PROPIOS tópicos. Por eso ahora hay que
+  // conectar a mano, eligiendo antes qué consola se simula.
+  btnConectar.addEventListener("click", () => {
+    const consolaId = selectConsola.value;
+    const password = inputPassword.value;
+    if (!password) {
+      addEntry("ERROR", "err", "Falta la contraseña MQTT de esta consola.");
+      return;
+    }
 
-  client.on("connect", () => {
-    dot.className = "dot on";
-    estadoTexto.textContent = "conectado a ws://localhost:9001";
-    btnDisparar.disabled = false;
-    client.subscribe("consolas/#", { qos: 1 });
-  });
+    client = mqtt.connect("ws://localhost:9001", { username: consolaId, password });
 
-  client.on("reconnect", () => {
-    dot.className = "dot off";
-    estadoTexto.textContent = "reconectando…";
-  });
+    client.on("connect", () => {
+      dot.className = "dot on";
+      estadoTexto.textContent = `conectado como ${consolaId}`;
+      btnDisparar.disabled = false;
+      selectConsola.disabled = true;
+      inputPassword.disabled = true;
+      btnConectar.disabled = true;
+      // Solo los tópicos que el rol de esta consola tiene permitido suscribir.
+      client.subscribe(
+        [`consolas/${consolaId}/evento-activo`, `consolas/${consolaId}/accountability/+`,
+         `consolas/${consolaId}/padron`, `consolas/${consolaId}/simulacro`],
+        { qos: 1 }
+      );
+    });
 
-  client.on("close", () => {
-    dot.className = "dot off";
-    estadoTexto.textContent = "desconectado";
-  });
+    client.on("reconnect", () => {
+      dot.className = "dot off";
+      estadoTexto.textContent = "reconectando…";
+    });
 
-  client.on("error", (err) => {
-    addEntry("ERROR MQTT", "err", err.message || String(err));
-  });
+    client.on("close", () => {
+      dot.className = "dot off";
+      estadoTexto.textContent = "desconectado";
+    });
 
-  client.on("message", (topic, payload) => {
-    // No mostrar el eco de lo que publicamos nosotros mismos (ya queda logueado al publicar).
-    if (topic.endsWith("/eventos") || topic.endsWith("/auth")) return;
-    let parsed;
-    try { parsed = JSON.parse(payload.toString()); } catch { parsed = payload.toString(); }
-    addEntry(`RECIBIDO ${topic}`, "sub", parsed);
+    client.on("error", (err) => {
+      addEntry("ERROR MQTT", "err", err.message || String(err));
+    });
+
+    client.on("message", (topic, payload) => {
+      let parsed;
+      try { parsed = JSON.parse(payload.toString()); } catch { parsed = payload.toString(); }
+      addEntry(`RECIBIDO ${topic}`, "sub", parsed);
+    });
   });
 
   function uuid() {

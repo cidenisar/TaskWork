@@ -83,12 +83,14 @@ npm run typecheck      # type-check completo (con los tipos reales de cada paque
 npm run dev            # levanta el servidor contra el Supabase/broker configurados en .env
 ```
 
-Para probar sin las consolas físicas: instalar Mosquitto local
-(`mosquitto -v`) y publicar un mensaje de prueba en el tópico
-`consolas/{id}/eventos` con `mosquitto_pub` — el `{id}` tiene que ser el
-`id` real de una fila de la tabla `consolas` en Supabase (ver "Cómo se
-prueba sin la consola física" en `05.3-programacion.md`, que sugiere el
-mismo enfoque para el lado de la Pi).
+Para probar sin las consolas físicas: instalar Mosquitto local con el
+plugin dynamic-security (ver "Autenticación de las consolas contra
+Mosquitto" más abajo — ya no acepta anónimos) y publicar un mensaje de
+prueba en el tópico `consolas/{id}/eventos` con `mosquitto_pub -u <id> -P
+<password>` — el `{id}` tiene que ser el `id` real de una fila de la tabla
+`consolas` en Supabase, provisionada con `scripts/provisionar-consola.sh`
+(ver "Cómo se prueba sin la consola física" en `05.3-programacion.md`, que
+sugiere el mismo enfoque para el lado de la Pi).
 
 ## Validado de punta a punta — 2026-08-26 (en curso)
 
@@ -241,6 +243,8 @@ frontend → broker → backend está bien, independiente de ese bloqueo.
   pendientes"). Alcance actual: solo simulacros **puntuales**; ver esa
   sección para los recurrentes.
 - **Despacho real de push/SMS** — ver "Despacho real de push/SMS" más abajo.
+- **Autenticación de las consolas contra Mosquitto** — usuario/contraseña
+  por consola vía dynamic-security; ver esa sección más abajo.
 
 ### Despacho real de push/SMS
 
@@ -358,6 +362,87 @@ válido sin persona vinculada → `403`, token válido + persona vinculada +
 evento real → `200` con el `persona_id` correcto). Usuario y vínculo de
 prueba borrados al terminar.
 
+### Autenticación de las consolas contra Mosquitto
+
+**Decisión tomada (2026-08-27): usuario/contraseña por consola**, vía el
+plugin **dynamic-security** que ya viene con Mosquitto 2.x (sin bajar nada
+de terceros — mismo criterio de "no traer infraestructura que no hace
+falta" que el resto del proyecto). Se descartó certificado por dispositivo
+(mTLS): mucha más infraestructura (CA propia, emisión/rotación de
+certificados) para 5 consolas en 3 sitios.
+
+**Hallazgo real al implementarlo:** el plan original era un solo rol
+`consola` compartido, con ACLs con plantilla (`consolas/%u/eventos`, donde
+`%u` se sustituye por el username al conectar — según la documentación de
+dynamic-security). Probado de forma aislada (rol + cliente de prueba,
+ACL `test/%u` vs. `test/literal`): **la sustitución `%u`/`%c` no se aplica
+en Mosquitto 2.0.18** — la ACL con plantilla deniega siempre, la literal
+funciona. Se pivotó a **un rol por consola** (`consola-{consolaId}`, con el
+id ya resuelto en el tópico) — más roles, pero funciona de verdad y es
+igual de simple de automatizar (ver `scripts/provisionar-consola.sh`).
+
+**Bootstrap del broker (una sola vez, no está scripteado — es
+infraestructura, no código de la app):**
+
+```
+# mosquitto.conf
+listener 1883
+protocol mqtt
+allow_anonymous false      # false una vez que ya provisionaste todo
+
+listener 9001
+protocol websockets
+allow_anonymous false
+
+plugin /usr/lib/x86_64-linux-gnu/mosquitto_dynamic_security.so
+plugin_opt_config_file /ruta/persistente/dynamic-security.json
+```
+
+```bash
+# 1. Crea el archivo de config con un admin de dynsec (guardar esta
+#    contraseña aparte — es la que abre/cierra todo lo demás).
+mosquitto_ctrl dynsec init dynamic-security.json <admin-user> <admin-pass>
+
+# 2. Con el broker ya corriendo con ese plugin+config, crear el rol del
+#    propio backend (acceso amplio, pero acotado al árbol consolas/*) y su
+#    cliente — MQTT_USERNAME/MQTT_PASSWORD del .env del backend salen de acá.
+mosquitto_ctrl -u <admin-user> -P <admin-pass> dynsec createRole backend
+mosquitto_ctrl -u <admin-user> -P <admin-pass> dynsec addRoleACL backend subscribePattern "consolas/+/eventos" allow
+mosquitto_ctrl -u <admin-user> -P <admin-pass> dynsec addRoleACL backend subscribePattern "consolas/+/auth" allow
+mosquitto_ctrl -u <admin-user> -P <admin-pass> dynsec addRoleACL backend subscribePattern "consolas/+/heartbeat" allow
+mosquitto_ctrl -u <admin-user> -P <admin-pass> dynsec addRoleACL backend subscribePattern "consolas/+/estado" allow
+mosquitto_ctrl -u <admin-user> -P <admin-pass> dynsec addRoleACL backend publishClientSend "consolas/+/padron" allow
+mosquitto_ctrl -u <admin-user> -P <admin-pass> dynsec addRoleACL backend publishClientSend "consolas/+/simulacro" allow
+mosquitto_ctrl -u <admin-user> -P <admin-pass> dynsec addRoleACL backend publishClientSend "consolas/+/evento-activo" allow
+mosquitto_ctrl -u <admin-user> -P <admin-pass> dynsec addRoleACL backend publishClientSend "consolas/+/accountability/+" allow
+mosquitto_ctrl -u <admin-user> -P <admin-pass> dynsec createClient backend -p <una-contraseña-random>
+mosquitto_ctrl -u <admin-user> -P <admin-pass> dynsec addClientRole backend backend
+
+# 3. Cada consola nueva (repetible):
+DYNSEC_ADMIN_USER=<admin-user> DYNSEC_ADMIN_PASS=<admin-pass> \
+  ./scripts/provisionar-consola.sh <consolaId>
+```
+
+`scripts/provisionar-consola.sh` crea el rol `consola-{id}` (las 8 ACLs:
+publicar en sus 4 tópicos entrantes, suscribirse a sus 4 salientes), el
+cliente con una contraseña generada, y se la asigna — la imprime una sola
+vez (dynsec no la devuelve de nuevo; solo se puede resetear con
+`setClientPassword`). Esa contraseña va en la config MQTT de la Pi de esa
+consola, nunca en este repo.
+
+`consola-simulador/` se actualizó para pedir esa contraseña antes de
+conectar (ver su propio README) — ya no puede conectar anónimo.
+
+**Validado de punta a punta:** con las 5 consolas reales del proyecto
+provisionadas — publicar en el propio tópico funciona (el backend procesa
+el evento normalmente); publicar en el tópico de OTRA consola con las
+credenciales de la primera es denegado por el broker (`rc135`, `Denied
+PUBLISH` en el log) sin llegar nunca al backend; un cliente sin
+credenciales es rechazado en el `CONNECT` (`Connection Refused: not
+authorised`); probado también desde la UI real de `consola-simulador`
+(contraseña incorrecta → no conecta; correcta → ciclo completo, incluida
+la recepción de `evento-activo`).
+
 ## Qué NO está implementado todavía (a propósito, ver la ficha)
 
 - **Marcar un simulacro como "no_realizado"** tras pasar un tiempo
@@ -377,9 +462,6 @@ prueba borrados al terminar.
   `handlers/eventos.ts`. La ficha dice que la consola ya lo guarda en su
   historial local; falta decidir si Backend Online también necesita su
   propia copia centralizada, o si alcanza con el historial de cada Pi.
-- Autenticación de cada consola contra el broker MQTT (usuario/contraseña
-  por consola vs. certificado por dispositivo) — ver "Próximos pasos" de la
-  ficha de Programación, todavía sin elegir.
 - Formato de la columna `recurrencia` (jsonb) de `simulacros_programados` —
   hasta que se defina, `elegirProximoSimulacro` (`src/logic/simulacro.ts`)
   no calcula la próxima ocurrencia de los simulacros recurrentes
