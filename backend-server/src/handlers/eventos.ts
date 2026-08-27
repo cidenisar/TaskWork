@@ -46,9 +46,11 @@ export async function manejarEvento(
 
     case "registrar_cancelado":
       // Ver "OK vs. CANCELAR — resuelto": nunca dispara nada, solo auditoría.
-      // No hay tabla dedicada a intentos cancelados en el modelo actual — se
-      // deja como TODO explícito en vez de inventar una tabla no pedida por
-      // ninguna ficha (ver README, "Decisiones pendientes").
+      // Decisión tomada con el usuario (2026-08-27): no hace falta una tabla
+      // centralizada en Backend Online para esto — el historial local de
+      // cada consola ya lo guarda, y es donde tiene sentido consultarlo (es
+      // 100% local a la consola que lo generó). Este log es la auditoría
+      // completa que corresponde acá, no un placeholder de algo pendiente.
       console.log(`[eventos] CANCELADO auditado (sin efecto): ${plan.eventoId}`);
       return;
 

@@ -253,6 +253,28 @@ export class Db {
       .eq("sitio_id", sitioId)
       .eq("estado", "programado");
     if (error) throw error;
+    return this.mapFilasSimulacro(data);
+  }
+
+  /**
+   * Todos los simulacros puntuales `programado`, de cualquier sitio — para
+   * el barrido periódico que busca vencidos (ver
+   * handlers/simulacro.ts, marcarSimulacrosVencidosComoNoRealizados). A
+   * diferencia de getSimulacrosProgramadosDeSitio, no filtra por sitio (es
+   * un chequeo global) y sí filtra `puntual` en la query — los recurrentes
+   * ni se traen, total logic/simulacro.ts los descarta igual.
+   */
+  async getTodosLosSimulacrosProgramadosPuntuales(): Promise<SimulacroProgramado[]> {
+    const { data, error } = await this.client
+      .from("simulacros_programados")
+      .select("id, sitio_id, puntual, fecha_hora, estado, tipos_evento(nombre)")
+      .eq("estado", "programado")
+      .eq("puntual", true);
+    if (error) throw error;
+    return this.mapFilasSimulacro(data);
+  }
+
+  private mapFilasSimulacro(data: unknown[] | null): SimulacroProgramado[] {
     type Fila = {
       id: string;
       sitio_id: string;
@@ -269,6 +291,16 @@ export class Db {
       fechaHora: f.fecha_hora,
       estado: f.estado,
     }));
+  }
+
+  /** Transición terminal — ver logic/simulacro.ts, simulacrosVencidos. */
+  async marcarSimulacroNoRealizado(id: string): Promise<void> {
+    const { error } = await this.client
+      .from("simulacros_programados")
+      .update({ estado: "no_realizado" })
+      .eq("id", id)
+      .eq("estado", "programado"); // no pisar si alguien ya lo movió de estado mientras tanto
+    if (error) throw error;
   }
 
   async getSitiosVecinos(sitioId: string): Promise<string[]> {

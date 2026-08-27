@@ -13,6 +13,7 @@ import { Despachador } from "./lib/despachador.js";
 import { manejarEvento } from "./handlers/eventos.js";
 import { manejarAuth } from "./handlers/auth.js";
 import { manejarHeartbeat, manejarEstado } from "./handlers/estadoConsola.js";
+import { marcarSimulacrosVencidosComoNoRealizados } from "./handlers/simulacro.js";
 import type {
   PayloadEventoMqtt,
   PayloadAuthMqtt,
@@ -68,5 +69,19 @@ async function manejarMensaje(consolaId: string, resto: string, raw: string): Pr
     return;
   }
 }
+
+// Chequeo periódico de simulacros vencidos (margen de 1h, ver
+// logic/simulacro.ts) — 15 min de intervalo alcanza de sobra frente a un
+// margen de una hora, sin recargar la base con chequeos constantes. Corre
+// una vez ya al arrancar, para no esperar 15 min tras un restart antes de
+// agarrar los que ya estaban vencidos.
+const INTERVALO_CHEQUEO_SIMULACROS_MS = 15 * 60 * 1000;
+function chequearSimulacrosVencidos(): void {
+  void marcarSimulacrosVencidosComoNoRealizados(db).catch((err) => {
+    console.error("[simulacros] error chequeando vencidos:", err);
+  });
+}
+chequearSimulacrosVencidos();
+setInterval(chequearSimulacrosVencidos, INTERVALO_CHEQUEO_SIMULACROS_MS);
 
 console.log("[backend-online] arrancando…");

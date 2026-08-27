@@ -245,6 +245,8 @@ frontend → broker → backend está bien, independiente de ese bloqueo.
 - **Despacho real de push/SMS** — ver "Despacho real de push/SMS" más abajo.
 - **Autenticación de las consolas contra Mosquitto** — usuario/contraseña
   por consola vía dynamic-security; ver esa sección más abajo.
+- **Marcar un simulacro como "no_realizado"** tras 1h sin dispararse —
+  barrido periódico, ver esa sección más abajo.
 
 ### Despacho real de push/SMS
 
@@ -443,25 +445,32 @@ authorised`); probado también desde la UI real de `consola-simulador`
 (contraseña incorrecta → no conecta; correcta → ciclo completo, incluida
 la recepción de `evento-activo`).
 
+- **Marcar un simulacro como "no_realizado"** — `marcarSimulacrosVencidosComoNoRealizados`
+  (`src/handlers/simulacro.ts`), enganchada a un `setInterval` en `index.ts`
+  (cada 15 min, más una corrida al arrancar). **Decisión tomada
+  (2026-08-27): margen de 1 hora** tras la `fecha_hora` programada — ver
+  `logic/simulacro.ts`, `MARGEN_NO_REALIZADO_MS`. Mismo alcance que
+  `elegirProximoSimulacro`: solo simulacros puntuales.
+
+  Validado contra Supabase real: insertado un simulacro con `fecha_hora`
+  2h en el pasado — al reiniciar el backend, el barrido inicial lo marcó
+  `no_realizado` (`[simulacros] marcados no_realizado: 1`). Insertado un
+  segundo con `fecha_hora` 30 min en el pasado (dentro del margen) — un
+  segundo reinicio no lo tocó, confirma que el límite de 1h se respeta.
+
 ## Qué NO está implementado todavía (a propósito, ver la ficha)
 
-- **Marcar un simulacro como "no_realizado"** tras pasar un tiempo
-  prudencial sin dispararse (ver ficha, "Programador de simulacros") — no
-  hay todavía un job periódico para esto.
 - **Contador incremental de Accountability** — `calcularAccountability`
   recalcula desde `confirmaciones` completa cada vez; a la escala real
   (2000-4000 personas, ver "Escala esperada" de la ficha) esto necesita
   pasar a contadores que se actualizan por evento en vez de recontar filas
   en cada publicación — queda señalado en el propio código
-  (`src/logic/accountability.ts`).
+  (`src/logic/accountability.ts`). **Revisado con el usuario (2026-08-27):
+  confirmado que sigue sin ser prioridad** con los volúmenes de prueba
+  actuales — se deja documentado, no se implementa todavía.
 
 ## Decisiones pendientes (para no perderlas de vista)
 
-- Dónde/cómo persistir el registro "CANCELADO (no se envió)" — hoy no hay
-  tabla para eso, solo un `console.log` + comentario `TODO` en
-  `handlers/eventos.ts`. La ficha dice que la consola ya lo guarda en su
-  historial local; falta decidir si Backend Online también necesita su
-  propia copia centralizada, o si alcanza con el historial de cada Pi.
 - Formato de la columna `recurrencia` (jsonb) de `simulacros_programados` —
   hasta que se defina, `elegirProximoSimulacro` (`src/logic/simulacro.ts`)
   no calcula la próxima ocurrencia de los simulacros recurrentes

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { elegirProximoSimulacro } from "../src/logic/simulacro.js";
+import { elegirProximoSimulacro, simulacrosVencidos } from "../src/logic/simulacro.js";
 import type { SimulacroProgramado } from "../src/types.js";
 
 function simulacro(overrides: Partial<SimulacroProgramado> = {}): SimulacroProgramado {
@@ -54,4 +54,37 @@ test("elegirProximoSimulacro: los recurrentes (puntual: false) no se eligen toda
 
 test("elegirProximoSimulacro: sin candidatos devuelve null", () => {
   assert.equal(elegirProximoSimulacro([], ahora), null);
+});
+
+test("simulacrosVencidos: puntual programado hace más de 1h se considera vencido", () => {
+  const haceDosHoras = new Date(ahora.getTime() - 2 * 60 * 60 * 1000).toISOString();
+  const s = simulacro({ id: "s", fechaHora: haceDosHoras });
+  assert.deepEqual(
+    simulacrosVencidos([s], ahora).map((x) => x.id),
+    ["s"]
+  );
+});
+
+test("simulacrosVencidos: dentro del margen de 1h todavía no se considera vencido", () => {
+  const haceMediaHora = new Date(ahora.getTime() - 30 * 60 * 1000).toISOString();
+  const s = simulacro({ id: "s", fechaHora: haceMediaHora });
+  assert.deepEqual(simulacrosVencidos([s], ahora), []);
+});
+
+test("simulacrosVencidos: uno futuro nunca es vencido", () => {
+  const enUnaHora = new Date(ahora.getTime() + 60 * 60 * 1000).toISOString();
+  const s = simulacro({ id: "s", fechaHora: enUnaHora });
+  assert.deepEqual(simulacrosVencidos([s], ahora), []);
+});
+
+test("simulacrosVencidos: ignora los que no están programado o son recurrentes", () => {
+  const haceDosHoras = new Date(ahora.getTime() - 2 * 60 * 60 * 1000).toISOString();
+  const yaRealizado = simulacro({ id: "realizado", estado: "realizado", fechaHora: haceDosHoras });
+  const yaNoRealizado = simulacro({ id: "no_realizado", estado: "no_realizado", fechaHora: haceDosHoras });
+  const recurrente = simulacro({ id: "recurrente", puntual: false, fechaHora: null });
+  const vencido = simulacro({ id: "vencido", fechaHora: haceDosHoras });
+  assert.deepEqual(
+    simulacrosVencidos([yaRealizado, yaNoRealizado, recurrente, vencido], ahora).map((x) => x.id),
+    ["vencido"]
+  );
 });
