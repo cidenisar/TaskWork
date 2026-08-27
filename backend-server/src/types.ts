@@ -33,6 +33,19 @@ export interface Confirmacion {
   canal: CanalConfirmacion | null;
 }
 
+/**
+ * Una fila de `accountability_contadores` — el contador incremental que
+ * mantiene `trg_confirmaciones_accountability` sobre `confirmaciones` (ver
+ * migración `accountability_contadores`). `puntoId: null` = confirmaciones
+ * sin punto de encuentro asignado; igual suman al total del evento.
+ */
+export interface ContadorAccountability {
+  puntoId: string | null;
+  ok: number;
+  ayuda: number;
+  pendiente: number;
+}
+
 export interface PuntoEncuentro {
   id: string;
   sitio_id: string;

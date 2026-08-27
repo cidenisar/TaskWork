@@ -13,6 +13,7 @@ import type {
   TipoEvento,
   Consola,
   Confirmacion,
+  ContadorAccountability,
   EstadoEvento,
   EstadoSimulacro,
   SimulacroProgramado,
@@ -272,6 +273,27 @@ export class Db {
       .eq("evento_id", eventoId);
     if (error) throw error;
     return (data ?? []) as Confirmacion[];
+  }
+
+  /**
+   * Camino real para Accountability (ver logic/accountability.ts,
+   * `armarAccountabilityDesdeContadores`) — lee `accountability_contadores`
+   * (una fila por punto + una para "sin punto", mantenidas por
+   * `trg_confirmaciones_accountability`) en vez de `getConfirmacionesDeEvento`,
+   * que trae la tabla completa.
+   */
+  async getContadoresAccountability(eventoId: string): Promise<ContadorAccountability[]> {
+    const { data, error } = await this.client
+      .from("accountability_contadores")
+      .select("punto_id, ok, ayuda, pendiente")
+      .eq("evento_id", eventoId);
+    if (error) throw error;
+    return (data ?? []).map((r: { punto_id: string | null; ok: number; ayuda: number; pendiente: number }) => ({
+      puntoId: r.punto_id,
+      ok: r.ok,
+      ayuda: r.ayuda,
+      pendiente: r.pendiente,
+    }));
   }
 
   /** Filas `programado` de simulacros_programados de un sitio — ver logic/simulacro.ts. */

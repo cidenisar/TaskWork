@@ -246,7 +246,8 @@ frontend → broker → backend está bien, independiente de ese bloqueo.
   periódico (cada 5 min) además del disparo puntual**, ver "Sincronización
   periódica del padrón" más abajo.
 - Agregación de Accountability en vivo (ok/ayuda/pendiente, total y por
-  punto de encuentro).
+  punto de encuentro) — **con contador incremental**, ver "Contador
+  incremental de Accountability" más abajo.
 - **Endpoint para las confirmaciones de Mobile** — `POST /confirmaciones`
   (HTTP, no MQTT; ver "Endpoint para las confirmaciones de Mobile" más
   abajo). Actualiza la fila `pendiente` ya existente para (evento, persona)
@@ -659,6 +660,74 @@ barrido lo marcó `no_realizado` y generó la fila siguiente con tipo
 **Sismo** (el que sigue en la lista, no Incendio de nuevo), fecha +1 mes
 exacto, misma rotación heredada. Datos de prueba limpiados.
 
+### Contador incremental de Accountability
+
+Hasta acá, cada escritura en `confirmaciones` (una confirmación real desde
+Mobile, o el alta inicial `pendiente` al abrir un evento) disparaba
+`publicarAccountabilityDeEvento`, que traía **todas** las confirmaciones
+del evento (`getConfirmacionesDeEvento`) y las recontaba en JS
+(`calcularAccountability`). A la escala real (2000-4000 personas, ver
+"Escala esperada" de la ficha), en una evacuación real las confirmaciones
+llegan en ráfaga — cientos casi simultáneas — y cada una disparaba ese
+recount completo de nuevo, justo en el momento donde el sistema tiene que
+responder más rápido.
+
+**Decisión tomada (2026-08-27): trigger de Postgres + tabla de
+contadores**, no un contador mantenido a mano desde la app. Se prefirió
+sobre la alternativa (actualizar el contador en la misma función de
+TypeScript que escribe la confirmación) porque el trigger es correcto
+pase lo que pase toque `confirmaciones` — incluida una corrección manual
+por SQL — mientras que un contador de app se desincroniza en cuanto algo
+escribe la tabla por otro lado. El costo es tener lógica en PL/pgSQL en
+vez de TypeScript, que se valida contra Supabase real en vez de con
+`node:test` (mismo criterio que el resto de `db.ts`).
+
+- **`accountability_contadores`** (migración `accountability_contadores`)
+  — una fila por `(evento_id, punto_id)`, más una fila con `punto_id NULL`
+  para las confirmaciones sin punto de encuentro asignado (que igual
+  cuentan para el total del evento). La unicidad usa
+  `UNIQUE NULLS NOT DISTINCT` (Postgres 15+, este proyecto está en 17) para
+  que el bucket `NULL` también sea una fila única por evento, no una por
+  cada INSERT.
+- **`trg_confirmaciones_accountability`** — trigger `AFTER INSERT OR
+  UPDATE OR DELETE` sobre `confirmaciones`, `fn_accountability_actualizar_contador`.
+  En un INSERT suma 1 al bucket que corresponda; en un DELETE resta 1; en
+  un UPDATE, si cambió `estado` y/o `punto_id`, resta del bucket viejo y
+  suma al nuevo (soporta que una confirmación cambie de punto, no solo de
+  estado). Si no cambió nada relevante, no toca la tabla.
+- **`armarAccountabilityDesdeContadores`** (`logic/accountability.ts`,
+  pura) — arma el mismo `PayloadAccountabilityMqtt` de siempre, pero
+  sumando las pocas filas de `accountability_contadores` en vez de filtrar
+  miles de confirmaciones. `calcularAccountability` (el recount completo)
+  **se mantiene** como referencia: los tests nuevos comparan que ambas
+  formas den el mismo resultado partiendo del mismo fixture, no que una
+  reemplace a la otra en el código de test.
+- `Db.getContadoresAccountability` reemplaza a `getConfirmacionesDeEvento`
+  en el único lugar que la usaba (`publicarAccountabilityDeEvento`,
+  `handlers/eventos.ts`) — `getConfirmacionesDeEvento` se deja en `db.ts`
+  sin usar en producción, la sigue necesitando `calcularAccountability`
+  como referencia si alguna vez hace falta re-auditar un evento a mano.
+
+Validado en dos niveles contra Supabase real:
+- **El trigger solo, con SQL a mano** — insertados 3 confirmaciones (dos
+  con punto, una sin), verificados los contadores; actualizada una a
+  `ok` y otra a `ayuda` **cambiando de punto** (para ejercitar el camino
+  menos común), verificado que decrementó el bucket viejo e incrementó el
+  nuevo correctamente; borrada una fila, verificado el decremento.
+- **El camino completo, de punta a punta** — creado un usuario real de
+  Supabase Auth vinculado a una persona de prueba (mismo patrón que
+  "Endpoint para las confirmaciones de Mobile"), disparado un evento real
+  por `mosquitto_pub` (2 personas activas → 2 `pendiente` iniciales, el
+  trigger las contó bien desde el INSERT en lote), y confirmado un
+  `POST /confirmaciones` real con ese JWT — el mensaje MQTT en
+  `consolas/{id}/accountability/{eventoId}` salió con
+  `notificados: 2, ok: 1, ayuda: 0, pendiente: 1` y el desglose por punto
+  correcto (el punto sin nadie confirmado mostró 0, no un error).
+
+Usuario, vínculo y datos de prueba borrados al terminar. `npm run
+typecheck` limpio, 70/70 tests (3 nuevos: contadores vs. recount con el
+mismo fixture, punto sin fila en contadores, bucket `puntoId: null`).
+
 ### Sincronización periódica del padrón
 
 `sincronizarPadronDeSitio` (`src/handlers/padron.ts`) existía desde antes y
@@ -729,14 +798,9 @@ otro programado). Datos y `activa_rele` de prueba revertidos al terminar.
 
 ## Qué NO está implementado todavía (a propósito, ver la ficha)
 
-- **Contador incremental de Accountability** — `calcularAccountability`
-  recalcula desde `confirmaciones` completa cada vez; a la escala real
-  (2000-4000 personas, ver "Escala esperada" de la ficha) esto necesita
-  pasar a contadores que se actualizan por evento en vez de recontar filas
-  en cada publicación — queda señalado en el propio código
-  (`src/logic/accountability.ts`). **Revisado con el usuario (2026-08-27):
-  confirmado que sigue sin ser prioridad** con los volúmenes de prueba
-  actuales — se deja documentado, no se implementa todavía.
+Nada por ahora — el último ítem señalado acá (el contador incremental de
+Accountability) se implementó el 2026-08-27, ver "Contador incremental de
+Accountability" más abajo.
 
 ## Revisión de código (2026-08-27)
 

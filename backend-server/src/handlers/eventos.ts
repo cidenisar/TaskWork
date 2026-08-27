@@ -6,7 +6,7 @@ import type { Db } from "../lib/db.js";
 import type { Despachador } from "../lib/despachador.js";
 import { publicarEventoActivo, publicarAccountability } from "../lib/mqtt.js";
 import { planificarEvento, crearConfirmacionesIniciales, activarPuntosParaEvento } from "../logic/eventos.js";
-import { calcularAccountability } from "../logic/accountability.js";
+import { armarAccountabilityDesdeContadores } from "../logic/accountability.js";
 import { armarMensajeDespacho } from "../logic/despacho.js";
 import { resolverConsolasParaEventoActivo } from "../logic/eventoActivo.js";
 import { resolverSimulacroProgramado } from "./simulacro.js";
@@ -257,12 +257,16 @@ export async function publicarAccountabilityDeEvento(
   eventoId: string,
   sitioId: string
 ): Promise<void> {
-  const [confirmaciones, puntos, consolas] = await Promise.all([
-    db.getConfirmacionesDeEvento(eventoId),
+  // Lee accountability_contadores (unas pocas filas, una por punto + una
+  // para "sin punto") en vez de traer y recontar TODAS las confirmaciones
+  // del evento — ver README "Contador incremental de Accountability" y
+  // logic/accountability.ts, armarAccountabilityDesdeContadores.
+  const [contadores, puntos, consolas] = await Promise.all([
+    db.getContadoresAccountability(eventoId),
     db.getPuntosActivosDeSitio(sitioId),
     db.getConsolasActivasDeSitio(sitioId),
   ]);
-  const resumen = calcularAccountability(eventoId, confirmaciones, puntos);
+  const resumen = armarAccountabilityDesdeContadores(eventoId, contadores, puntos);
   for (const consolaId of consolas) {
     publicarAccountability(mqttClient, consolaId, eventoId, resumen);
   }
