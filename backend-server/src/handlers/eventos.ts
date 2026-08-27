@@ -83,6 +83,11 @@ export async function manejarEvento(
         ? await resolverSimulacroProgramado(db, payload.simulacroProgramadoId, "realizado")
         : null;
 
+      // Personas/puntos/sitioNombre se necesitan tanto para activar
+      // puntos+confirmaciones (acá abajo) como para el despacho de
+      // push/SMS (más abajo) — se resuelven una sola vez.
+      let personasParaDespachar: Persona[] = [];
+      let sitioNombreParaDespachar = "";
       if (!plan.esCierre) {
         // Evento real (no OK): activar puntos + crear confirmaciones para
         // todo el personal activo del sitio (ver ficha, "Padrón de Personas").
@@ -93,19 +98,16 @@ export async function manejarEvento(
         ]);
         await db.insertConfirmacionesIniciales(crearConfirmacionesIniciales(personas, plan.eventoId));
         await db.insertEventosPuntosEstado(activarPuntosParaEvento(puntos, plan.eventoId));
-
-        await despacharATodos(despachador, personas, {
-          eventoId: plan.eventoId,
-          tipoEvento: payload.tipo,
-          sitioId,
-          sitioNombre,
-          escenario: simulacroResuelto?.escenario ?? null,
-        });
+        personasParaDespachar = personas;
+        sitioNombreParaDespachar = sitioNombre;
       }
 
-      // Un OK nunca es, en sí mismo, un evento activo — ni siquiera en este
-      // caso raro sin nada que cerrar (mismo criterio que el cierre normal,
-      // más abajo, que también publica null).
+      // Publicar evento-activo ANTES del despacho de push/SMS a propósito:
+      // este mensaje es lo que dispara la sirena/relé físico en el resto de
+      // las consolas (ver `activarRele`) — no puede quedar detrás de un
+      // despacho a miles de personas que puede tardar bastante más.
+      // Un OK nunca es, en sí mismo, un evento activo — ni siquiera en el
+      // caso raro sin nada que cerrar.
       await publicarEventoActivoParaSitio(
         db,
         mqttClient,
@@ -121,6 +123,16 @@ export async function manejarEvento(
               escenario: simulacroResuelto?.escenario ?? null,
             }
       );
+
+      if (!plan.esCierre) {
+        await despacharATodos(despachador, personasParaDespachar, {
+          eventoId: plan.eventoId,
+          tipoEvento: payload.tipo,
+          sitioId,
+          sitioNombre: sitioNombreParaDespachar,
+          escenario: simulacroResuelto?.escenario ?? null,
+        });
+      }
       return;
     }
 

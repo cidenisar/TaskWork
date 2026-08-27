@@ -225,6 +225,17 @@ export class Db {
     return data as { sitio_id: string; estado: EstadoEvento } | null;
   }
 
+  /** Los punto_id habilitados de un evento (eventos_puntos_estado) — para validar el puntoId de POST /confirmaciones. */
+  async getPuntosHabilitadosDeEvento(eventoId: string): Promise<string[]> {
+    const { data, error } = await this.client
+      .from("eventos_puntos_estado")
+      .select("punto_id")
+      .eq("evento_id", eventoId)
+      .eq("habilitado", true);
+    if (error) throw error;
+    return (data ?? []).map((r: { punto_id: string }) => r.punto_id);
+  }
+
   /**
    * Actualiza la confirmación que ya existe para (evento, persona) — nace
    * `pendiente` al abrir el evento (ver crearConfirmacionesIniciales), esto

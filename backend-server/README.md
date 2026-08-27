@@ -658,6 +658,53 @@ exacto, misma rotación heredada. Datos de prueba limpiados.
   confirmado que sigue sin ser prioridad** con los volúmenes de prueba
   actuales — se deja documentado, no se implementa todavía.
 
+## Revisión de código (2026-08-27)
+
+Pasada de code review sobre los 11 commits de la sesión (todo desde
+`POST /confirmaciones` hasta la rotación de tipo). 5 hallazgos, los 5
+reales, los 5 corregidos:
+
+1. **Fecha de recurrencia mensual desbordaba de mes** (`logic/recurrencia.ts`)
+   — `setUTCMonth` sobre el día original de un simulacro programado el 29,
+   30 o 31 se salteaba el mes siguiente entero cuando este tenía menos
+   días: "31 de enero + 1 mes" daba **3 de marzo**, no fin de febrero.
+   Arreglado recortando al último día real del mes destino (mismo criterio
+   que cualquier librería de fechas seria). 3 tests de regresión nuevos
+   (incluido un año bisiesto).
+2. **`evento-activo` (dispara la sirena vía `activarRele`) quedaba
+   bloqueado detrás del despacho completo de push/SMS** (`handlers/eventos.ts`)
+   — con miles de personas activas, el aviso a las demás consolas del
+   sitio (y su relé físico) esperaba a que terminaran TODOS los
+   push/SMS individuales antes de publicarse. Reordenado: `evento-activo`
+   se publica antes de empezar el despacho, no después.
+3. **`puntoId` de una confirmación no se validaba contra los puntos
+   habilitados del evento** (`handlers/confirmaciones.ts`) — un cliente
+   podía mandar cualquier string como `puntoId` y se guardaba tal cual;
+   contaba para el total `ok`/`ayuda` pero desaparecía del desglose por
+   punto en `calcularAccountability`, un descuadre silencioso en medio de
+   una evacuación real. Agregada `Db.getPuntosHabilitadosDeEvento` +
+   validación (`400` si no es uno de los puntos activos de ese evento).
+4. **`POST /confirmaciones` bufferaba el body sin límite de tamaño**
+   (`lib/http.ts`) — un body arbitrariamente grande se acumulaba entero en
+   memoria antes de siquiera intentar parsearlo, en el único proceso Node
+   que también maneja todo el tráfico MQTT. Límite de 64KB (de sobra para
+   el body más grande real), `413` si se excede. Al arreglar esto se
+   encontró un segundo bug en el propio fix: destruir el socket antes de
+   escribir la respuesta mandaba la conexión vacía en vez del `413` —
+   corregido el orden (responder primero, cortar después).
+5. **La ruta de `GET /simulacros/cumplimiento` matcheaba con `startsWith`**
+   (`lib/http.ts`) — `/simulacros/cumplimientoXYZ` (typo, scanner, ruta
+   futura sin relación) se procesaba igual que la ruta real en vez de caer
+   al 404. Cambiado a comparar `url.pathname` exacto, parseado una sola
+   vez arriba en vez de comparar `req.url` crudo en cada rama.
+
+Los 5 probados de punta a punta contra Supabase y Mosquitto reales, no
+solo con tests: fechas de fin de mes con los tests unitarios nuevos; el
+resto con curl/mosquitto_pub contra el servidor corriendo — `puntoId`
+inventado → `400`, uno real → `200`; body de 100KB → `413` limpio; ruta
+con prefijo parecido → `404`. Datos de prueba limpiados. 67/67 tests,
+typecheck limpio.
+
 ## Decisiones pendientes (para no perderlas de vista)
 
 - Frecuencia de sincronización del padrón hacia las consolas (¿cada cuánto

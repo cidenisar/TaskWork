@@ -63,6 +63,20 @@ export async function manejarConfirmacion(
     };
   }
 
+  // Sin esto, un puntoId inventado se guardaría igual (actualizarConfirmacion
+  // no lo valida) — cuenta para el total ok/ayuda pero desaparece del
+  // desglose por punto en calcularAccountability, un descuadre que un
+  // operador en medio de una evacuación no debería tener que explicarse.
+  if (puntoId !== null) {
+    const puntosHabilitados = await db.getPuntosHabilitadosDeEvento(eventoId);
+    if (!puntosHabilitados.includes(puntoId)) {
+      return {
+        status: 400,
+        body: { error: `puntoId ${puntoId} no es un punto de encuentro habilitado para el evento ${eventoId}` },
+      };
+    }
+  }
+
   const confirmacion = await db.actualizarConfirmacion(eventoId, personaId, {
     estado,
     punto_id: puntoId,

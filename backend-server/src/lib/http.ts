@@ -9,11 +9,32 @@ import type { Db } from "./db.js";
 import { manejarConfirmacion } from "../handlers/confirmaciones.js";
 import { manejarCumplimiento } from "../handlers/cumplimiento.js";
 
+// De sobra para el body más grande que maneja este servidor (una
+// confirmación, con `notaAyuda` de texto libre incluido) — sin esto,
+// `leerBody` bufferea cualquier tamaño en memoria antes de siquiera
+// intentar parsear el JSON.
+const MAX_BODY_BYTES = 64 * 1024;
+
+class BodyDemasiadoGrandeError extends Error {}
+
 function leerBody(req: IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
     let data = "";
-    req.on("data", (chunk) => (data += chunk));
-    req.on("end", () => resolve(data));
+    let bytes = 0;
+    let rechazado = false;
+    req.on("data", (chunk: Buffer) => {
+      if (rechazado) return; // ya se rechazó — seguir descartando sin acumular, no destruir el socket todavía
+      bytes += chunk.length;
+      if (bytes > MAX_BODY_BYTES) {
+        rechazado = true;
+        reject(new BodyDemasiadoGrandeError());
+        return;
+      }
+      data += chunk;
+    });
+    req.on("end", () => {
+      if (!rechazado) resolve(data);
+    });
     req.on("error", reject);
   });
 }
@@ -40,10 +61,28 @@ export function crearServidorHttp(db: Db, mqttClient: MqttClient): Server {
       return;
     }
 
-    if (req.method === "POST" && req.url === "/confirmaciones") {
+    // Parseado una sola vez acá — `pathname` es lo que se compara en cada
+    // ruta (nunca `req.url` crudo, que trae el query string pegado y haría
+    // que un `startsWith` matchee de más — ver README, hallazgo de code review).
+    const url = new URL(req.url ?? "/", "http://localhost");
+
+    if (req.method === "POST" && url.pathname === "/confirmaciones") {
       void (async () => {
         try {
-          const raw = await leerBody(req);
+          let raw: string;
+          try {
+            raw = await leerBody(req);
+          } catch (err) {
+            if (err instanceof BodyDemasiadoGrandeError) {
+              // Responder primero, cortar recién después — destruir el
+              // socket antes de escribir la respuesta manda la conexión
+              // vacía en vez del 413 (probado: así fallaba).
+              responderJson(res, 413, { error: "body demasiado grande" });
+              req.destroy();
+              return;
+            }
+            throw err;
+          }
           let body: unknown;
           try {
             body = raw.length > 0 ? JSON.parse(raw) : {};
@@ -61,10 +100,10 @@ export function crearServidorHttp(db: Db, mqttClient: MqttClient): Server {
       return;
     }
 
-    if (req.method === "GET" && req.url?.startsWith("/simulacros/cumplimiento")) {
+    if (req.method === "GET" && url.pathname === "/simulacros/cumplimiento") {
       void (async () => {
         try {
-          const sitioId = new URL(req.url as string, "http://localhost").searchParams.get("sitioId");
+          const sitioId = url.searchParams.get("sitioId");
           const resultado = await manejarCumplimiento(db, req.headers.authorization, sitioId);
           responderJson(res, resultado.status, resultado.body);
         } catch (err) {

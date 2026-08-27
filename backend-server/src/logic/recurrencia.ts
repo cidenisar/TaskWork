@@ -22,7 +22,19 @@ export function calcularProximaOcurrencia(regla: ReglaRecurrencia, fechaActual: 
     if (regla.unidad === "semanas") {
       resultado.setUTCDate(resultado.getUTCDate() + regla.cada * 7);
     } else {
+      // setUTCMonth sobre el día original desborda cuando el mes destino
+      // tiene menos días (ej. 31 de enero + 1 mes "es" el 3 de marzo, no
+      // fin de febrero — Date normaliza el overflow al mes siguiente en
+      // vez de recortar). Se arma el mes primero con el día en 1 (así
+      // nunca desborda mientras cambia de mes), y recién ahí se fija el
+      // día, recortado al último día real del mes destino si hace falta.
+      const diaOriginal = resultado.getUTCDate();
+      resultado.setUTCDate(1);
       resultado.setUTCMonth(resultado.getUTCMonth() + regla.cada);
+      const ultimoDiaDelMesDestino = new Date(
+        Date.UTC(resultado.getUTCFullYear(), resultado.getUTCMonth() + 1, 0)
+      ).getUTCDate();
+      resultado.setUTCDate(Math.min(diaOriginal, ultimoDiaDelMesDestino));
     }
     return resultado;
   }

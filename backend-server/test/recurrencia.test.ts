@@ -21,6 +21,25 @@ test("intervalo meses: trimestral, cruzando fin de año", () => {
   assert.equal(resultado.toISOString(), "2027-02-15T09:00:00.000Z");
 });
 
+test("intervalo meses: 31 de enero + 1 mes recorta a fin de febrero, no desborda a marzo", () => {
+  const regla: ReglaRecurrencia = { tipo: "intervalo", unidad: "meses", cada: 1 };
+  const resultado = calcularProximaOcurrencia(regla, new Date("2026-01-31T10:00:00.000Z"));
+  // 2026 no es bisiesto — sin el recorte, Date normaliza "31 de febrero" al 3 de marzo.
+  assert.equal(resultado.toISOString(), "2026-02-28T10:00:00.000Z");
+});
+
+test("intervalo meses: 31 de enero + 1 mes en año bisiesto recorta al 29", () => {
+  const regla: ReglaRecurrencia = { tipo: "intervalo", unidad: "meses", cada: 1 };
+  const resultado = calcularProximaOcurrencia(regla, new Date("2028-01-31T10:00:00.000Z"));
+  assert.equal(resultado.toISOString(), "2028-02-29T10:00:00.000Z");
+});
+
+test("intervalo meses: 31 de marzo + 1 mes recorta a fin de abril (30 días)", () => {
+  const regla: ReglaRecurrencia = { tipo: "intervalo", unidad: "meses", cada: 1 };
+  const resultado = calcularProximaOcurrencia(regla, new Date("2026-03-31T10:00:00.000Z"));
+  assert.equal(resultado.toISOString(), "2026-04-30T10:00:00.000Z");
+});
+
 test("posicion: el primer lunes de cada trimestre", () => {
   // 2026-06-01 es lunes — arranca ahí, cadaMeses:3 → septiembre 2026.
   const regla: ReglaRecurrencia = { tipo: "posicion", diaSemana: 1, posicion: 1, cadaMeses: 3 };
