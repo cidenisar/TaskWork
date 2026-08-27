@@ -245,10 +245,10 @@ frontend → broker → backend está bien, independiente de ese bloqueo.
   abajo). Actualiza la fila `pendiente` ya existente para (evento, persona)
   y dispara `publicarAccountabilityDeEvento` después de cada escritura.
 - **Publicación de `consolas/{id}/simulacro`** — `sincronizarSimulacroDeSitio`
-  (mismo patrón que `sincronizarPadronDeSitio`: se publica retained, y
-  todavía no está enganchada a ningún disparador — ver "Decisiones
-  pendientes"). Alcance actual: solo simulacros **puntuales**; ver esa
-  sección para los recurrentes.
+  (mismo patrón que `sincronizarPadronDeSitio`, retained) **ahora enganchada
+  en dos caminos**: al resolver cualquier simulacro (evento-driven, ver
+  `resolverSimulacroProgramado`) y un barrido periódico de respaldo cada 15
+  min — ver "Sincronización de 'próximo simulacro'" más abajo.
 - **Despacho real de push/SMS** — ver "Despacho real de push/SMS" más abajo.
 - **Autenticación de las consolas contra Mosquitto** — usuario/contraseña
   por consola vía dynamic-security; ver esa sección más abajo.
@@ -682,6 +682,43 @@ Validado contra Supabase y Mosquitto reales: suscripto como la consola
 corrida de arranque, y capturado el mensaje retained publicado con el
 operador real de prueba ("Admin Test", legajo 9001, rol admin) — el
 padrón llegó solo, sin ningún disparo manual.
+
+### Sincronización de "próximo simulacro"
+
+`sincronizarSimulacroDeSitio` existía desde la sesión anterior (motor de
+recurrencia) pero, a diferencia de la de padrón, no tenía ningún camino
+que la disparara — quedó señalado explícitamente como pendiente. Al
+retomarlo para poder probar simulacro sorpresa/escenario/relé de punta a
+punta desde el simulador de consola, se enganchó por dos caminos en vez
+de copiar directo el patrón de polling del padrón:
+
+1. **Evento-driven (el camino principal):** `resolverSimulacroProgramado`
+   — el único punto por el que un simulacro pasa a un estado terminal — ya
+   sabe todo lo que hace falta para decidir si cambió el "próximo" del
+   sitio (se resolvió uno, y si era recurrente se generó el siguiente), así
+   que ahora re-publica ahí mismo en vez de esperar a un poll. Se
+   actualiza en el momento, no con hasta 5-15 min de rezago.
+2. **Barrido periódico de respaldo** (`sincronizarSimulacroDeTodosLosSitios`,
+   cada 15 min, mismo intervalo que el chequeo de vencidos) — red de
+   seguridad para el único caso que el camino 1 no cubre: alguien edita
+   `simulacros_programados` directo en la base (alta, cambio de fecha)
+   sin pasar por `resolverSimulacroProgramado`.
+
+Se prefirió esto a copiar el polling de 5 min del padrón porque acá, a
+diferencia del padrón, **casi todos los cambios reales ya pasan por un
+punto único en el propio backend** — no hacía falta esperar a un poll
+para algo que el código ya sabe que acaba de pasar.
+
+Validado de punta a punta contra Supabase y Mosquitto reales: programado
+un simulacro puntual de Tóxico con escenario ("se rompió una válvula...")
+y `activa_rele` temporalmente en `true` para ese tipo — (a) reiniciado el
+backend, el barrido de arranque publicó el "próximo simulacro" correcto
+en `consolas/{id}/simulacro`; (b) disparado el evento real vía
+`mosquitto_pub` con ese `simulacroProgramadoId` (mismo flujo que un
+simulacro real disparándose) — `evento-activo` salió con `activarRele:
+true` y el `escenario` correcto, y `consolas/{id}/simulacro` se
+re-publicó solo, sin ningún poll de por medio, con `null` (no quedaba
+otro programado). Datos y `activa_rele` de prueba revertidos al terminar.
 
 ## Qué NO está implementado todavía (a propósito, ver la ficha)
 

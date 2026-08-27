@@ -13,7 +13,10 @@ import { Despachador } from "./lib/despachador.js";
 import { manejarEvento } from "./handlers/eventos.js";
 import { manejarAuth } from "./handlers/auth.js";
 import { manejarHeartbeat, manejarEstado } from "./handlers/estadoConsola.js";
-import { marcarSimulacrosVencidosComoNoRealizados } from "./handlers/simulacro.js";
+import {
+  marcarSimulacrosVencidosComoNoRealizados,
+  sincronizarSimulacroDeTodosLosSitios,
+} from "./handlers/simulacro.js";
 import { sincronizarPadronDeTodosLosSitios } from "./handlers/padron.js";
 import type {
   PayloadEventoMqtt,
@@ -78,12 +81,27 @@ async function manejarMensaje(consolaId: string, resto: string, raw: string): Pr
 // agarrar los que ya estaban vencidos.
 const INTERVALO_CHEQUEO_SIMULACROS_MS = 15 * 60 * 1000;
 function chequearSimulacrosVencidos(): void {
-  void marcarSimulacrosVencidosComoNoRealizados(db).catch((err) => {
+  void marcarSimulacrosVencidosComoNoRealizados(db, mqttClient).catch((err) => {
     console.error("[simulacros] error chequeando vencidos:", err);
   });
 }
 chequearSimulacrosVencidos();
 setInterval(chequearSimulacrosVencidos, INTERVALO_CHEQUEO_SIMULACROS_MS);
+
+// Re-sincronización de "próximo simulacro" (`consolas/{id}/simulacro`) de
+// respaldo — el camino principal es el broadcast enganchado dentro de
+// resolverSimulacroProgramado (handlers/simulacro.ts), que cubre el caso
+// normal (se resolvió un simulacro). Este barrido es solo la red de
+// seguridad para una edición directa en `simulacros_programados` que no
+// pasó por ahí — mismo intervalo que el chequeo de vencidos, no hace
+// falta algo más agresivo para un caso de borde.
+function resincronizarSimulacros(): void {
+  void sincronizarSimulacroDeTodosLosSitios(db, mqttClient).catch((err) => {
+    console.error("[simulacros] error en la resincronización periódica:", err);
+  });
+}
+resincronizarSimulacros();
+setInterval(resincronizarSimulacros, INTERVALO_CHEQUEO_SIMULACROS_MS);
 
 // Sincronización periódica del padrón hacia todas las consolas — decisión
 // tomada (2026-08-27): cada 5 minutos, ver handlers/padron.ts. Corre una

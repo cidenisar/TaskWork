@@ -80,7 +80,7 @@ export async function manejarEvento(
       // Se guarda la fila resuelta para sacarle el `escenario` (si tiene)
       // y sumarlo al mensaje de despacho, más abajo.
       const simulacroResuelto = payload.simulacroProgramadoId
-        ? await resolverSimulacroProgramado(db, payload.simulacroProgramadoId, "realizado")
+        ? await resolverSimulacroProgramado(db, mqttClient, payload.simulacroProgramadoId, "realizado")
         : null;
 
       // Personas/puntos/sitioNombre se necesitan tanto para activar
@@ -161,7 +161,7 @@ export async function manejarEvento(
       });
 
       if (payload.simulacroProgramadoId) {
-        await resolverSimulacroProgramado(db, payload.simulacroProgramadoId, "realizado");
+        await resolverSimulacroProgramado(db, mqttClient, payload.simulacroProgramadoId, "realizado");
       }
 
       // Al cerrar, no queda ningún evento activo relevante para el sitio.
