@@ -24,7 +24,7 @@ import type { MqttClient } from "mqtt";
 import type { Db } from "../lib/db.js";
 import { publicarSimulacro } from "../lib/mqtt.js";
 import { elegirProximoSimulacro, simulacrosVencidos, proximaFilaSimulacro } from "../logic/simulacro.js";
-import type { PayloadSimulacroMqtt } from "../types.js";
+import type { PayloadSimulacroMqtt, SimulacroProgramado } from "../types.js";
 
 export async function sincronizarSimulacroDeSitio(db: Db, mqttClient: MqttClient, sitioId: string): Promise<void> {
   const [simulacros, consolas] = await Promise.all([
@@ -32,9 +32,11 @@ export async function sincronizarSimulacroDeSitio(db: Db, mqttClient: MqttClient
     db.getConsolasActivasDeSitio(sitioId),
   ]);
 
+  // elegirProximoSimulacro ya excluye los `sorpresa` — este broadcast
+  // anticipado nunca los revela (ver logic/simulacro.ts).
   const proximo = elegirProximoSimulacro(simulacros, new Date());
   const payload: PayloadSimulacroMqtt | null = proximo
-    ? { tipo: proximo.tipoEventoNombre, fechaHora: proximo.fechaHora }
+    ? { tipo: proximo.tipoEventoNombre, fechaHora: proximo.fechaHora, escenario: proximo.escenario }
     : null;
 
   for (const consolaId of consolas) {
@@ -44,23 +46,26 @@ export async function sincronizarSimulacroDeSitio(db: Db, mqttClient: MqttClient
 
 /**
  * Transiciona un simulacro `programado` a un estado terminal y, si es
- * recurrente, genera la fila de la próxima ocurrencia. No hace nada (ni
- * tira error) si el id no existe o ya no estaba en `programado` — puede
- * pasar por una carrera legítima (ej. venció justo cuando alguien lo
- * disparaba) y no es un caso excepcional que haya que frenar.
+ * recurrente, genera la fila de la próxima ocurrencia. Devuelve la fila
+ * resuelta (o null si el id no existe o ya no estaba en `programado` —
+ * puede pasar por una carrera legítima, ej. venció justo cuando alguien lo
+ * disparaba, no es un caso excepcional que haya que frenar) para que el
+ * caller pueda usar su `escenario`/tipo en lo que siga (ver
+ * handlers/eventos.ts, el mensaje de despacho).
  */
 export async function resolverSimulacroProgramado(
   db: Db,
   simulacroProgramadoId: string,
   nuevoEstado: "realizado" | "no_realizado"
-): Promise<void> {
+): Promise<SimulacroProgramado | null> {
   const resuelto = await db.transicionarSimulacro(simulacroProgramadoId, nuevoEstado);
-  if (!resuelto) return;
+  if (!resuelto) return null;
 
   const proximaFila = proximaFilaSimulacro(resuelto);
   if (proximaFila) {
     await db.insertProximaOcurrenciaSimulacro(proximaFila);
   }
+  return resuelto;
 }
 
 /**

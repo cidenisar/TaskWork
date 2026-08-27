@@ -77,9 +77,11 @@ export async function manejarEvento(
       // Este evento es el simulacro programado disparándose de verdad — ver
       // README "Motor de recurrencia": sin esto, marcarSimulacrosVencidosComoNoRealizados
       // terminaría marcando como "no realizado" simulacros que sí se hicieron.
-      if (payload.simulacroProgramadoId) {
-        await resolverSimulacroProgramado(db, payload.simulacroProgramadoId, "realizado");
-      }
+      // Se guarda la fila resuelta para sacarle el `escenario` (si tiene)
+      // y sumarlo al mensaje de despacho, más abajo.
+      const simulacroResuelto = payload.simulacroProgramadoId
+        ? await resolverSimulacroProgramado(db, payload.simulacroProgramadoId, "realizado")
+        : null;
 
       if (!plan.esCierre) {
         // Evento real (no OK): activar puntos + crear confirmaciones para
@@ -97,6 +99,7 @@ export async function manejarEvento(
           tipoEvento: payload.tipo,
           sitioId,
           sitioNombre,
+          escenario: simulacroResuelto?.escenario ?? null,
         });
       }
 
@@ -109,7 +112,14 @@ export async function manejarEvento(
         sitioId,
         plan.esCierre
           ? null
-          : { eventoId: plan.eventoId, tipo: payload.tipo, modo: payload.modo, consolaOrigenId: payload.consolaId }
+          : {
+              eventoId: plan.eventoId,
+              tipo: payload.tipo,
+              modo: payload.modo,
+              consolaOrigenId: payload.consolaId,
+              activarRele: tipoEvento.activa_rele,
+              escenario: simulacroResuelto?.escenario ?? null,
+            }
       );
       return;
     }
@@ -158,7 +168,7 @@ export async function manejarEvento(
 async function despacharATodos(
   despachador: Despachador,
   personas: Persona[],
-  contexto: { eventoId: string; tipoEvento: string; sitioId: string; sitioNombre: string }
+  contexto: { eventoId: string; tipoEvento: string; sitioId: string; sitioNombre: string; escenario: string | null }
 ): Promise<void> {
   const mensaje = armarMensajeDespacho(contexto);
   const resultados = await Promise.allSettled(personas.map((p) => despachador.despacharAPersona(p, mensaje)));
@@ -182,7 +192,14 @@ async function publicarEventoActivoParaSitio(
   db: Db,
   mqttClient: MqttClient,
   sitioId: string,
-  info: { eventoId: string; tipo: string; modo: "REAL" | "SIMULACRO"; consolaOrigenId: string } | null
+  info: {
+    eventoId: string;
+    tipo: string;
+    modo: "REAL" | "SIMULACRO";
+    consolaOrigenId: string;
+    activarRele: boolean;
+    escenario: string | null;
+  } | null
 ): Promise<void> {
   const vecinos = await db.getSitiosVecinos(sitioId);
   const consolasPorSitio = new Map<string, string[]>();
@@ -207,6 +224,8 @@ async function publicarEventoActivoParaSitio(
       sitioNombre,
       consolaOrigenNombre,
       ts: Date.now(),
+      activarRele: info.activarRele,
+      escenario: info.escenario,
     };
   }
 

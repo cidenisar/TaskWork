@@ -27,3 +27,26 @@ test("armarMensajeDespacho refleja el tipo de evento tal cual viene (Sismo, Méd
   assert.match(mensaje.titulo, /Sismo/);
   assert.equal(mensaje.data.tipo, "Sismo");
 });
+
+test("armarMensajeDespacho suma el escenario al cuerpo y al SMS cuando viene", () => {
+  const mensaje = armarMensajeDespacho({
+    eventoId: "evt3",
+    tipoEvento: "Tóxico",
+    sitioId: "sitio1",
+    sitioNombre: "Planta de Refinación Principal",
+    escenario: "Se rompió una válvula, hay derrame de líquido en Zona B.",
+  });
+  assert.match(mensaje.cuerpo, /Se rompió una válvula/);
+  assert.match(mensaje.textoSms, /Se rompió una válvula/);
+});
+
+test("armarMensajeDespacho sin escenario queda con el texto genérico de siempre", () => {
+  const mensaje = armarMensajeDespacho({
+    eventoId: "evt4",
+    tipoEvento: "Incendio",
+    sitioId: "sitio1",
+    sitioNombre: "Planta de Refinación Principal",
+    escenario: null,
+  });
+  assert.equal(mensaje.cuerpo, "Diríjase a un punto de encuentro y confirme su estado en la app.");
+});

@@ -13,6 +13,8 @@ function simulacro(overrides: Partial<SimulacroProgramado> = {}): SimulacroProgr
     fechaHora: "2026-06-01T10:00:00.000Z",
     estado: "programado",
     recurrencia: null,
+    sorpresa: false,
+    escenario: null,
     ...overrides,
   };
 }
@@ -61,6 +63,13 @@ test("elegirProximoSimulacro: un recurrente con fechaHora participa igual que un
 
 test("elegirProximoSimulacro: sin candidatos devuelve null", () => {
   assert.equal(elegirProximoSimulacro([], ahora), null);
+});
+
+test("elegirProximoSimulacro: excluye los sorpresa aunque sean el más próximo", () => {
+  const sorpresa = simulacro({ id: "sorpresa", sorpresa: true, fechaHora: "2026-05-10T00:00:00.000Z" });
+  const anunciado = simulacro({ id: "anunciado", fechaHora: "2026-06-01T00:00:00.000Z" });
+  assert.equal(elegirProximoSimulacro([sorpresa, anunciado], ahora)?.id, "anunciado");
+  assert.equal(elegirProximoSimulacro([sorpresa], ahora), null);
 });
 
 test("simulacrosVencidos: programado hace más de 1h se considera vencido", () => {
@@ -121,7 +130,17 @@ test("proximaFilaSimulacro: recurrente arma la fila siguiente con la misma regla
     tipoEventoId: "tipoY",
     fechaHora: "2026-09-01T10:00:00.000Z",
     recurrencia: { tipo: "intervalo", unidad: "meses", cada: 3 },
+    sorpresa: false,
   });
+});
+
+test("proximaFilaSimulacro: hereda sorpresa: true de la ocurrencia resuelta", () => {
+  const resuelto = simulacro({
+    sorpresa: true,
+    fechaHora: "2026-06-01T10:00:00.000Z",
+    recurrencia: { tipo: "intervalo", unidad: "semanas", cada: 2 },
+  });
+  assert.equal(proximaFilaSimulacro(resuelto)?.sorpresa, true);
 });
 
 test("proximaFilaSimulacro: null si es recurrente pero no tiene fechaHora (no se inventa un ancla)", () => {

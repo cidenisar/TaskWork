@@ -69,6 +69,15 @@ export interface TipoEvento {
   id: string;
   nombre: string;
   es_ok: boolean;
+  /**
+   * ¿Esta clase de evento amerita activar el relé/sirena física de la
+   * consola? Aplica a eventos reales y a simulacros por igual — un Tóxico
+   * real también debería sonar la sirena, no solo el simulacro (ver
+   * README, "Simulacro sorpresa"). Se manda en PayloadEventoActivoMqtt
+   * como `activarRele` para que el firmware de la consola (todavía no
+   * escrito) sepa cuándo mover el pin.
+   */
+  activa_rele: boolean;
 }
 
 export type EstadoSimulacro = "programado" | "pendiente_confirmacion" | "realizado" | "no_realizado";
@@ -111,6 +120,10 @@ export interface SimulacroProgramado {
   fechaHora: string | null; // ISO
   estado: EstadoSimulacro;
   recurrencia: ReglaRecurrencia | null;
+  /** Sin aviso previo por el broadcast de `consolas/{id}/simulacro` — ver logic/simulacro.ts, elegirProximoSimulacro. */
+  sorpresa: boolean;
+  /** Narrativa puntual (ej. "se rompió una válvula, hay derrame de líquido tóxico en Zona B") — null si no se cargó. */
+  escenario: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -167,6 +180,7 @@ export interface PayloadPadronMqtt {
 export interface PayloadSimulacroMqtt {
   tipo: string;
   fechaHora: string | null; // ISO, null si es recurrente sin próxima ocurrencia calculada aún
+  escenario: string | null;
 }
 
 /** Payload de `consolas/{id}/accountability/{eventoId}` (Backend → Pi). */
@@ -188,6 +202,10 @@ export interface PayloadEventoActivoMqtt {
   consolaOrigenNombre: string;
   relacion: "mismo-sitio" | "sitio-vecino";
   ts: number;
+  /** Ver TipoEvento.activa_rele — contrato para el firmware de la consola (todavía no escrito). */
+  activarRele: boolean;
+  /** Narrativa del simulacro, si la tiene (ver SimulacroProgramado.escenario) — null en eventos reales o sin escenario cargado. */
+  escenario: string | null;
 }
 
 /**

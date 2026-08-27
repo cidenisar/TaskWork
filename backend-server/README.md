@@ -248,6 +248,7 @@ frontend → broker → backend está bien, independiente de ese bloqueo.
   por consola vía dynamic-security; ver esa sección más abajo.
 - **Marcar un simulacro como "no_realizado"** tras 1h sin dispararse —
   barrido periódico, ver esa sección más abajo.
+- **Simulacro sorpresa, escenario y relé/sirena** — ver esa sección más abajo.
 
 ### Despacho real de push/SMS
 
@@ -539,6 +540,54 @@ caminos de resolución:
   fila 3 meses después de esa. El programa se auto-perpetuó en cadena por
   los dos caminos. Datos de prueba limpiados.
 
+### Simulacro sorpresa, escenario y relé/sirena
+
+Tres columnas nuevas en `simulacros_programados` (`sorpresa` bool,
+`escenario` text, ambas nullable/con default) y una en `tipos_evento`
+(`activa_rele` bool) — decisiones tomadas con el usuario (2026-08-27), a
+partir de una sesión de "cómo hacer el programador de simulacros más
+profesional":
+
+- **`sorpresa`**: el simulacro no se incluye en el broadcast anticipado
+  de `consolas/{id}/simulacro` (ver `elegirProximoSimulacro`, que ahora
+  filtra `!s.sorpresa` además del resto de condiciones) — nadie en el
+  sitio sabe que viene. Sigue siendo alguien quien lo dispara físicamente
+  desde una consola (no hay auto-disparo por el backend — eso sería un
+  cambio de arquitectura más grande, ver "Decisiones pendientes"); lo
+  único que cambia es que no hay aviso previo público. `sorpresa` se
+  hereda a la próxima ocurrencia si el simulacro es recurrente (un
+  programa sorpresa sigue siendo sorpresa).
+
+- **`escenario`**: narrativa puntual de un simulacro (ej. "Se rompió una
+  válvula, hay derrame de líquido tóxico en Zona B"). Se suma al mensaje
+  de push/SMS (`logic/despacho.ts`, `armarMensajeDespacho` — antes
+  genérico, ahora "`{escenario}` Diríjase a un punto de encuentro...") y
+  al payload de `evento-activo` que ve la consola. **No se hereda** a la
+  próxima ocurrencia de un recurrente — repetir la misma narrativa cada
+  vez no tiene sentido; alguien tiene que escribir una fresca cuando
+  corresponda.
+
+- **`tipos_evento.activa_rele`**: por tipo de evento — decisión ampliada
+  respecto de lo que se pidió originalmente (solo para "simulacro
+  sorpresa"): aplica a **eventos reales y a simulacros por igual**, un
+  Tóxico real también amerita sirena, no solo el simulacro de Tóxico. Se
+  manda como `activarRele` en `PayloadEventoActivoMqtt` — es el contrato
+  MQTT que el firmware de la consola (Raspberry Pi/ESP32) va a necesitar
+  el día que se escriba, para drivear un relé conectado a una sirena o a
+  una entrada del SS2000. **Ese firmware no existe todavía en ningún
+  repo** — acá solo se armó y probó el contrato del lado del backend; la
+  parte de hardware (relé físico, cableado, GPIO) es trabajo de otro
+  proyecto.
+
+Validado de punta a punta contra Supabase y Mosquitto reales: un
+simulacro sorpresa con `fecha_hora` más próxima que uno anunciado — el
+broadcast de "próximo simulacro" trajo el anunciado, no el sorpresa
+(confirma el filtro). Tipo "Tóxico" marcado `activa_rele: true`, evento
+real disparado contra ese simulacro sorpresa → el `evento-activo`
+resultante trajo `activarRele: true` y el `escenario` completo; la fila
+pasó a `realizado` en la base. Datos y flag de prueba revertidos al
+terminar.
+
 ## Qué NO está implementado todavía (a propósito, ver la ficha)
 
 - **Contador incremental de Accountability** — `calcularAccountability`
@@ -555,3 +604,10 @@ caminos de resolución:
 - Frecuencia de sincronización del padrón hacia las consolas (¿cada cuánto
   se llama `sincronizarPadronDeSitio`? ¿poll a intervalo fijo, o
   suscripción a cambios de Supabase Realtime sobre `operadores`?).
+- Auto-disparo de un simulacro sorpresa por el propio backend (sin que un
+  humano tenga que apretar nada en la consola a la hora exacta) — quedó
+  descartado por ahora por ser un cambio de arquitectura más grande (hoy
+  TODO evento nace de un mensaje MQTT que manda una consola; esto
+  necesitaría que el backend genere el evento él mismo). Ver README,
+  "Simulacro sorpresa" — se optó por seguir dependiendo de un humano
+  (que sabe la fecha aunque el resto del sitio no) para disparar.

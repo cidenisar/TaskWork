@@ -65,7 +65,7 @@ export class Db {
   async getTipoEventoPorNombre(organizacionId: string, nombre: string): Promise<TipoEvento | null> {
     const { data, error } = await this.client
       .from("tipos_evento")
-      .select("id, nombre, es_ok")
+      .select("id, nombre, es_ok, activa_rele")
       .or(`organizacion_id.eq.${organizacionId},organizacion_id.is.null`)
       .ilike("nombre", nombre)
       .maybeSingle();
@@ -276,7 +276,7 @@ export class Db {
   }
 
   private static readonly SELECT_SIMULACRO =
-    "id, sitio_id, tipo_evento_id, puntual, fecha_hora, estado, recurrencia, tipos_evento(nombre)";
+    "id, sitio_id, tipo_evento_id, puntual, fecha_hora, estado, recurrencia, sorpresa, escenario, tipos_evento(nombre)";
 
   private mapFilasSimulacro(data: unknown[] | null): SimulacroProgramado[] {
     type Fila = {
@@ -287,6 +287,8 @@ export class Db {
       fecha_hora: string | null;
       estado: SimulacroProgramado["estado"];
       recurrencia: SimulacroProgramado["recurrencia"];
+      sorpresa: boolean;
+      escenario: string | null;
       tipos_evento: { nombre: string } | null;
     };
     return ((data ?? []) as unknown as Fila[]).map((f) => ({
@@ -298,6 +300,8 @@ export class Db {
       fechaHora: f.fecha_hora,
       estado: f.estado,
       recurrencia: f.recurrencia,
+      sorpresa: f.sorpresa,
+      escenario: f.escenario,
     }));
   }
 
@@ -324,7 +328,14 @@ export class Db {
     return data ? this.mapFilasSimulacro([data])[0] : null;
   }
 
-  /** Inserta la fila de la próxima ocurrencia de un simulacro recurrente — ver logic/simulacro.ts, proximaFilaSimulacro. */
+  /**
+   * Inserta la fila de la próxima ocurrencia de un simulacro recurrente —
+   * ver logic/simulacro.ts, proximaFilaSimulacro. `sorpresa` se hereda de
+   * la ocurrencia resuelta (un programa sorpresa sigue siendo sorpresa);
+   * `escenario` NO se hereda — repetir la misma narrativa en cada
+   * ocurrencia futura no tiene sentido, alguien tiene que escribir una
+   * nueva para la próxima vez que corresponda.
+   */
   async insertProximaOcurrenciaSimulacro(fila: NuevaFilaSimulacro): Promise<void> {
     const { error } = await this.client.from("simulacros_programados").insert({
       sitio_id: fila.sitioId,
@@ -332,6 +343,7 @@ export class Db {
       puntual: false,
       fecha_hora: fila.fechaHora,
       recurrencia: fila.recurrencia,
+      sorpresa: fila.sorpresa,
       estado: "programado",
     });
     if (error) throw error;

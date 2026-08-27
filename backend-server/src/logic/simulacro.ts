@@ -7,6 +7,12 @@ import { calcularProximaOcurrencia } from "./recurrencia.js";
 import type { SimulacroProgramado } from "../types.js";
 
 /**
+ * "El próximo simulacro" para el broadcast anticipado a las consolas (ver
+ * handlers/simulacro.ts, sincronizarSimulacroDeSitio) — excluye los
+ * marcados `sorpresa`: avisarlos por acá sería anunciarlos, que es
+ * exactamente lo que "sorpresa" quiere evitar. Un sorpresa igual se
+ * dispara y se audita normal — esto solo lo saca del aviso previo.
+ *
  * @param simulacros ya filtrados por sitio (el caller decide el sitio) — se
  *   espera que el caller también haya filtrado por `estado: "programado"`,
  *   pero esta función igual lo revalida, no confía ciegamente en el caller.
@@ -17,7 +23,7 @@ export function elegirProximoSimulacro(
   ahora: Date
 ): SimulacroProgramado | null {
   const candidatos = simulacros
-    .filter((s) => s.estado === "programado" && s.fechaHora !== null)
+    .filter((s) => s.estado === "programado" && s.fechaHora !== null && !s.sorpresa)
     .filter((s) => new Date(s.fechaHora as string).getTime() >= ahora.getTime())
     .sort((a, b) => new Date(a.fechaHora as string).getTime() - new Date(b.fechaHora as string).getTime());
   return candidatos[0] ?? null;
@@ -44,6 +50,7 @@ export interface NuevaFilaSimulacro {
   tipoEventoId: string;
   fechaHora: string; // ISO
   recurrencia: SimulacroProgramado["recurrencia"];
+  sorpresa: boolean;
 }
 
 /**
@@ -57,6 +64,9 @@ export interface NuevaFilaSimulacro {
  * esta fila no tiene fechaHora (no debería pasar en una fila `programado`
  * real), tampoco se inventa nada: se devuelve null antes que adivinar un
  * ancla.
+ *
+ * `sorpresa` se hereda tal cual (un programa sorpresa sigue siendo
+ * sorpresa) — `escenario` NO se hereda, ver Db.insertProximaOcurrenciaSimulacro.
  */
 export function proximaFilaSimulacro(resuelto: SimulacroProgramado): NuevaFilaSimulacro | null {
   if (!resuelto.recurrencia || !resuelto.fechaHora) return null;
@@ -66,5 +76,6 @@ export function proximaFilaSimulacro(resuelto: SimulacroProgramado): NuevaFilaSi
     tipoEventoId: resuelto.tipoEventoId,
     fechaHora: proxima.toISOString(),
     recurrencia: resuelto.recurrencia,
+    sorpresa: resuelto.sorpresa,
   };
 }
