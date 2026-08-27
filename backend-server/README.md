@@ -224,8 +224,11 @@ frontend → broker → backend está bien, independiente de ese bloqueo.
   y publica `evento-activo` al propio sitio y a sus sitios vecinos.
 - OK cierra el evento en curso del sitio (no abre uno nuevo) — ver
   "OK vs. CANCELAR — resuelto" en la ficha de Programación.
-- CANCELADO no dispara nada — queda como TODO explícito el guardar su
-  auditoría (ver "Decisiones pendientes" abajo).
+- CANCELADO no dispara nada — solo se audita (log). **Decisión tomada con
+  el usuario (2026-08-27): no hace falta una tabla centralizada en Backend
+  Online para esto** — el historial local de cada consola ya lo guarda, y
+  es donde tiene sentido consultarlo (es 100% local a la consola que lo
+  generó); ver `handlers/eventos.ts`.
 - Idempotencia ante reentrega de MQTT QoS 1 (mismo `eventoId` no se procesa
   dos veces).
 - Auditoría de validación de PIN (la consola valida, acá solo se audita).
