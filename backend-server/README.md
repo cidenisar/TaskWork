@@ -16,9 +16,11 @@ src/
     accountability.ts      Agregación del resumen ok/ayuda/pendiente
     eventoActivo.ts         A qué consolas (propio sitio + vecinos) avisar
     auth.ts                 Armado del registro de auditoría de PIN
+    confirmar.ts            Validación del body de POST /confirmaciones (Mobile)
   lib/
     db.ts                  Acceso a Supabase (service_role — bypasea RLS)
     mqtt.ts                Cliente MQTT y helpers de tópicos
+    http.ts                 Servidor HTTP mínimo (POST /confirmaciones — Mobile)
   handlers/               Conectan lógica pura + db + mqtt para cada tópico
   index.ts                Punto de entrada
 test/                    Tests de la lógica pura (node:test, sin mocks de red)
@@ -224,16 +226,56 @@ frontend → broker → backend está bien, independiente de ese bloqueo.
   (alcance puntual + alcance organización).
 - Agregación de Accountability en vivo (ok/ayuda/pendiente, total y por
   punto de encuentro).
+- **Endpoint para las confirmaciones de Mobile** — `POST /confirmaciones`
+  (HTTP, no MQTT; ver "Endpoint para las confirmaciones de Mobile" más
+  abajo). Actualiza la fila `pendiente` ya existente para (evento, persona)
+  y dispara `publicarAccountabilityDeEvento` después de cada escritura.
+
+### Endpoint para las confirmaciones de Mobile
+
+**Decisión tomada (2026-08-27): REST, no MQTT.** La ficha dejaba esto sin
+definir ("REST vs. WebSocket"). Se eligió REST porque el resto del modelo ya
+asume un flujo push-out/callback-in (`personas.push_token` implica que a
+Mobile se le avisa por push; un teléfono no mantiene una conexión de broker
+persistente en background, así que "Mobile publica en un tópico MQTT como
+si fuera otra consola" no es viable de verdad). Sin framework — un endpoint
+solo no lo justifica (`src/lib/http.ts`, con el módulo `http` nativo).
+
+```
+POST /confirmaciones
+Content-Type: application/json
+
+{
+  "personaId": "<uuid>",
+  "eventoId": "<uuid>",
+  "estado": "ok" | "ayuda",
+  "puntoId": "<uuid> | null",       // opcional
+  "notaAyuda": "texto | null",       // opcional, solo tiene sentido con "ayuda"
+  "ubicacionLat": <number> | null,   // opcional
+  "ubicacionLng": <number> | null    // opcional
+}
+```
+
+Respuestas: `200` con la fila de `confirmaciones` actualizada · `400` si el
+body no valida (campo faltante/tipo incorrecto) · `404` si el evento no
+existe, o si la persona no fue notificada de ese evento (no hay fila
+`pendiente` para ese par) · `409` si el evento ya no está `en_curso` (no
+tiene sentido de negocio seguir confirmando contra una emergencia cerrada).
+
+Probado de punta a punta contra el Supabase y el Mosquitto reales
+(`test/confirmar.test.ts` para la validación pura + un ciclo manual con
+`curl` cubriendo los 4 casos de respuesta, incluido el `409` tras cerrar el
+evento con OK) — ver sesión 2026-08-27.
 
 ## Qué NO está implementado todavía (a propósito, ver la ficha)
 
 - **Despacho real de push/SMS** — el proveedor todavía no está elegido (ver
   "Próximos pasos" de `03-backend-online.md`). Hoy el servidor solo loguea
   cuántos destinatarios habría que notificar.
-- **Endpoint para las confirmaciones de Mobile** ("estoy bien"/"necesito
-  ayuda") — hoy `publicarAccountabilityDeEvento` existe pero nadie la llama
-  todavía; falta el canal por el que Mobile manda la confirmación (ver
-  "Próximos pasos" de la ficha: REST vs. WebSocket, todavía sin definir).
+- **Autenticación del endpoint de Mobile** — hoy `POST /confirmaciones` no
+  pide ninguna credencial (mismo estado que el Mosquitto local, `allow_anonymous
+  true`); antes de producción hace falta decidir el mecanismo (JWT del login
+  de Mobile, lo más probable) — ver "Decisiones pendientes".
 - **Publicación de `consolas/{id}/simulacro`** — la función de
   `handlers/padron.ts` para el padrón de operadores está armada; falta la
   equivalente para el próximo simulacro programado (mismo patrón, tabla
@@ -258,6 +300,9 @@ frontend → broker → backend está bien, independiente de ese bloqueo.
 - Autenticación de cada consola contra el broker MQTT (usuario/contraseña
   por consola vs. certificado por dispositivo) — ver "Próximos pasos" de la
   ficha de Programación, todavía sin elegir.
+- Autenticación de `POST /confirmaciones` (probablemente JWT del login de
+  Mobile, pero no está decidido) — hoy queda abierto, sin verificar siquiera
+  que quien confirma es realmente esa `personaId`.
 - Frecuencia de sincronización del padrón hacia las consolas (¿cada cuánto
   se llama `sincronizarPadronDeSitio`? ¿poll a intervalo fijo, o
   suscripción a cambios de Supabase Realtime sobre `operadores`?).

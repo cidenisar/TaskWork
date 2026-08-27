@@ -147,3 +147,19 @@ export interface PayloadEventoActivoMqtt {
   relacion: "mismo-sitio" | "sitio-vecino";
   ts: number;
 }
+
+/**
+ * Body de `POST /confirmaciones` (Mobile → Backend). No es MQTT — es un
+ * endpoint HTTP normal (ver README, "Endpoint para las confirmaciones de
+ * Mobile"): un teléfono no mantiene una conexión de broker persistente en
+ * background, así que el flujo es push-out / REST-in, no push-out / MQTT-in.
+ */
+export interface PayloadConfirmacionHttp {
+  personaId: string;
+  eventoId: string;
+  estado: "ok" | "ayuda";
+  puntoId: string | null;
+  notaAyuda: string | null;
+  ubicacionLat: number | null;
+  ubicacionLng: number | null;
+}

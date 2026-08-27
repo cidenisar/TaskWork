@@ -13,6 +13,7 @@ import type {
   TipoEvento,
   Consola,
   Confirmacion,
+  EstadoEvento,
 } from "../types.js";
 import type { ConfirmacionInicial, EventoPuntoInicial } from "../logic/eventos.js";
 import type { RegistroAuditoriaPin } from "../logic/auth.js";
@@ -167,6 +168,46 @@ export class Db {
   async actualizarEstadoConsola(consolaId: string, enLinea: boolean): Promise<void> {
     const { error } = await this.client.from("consolas").update({ en_linea: enLinea }).eq("id", consolaId);
     if (error) throw error;
+  }
+
+  /** Para el handler de POST /confirmaciones: a qué sitio pertenece el evento y si sigue en curso. */
+  async getEventoParaConfirmar(eventoId: string): Promise<{ sitio_id: string; estado: EstadoEvento } | null> {
+    const { data, error } = await this.client
+      .from("eventos")
+      .select("sitio_id, estado")
+      .eq("id", eventoId)
+      .maybeSingle();
+    if (error) throw error;
+    return data as { sitio_id: string; estado: EstadoEvento } | null;
+  }
+
+  /**
+   * Actualiza la confirmación que ya existe para (evento, persona) — nace
+   * `pendiente` al abrir el evento (ver crearConfirmacionesIniciales), esto
+   * nunca inserta una fila nueva. Devuelve null si no hay ninguna fila para
+   * ese par — significa que esa persona no fue notificada de ese evento
+   * (personaId equivocado, o no estaba activa en el sitio cuando se abrió).
+   */
+  async actualizarConfirmacion(
+    eventoId: string,
+    personaId: string,
+    campos: {
+      estado: "ok" | "ayuda";
+      punto_id: string | null;
+      nota_ayuda: string | null;
+      ubicacion_lat: number | null;
+      ubicacion_lng: number | null;
+    }
+  ): Promise<Confirmacion | null> {
+    const { data, error } = await this.client
+      .from("confirmaciones")
+      .update({ ...campos, confirmado_at: new Date().toISOString() })
+      .eq("evento_id", eventoId)
+      .eq("persona_id", personaId)
+      .select("id, evento_id, persona_id, estado, punto_id, canal")
+      .maybeSingle();
+    if (error) throw error;
+    return data as Confirmacion | null;
   }
 
   async getConfirmacionesDeEvento(eventoId: string): Promise<Confirmacion[]> {

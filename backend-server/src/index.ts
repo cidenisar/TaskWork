@@ -6,7 +6,8 @@
 import "dotenv/config";
 import { crearClienteDb, Db } from "./lib/db.js";
 import { conectar, suscribirEntrantes, idConsolaDeTopico } from "./lib/mqtt.js";
-import { manejarEvento, publicarAccountabilityDeEvento } from "./handlers/eventos.js";
+import { crearServidorHttp } from "./lib/http.js";
+import { manejarEvento } from "./handlers/eventos.js";
 import { manejarAuth } from "./handlers/auth.js";
 import { manejarHeartbeat, manejarEstado } from "./handlers/estadoConsola.js";
 import type {
@@ -17,6 +18,11 @@ import type {
 
 const db = new Db(crearClienteDb());
 const mqttClient = conectar();
+
+const httpPort = Number(process.env.HTTP_PORT ?? 8090);
+crearServidorHttp(db, mqttClient).listen(httpPort, () => {
+  console.log(`[http] escuchando en :${httpPort} — POST /confirmaciones (canal de Mobile)`);
+});
 
 mqttClient.on("connect", () => {
   console.log("[mqtt] conectado — suscribiendo tópicos entrantes");
@@ -58,13 +64,5 @@ async function manejarMensaje(consolaId: string, resto: string, raw: string): Pr
     return;
   }
 }
-
-// TODO: publicarAccountabilityDeEvento hay que llamarlo cada vez que se
-// escribe una confirmación (ver "Próximos pasos" — falta el endpoint/canal
-// por el que Mobile manda "estoy bien"/"necesito ayuda"; cuando exista, ese
-// mismo código llama a esta función después de cada escritura). Se deja
-// importada acá para dejar visible el enganche pendiente, no para que quede
-// sin usar silenciosamente.
-void publicarAccountabilityDeEvento;
 
 console.log("[backend-online] arrancando…");
