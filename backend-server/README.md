@@ -20,10 +20,11 @@ src/
     simulacro.ts             "Próximo simulacro", vencidos, y la fila siguiente al resolverse uno recurrente
     recurrencia.ts            Motor de recurrencia: calcula la próxima ocurrencia de una regla
     despacho.ts              Arma el texto del push/SMS de un evento
+    cumplimiento.ts           Agrupa el historial de simulacros por (sitio, tipo) y calcula alDia
   lib/
     db.ts                  Acceso a Supabase (service_role — bypasea RLS)
     mqtt.ts                Cliente MQTT y helpers de tópicos
-    http.ts                 Servidor HTTP mínimo (POST /confirmaciones — Mobile)
+    http.ts                 Servidor HTTP mínimo (POST /confirmaciones, GET /simulacros/cumplimiento)
     push.ts                 Wrapper de Firebase Cloud Messaging
     sms.ts                  Wrapper de Twilio
     despachador.ts           Decide push vs. SMS por persona y despacha
@@ -249,6 +250,7 @@ frontend → broker → backend está bien, independiente de ese bloqueo.
 - **Marcar un simulacro como "no_realizado"** tras 1h sin dispararse —
   barrido periódico, ver esa sección más abajo.
 - **Simulacro sorpresa, escenario y relé/sirena** — ver esa sección más abajo.
+- **Vista de cumplimiento** — `GET /simulacros/cumplimiento`, ver esa sección más abajo.
 
 ### Despacho real de push/SMS
 
@@ -352,7 +354,9 @@ verifica la firma a mano (evita depender de si el proyecto usa un secreto
 HS256 compartido o claves asimétricas/JWKS — de hecho este proyecto ya usa
 claves asimétricas, `alg: ES256`, se confirmó al probarlo): en cambio llama
 a `auth.getUser(token)` con el cliente `service_role` ya existente, que
-valida contra el propio servidor de Auth de Supabase (`Db.verificarJwtMobile`).
+valida contra el propio servidor de Auth de Supabase (`Db.verificarJwt` —
+renombrado más adelante, ver "Vista de cumplimiento": dejó de ser
+específico de Mobile).
 
 Encontrado al implementar esto: la tabla `personas` (el padrón grande, a
 diferencia de `operadores` que sí tenía `auth_user_id`) no tenía forma de
@@ -587,6 +591,39 @@ real disparado contra ese simulacro sorpresa → el `evento-activo`
 resultante trajo `activarRele: true` y el `escenario` completo; la fila
 pasó a `realizado` en la base. Datos y flag de prueba revertidos al
 terminar.
+
+### Vista de cumplimiento
+
+`GET /simulacros/cumplimiento` (`?sitioId=<uuid>` opcional, omitir para
+todos los sitios) — la pieza que le permite a un responsable de seguridad
+mirar el estado real del programa de simulacros, no solo consultarlo fila
+por fila en la base.
+
+**Granularidad: (sitio, tipo de evento), no por sitio a secas** — un sitio
+puede tener su programa de Incendio al día y el de Tóxico completamente
+vencido; mezclarlos en un solo estado por sitio escondería justo lo que
+importa ver. Por cada par devuelve: el último simulacro que se resolvió
+(`realizado` o `no_realizado`, con fecha), el próximo programado si el
+programa sigue vivo, y `alDia` — true solo si el último resuelto fue
+`realizado`. **Sin historial cuenta como NO al día**, a propósito: no hay
+evidencia de que se haya probado nunca, y eso es justo lo que un auditor
+necesita ver marcado, no que se lo salteen en silencio. Cálculo puro en
+`src/logic/cumplimiento.ts` (`calcularCumplimiento`, 8 tests).
+
+**Auth: JWT de Supabase Auth, igual que `POST /confirmaciones`, pero
+resuelve a un OPERADOR (no a una persona) y exige `rol: admin`** — esto es
+una vista de gestión/auditoría, no algo que use el personal general.
+`operadores.auth_user_id` ya existía en el esquema (no hizo falta
+migración, a diferencia de `personas`). `Db.verificarJwtMobile` se
+renombró a `Db.verificarJwt` — no era específico de Mobile, ahora lo
+reusan los dos endpoints.
+
+Validado de punta a punta contra Supabase real, los 4 casos de respuesta:
+sin header → `401` · token inválido → `401` · operador válido pero sin
+rol `admin` → `403` · admin con datos reales (un sitio con Incendio
+`realizado`+`programado` y Tóxico solo `no_realizado`) → `200` con
+`alDia: true`/`false` correctos para cada tipo. Datos, operador y
+usuarios de prueba borrados al terminar.
 
 ## Qué NO está implementado todavía (a propósito, ver la ficha)
 

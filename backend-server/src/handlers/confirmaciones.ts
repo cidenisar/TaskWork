@@ -33,7 +33,7 @@ export async function manejarConfirmacion(
   if (!token) {
     return { status: 401, body: { error: "falta el header Authorization: Bearer <token>" } };
   }
-  const authUserId = await db.verificarJwtMobile(token);
+  const authUserId = await db.verificarJwt(token);
   if (!authUserId) {
     return { status: 401, body: { error: "token inválido o expirado" } };
   }

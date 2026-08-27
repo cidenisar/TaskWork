@@ -14,7 +14,9 @@ import type {
   Consola,
   Confirmacion,
   EstadoEvento,
+  EstadoSimulacro,
   SimulacroProgramado,
+  FilaHistorialSimulacro,
 } from "../types.js";
 import type { ConfirmacionInicial, EventoPuntoInicial } from "../logic/eventos.js";
 import type { RegistroAuditoriaPin } from "../logic/auth.js";
@@ -179,8 +181,12 @@ export class Db {
    * esquema de firma use el proyecto (HS256 con secreto compartido vs.
    * claves asimétricas/JWKS); `auth.getUser` ya lo resuelve. Devuelve el
    * `auth_user_id`, o null si el token es inválido o expiró.
+   *
+   * No es específico de Mobile pese al nombre original — lo reusa también
+   * GET /simulacros/cumplimiento (ver handlers/cumplimiento.ts) para
+   * autenticar operadores, no solo personas.
    */
-  async verificarJwtMobile(token: string): Promise<string | null> {
+  async verificarJwt(token: string): Promise<string | null> {
     const { data, error } = await this.client.auth.getUser(token);
     if (error || !data.user) return null;
     return data.user.id;
@@ -195,6 +201,17 @@ export class Db {
       .maybeSingle();
     if (error) throw error;
     return data as { id: string } | null;
+  }
+
+  /** El operador vinculado a esa cuenta (operadores.auth_user_id, ya existía en el esquema) — null si ninguno. */
+  async getOperadorPorAuthUserId(authUserId: string): Promise<{ id: string; rol: "operador" | "admin" } | null> {
+    const { data, error } = await this.client
+      .from("operadores")
+      .select("id, rol")
+      .eq("auth_user_id", authUserId)
+      .maybeSingle();
+    if (error) throw error;
+    return data as { id: string; rol: "operador" | "admin" } | null;
   }
 
   /** Para el handler de POST /confirmaciones: a qué sitio pertenece el evento y si sigue en curso. */
@@ -273,6 +290,39 @@ export class Db {
       .eq("estado", "programado");
     if (error) throw error;
     return this.mapFilasSimulacro(data);
+  }
+
+  /**
+   * Todo el historial de simulacros (cualquier estado) — para GET
+   * /simulacros/cumplimiento (ver handlers/cumplimiento.ts). A diferencia
+   * de las otras consultas de simulacros, esta SÍ trae el nombre del sitio
+   * (join a `sitios`) — es la única que lo necesita, no vale la pena
+   * traerlo en las demás.
+   */
+  async getHistorialSimulacros(sitioId: string | null): Promise<FilaHistorialSimulacro[]> {
+    let query = this.client
+      .from("simulacros_programados")
+      .select("sitio_id, tipo_evento_id, fecha_hora, estado, sitios(nombre), tipos_evento(nombre)");
+    if (sitioId) query = query.eq("sitio_id", sitioId);
+    const { data, error } = await query;
+    if (error) throw error;
+
+    type Fila = {
+      sitio_id: string;
+      tipo_evento_id: string;
+      fecha_hora: string | null;
+      estado: EstadoSimulacro;
+      sitios: { nombre: string } | null;
+      tipos_evento: { nombre: string } | null;
+    };
+    return ((data ?? []) as unknown as Fila[]).map((f) => ({
+      sitioId: f.sitio_id,
+      sitioNombre: f.sitios?.nombre ?? "(sitio desconocido)",
+      tipoEventoId: f.tipo_evento_id,
+      tipoEventoNombre: f.tipos_evento?.nombre ?? "(tipo desconocido)",
+      fechaHora: f.fecha_hora,
+      estado: f.estado,
+    }));
   }
 
   private static readonly SELECT_SIMULACRO =

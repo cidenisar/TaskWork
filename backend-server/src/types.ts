@@ -126,6 +126,21 @@ export interface SimulacroProgramado {
   escenario: string | null;
 }
 
+/**
+ * Fila del historial de simulacros (cualquier estado, no solo
+ * `programado`) para GET /simulacros/cumplimiento — ver
+ * logic/cumplimiento.ts. Trae `sitioNombre` (no lo trae
+ * SimulacroProgramado — es la única consulta que lo necesita).
+ */
+export interface FilaHistorialSimulacro {
+  sitioId: string;
+  sitioNombre: string;
+  tipoEventoId: string;
+  tipoEventoNombre: string;
+  fechaHora: string | null;
+  estado: EstadoSimulacro;
+}
+
 // ---------------------------------------------------------------------------
 // Contrato MQTT (ver ficha Programación)
 // ---------------------------------------------------------------------------

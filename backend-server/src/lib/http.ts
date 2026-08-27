@@ -7,6 +7,7 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import type { MqttClient } from "mqtt";
 import type { Db } from "./db.js";
 import { manejarConfirmacion } from "../handlers/confirmaciones.js";
+import { manejarCumplimiento } from "../handlers/cumplimiento.js";
 
 function leerBody(req: IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -32,7 +33,7 @@ export function crearServidorHttp(db: Db, mqttClient: MqttClient): Server {
     if (req.method === "OPTIONS") {
       res.writeHead(204, {
         "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "POST, OPTIONS",
+        "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
         "Access-Control-Allow-Headers": "Content-Type, Authorization",
       });
       res.end();
@@ -54,6 +55,20 @@ export function crearServidorHttp(db: Db, mqttClient: MqttClient): Server {
           responderJson(res, resultado.status, resultado.body);
         } catch (err) {
           console.error("[http] error procesando POST /confirmaciones:", err);
+          responderJson(res, 500, { error: "error interno" });
+        }
+      })();
+      return;
+    }
+
+    if (req.method === "GET" && req.url?.startsWith("/simulacros/cumplimiento")) {
+      void (async () => {
+        try {
+          const sitioId = new URL(req.url as string, "http://localhost").searchParams.get("sitioId");
+          const resultado = await manejarCumplimiento(db, req.headers.authorization, sitioId);
+          responderJson(res, resultado.status, resultado.body);
+        } catch (err) {
+          console.error("[http] error procesando GET /simulacros/cumplimiento:", err);
           responderJson(res, 500, { error: "error interno" });
         }
       })();

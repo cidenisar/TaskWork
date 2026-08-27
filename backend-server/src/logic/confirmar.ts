@@ -59,7 +59,7 @@ export function validarConfirmacion(body: unknown): ResultadoValidacion {
 /**
  * Extrae el token de un header `Authorization: Bearer <token>` — pura,
  * separada de la verificación real del JWT (esa sí necesita I/O, ver
- * Db.verificarJwtMobile). Devuelve null si el header falta o no tiene la
+ * Db.verificarJwt). Devuelve null si el header falta o no tiene la
  * forma esperada.
  */
 export function extraerBearerToken(authorizationHeader: string | undefined | null): string | null {
