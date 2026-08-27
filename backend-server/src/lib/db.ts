@@ -18,6 +18,7 @@ import type {
 } from "../types.js";
 import type { ConfirmacionInicial, EventoPuntoInicial } from "../logic/eventos.js";
 import type { RegistroAuditoriaPin } from "../logic/auth.js";
+import type { NuevaFilaSimulacro } from "../logic/simulacro.js";
 
 export function crearClienteDb(): SupabaseClient {
   const url = process.env.SUPABASE_URL;
@@ -249,7 +250,7 @@ export class Db {
   async getSimulacrosProgramadosDeSitio(sitioId: string): Promise<SimulacroProgramado[]> {
     const { data, error } = await this.client
       .from("simulacros_programados")
-      .select("id, sitio_id, puntual, fecha_hora, estado, tipos_evento(nombre)")
+      .select(Db.SELECT_SIMULACRO)
       .eq("sitio_id", sitioId)
       .eq("estado", "programado");
     if (error) throw error;
@@ -257,49 +258,82 @@ export class Db {
   }
 
   /**
-   * Todos los simulacros puntuales `programado`, de cualquier sitio — para
-   * el barrido periódico que busca vencidos (ver
-   * handlers/simulacro.ts, marcarSimulacrosVencidosComoNoRealizados). A
-   * diferencia de getSimulacrosProgramadosDeSitio, no filtra por sitio (es
-   * un chequeo global) y sí filtra `puntual` en la query — los recurrentes
-   * ni se traen, total logic/simulacro.ts los descarta igual.
+   * Todos los simulacros `programado`, de cualquier sitio — para el
+   * barrido periódico que busca vencidos (ver handlers/simulacro.ts,
+   * marcarSimulacrosVencidosComoNoRealizados). A diferencia de
+   * getSimulacrosProgramadosDeSitio, no filtra por sitio (es un chequeo
+   * global). Ya no filtra por `puntual` — las recurrentes también tienen
+   * una fecha_hora concreta (ver types.ts, SimulacroProgramado) y también
+   * pueden vencer.
    */
-  async getTodosLosSimulacrosProgramadosPuntuales(): Promise<SimulacroProgramado[]> {
+  async getTodosLosSimulacrosProgramados(): Promise<SimulacroProgramado[]> {
     const { data, error } = await this.client
       .from("simulacros_programados")
-      .select("id, sitio_id, puntual, fecha_hora, estado, tipos_evento(nombre)")
-      .eq("estado", "programado")
-      .eq("puntual", true);
+      .select(Db.SELECT_SIMULACRO)
+      .eq("estado", "programado");
     if (error) throw error;
     return this.mapFilasSimulacro(data);
   }
+
+  private static readonly SELECT_SIMULACRO =
+    "id, sitio_id, tipo_evento_id, puntual, fecha_hora, estado, recurrencia, tipos_evento(nombre)";
 
   private mapFilasSimulacro(data: unknown[] | null): SimulacroProgramado[] {
     type Fila = {
       id: string;
       sitio_id: string;
+      tipo_evento_id: string;
       puntual: boolean;
       fecha_hora: string | null;
       estado: SimulacroProgramado["estado"];
+      recurrencia: SimulacroProgramado["recurrencia"];
       tipos_evento: { nombre: string } | null;
     };
     return ((data ?? []) as unknown as Fila[]).map((f) => ({
       id: f.id,
       sitioId: f.sitio_id,
+      tipoEventoId: f.tipo_evento_id,
       tipoEventoNombre: f.tipos_evento?.nombre ?? "(tipo desconocido)",
       puntual: f.puntual,
       fechaHora: f.fecha_hora,
       estado: f.estado,
+      recurrencia: f.recurrencia,
     }));
   }
 
-  /** Transición terminal — ver logic/simulacro.ts, simulacrosVencidos. */
-  async marcarSimulacroNoRealizado(id: string): Promise<void> {
-    const { error } = await this.client
+  /**
+   * Transiciona un simulacro de `programado` a un estado terminal
+   * (`realizado` o `no_realizado`) y devuelve la fila completa si la
+   * transición aplicó — null si ya no estaba en `programado` (alguien más
+   * ya lo resolvió, o el id no existe). El caller usa la fila devuelta
+   * para decidir si hay que generar la próxima ocurrencia (ver
+   * logic/simulacro.ts, proximaFilaSimulacro).
+   */
+  async transicionarSimulacro(
+    id: string,
+    nuevoEstado: "realizado" | "no_realizado"
+  ): Promise<SimulacroProgramado | null> {
+    const { data, error } = await this.client
       .from("simulacros_programados")
-      .update({ estado: "no_realizado" })
+      .update({ estado: nuevoEstado })
       .eq("id", id)
-      .eq("estado", "programado"); // no pisar si alguien ya lo movió de estado mientras tanto
+      .eq("estado", "programado") // no pisar si alguien ya lo movió de estado mientras tanto
+      .select(Db.SELECT_SIMULACRO)
+      .maybeSingle();
+    if (error) throw error;
+    return data ? this.mapFilasSimulacro([data])[0] : null;
+  }
+
+  /** Inserta la fila de la próxima ocurrencia de un simulacro recurrente — ver logic/simulacro.ts, proximaFilaSimulacro. */
+  async insertProximaOcurrenciaSimulacro(fila: NuevaFilaSimulacro): Promise<void> {
+    const { error } = await this.client.from("simulacros_programados").insert({
+      sitio_id: fila.sitioId,
+      tipo_evento_id: fila.tipoEventoId,
+      puntual: false,
+      fecha_hora: fila.fechaHora,
+      recurrencia: fila.recurrencia,
+      estado: "programado",
+    });
     if (error) throw error;
   }
 

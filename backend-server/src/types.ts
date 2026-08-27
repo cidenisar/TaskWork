@@ -74,17 +74,43 @@ export interface TipoEvento {
 export type EstadoSimulacro = "programado" | "pendiente_confirmacion" | "realizado" | "no_realizado";
 
 /**
- * Subconjunto de `simulacros_programados` que necesita la lógica de "cuál
- * es el próximo simulacro de este sitio" (ver src/logic/simulacro.ts).
+ * Forma de la columna `recurrencia` (jsonb) de `simulacros_programados` —
+ * ver logic/recurrencia.ts para el cálculo de la próxima ocurrencia.
+ * Dos formas cubren los patrones reales de un programa de simulacros de
+ * seguridad industrial (mensual, trimestral, semestral, "el primer lunes
+ * de cada trimestre") sin la complejidad de un estándar completo tipo
+ * RRULE, que sería mucha más potencia de la que hace falta acá:
+ *
+ *  - "intervalo": cada N semanas/meses desde la ocurrencia actual.
+ *  - "posicion": el N-ésimo día de semana del mes, cada N meses — para
+ *    patrones tipo "el primer lunes de cada trimestre" (diaSemana: 1,
+ *    posicion: 1, cadaMeses: 3). `posicion: -1` = el último de ese día en
+ *    el mes.
+ */
+export type ReglaRecurrencia =
+  | { tipo: "intervalo"; unidad: "semanas" | "meses"; cada: number }
+  | { tipo: "posicion"; diaSemana: 0 | 1 | 2 | 3 | 4 | 5 | 6; posicion: 1 | 2 | 3 | 4 | -1; cadaMeses: number };
+
+/**
+ * Subconjunto de `simulacros_programados` que necesita la lógica de
+ * simulacros (ver src/logic/simulacro.ts, src/logic/recurrencia.ts).
  * `tipoEventoNombre` viene resuelto por join en la query — evita un N+1.
+ *
+ * Toda fila `programado` tiene una `fechaHora` concreta — puntual o
+ * recurrente (el modelo anterior dejaba `fechaHora: null` en las
+ * recurrentes; ya no: cada ocurrencia agendada tiene su fecha propia, y
+ * `recurrencia` no-null es lo que dispara que se genere la siguiente al
+ * resolverse esta — ver handlers/simulacro.ts, resolverSimulacroProgramado).
  */
 export interface SimulacroProgramado {
   id: string;
   sitioId: string;
+  tipoEventoId: string;
   tipoEventoNombre: string;
   puntual: boolean;
-  fechaHora: string | null; // ISO; null en los recurrentes (ver logic/simulacro.ts)
+  fechaHora: string | null; // ISO
   estado: EstadoSimulacro;
+  recurrencia: ReglaRecurrencia | null;
 }
 
 // ---------------------------------------------------------------------------

@@ -9,6 +9,7 @@ import { planificarEvento, crearConfirmacionesIniciales, activarPuntosParaEvento
 import { calcularAccountability } from "../logic/accountability.js";
 import { armarMensajeDespacho } from "../logic/despacho.js";
 import { resolverConsolasParaEventoActivo } from "../logic/eventoActivo.js";
+import { resolverSimulacroProgramado } from "./simulacro.js";
 import type { Persona, PayloadEventoMqtt, PayloadEventoActivoMqtt } from "../types.js";
 
 export async function manejarEvento(
@@ -73,6 +74,13 @@ export async function manejarEvento(
         ...(plan.esCierre ? { estado: "cerrado" as const, cerrado_at: new Date().toISOString() } : {}),
       });
 
+      // Este evento es el simulacro programado disparándose de verdad — ver
+      // README "Motor de recurrencia": sin esto, marcarSimulacrosVencidosComoNoRealizados
+      // terminaría marcando como "no realizado" simulacros que sí se hicieron.
+      if (payload.simulacroProgramadoId) {
+        await resolverSimulacroProgramado(db, payload.simulacroProgramadoId, "realizado");
+      }
+
       if (!plan.esCierre) {
         // Evento real (no OK): activar puntos + crear confirmaciones para
         // todo el personal activo del sitio (ver ficha, "Padrón de Personas").
@@ -129,6 +137,10 @@ export async function manejarEvento(
         estado: "cerrado",
         cerrado_at: ahora,
       });
+
+      if (payload.simulacroProgramadoId) {
+        await resolverSimulacroProgramado(db, payload.simulacroProgramadoId, "realizado");
+      }
 
       // Al cerrar, no queda ningún evento activo relevante para el sitio.
       await publicarEventoActivoParaSitio(db, mqttClient, sitioId, null);

@@ -17,7 +17,8 @@ src/
     eventoActivo.ts         A qué consolas (propio sitio + vecinos) avisar
     auth.ts                 Armado del registro de auditoría de PIN
     confirmar.ts            Validación del body de POST /confirmaciones (Mobile)
-    simulacro.ts             Elige "el próximo simulacro" puntual de un sitio
+    simulacro.ts             "Próximo simulacro", vencidos, y la fila siguiente al resolverse uno recurrente
+    recurrencia.ts            Motor de recurrencia: calcula la próxima ocurrencia de una regla
     despacho.ts              Arma el texto del push/SMS de un evento
   lib/
     db.ts                  Acceso a Supabase (service_role — bypasea RLS)
@@ -463,14 +464,80 @@ la recepción de `evento-activo`).
   (`src/handlers/simulacro.ts`), enganchada a un `setInterval` en `index.ts`
   (cada 15 min, más una corrida al arrancar). **Decisión tomada
   (2026-08-27): margen de 1 hora** tras la `fecha_hora` programada — ver
-  `logic/simulacro.ts`, `MARGEN_NO_REALIZADO_MS`. Mismo alcance que
-  `elegirProximoSimulacro`: solo simulacros puntuales.
+  `logic/simulacro.ts`, `MARGEN_NO_REALIZADO_MS`. Aplica a cualquier fila
+  `programado` con `fecha_hora` — puntual o recurrente (ver "Motor de
+  recurrencia" más abajo; antes solo cubría puntuales).
 
   Validado contra Supabase real: insertado un simulacro con `fecha_hora`
   2h en el pasado — al reiniciar el backend, el barrido inicial lo marcó
   `no_realizado` (`[simulacros] marcados no_realizado: 1`). Insertado un
   segundo con `fecha_hora` 30 min en el pasado (dentro del margen) — un
   segundo reinicio no lo tocó, confirma que el límite de 1h se respeta.
+
+### Motor de recurrencia de simulacros
+
+**Decisión tomada (2026-08-27), a partir de una sesión de "cómo hacer esto
+más profesional":** dos formas de regla para `recurrencia` (jsonb),
+guardadas en `types.ts` como `ReglaRecurrencia`, en vez de adoptar un
+estándar completo tipo RRULE (mucha más potencia de la que hace falta acá)
+o inventar algo ad-hoc sin estructura:
+
+```ts
+| { tipo: "intervalo"; unidad: "semanas" | "meses"; cada: number }
+| { tipo: "posicion"; diaSemana: 0-6; posicion: 1 | 2 | 3 | 4 | -1; cadaMeses: number }
+```
+
+`"intervalo"` cubre "cada N semanas/meses" (mensual, trimestral,
+semestral). `"posicion"` cubre "el N-ésimo día de semana del mes, cada N
+meses" — para patrones tipo "el primer lunes de cada trimestre"
+(`diaSemana: 1, posicion: 1, cadaMeses: 3`); `posicion: -1` = el último de
+ese día en el mes. Entre las dos cubren los patrones reales de un
+programa de simulacros de seguridad industrial. El cálculo de la próxima
+fecha vive en `src/logic/recurrencia.ts` (`calcularProximaOcurrencia`,
+pura, 7 tests — incluye cruce de fin de año y meses de distinta
+duración), usando siempre métodos UTC de `Date` para no depender de la
+zona horaria del proceso.
+
+**Cambio de modelo que esto trajo:** antes, una fila recurrente
+(`puntual: false`) se guardaba con `fecha_hora: null` — no había ancla
+desde donde calcular nada. Ahora **toda fila `programado` tiene una
+`fecha_hora` concreta**, puntual o recurrente; lo que distingue a una
+recurrente es que además carga una `recurrencia` no-nula. Esto es lo que
+permitió sacar el filtro `puntual` de `elegirProximoSimulacro` y de
+`simulacrosVencidos` — antes ignoraban cualquier fila recurrente por
+completo, ahora participan igual que las puntuales.
+
+**Hallazgo real al revisar el código para esto:** `eventos.simulacro_programado_id`
+se guardaba desde que se armó el modelo, pero **nada lo leía después** —
+ninguna fila de `simulacros_programados` pasaba a `realizado` nunca, ni
+aunque el simulacro se hubiera disparado de verdad. Con eso, el barrido de
+`no_realizado` de ayer eventualmente iba a marcar como "no realizado"
+simulacros que sí se hicieron. Arreglado: `handlers/eventos.ts` llama a
+`resolverSimulacroProgramado(db, simulacroProgramadoId, "realizado")`
+cada vez que se inserta un evento con ese id — en los dos lugares donde se
+inserta un evento (abrir uno nuevo, o el propio OK que cierra).
+
+**Auto-generación de la próxima ocurrencia:** `resolverSimulacroProgramado`
+(`src/handlers/simulacro.ts`) es el único punto por el que un simulacro
+pasa a un estado terminal — lo llaman tanto el barrido de vencidos
+(`no_realizado`) como el enganche nuevo en `handlers/eventos.ts`
+(`realizado`). Si la fila resuelta tiene `recurrencia`, genera y guarda la
+fila de la próxima ocurrencia con la misma regla (`logic/simulacro.ts`,
+`proximaFilaSimulacro` — pura, calcula desde la fecha de ESTA ocurrencia,
+no desde "ahora", para que un atraso puntual no corra todo el programa
+hacia adelante). Así, `simulacros_programados` deja de ser una lista que
+alguien tiene que rellenar a mano fila por fila — un programa recurrente
+se auto-perpetúa solo.
+
+Validado de punta a punta contra Supabase y Mosquitto reales, los dos
+caminos de resolución:
+- Insertado un recurrente (`cada: 3 meses`) con `fecha_hora` 2h en el
+  pasado → el barrido al reiniciar lo marcó `no_realizado` y generó la fila
+  siguiente exactamente 3 meses después, `programado`, misma regla.
+- Disparado un evento real (modo `SIMULACRO`) con ese `simulacroProgramadoId`
+  apuntando a la fila recién generada → pasó a `realizado` y generó OTRA
+  fila 3 meses después de esa. El programa se auto-perpetuó en cadena por
+  los dos caminos. Datos de prueba limpiados.
 
 ## Qué NO está implementado todavía (a propósito, ver la ficha)
 
@@ -485,10 +552,6 @@ la recepción de `evento-activo`).
 
 ## Decisiones pendientes (para no perderlas de vista)
 
-- Formato de la columna `recurrencia` (jsonb) de `simulacros_programados` —
-  hasta que se defina, `elegirProximoSimulacro` (`src/logic/simulacro.ts`)
-  no calcula la próxima ocurrencia de los simulacros recurrentes
-  (`puntual: false`); esas filas simplemente no entran en la selección.
 - Frecuencia de sincronización del padrón hacia las consolas (¿cada cuánto
   se llama `sincronizarPadronDeSitio`? ¿poll a intervalo fijo, o
   suscripción a cambios de Supabase Realtime sobre `operadores`?).
