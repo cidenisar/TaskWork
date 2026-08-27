@@ -3,13 +3,20 @@
 
 import type { MqttClient } from "mqtt";
 import type { Db } from "../lib/db.js";
+import type { Despachador } from "../lib/despachador.js";
 import { publicarEventoActivo, publicarAccountability } from "../lib/mqtt.js";
 import { planificarEvento, crearConfirmacionesIniciales, activarPuntosParaEvento } from "../logic/eventos.js";
 import { calcularAccountability } from "../logic/accountability.js";
+import { armarMensajeDespacho } from "../logic/despacho.js";
 import { resolverConsolasParaEventoActivo } from "../logic/eventoActivo.js";
-import type { PayloadEventoMqtt, PayloadEventoActivoMqtt } from "../types.js";
+import type { Persona, PayloadEventoMqtt, PayloadEventoActivoMqtt } from "../types.js";
 
-export async function manejarEvento(db: Db, mqttClient: MqttClient, payload: PayloadEventoMqtt): Promise<void> {
+export async function manejarEvento(
+  db: Db,
+  mqttClient: MqttClient,
+  despachador: Despachador,
+  payload: PayloadEventoMqtt
+): Promise<void> {
   const consola = await db.getConsolaPorId(payload.consolaId);
   if (!consola) {
     console.error(`[eventos] consola desconocida: ${payload.consolaId} — se ignora el mensaje`);
@@ -67,19 +74,20 @@ export async function manejarEvento(db: Db, mqttClient: MqttClient, payload: Pay
       if (!plan.esCierre) {
         // Evento real (no OK): activar puntos + crear confirmaciones para
         // todo el personal activo del sitio (ver ficha, "Padrón de Personas").
-        const [personas, puntos] = await Promise.all([
+        const [personas, puntos, sitioNombre] = await Promise.all([
           db.getPersonasActivasDeSitio(sitioId),
           db.getPuntosActivosDeSitio(sitioId),
+          db.getSitioNombre(sitioId),
         ]);
         await db.insertConfirmacionesIniciales(crearConfirmacionesIniciales(personas, plan.eventoId));
         await db.insertEventosPuntosEstado(activarPuntosParaEvento(puntos, plan.eventoId));
 
-        // TODO (ver "Próximos pasos" de la ficha): acá va el despacho real de
-        // push/SMS una vez elegido el proveedor — por ahora queda como log
-        // explícito, ver README "Qué falta para producción".
-        console.log(
-          `[eventos] evento ${plan.eventoId} abierto en sitio ${sitioId} — ${personas.length} destinatarios a notificar (dispatch real: pendiente, ver Próximos pasos)`
-        );
+        await despacharATodos(despachador, personas, {
+          eventoId: plan.eventoId,
+          tipoEvento: payload.tipo,
+          sitioId,
+          sitioNombre,
+        });
       }
 
       // Un OK nunca es, en sí mismo, un evento activo — ni siquiera en este
@@ -125,6 +133,35 @@ export async function manejarEvento(db: Db, mqttClient: MqttClient, payload: Pay
       return;
     }
   }
+}
+
+/**
+ * Despacha a todos los destinatarios en paralelo. Un token de push inválido
+ * o un número que Twilio rechaza no debe tumbar el resto del evento — se
+ * loguea cada fallo individual y se sigue; el conteo final queda en un solo
+ * log de resumen (mismo lugar donde antes estaba el placeholder).
+ */
+async function despacharATodos(
+  despachador: Despachador,
+  personas: Persona[],
+  contexto: { eventoId: string; tipoEvento: string; sitioId: string; sitioNombre: string }
+): Promise<void> {
+  const mensaje = armarMensajeDespacho(contexto);
+  const resultados = await Promise.allSettled(personas.map((p) => despachador.despacharAPersona(p, mensaje)));
+
+  let fallidos = 0;
+  resultados.forEach((r, i) => {
+    if (r.status === "rejected") {
+      fallidos++;
+      console.error(`[eventos] error despachando a persona ${personas[i].id}:`, r.reason);
+    }
+  });
+
+  const ok = personas.length - fallidos;
+  console.log(
+    `[eventos] evento ${contexto.eventoId} abierto en sitio ${contexto.sitioId} — despachado a ${ok}/${personas.length} destinatarios` +
+      (fallidos > 0 ? ` (${fallidos} fallidos, ver log de arriba)` : "")
+  );
 }
 
 async function publicarEventoActivoParaSitio(

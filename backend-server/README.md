@@ -18,10 +18,14 @@ src/
     auth.ts                 Armado del registro de auditoría de PIN
     confirmar.ts            Validación del body de POST /confirmaciones (Mobile)
     simulacro.ts             Elige "el próximo simulacro" puntual de un sitio
+    despacho.ts              Arma el texto del push/SMS de un evento
   lib/
     db.ts                  Acceso a Supabase (service_role — bypasea RLS)
     mqtt.ts                Cliente MQTT y helpers de tópicos
     http.ts                 Servidor HTTP mínimo (POST /confirmaciones — Mobile)
+    push.ts                 Wrapper de Firebase Cloud Messaging
+    sms.ts                  Wrapper de Twilio
+    despachador.ts           Decide push vs. SMS por persona y despacha
   handlers/               Conectan lógica pura + db + mqtt para cada tópico
   index.ts                Punto de entrada
 test/                    Tests de la lógica pura (node:test, sin mocks de red)
@@ -236,6 +240,45 @@ frontend → broker → backend está bien, independiente de ese bloqueo.
   todavía no está enganchada a ningún disparador — ver "Decisiones
   pendientes"). Alcance actual: solo simulacros **puntuales**; ver esa
   sección para los recurrentes.
+- **Despacho real de push/SMS** — ver "Despacho real de push/SMS" más abajo.
+
+### Despacho real de push/SMS
+
+**Decisión tomada (2026-08-27): Firebase Cloud Messaging (push) + Twilio
+(SMS)**. Reemplaza el `console.log` que antes solo contaba destinatarios —
+ver `src/lib/push.ts`, `src/lib/sms.ts` (wrappers finos de cada SDK, mismo
+criterio que `lib/db.ts` sobre `@supabase/supabase-js`), `src/lib/despachador.ts`
+(decide push vs. SMS por persona con `canalDePersona`, ya existente) y
+`src/logic/despacho.ts` (arma el texto — pura, testeada; la redacción es una
+primera versión, no viene de ninguna ficha).
+
+Se dispara desde `handlers/eventos.ts` en el mismo punto donde antes estaba
+el log: al abrir un evento (no-OK), a cada persona activa del sitio, en
+paralelo. Un fallo individual (token de push inválido, número que Twilio
+rechaza, credenciales faltantes) no aborta el resto — se loguea por
+persona y el evento sigue su curso normal (confirmaciones y puntos de
+encuentro se crean igual). **Si `FIREBASE_*`/`TWILIO_*` no están en `.env`,
+el servidor arranca igual** (loguea un warning una vez al boot) y cada
+intento de despacho falla con un error explícito — a propósito, para que
+el resto del backend no dependa de tener estas credenciales.
+
+**Validado hasta ahora**: el camino de fallo gracioso (sin credenciales) —
+confirmado que un evento real se abre, crea sus 2 confirmaciones, y reporta
+`despachado a 0/2 destinatarios (2 fallidos)` con la razón exacta por
+persona, sin afectar el resto del pipeline. **Falta validar el envío real**
+(un push/SMS de verdad llegando a un dispositivo) — pendiente de
+credenciales reales de Firebase/Twilio.
+
+**Nota aparte, encontrada al revisar este código (no se tocó todavía):**
+la ficha dice que "OK es un tipo de evento real más, con despacho
+completo" (ver comentario en `handlers/eventos.ts`), pero el código actual
+—desde antes de este cambio— **no despacha nada cuando se procesa un OK**
+(ni al cerrar un evento en curso, ni en el caso raro de un OK sin nada que
+cerrar): ese bloque de despacho solo corre para el `abrir_evento` original,
+no-OK. No lo cambié porque es una decisión de alcance aparte (¿"despacho
+completo" de OK significa el mismo push/SMS que abrió el evento, o un
+mensaje distinto tipo "todo despejado"?) — queda para la próxima vez que
+se toque este ítem puntual.
 
 ### Endpoint para las confirmaciones de Mobile
 
@@ -275,9 +318,6 @@ evento con OK) — ver sesión 2026-08-27.
 
 ## Qué NO está implementado todavía (a propósito, ver la ficha)
 
-- **Despacho real de push/SMS** — el proveedor todavía no está elegido (ver
-  "Próximos pasos" de `03-backend-online.md`). Hoy el servidor solo loguea
-  cuántos destinatarios habría que notificar.
 - **Autenticación del endpoint de Mobile** — hoy `POST /confirmaciones` no
   pide ninguna credencial (mismo estado que el Mosquitto local, `allow_anonymous
   true`); antes de producción hace falta decidir el mecanismo (JWT del login

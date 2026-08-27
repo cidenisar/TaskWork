@@ -7,6 +7,9 @@ import "dotenv/config";
 import { crearClienteDb, Db } from "./lib/db.js";
 import { conectar, suscribirEntrantes, idConsolaDeTopico } from "./lib/mqtt.js";
 import { crearServidorHttp } from "./lib/http.js";
+import { crearClientePush } from "./lib/push.js";
+import { crearClienteSms } from "./lib/sms.js";
+import { Despachador } from "./lib/despachador.js";
 import { manejarEvento } from "./handlers/eventos.js";
 import { manejarAuth } from "./handlers/auth.js";
 import { manejarHeartbeat, manejarEstado } from "./handlers/estadoConsola.js";
@@ -18,6 +21,7 @@ import type {
 
 const db = new Db(crearClienteDb());
 const mqttClient = conectar();
+const despachador = new Despachador(crearClientePush(), crearClienteSms());
 
 const httpPort = Number(process.env.HTTP_PORT ?? 8090);
 crearServidorHttp(db, mqttClient).listen(httpPort, () => {
@@ -46,7 +50,7 @@ mqttClient.on("message", (topic, rawPayload) => {
 async function manejarMensaje(consolaId: string, resto: string, raw: string): Promise<void> {
   if (resto === "eventos") {
     const payload = JSON.parse(raw) as PayloadEventoMqtt;
-    await manejarEvento(db, mqttClient, payload);
+    await manejarEvento(db, mqttClient, despachador, payload);
     return;
   }
   if (resto === "auth") {
