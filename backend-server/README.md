@@ -271,9 +271,23 @@ el resto del backend no dependa de tener estas credenciales.
 **Validado hasta ahora**: el camino de fallo gracioso (sin credenciales) —
 confirmado que un evento real se abre, crea sus 2 confirmaciones, y reporta
 `despachado a 0/2 destinatarios (2 fallidos)` con la razón exacta por
-persona, sin afectar el resto del pipeline. **Falta validar el envío real**
-(un push/SMS de verdad llegando a un dispositivo) — pendiente de
-credenciales reales de Firebase/Twilio.
+persona, sin afectar el resto del pipeline.
+
+**Push (Firebase) — credenciales reales cargadas y probadas (2026-08-27):**
+con el Service Account real del usuario, el evento se disparó contra el
+personal de prueba (`push_token: "tok-abc"`, no un token de dispositivo
+real). La respuesta fue un `400` de los servidores reales de Google
+(`FirebaseMessagingError: messaging/invalid-argument`, `"The registration
+token is not a valid FCM registration token"`) — **prueba que las
+credenciales autentican correctamente**: un secreto mal armado da `401`,
+no un rechazo de negocio sobre el token. Falta la prueba de un dispositivo
+real (necesita la app de Mobile pidiendo un token FCM de verdad), pero la
+integración con Firebase en sí ya está confirmada de punta a punta.
+
+**SMS (Twilio) — todavía sin probar.** El usuario no pudo terminar de crear
+la cuenta (se frena en la verificación de segundo factor de Twilio) — no es
+un problema del código, sigue bloqueado del lado de la cuenta. El camino
+de fallo gracioso (sin `TWILIO_*`) ya está validado igual que push.
 
 **Nota aparte, encontrada al revisar este código (no se tocó todavía):**
 la ficha dice que "OK es un tipo de evento real más, con despacho
