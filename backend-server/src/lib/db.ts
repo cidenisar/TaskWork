@@ -326,7 +326,7 @@ export class Db {
   }
 
   private static readonly SELECT_SIMULACRO =
-    "id, sitio_id, tipo_evento_id, puntual, fecha_hora, estado, recurrencia, sorpresa, escenario, tipos_evento(nombre)";
+    "id, sitio_id, tipo_evento_id, puntual, fecha_hora, estado, recurrencia, sorpresa, escenario, rotacion_tipos, tipos_evento(nombre)";
 
   private mapFilasSimulacro(data: unknown[] | null): SimulacroProgramado[] {
     type Fila = {
@@ -339,6 +339,7 @@ export class Db {
       recurrencia: SimulacroProgramado["recurrencia"];
       sorpresa: boolean;
       escenario: string | null;
+      rotacion_tipos: string[] | null;
       tipos_evento: { nombre: string } | null;
     };
     return ((data ?? []) as unknown as Fila[]).map((f) => ({
@@ -352,6 +353,7 @@ export class Db {
       recurrencia: f.recurrencia,
       sorpresa: f.sorpresa,
       escenario: f.escenario,
+      rotacionTipos: f.rotacion_tipos,
     }));
   }
 
@@ -394,6 +396,7 @@ export class Db {
       fecha_hora: fila.fechaHora,
       recurrencia: fila.recurrencia,
       sorpresa: fila.sorpresa,
+      rotacion_tipos: fila.rotacionTipos,
       estado: "programado",
     });
     if (error) throw error;

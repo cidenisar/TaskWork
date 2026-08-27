@@ -51,6 +51,24 @@ export interface NuevaFilaSimulacro {
   fechaHora: string; // ISO
   recurrencia: SimulacroProgramado["recurrencia"];
   sorpresa: boolean;
+  rotacionTipos: string[] | null;
+}
+
+/**
+ * El tipo de evento de la próxima ocurrencia de un programa recurrente.
+ * Sin rotación configurada (null o lista vacía), sigue siendo el mismo
+ * tipo de siempre — comportamiento sin cambios respecto de antes de que
+ * existiera esto. Con rotación: avanza al siguiente de la lista,
+ * volviendo al principio al llegar al final. Si el tipo actual no está en
+ * la lista (ej. se cambió la rotación a mitad del programa), arranca de
+ * nuevo desde el primero en vez de romper — no hay una posición "correcta"
+ * que inferir ahí, así que no tiene sentido fallar por eso.
+ */
+export function proximoTipoEvento(tipoActualId: string, rotacion: string[] | null): string {
+  if (!rotacion || rotacion.length === 0) return tipoActualId;
+  const indice = rotacion.indexOf(tipoActualId);
+  if (indice === -1) return rotacion[0];
+  return rotacion[(indice + 1) % rotacion.length];
 }
 
 /**
@@ -65,17 +83,19 @@ export interface NuevaFilaSimulacro {
  * real), tampoco se inventa nada: se devuelve null antes que adivinar un
  * ancla.
  *
- * `sorpresa` se hereda tal cual (un programa sorpresa sigue siendo
- * sorpresa) — `escenario` NO se hereda, ver Db.insertProximaOcurrenciaSimulacro.
+ * `sorpresa` y `rotacionTipos` se heredan tal cual (un programa sorpresa
+ * sigue siendo sorpresa, la rotación sigue rotando) — `escenario` NO se
+ * hereda, ver Db.insertProximaOcurrenciaSimulacro.
  */
 export function proximaFilaSimulacro(resuelto: SimulacroProgramado): NuevaFilaSimulacro | null {
   if (!resuelto.recurrencia || !resuelto.fechaHora) return null;
   const proxima = calcularProximaOcurrencia(resuelto.recurrencia, new Date(resuelto.fechaHora));
   return {
     sitioId: resuelto.sitioId,
-    tipoEventoId: resuelto.tipoEventoId,
+    tipoEventoId: proximoTipoEvento(resuelto.tipoEventoId, resuelto.rotacionTipos),
     fechaHora: proxima.toISOString(),
     recurrencia: resuelto.recurrencia,
     sorpresa: resuelto.sorpresa,
+    rotacionTipos: resuelto.rotacionTipos,
   };
 }

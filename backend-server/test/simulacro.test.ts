@@ -1,6 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { elegirProximoSimulacro, simulacrosVencidos, proximaFilaSimulacro } from "../src/logic/simulacro.js";
+import {
+  elegirProximoSimulacro,
+  simulacrosVencidos,
+  proximaFilaSimulacro,
+  proximoTipoEvento,
+} from "../src/logic/simulacro.js";
 import type { SimulacroProgramado } from "../src/types.js";
 
 function simulacro(overrides: Partial<SimulacroProgramado> = {}): SimulacroProgramado {
@@ -15,6 +20,7 @@ function simulacro(overrides: Partial<SimulacroProgramado> = {}): SimulacroProgr
     recurrencia: null,
     sorpresa: false,
     escenario: null,
+    rotacionTipos: null,
     ...overrides,
   };
 }
@@ -131,6 +137,7 @@ test("proximaFilaSimulacro: recurrente arma la fila siguiente con la misma regla
     fechaHora: "2026-09-01T10:00:00.000Z",
     recurrencia: { tipo: "intervalo", unidad: "meses", cada: 3 },
     sorpresa: false,
+    rotacionTipos: null,
   });
 });
 
@@ -149,4 +156,37 @@ test("proximaFilaSimulacro: null si es recurrente pero no tiene fechaHora (no se
     recurrencia: { tipo: "intervalo", unidad: "semanas", cada: 1 },
   });
   assert.equal(proximaFilaSimulacro(sinFecha), null);
+});
+
+test("proximoTipoEvento: sin rotación, sigue con el mismo tipo", () => {
+  assert.equal(proximoTipoEvento("incendio", null), "incendio");
+  assert.equal(proximoTipoEvento("incendio", []), "incendio");
+});
+
+test("proximoTipoEvento: avanza al siguiente de la lista", () => {
+  const rotacion = ["incendio", "sismo", "medico", "toxico"];
+  assert.equal(proximoTipoEvento("incendio", rotacion), "sismo");
+  assert.equal(proximoTipoEvento("sismo", rotacion), "medico");
+});
+
+test("proximoTipoEvento: vuelve al principio al llegar al final", () => {
+  const rotacion = ["incendio", "sismo", "medico", "toxico"];
+  assert.equal(proximoTipoEvento("toxico", rotacion), "incendio");
+});
+
+test("proximoTipoEvento: si el tipo actual no está en la lista, arranca desde el primero", () => {
+  const rotacion = ["incendio", "sismo"];
+  assert.equal(proximoTipoEvento("medico", rotacion), "incendio");
+});
+
+test("proximaFilaSimulacro: con rotación configurada, la próxima fila tiene el siguiente tipo", () => {
+  const resuelto = simulacro({
+    tipoEventoId: "incendio",
+    fechaHora: "2026-06-01T10:00:00.000Z",
+    recurrencia: { tipo: "intervalo", unidad: "meses", cada: 1 },
+    rotacionTipos: ["incendio", "sismo", "medico"],
+  });
+  const proxima = proximaFilaSimulacro(resuelto);
+  assert.equal(proxima?.tipoEventoId, "sismo");
+  assert.deepEqual(proxima?.rotacionTipos, ["incendio", "sismo", "medico"]);
 });

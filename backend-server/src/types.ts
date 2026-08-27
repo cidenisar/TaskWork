@@ -124,6 +124,13 @@ export interface SimulacroProgramado {
   sorpresa: boolean;
   /** Narrativa puntual (ej. "se rompió una válvula, hay derrame de líquido tóxico en Zona B") — null si no se cargó. */
   escenario: string | null;
+  /**
+   * Lista ordenada de `tipo_evento_id` por la que rota un programa
+   * recurrente — ver logic/simulacro.ts, proximoTipoEvento. Null/vacío =
+   * sin rotación, el programa sigue con el mismo tipo para siempre (el
+   * comportamiento de antes de que existiera esto).
+   */
+  rotacionTipos: string[] | null;
 }
 
 /**

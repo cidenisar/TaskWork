@@ -251,6 +251,9 @@ frontend → broker → backend está bien, independiente de ese bloqueo.
   barrido periódico, ver esa sección más abajo.
 - **Simulacro sorpresa, escenario y relé/sirena** — ver esa sección más abajo.
 - **Vista de cumplimiento** — `GET /simulacros/cumplimiento`, ver esa sección más abajo.
+- **Rotación de tipo de evento** — un programa recurrente puede ir
+  rotando entre varios tipos en vez de quedar pegado siempre al mismo,
+  ver esa sección más abajo.
 
 ### Despacho real de push/SMS
 
@@ -624,6 +627,25 @@ rol `admin` → `403` · admin con datos reales (un sitio con Incendio
 `realizado`+`programado` y Tóxico solo `no_realizado`) → `200` con
 `alDia: true`/`false` correctos para cada tipo. Datos, operador y
 usuarios de prueba borrados al terminar.
+
+### Rotación de tipo de evento
+
+`simulacros_programados.rotacion_tipos` (`uuid[]`, nullable) — una lista
+ordenada de `tipo_evento_id`. Sin rotación configurada (null o vacía), un
+programa recurrente sigue con el mismo tipo para siempre, como antes. Con
+rotación: `proximoTipoEvento` (`logic/simulacro.ts`) avanza al siguiente
+de la lista cada vez que se genera una ocurrencia nueva, volviendo al
+principio al llegar al final. Si el tipo actual no está en la lista (ej.
+se cambió la rotación a mitad del programa), arranca de nuevo desde el
+primero en vez de romper — no hay una posición "correcta" que inferir
+ahí. La lista se hereda igual que `sorpresa` y `recurrencia` — un
+programa con rotación sigue rotando indefinidamente.
+
+Validado contra Supabase real: programa recurrente (mensual) con rotación
+`[Incendio, Sismo, Médico]`, arrancando en Incendio y vencido — el
+barrido lo marcó `no_realizado` y generó la fila siguiente con tipo
+**Sismo** (el que sigue en la lista, no Incendio de nuevo), fecha +1 mes
+exacto, misma rotación heredada. Datos de prueba limpiados.
 
 ## Qué NO está implementado todavía (a propósito, ver la ficha)
 
