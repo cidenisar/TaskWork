@@ -37,6 +37,7 @@ export function suscribirSaliente(client: MqttClient, consolaId: string): void {
       `consolas/${consolaId}/accountability/+`,
       `consolas/${consolaId}/padron`,
       `consolas/${consolaId}/simulacro`,
+      `consolas/${consolaId}/prog`,
     ],
     { qos: 1 },
     (err) => {

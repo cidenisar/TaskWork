@@ -38,6 +38,7 @@ mosquitto_ctrl "${CONN[@]}" dynsec addRoleACL "$ROLE" publishClientSend "consola
 mosquitto_ctrl "${CONN[@]}" dynsec addRoleACL "$ROLE" subscribeLiteral "consolas/$CONSOLA_ID/padron" allow
 mosquitto_ctrl "${CONN[@]}" dynsec addRoleACL "$ROLE" subscribeLiteral "consolas/$CONSOLA_ID/simulacro" allow
 mosquitto_ctrl "${CONN[@]}" dynsec addRoleACL "$ROLE" subscribeLiteral "consolas/$CONSOLA_ID/evento-activo" allow
+mosquitto_ctrl "${CONN[@]}" dynsec addRoleACL "$ROLE" subscribeLiteral "consolas/$CONSOLA_ID/prog" allow
 mosquitto_ctrl "${CONN[@]}" dynsec addRoleACL "$ROLE" subscribePattern "consolas/$CONSOLA_ID/accountability/+" allow
 
 mosquitto_ctrl "${CONN[@]}" dynsec createClient "$CONSOLA_ID" -p "$PASSWORD"

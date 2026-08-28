@@ -11,6 +11,7 @@ import { crearClienteEsp32, type ClienteEsp32, BOTONES_CON_LAMPARA } from "./lib
 import { abrirPuertoEsp32 } from "./lib/esp32Serial.js";
 import { ClienteEsp32Simulado } from "./lib/esp32Simulado.js";
 import { PadronCache } from "./lib/padronCache.js";
+import { HistorialLocal } from "./lib/historialLocal.js";
 import { crearServidorPantalla, type EstadoParaPantalla } from "./lib/pantalla.js";
 import { validarPin } from "./logic/pin.js";
 import { reducirPanel, type EstadoPanel, type EntradaPanel, type BotonAlarma } from "./logic/panel.js";
@@ -21,6 +22,7 @@ import type {
   PayloadAccountabilityMqtt,
   PayloadHeartbeatMqtt,
   PayloadEventoMqtt,
+  PayloadProgMqtt,
 } from "./types.js";
 
 const CONSOLA_ID = process.env.CONSOLA_ID;
@@ -46,16 +48,22 @@ const esp32: ClienteEsp32 = enPi
   : new ClienteEsp32Simulado();
 
 const padronCache = new PadronCache(process.env.PADRON_DB_PATH ?? "./padron.db");
+// Mismo archivo que padronCache (ver historialLocal.ts) — tabla propia,
+// conexión propia.
+const historial = new HistorialLocal(process.env.PADRON_DB_PATH ?? "./padron.db");
 
 // Estado en memoria que además se le empuja a la pantalla por SSE.
-// simulacro/evento-activo/accountability se repueblan solos al reconectar
-// porque los dos primeros son retained; el padrón vive en SQLite (ver
+// simulacro/evento-activo/accountability/prog se repueblan solos al
+// reconectar porque son retained; el padrón vive en SQLite (ver
 // PadronCache) porque tiene que sobrevivir a un restart sin red.
 let simulacroCache: PayloadSimulacroMqtt | null = null;
 let eventoActivoCache: PayloadEventoActivoMqtt | null = null;
 let accountabilityCache: PayloadAccountabilityMqtt | null = null;
+let progCache: PayloadProgMqtt | null = null;
 let releActivo = false;
 let esp32HeartbeatOk = false;
+let mqttConectado = false;
+let ultimoTestSirena: "ok" | null = null;
 let panelState: EstadoPanel = { fase: "bloqueado" };
 let temporizadorCuentaRegresiva: NodeJS.Timeout | null = null;
 let cuentaRegresivaFinTs: number | null = null;
@@ -66,10 +74,18 @@ client.on("connect", () => {
   console.log(`[mqtt] conectado como ${CONSOLA_ID}`);
   suscribirSaliente(client, CONSOLA_ID);
   publicarEstado(client, CONSOLA_ID, "online");
+  mqttConectado = true;
+  pantalla.notificar();
 });
 
 client.on("reconnect", () => console.log("[mqtt] reconectando…"));
 client.on("error", (err) => console.error("[mqtt] error:", err.message));
+client.on("close", () => {
+  if (!mqttConectado) return; // ya se había notificado la desconexión
+  mqttConectado = false;
+  console.log("[mqtt] conexión cerrada");
+  pantalla.notificar();
+});
 
 client.on("message", (topic, rawPayload) => {
   const resto = restoDeTopico(topic, CONSOLA_ID);
@@ -91,6 +107,13 @@ async function manejarMensajeMqtt(resto: string, raw: string): Promise<void> {
   if (resto === "simulacro") {
     simulacroCache = raw === "null" ? null : (JSON.parse(raw) as PayloadSimulacroMqtt);
     console.log("[simulacro] próximo programado:", simulacroCache ?? "ninguno");
+    pantalla.notificar();
+    return;
+  }
+
+  if (resto === "prog") {
+    progCache = raw === "null" ? null : (JSON.parse(raw) as PayloadProgMqtt);
+    console.log("[prog] asignación PROG1-4 actualizada:", progCache);
     pantalla.notificar();
     return;
   }
@@ -162,26 +185,60 @@ function dispatch(entrada: EntradaPanel): void {
           temporizadorCuentaRegresiva = null;
         }
         cuentaRegresivaFinTs = null;
-        if (anterior.fase === "confirmando") esp32.fijarLampara(anterior.boton, false);
+        if (anterior.fase === "confirmando") {
+          esp32.fijarLampara(anterior.boton, false);
+          // Bitácora local (ver README "Pantalla táctil" / Historial) — un
+          // operador cancelando cuenta atrás es información útil para
+          // quien llegue después a mirar la pantalla, aunque nunca haya
+          // tocado MQTT (invariante 3). eventoId propio porque nunca
+          // existió un evento real que lo tuviera.
+          historial.registrar({
+            eventoId: crypto.randomUUID(),
+            ts: Date.now(),
+            tipo: anterior.boton,
+            resultado: "cancelado_local",
+            operadorId: anterior.operador.operadorId,
+            operadorLegajo: anterior.operador.legajo,
+          });
+        }
         console.log("[panel] cuenta regresiva cancelada — 100% local, no se publicó nada");
         break;
 
-      case "publicar_evento":
+      case "publicar_evento": {
         cuentaRegresivaFinTs = null;
-        publicarDisparo(efecto.boton, efecto.operador);
+        const payload = publicarDisparo(efecto.boton, efecto.operador);
+        historial.registrar({
+          eventoId: payload.eventoId,
+          ts: payload.ts,
+          tipo: efecto.boton,
+          resultado: "enviado",
+          operadorId: efecto.operador.operadorId,
+          operadorLegajo: efecto.operador.legajo,
+        });
         esp32.fijarLampara(efecto.boton, true);
         break;
+      }
     }
   }
   pantalla.notificar();
 }
 
-/** PROG1–4 sin asignar todavía (eso es config de pantalla táctil, ver README) — se manda el nombre literal del botón. */
+/**
+ * PROG1–4 se manda con el nombre real del tipo de evento asignado desde
+ * `consolas.prog_config` (ver backend-server/handlers/prog.ts) si hay uno;
+ * sin asignar todavía, o para los botones fijos (INCENDIO/SISMO/MEDICO/
+ * TOXICO/OK), se manda el nombre literal del botón tal cual.
+ */
 function tipoEventoDeBoton(boton: BotonAlarma): string {
-  return boton;
+  const clave = boton.toLowerCase() as keyof PayloadProgMqtt;
+  const asignado = progCache?.[clave];
+  return asignado ?? boton;
 }
 
-function publicarDisparo(boton: BotonAlarma, operador: { operadorId: string; rol: "operador" | "admin" }): void {
+function publicarDisparo(
+  boton: BotonAlarma,
+  operador: { operadorId: string; rol: "operador" | "admin" }
+): PayloadEventoMqtt {
   const payload: PayloadEventoMqtt = {
     eventoId: crypto.randomUUID(),
     tipo: tipoEventoDeBoton(boton),
@@ -197,6 +254,7 @@ function publicarDisparo(boton: BotonAlarma, operador: { operadorId: string; rol
   };
   publicarEvento(client, CONSOLA_ID as string, payload);
   console.log(`[panel] DISPARADO publicado: ${payload.tipo} (${payload.modo}), operador ${operador.operadorId}`);
+  return payload;
 }
 
 esp32.onEvento((evento) => {
@@ -230,7 +288,28 @@ function estadoParaPantalla(): EstadoParaPantalla {
     simulacro: simulacroCache,
     esp32HeartbeatOk,
     cuentaRegresivaFinTs,
+    historial: historial.obtenerRecientes(),
+    prog: progCache,
+    mqttConectado,
+    ultimoTestSirena,
   };
+}
+
+/**
+ * Botón "PROBAR" de Diagnóstico — pulsa el relé un instante para verificar
+ * que la sirena local responde. No es un disparo (invariante 1): no pasa
+ * por logic/panel.ts, no genera ningún evento, no toca MQTT. Al terminar
+ * el pulso vuelve al estado real del relé (`releActivo`), no lo deja
+ * prendido si en el medio no hay ninguna emergencia en curso.
+ */
+const DURACION_TEST_SIRENA_MS = 500;
+function probarSirena(): void {
+  esp32.fijarRele(true);
+  setTimeout(() => {
+    esp32.fijarRele(releActivo);
+    ultimoTestSirena = "ok";
+    pantalla.notificar();
+  }, DURACION_TEST_SIRENA_MS);
 }
 
 const pantalla = crearServidorPantalla({
@@ -248,6 +327,7 @@ const pantalla = crearServidorPantalla({
     return { resultado: "invalido" };
   },
   onCancelar: () => dispatch({ tipo: "boton_presionado", boton: "CANCELAR" }),
+  onProbarSirena: probarSirena,
 });
 pantalla.server.listen(PUERTO_PANTALLA, () => {
   console.log(`[pantalla] escuchando en :${PUERTO_PANTALLA}`);
@@ -273,5 +353,6 @@ setInterval(enviarHeartbeat, INTERVALO_HEARTBEAT_MS);
 
 process.on("SIGINT", () => {
   padronCache.cerrar();
+  historial.cerrar();
   process.exit(0);
 });

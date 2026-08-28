@@ -139,11 +139,79 @@
     await fetch("/cancelar", { method: "POST" });
   }
 
+  async function probarSirena() {
+    await fetch("/diagnostico/sirena", { method: "POST" });
+    // el resultado ("ultimoTestSirena") llega solo por el próximo SSE
+  }
+
+  function formatoHora(ts) {
+    return new Date(ts).toLocaleString("es-AR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+  }
+
   function tile(label, value, color) {
     return '<div style="text-align:center;"><div class="lbl" style="font-size:11px; color:#5b6472;">' + label + '</div><div style="color:' + color + '; font-size:16px; margin-top:4px;">' + esc(value) + '</div></div>';
   }
   function kpi(value, label, color) {
     return '<div style="text-align:center;"><div style="font-size:28px; color:' + color + '; font-weight:600;">' + value + '</div><div class="lbl" style="font-size:10px; color:' + color + '; opacity:0.7;">' + label + '</div></div>';
+  }
+
+  // ---- Historial (bitácora local de esta consola — ver historialLocal.ts) ----
+  function renderHistorial(filas) {
+    if (!filas.length) {
+      return '<div style="flex:1;display:flex;align-items:center;justify-content:center;color:#3b4250;" class="lbl">sin eventos registrados todavía</div>';
+    }
+    var html = '<div style="flex:1; overflow-y:auto; padding:10px 20px 30px; display:flex; flex-direction:column; gap:10px;">';
+    filas.forEach(function (f) {
+      var colores = EV_COLORES[f.tipo] || EV_COLORES.OK;
+      var esEnviado = f.resultado === "enviado";
+      html += '<div class="listrow">';
+      html += '<div style="display:flex; align-items:center; gap:14px;">';
+      html += '<div class="lbl" style="font-size:13px; color:' + colores.text + '; min-width:110px;">' + esc(f.tipo) + '</div>';
+      html += '<div class="lbl" style="font-size:10px; color:' + (esEnviado ? "#f87171" : "#5b6472") + ';">' + (esEnviado ? "ENVIADO" : "CANCELADO (local)") + '</div>';
+      html += '</div>';
+      html += '<div style="text-align:right;">';
+      html += '<div style="font-size:12px; color:#8b94a3;">' + esc(f.operadorLegajo || f.operadorId || "—") + '</div>';
+      html += '<div class="lbl" style="font-size:10px; color:#5b6472;">' + formatoHora(f.ts) + '</div>';
+      html += '</div></div>';
+    });
+    html += '</div>';
+    return html;
+  }
+
+  // ---- Diagnóstico ----
+  function renderDiagnostico(u) {
+    var html = '<div style="flex:1; display:flex; flex-direction:column; gap:14px; padding:16px 24px 30px; overflow-y:auto;">';
+
+    html += '<div class="listrow"><span class="lbl" style="font-size:12px; color:#8b94a3;">CONECTIVIDAD (BACKEND)</span>';
+    html += '<span class="lbl" style="font-size:12px; color:' + (u.mqttConectado ? "#4ade80" : "#f87171") + ';">' + (u.mqttConectado ? "CONECTADO" : "SIN CONEXION") + '</span></div>';
+
+    html += '<div class="listrow"><span class="lbl" style="font-size:12px; color:#8b94a3;">ESP32 (HEARTBEAT)</span>';
+    html += '<span class="lbl" style="font-size:12px; color:' + (u.esp32HeartbeatOk ? "#4ade80" : "#f87171") + ';">' + (u.esp32HeartbeatOk ? "OK" : "SIN RESPUESTA") + '</span></div>';
+
+    html += '<div class="listrow"><span class="lbl" style="font-size:12px; color:#8b94a3;">SIRENA LOCAL</span>';
+    html += '<div style="display:flex; align-items:center; gap:12px;">';
+    if (u.ultimoTestSirena === "ok") html += '<span class="lbl" style="font-size:11px; color:#4ade80;">ULTIMA PRUEBA: OK</span>';
+    html += '<button class="lbl" data-act="probar-sirena" style="all:unset; cursor:pointer; padding:8px 20px; background:#12151b; border:1px solid #38bdf8; color:#38bdf8; border-radius:8px; font-size:11px;">PROBAR</button>';
+    html += '</div></div>';
+
+    html += '<div class="listrow"><span class="lbl" style="font-size:12px; color:#8b94a3;">BATERIA / UPS</span>';
+    html += '<span class="lbl" style="font-size:12px; color:#5b6472;">N/D — no implementado aún (ver README)</span></div>';
+
+    html += '</div>';
+    return html;
+  }
+
+  // ---- Configuración PROG1–4 (sincronizado desde el backend, ver README — sin teclado táctil de edición) ----
+  function renderConfig(prog) {
+    var html = '<div style="flex:1; display:flex; flex-direction:column; gap:14px; padding:16px 24px 30px;">';
+    html += '<div class="lbl" style="font-size:10px; color:#5b6472; padding:0 4px;">Se asigna desde el sistema central — esta pantalla solo lo muestra.</div>';
+    ["prog1", "prog2", "prog3", "prog4"].forEach(function (clave, i) {
+      var asignado = prog ? prog[clave] : null;
+      html += '<div class="listrow"><span class="lbl" style="font-size:13px; color:#8b94a3;">PROG' + (i + 1) + '</span>';
+      html += '<span class="lbl" style="font-size:13px; color:' + (asignado ? "#e7eaee" : "#3b4250") + ';">' + esc(asignado || "sin asignar") + '</span></div>';
+    });
+    html += '</div>';
+    return html;
   }
 
   function render() {
@@ -240,7 +308,16 @@
       var titulo = pantallaMenu === "historial" ? "HISTORIAL" : pantallaMenu === "diagnostico" ? "DIAGNOSTICO" : "CONFIGURACION PROG1–4";
       html += '<div style="position:absolute;inset:0;background:#04060a;display:flex;flex-direction:column;">';
       html += '<div class="subnav"><button class="backb" data-act="menu">' + svgBack() + '</button><div class="lbl" style="font-size:13px; color:#8b94a3;">' + titulo + '</div></div>';
-      html += '<div style="flex:1;display:flex;align-items:center;justify-content:center;color:#3b4250;" class="lbl">no construido todavía</div></div>';
+
+      if (pantallaMenu === "historial") {
+        html += renderHistorial(ultimo.historial || []);
+      } else if (pantallaMenu === "diagnostico") {
+        html += renderDiagnostico(ultimo);
+      } else {
+        html += renderConfig(ultimo.prog);
+      }
+
+      html += '</div>';
     }
 
     html += "</div>"; // body-wrap
@@ -269,6 +346,7 @@
       b.addEventListener("click", function () {
         var act = b.getAttribute("data-act");
         if (act === "cancelar") { void cancelarLocal(); return; }
+        if (act === "probar-sirena") { void probarSirena(); return; }
         ir(act);
       });
     });

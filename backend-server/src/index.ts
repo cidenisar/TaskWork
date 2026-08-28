@@ -18,6 +18,7 @@ import {
   sincronizarSimulacroDeTodosLosSitios,
 } from "./handlers/simulacro.js";
 import { sincronizarPadronDeTodosLosSitios } from "./handlers/padron.js";
+import { sincronizarProgDeTodasLasConsolas } from "./handlers/prog.js";
 import type {
   PayloadEventoMqtt,
   PayloadAuthMqtt,
@@ -116,5 +117,17 @@ function sincronizarPadron(): void {
 }
 sincronizarPadron();
 setInterval(sincronizarPadron, INTERVALO_SYNC_PADRON_MS);
+
+// Sincronización periódica de PROG1-4 (ver handlers/prog.ts) — mismo
+// intervalo que el padrón: cambia con poca frecuencia (hoy ni siquiera
+// hay una pantalla para editarlo, se completa a mano por SQL) y no hace
+// falta algo más fino.
+function sincronizarProg(): void {
+  void sincronizarProgDeTodasLasConsolas(db, mqttClient).catch((err) => {
+    console.error("[prog] error en la sincronización periódica:", err);
+  });
+}
+sincronizarProg();
+setInterval(sincronizarProg, INTERVALO_SYNC_PADRON_MS);
 
 console.log("[backend-online] arrancando…");

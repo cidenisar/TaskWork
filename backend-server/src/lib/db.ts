@@ -15,6 +15,7 @@ import type {
   Confirmacion,
   ContadorAccountability,
   EstadoEvento,
+  PayloadProgMqtt,
   EstadoSimulacro,
   SimulacroProgramado,
   FilaHistorialSimulacro,
@@ -440,6 +441,47 @@ export class Db {
     const { data, error } = await this.client.from("sitios").select("id");
     if (error) throw error;
     return (data ?? []).map((r: { id: string }) => r.id);
+  }
+
+  /** Todas las consolas — para el barrido periódico de sincronización de PROG1-4 (ver handlers/prog.ts). */
+  async getTodosLosIdsDeConsolas(): Promise<string[]> {
+    const { data, error } = await this.client.from("consolas").select("id");
+    if (error) throw error;
+    return (data ?? []).map((r: { id: string }) => r.id);
+  }
+
+  /**
+   * Resuelve `consolas.prog_config` (jsonb, `{prog1: tipoEventoId|null, ...}`)
+   * a nombres de tipo de evento reales — la consola solo necesita el
+   * nombre (lo manda tal cual en `PayloadEventoMqtt.tipo`), no el id.
+   */
+  async getProgConfigDeConsola(consolaId: string): Promise<PayloadProgMqtt> {
+    const { data: consola, error: errConsola } = await this.client
+      .from("consolas")
+      .select("prog_config")
+      .eq("id", consolaId)
+      .maybeSingle();
+    if (errConsola) throw errConsola;
+
+    const config = (consola?.prog_config ?? {}) as Record<string, string | null>;
+    const ids = ["prog1", "prog2", "prog3", "prog4"]
+      .map((k) => config[k])
+      .filter((id): id is string => typeof id === "string");
+
+    let nombresPorId: Record<string, string> = {};
+    if (ids.length > 0) {
+      const { data: tipos, error: errTipos } = await this.client.from("tipos_evento").select("id, nombre").in("id", ids);
+      if (errTipos) throw errTipos;
+      nombresPorId = Object.fromEntries((tipos ?? []).map((t: { id: string; nombre: string }) => [t.id, t.nombre]));
+    }
+
+    const resolver = (id: string | null | undefined): string | null => (id ? (nombresPorId[id] ?? null) : null);
+    return {
+      prog1: resolver(config.prog1),
+      prog2: resolver(config.prog2),
+      prog3: resolver(config.prog3),
+      prog4: resolver(config.prog4),
+    };
   }
 
   async getSitiosVecinos(sitioId: string): Promise<string[]> {

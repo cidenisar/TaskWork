@@ -62,6 +62,18 @@ export interface PayloadSimulacroMqtt {
   escenario: string | null;
 }
 
+/**
+ * Tópico `consolas/{id}/prog` (Backend → Pi, retain) — asignación de
+ * PROG1-4 a un tipo de evento (nombre real, no id — la consola lo manda
+ * tal cual en `PayloadEventoMqtt.tipo`). `null` = sin asignar.
+ */
+export interface PayloadProgMqtt {
+  prog1: string | null;
+  prog2: string | null;
+  prog3: string | null;
+  prog4: string | null;
+}
+
 /** Tópico `consolas/{id}/evento-activo` (Backend → Pi, retain). Null = ninguno. */
 export interface PayloadEventoActivoMqtt {
   eventoId: string;

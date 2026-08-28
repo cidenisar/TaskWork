@@ -222,6 +222,20 @@ export interface PayloadPadronMqtt {
   actualizadoAt: string; // ISO timestamp
 }
 
+/**
+ * Payload de `consolas/{id}/prog` (Backend → Pi, retain) — asignación de
+ * los botones programables PROG1-4 a un tipo de evento (ver
+ * `consolas.prog_config` y consola-pi/README, "Configuración PROG1-4").
+ * `null` = sin asignar, ese botón no manda un tipo que el backend
+ * reconozca todavía.
+ */
+export interface PayloadProgMqtt {
+  prog1: string | null;
+  prog2: string | null;
+  prog3: string | null;
+  prog4: string | null;
+}
+
 /** Payload de `consolas/{id}/simulacro` (Backend → Pi, retain). */
 export interface PayloadSimulacroMqtt {
   tipo: string;

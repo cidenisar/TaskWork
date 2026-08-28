@@ -267,6 +267,9 @@ frontend → broker → backend está bien, independiente de ese bloqueo.
 - **Rotación de tipo de evento** — un programa recurrente puede ir
   rotando entre varios tipos en vez de quedar pegado siempre al mismo,
   ver esa sección más abajo.
+- **Publicación de `consolas/{id}/prog`** — asignación de PROG1-4 a un
+  tipo de evento (`consolas.prog_config`, retained), barrido periódico
+  cada 5 min como el padrón; ver "Sincronización de PROG1-4" más abajo.
 
 ### Despacho real de push/SMS
 
@@ -804,6 +807,46 @@ simulacro real disparándose) — `evento-activo` salió con `activarRele:
 true` y el `escenario` correcto, y `consolas/{id}/simulacro` se
 re-publicó solo, sin ningún poll de por medio, con `null` (no quedaba
 otro programado). Datos y `activa_rele` de prueba revertidos al terminar.
+
+### Sincronización de PROG1-4
+
+Los botones PROG1–4 del panel físico (ver `consola-pi/`) son genéricos —
+qué tipo de evento dispara cada uno se decide por sitio/consola, no está
+fijo en el firmware. Se guarda en `consolas.prog_config` (jsonb, columna
+nueva, migración `consolas_prog_config`: `{prog1, prog2, prog3, prog4}`,
+cada valor el `id` de `tipos_evento` o `null` = sin asignar) y se publica
+a la consola como `consolas/{id}/prog` (retained) con los **nombres** de
+tipo ya resueltos, no los ids — la consola nunca necesita consultar
+`tipos_evento`, solo manda el nombre tal cual le llegó en
+`PayloadEventoMqtt.tipo` cuando se presiona ese botón.
+
+Sin UI de administración todavía (Frontend Web no forma parte de este
+repo) — `prog_config` se completa a mano por SQL hasta que exista esa
+pantalla; `Db.getProgConfigDeConsola` resuelve los ids a nombres en el
+momento de publicar, así que un cambio en el nombre de un tipo de evento
+se refleja solo, sin tocar `prog_config`.
+
+**Mismo patrón que el padrón** (`handlers/prog.ts`,
+`sincronizarProgDeTodasLasConsolas` + `barridoPorSitio`, cada 5 min,
+corre una vez al arrancar): no hay ningún evento en la app que lo dispare
+puntualmente porque, sin pantalla de administración, tampoco hay desde
+dónde editarlo — el barrido periódico es el único camino por ahora. Si el
+día de mañana existe esa pantalla, lo natural es agregar el disparo
+puntual igual que tiene el padrón (`sincronizarPadronDeSitio` llamado
+desde el alta/baja de un operador) y dejar el barrido como red de
+seguridad.
+
+Validado de punta a punta contra Supabase y Mosquitto reales: aplicada la
+migración, asignado temporalmente PROG1 → Tóxico en la consola "Bunker"
+(`prog_config: {"prog1": "<id de Tóxico>", "prog2": null, "prog3": null,
+"prog4": null}`), disparado el barrido manualmente — el mensaje retained
+en `consolas/{id}/prog` salió `{"prog1":"Tóxico","prog2":null,"prog3":null,
+"prog4":null}` (nombre resuelto, no el id). Del lado de `consola-pi/`
+(ver su README) se validó que ese mapeo efectivamente cambia el `tipo`
+publicado en `PayloadEventoMqtt` cuando se presiona PROG1, y que un
+PROG sin asignar sigue mandando el nombre literal del botón
+("PROG2", etc.). Dato de prueba revertido a `null` al terminar — el
+retained volvió a `{"prog1":null,"prog2":null,"prog3":null,"prog4":null}`.
 
 ## Qué NO está implementado todavía (a propósito, ver la ficha)
 

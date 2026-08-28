@@ -122,18 +122,10 @@ prebuilt, no hace falta compilador en la Pi tampoco.
 
 ## Qué falta (a propósito)
 
-- **Historial local, diagnóstico/modo prueba y configuración de PROG1–4**
-  — la pantalla ya navega a esas tres secciones desde el menú, pero
-  muestran "no construido todavía" (mismo criterio que el propio módulo
-  Mobile de la Especificación para pantallas sin wireframear). Necesitan
-  datos que `index.ts` todavía no guarda (historial de eventos locales) o
-  no existe (self-test real de sirena/conectividad/batería/ESP32).
-- **Tipo de evento de PROG1–4** — hoy se manda el nombre literal del
-  botón (`"PROG1"`) como `tipo`; la asignación real (ej. PROG1 → "Viento")
-  es una pantalla de configuración que todavía no existe. Sin esa
-  asignación, el backend recibe un tipo que no matchea ningún
-  `tipos_evento.nombre` y lo ignora (no rompe nada, pero tampoco hace
-  nada).
+- **Batería/UPS real en Diagnóstico** — la fila existe en la pantalla pero
+  muestra "N/D" a propósito: no hay forma de leer esto sin el hardware de
+  la Pi real (UPS HAT o similar), fuera del alcance de este paquete de
+  software puro.
 - **Failover de conectividad** (Ethernet → WiFi → 4G) — no implementado,
   la librería `mqtt` reconecta sola al mismo host pero no rota entre
   interfaces de red.
@@ -209,6 +201,60 @@ y en cada paso Playwright saca una captura real del navegador:
 Las 7 capturas se revisaron una por una — coinciden con el diseño del
 wireframe de Cowork. Servidor de prueba y capturas borrados al terminar.
 
+## Historial, Diagnóstico y Configuración PROG1–4 (2026-08-28)
+
+Las tres secciones que quedaban en "no construido todavía" ya muestran
+datos reales:
+
+- **Historial** — bitácora local de esta consola (`lib/historialLocal.ts`,
+  SQLite propio, misma tabla que sobrevive un restart que `padronCache`).
+  Se registra una fila en `index.ts` en los dos puntos donde
+  `logic/panel.ts` produce un resultado terminal: al publicar un evento
+  (`resultado: "enviado"`, mismo `eventoId`/`ts` que el MQTT real) y al
+  cancelar una cuenta regresiva (`resultado: "cancelado_local"`,
+  `eventoId` propio porque invariante 3 dice que ese camino nunca genera
+  un evento real). Más recientes primero, límite 20.
+- **Diagnóstico** — conectividad con el backend (`mqttConectado`, de los
+  eventos `connect`/`close` del cliente MQTT), heartbeat del ESP32 (ya
+  existía), un botón "PROBAR" que pulsa el relé 500ms
+  (`POST /diagnostico/sirena` → `probarSirena()` en `index.ts` — **no** es
+  un disparo: no pasa por `reducirPanel`, no genera evento, no toca MQTT,
+  invariante 1 intacta) y batería/UPS mostrado honestamente como "N/D"
+  (ver "Qué falta").
+- **Configuración PROG1–4** — de solo lectura, refleja
+  `consolas/{id}/prog` (ver backend-server README, "Sincronización de
+  PROG1-4"). **Decisión tomada:** no se construye un teclado táctil para
+  editar esto en la consola — la asignación se administra centralizada
+  (hoy por SQL, mañana por una pantalla de administración en Frontend
+  Web) y llega sola por MQTT retained, igual que el padrón. La consola
+  solo la muestra y la usa.
+- **`tipoEventoDeBoton`** (`index.ts`) ahora resuelve PROG1–4 contra el
+  `prog` cacheado — si hay una asignación manda el nombre real del tipo
+  de evento; sin asignar (o para los botones fijos INCENDIO/SISMO/MEDICO/
+  TOXICO/OK) sigue mandando el nombre literal del botón, como antes.
+
+Validado contra Supabase + Mosquitto reales (ver backend-server README,
+"Sincronización de PROG1-4"): con PROG1 → Tóxico asignado temporalmente en
+Bunker, confirmado que el mensaje retained en `consolas/{id}/prog` llegó
+con `{"prog1":"Tóxico", ...}` — la lógica de `tipoEventoDeBoton` se
+ejercitó leyendo ese mismo payload (no hace falta hardware para probar una
+función pura). Historial y Diagnóstico/Configuración se validaron
+visualmente con Playwright contra el `lib/pantalla.ts` +
+`pantalla/index.html` reales (mismo criterio que las 7 pantallas
+anteriores): `HistorialLocal` real contra un SQLite temporal con dos filas
+insertadas por su propia API (una "enviado", una "cancelado_local"),
+`prog` con PROG1 asignado, `mqttConectado: true`. Confirmado en las
+capturas: Historial muestra ambas filas con su resultado y legajo
+correctos; Diagnóstico muestra "CONECTADO"/"OK" y, tras tocar PROBAR,
+"ULTIMA PRUEBA: OK"; Configuración muestra "PROG1 → Tóxico" y
+"PROG2/3/4 → sin asignar". Ninguna de las tres dice ya "no construido
+todavía". Dato de prueba de Bunker (`prog_config`) revertido a `null` al
+terminar — confirmado el retained volviendo a todo `null`. `npm run
+typecheck` limpio, 25/25 tests (sin tests nuevos: todo lo agregado es
+wiring de I/O en `index.ts`/`pantalla.ts`/HTML, no lógica pura nueva —
+`HistorialLocal` y el mapeo PROG ya se ejercitaron contra infra real
+arriba).
+
 ### Decisión de diseño encontrada al adaptar el wireframe
 
 El wireframe original tenía un ícono de candado en la pantalla que se
@@ -230,8 +276,12 @@ de verdad al lado, no hace falta dibujarlo.
   antes de que el evento sea real), pero potencialmente más lento que lo
   que permitiría la "capa de seguridad independiente" si el ESP32 pudiera
   decidirlo solo. Sin resolver todavía.
-- **Asignación de PROG1–4** — qué tipo de evento le corresponde a cada
-  uno es una pantalla de configuración (rol admin) que no existe.
+- **Asignación de PROG1–4 — resuelto (2026-08-28):** se administra
+  centralizada (por ahora SQL directo sobre `consolas.prog_config`, ver
+  backend-server README), no desde la consola — la pantalla de
+  Configuración es de solo lectura. Queda pendiente, del lado del backend,
+  construir la pantalla de administración real en Frontend Web (hoy fuera
+  de este repo).
 - **Qué pasa ante varios PIN incorrectos seguidos** — la propia
   Especificación lo deja como pendiente (bloqueo temporal, aviso al
   backend, o ambos) — no implementado.

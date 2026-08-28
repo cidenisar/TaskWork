@@ -17,7 +17,13 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { EstadoPanel } from "../logic/panel.js";
-import type { PayloadEventoActivoMqtt, PayloadAccountabilityMqtt, PayloadSimulacroMqtt } from "../types.js";
+import type { FilaHistorial } from "./historialLocal.js";
+import type {
+  PayloadEventoActivoMqtt,
+  PayloadAccountabilityMqtt,
+  PayloadSimulacroMqtt,
+  PayloadProgMqtt,
+} from "../types.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const HTML = readFileSync(path.join(__dirname, "../pantalla/index.html"), "utf8");
@@ -33,6 +39,11 @@ export interface EstadoParaPantalla {
   esp32HeartbeatOk: boolean;
   /** epoch ms — cuándo termina la cuenta regresiva actual, si `panel.fase === "confirmando"`. */
   cuentaRegresivaFinTs: number | null;
+  historial: FilaHistorial[];
+  prog: PayloadProgMqtt | null;
+  mqttConectado: boolean;
+  /** Resultado del último test de sirena disparado desde Diagnóstico, o null si no se probó todavía en esta sesión. */
+  ultimoTestSirena: "ok" | null;
 }
 
 export interface ServidorPantalla {
@@ -59,6 +70,8 @@ export function crearServidorPantalla(opts: {
   obtenerEstado: () => EstadoParaPantalla;
   onPin: (pin: string) => Promise<{ resultado: "valido" | "invalido" }>;
   onCancelar: () => void;
+  /** Botón "PROBAR" de Diagnóstico → pulsa la sirena unos ms. No es un disparo (invariante 1: no hay evento, no se toca MQTT). */
+  onProbarSirena: () => void;
 }): ServidorPantalla {
   const clientesSse = new Set<ServerResponse>();
 
@@ -108,6 +121,12 @@ export function crearServidorPantalla(opts: {
 
     if (req.method === "POST" && url.pathname === "/cancelar") {
       opts.onCancelar();
+      responderJson(res, 200, { ok: true });
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/diagnostico/sirena") {
+      opts.onProbarSirena();
       responderJson(res, 200, { ok: true });
       return;
     }
