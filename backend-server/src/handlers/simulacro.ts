@@ -24,6 +24,7 @@
 import type { MqttClient } from "mqtt";
 import type { Db } from "../lib/db.js";
 import { publicarSimulacro } from "../lib/mqtt.js";
+import { barridoPorSitio } from "../lib/barrido.js";
 import { elegirProximoSimulacro, simulacrosVencidos, proximaFilaSimulacro } from "../logic/simulacro.js";
 import type { PayloadSimulacroMqtt, SimulacroProgramado } from "../types.js";
 
@@ -89,28 +90,34 @@ export async function resolverSimulacroProgramado(
 export async function marcarSimulacrosVencidosComoNoRealizados(db: Db, mqttClient: MqttClient): Promise<void> {
   const simulacros = await db.getTodosLosSimulacrosProgramados();
   const vencidos = simulacrosVencidos(simulacros, new Date());
+  let marcados = 0;
   for (const s of vencidos) {
-    await resolverSimulacroProgramado(db, mqttClient, s.id, "no_realizado");
+    // resolverSimulacroProgramado ahora hace I/O extra (re-publicar
+    // consolas/{id}/simulacro, ver más arriba) — sin este try/catch, un
+    // fallo transitorio en UN simulacro (ej. el broadcast MQTT) frenaba el
+    // resto del barrido y dejaba sin marcar todo lo que venía después en
+    // `vencidos`, no solo lo que falló (hallazgo de code review).
+    try {
+      await resolverSimulacroProgramado(db, mqttClient, s.id, "no_realizado");
+      marcados++;
+    } catch (err) {
+      console.error(`[simulacros] error marcando no_realizado el simulacro ${s.id}:`, err);
+    }
   }
-  if (vencidos.length > 0) {
-    console.log(`[simulacros] marcados no_realizado (vencidos hace más de 1h): ${vencidos.length}`);
+  if (marcados > 0) {
+    console.log(`[simulacros] marcados no_realizado (vencidos hace más de 1h): ${marcados}`);
   }
 }
 
 /**
  * Barrido periódico de re-sincronización de `consolas/{id}/simulacro` para
- * TODOS los sitios — red de seguridad para cambios que no pasan por
- * `resolverSimulacroProgramado` (ej. alguien edita `simulacros_programados`
- * directo en la base). Mismo criterio que `sincronizarPadronDeTodosLosSitios`:
- * un fallo en un sitio se loguea y no frena a los demás.
+ * TODOS los sitios, en paralelo (ver lib/barrido.ts) — red de seguridad
+ * para cambios que no pasan por `resolverSimulacroProgramado` (ej.
+ * alguien edita `simulacros_programados` directo en la base). Mismo
+ * criterio que `sincronizarPadronDeTodosLosSitios`: un fallo en un sitio
+ * se loguea y no frena a los demás.
  */
 export async function sincronizarSimulacroDeTodosLosSitios(db: Db, mqttClient: MqttClient): Promise<void> {
   const sitiosIds = await db.getTodosLosSitiosIds();
-  for (const sitioId of sitiosIds) {
-    try {
-      await sincronizarSimulacroDeSitio(db, mqttClient, sitioId);
-    } catch (err) {
-      console.error(`[simulacros] error sincronizando sitio ${sitioId}:`, err);
-    }
-  }
+  await barridoPorSitio("simulacros", sitiosIds, (sitioId) => sincronizarSimulacroDeSitio(db, mqttClient, sitioId));
 }

@@ -15,6 +15,7 @@
 import type { MqttClient } from "mqtt";
 import type { Db } from "../lib/db.js";
 import { publicarPadron } from "../lib/mqtt.js";
+import { barridoPorSitio } from "../lib/barrido.js";
 import type { PayloadPadronMqtt } from "../types.js";
 
 export async function sincronizarPadronDeSitio(db: Db, mqttClient: MqttClient, sitioId: string): Promise<void> {
@@ -34,18 +35,12 @@ export async function sincronizarPadronDeSitio(db: Db, mqttClient: MqttClient, s
 }
 
 /**
- * Barrido periódico — sincroniza el padrón de TODOS los sitios, uno por
- * uno. Un fallo en un sitio (ej. la query de operadores falla) se loguea y
- * no frena a los demás — un sitio con problemas no debería dejar sin
- * padrón actualizado al resto.
+ * Barrido periódico — sincroniza el padrón de TODOS los sitios en
+ * paralelo (ver lib/barrido.ts). Un fallo en un sitio (ej. la query de
+ * operadores falla) se loguea y no frena a los demás — un sitio con
+ * problemas no debería dejar sin padrón actualizado al resto.
  */
 export async function sincronizarPadronDeTodosLosSitios(db: Db, mqttClient: MqttClient): Promise<void> {
   const sitiosIds = await db.getTodosLosSitiosIds();
-  for (const sitioId of sitiosIds) {
-    try {
-      await sincronizarPadronDeSitio(db, mqttClient, sitioId);
-    } catch (err) {
-      console.error(`[padron] error sincronizando sitio ${sitioId}:`, err);
-    }
-  }
+  await barridoPorSitio("padron", sitiosIds, (sitioId) => sincronizarPadronDeSitio(db, mqttClient, sitioId));
 }

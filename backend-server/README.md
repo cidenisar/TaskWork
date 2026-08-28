@@ -849,6 +849,42 @@ inventado → `400`, uno real → `200`; body de 100KB → `413` limpio; ruta
 con prefijo parecido → `404`. Datos de prueba limpiados. 67/67 tests,
 typecheck limpio.
 
+## Revisión de código (2026-08-28)
+
+Segunda pasada, sobre lo que se sumó desde la revisión anterior: barridos
+de padrón y "próximo simulacro", panel del simulador de consola, y el
+contador incremental de Accountability. 3 hallazgos, los 3 reales:
+
+1. **`marcarSimulacrosVencidosComoNoRealizados` sin `try/catch` por ítem**
+   (`handlers/simulacro.ts`) — al enganchar el broadcast de "próximo
+   simulacro" dentro de `resolverSimulacroProgramado` (ver "Sincronización
+   de próximo simulacro"), esa función pasó a hacer I/O extra (una query +
+   una publicación MQTT) dentro del loop de vencidos, sin la protección
+   que si tienen los otros dos barridos del mismo lote
+   (`sincronizarPadronDeTodosLosSitios`, `sincronizarSimulacroDeTodosLosSitios`).
+   Un fallo transitorio en un solo simulacro (ej. el broadcast) frenaba el
+   resto del `for` y dejaba sin marcar todo lo que venía después en la
+   lista, no solo lo que falló. Agregado el mismo `try/catch` por ítem que
+   ya usan los otros barridos.
+2. **Barridos por sitio secuenciales en vez de paralelos**
+   (`sincronizarPadronDeTodosLosSitios`, `sincronizarSimulacroDeTodosLosSitios`)
+   — cada sitio es independiente y ya estaba aislado por su propio
+   `try/catch`, pero se recorrían uno por uno con un `for` — con N sitios,
+   la latencia del barrido crece con N sin necesidad. Cambiado a
+   `Promise.allSettled`.
+3. **El patrón de barrido estaba duplicado** entre `padron.ts` y
+   `simulacro.ts` (recorrer sitios, aislar fallos, loguear). Unificado en
+   `lib/barrido.ts` (`barridoPorSitio`), que de paso resuelve el hallazgo
+   2 (usa `Promise.allSettled` internamente) — los dos handlers ahora lo
+   llaman en vez de repetir el loop.
+
+Validado contra Supabase y Mosquitto reales: insertados 2 simulacros
+vencidos en el mismo sitio, reiniciado el backend — el log confirmó
+`marcados no_realizado: 2` (contador que ahora solo suma los que
+efectivamente se resolvieron, no el tamaño de la lista de vencidos) y
+ambos quedaron `no_realizado` en la base. `npm run typecheck` limpio,
+70/70 tests. Datos de prueba limpiados.
+
 ## Decisiones pendientes (para no perderlas de vista)
 
 - Auto-disparo de un simulacro sorpresa por el propio backend (sin que un
