@@ -1,10 +1,9 @@
 // Punto de entrada de la consola. Conecta a MQTT con el contrato real,
 // cachea padrón (SQLite)/próximo simulacro, reacciona a evento-activo
-// activando/desactivando el relé, y maneja el ciclo completo
+// activando/desactivando el relé, maneja el ciclo completo
 // llave→PIN→botón→cuenta regresiva→envío a través de la máquina de
-// estados pura de logic/panel.ts. No hay pantalla táctil todavía — lo
-// que mostraría se loguea por consola como aproximación (ver README,
-// "Qué falta").
+// estados pura de logic/panel.ts, y sirve la pantalla táctil (lib/pantalla.ts,
+// HTML adaptado del wireframe de Cowork) con el estado en vivo por SSE.
 
 import "dotenv/config";
 import { conectar, suscribirSaliente, restoDeTopico, publicarEstado, publicarHeartbeat, publicarEvento, publicarAuth } from "./lib/mqtt.js";
@@ -12,6 +11,7 @@ import { crearClienteEsp32, type ClienteEsp32, BOTONES_CON_LAMPARA } from "./lib
 import { abrirPuertoEsp32 } from "./lib/esp32Serial.js";
 import { ClienteEsp32Simulado } from "./lib/esp32Simulado.js";
 import { PadronCache } from "./lib/padronCache.js";
+import { crearServidorPantalla, type EstadoParaPantalla } from "./lib/pantalla.js";
 import { validarPin } from "./logic/pin.js";
 import { reducirPanel, type EstadoPanel, type EntradaPanel, type BotonAlarma } from "./logic/panel.js";
 import type {
@@ -26,7 +26,7 @@ import type {
 const CONSOLA_ID = process.env.CONSOLA_ID;
 if (!CONSOLA_ID) throw new Error("falta CONSOLA_ID en .env");
 
-const FIRMWARE_VERSION = "0.2.0-dev";
+const FIRMWARE_VERSION = "0.3.0-dev";
 const INTERVALO_HEARTBEAT_MS = 30_000;
 // Ventana para cancelar antes de que un botón de alarma se envíe de
 // verdad — ver README, "Decisión pendiente: tiempo de cuenta regresiva"
@@ -34,6 +34,7 @@ const INTERVALO_HEARTBEAT_MS = 30_000;
 // un número; 5s es el valor usado en el wireframe de pantalla, se toma
 // como punto de partida razonable hasta que se confirme con el cliente).
 const CUENTA_REGRESIVA_MS = 5_000;
+const PUERTO_PANTALLA = Number(process.env.PUERTO_PANTALLA ?? 8080);
 
 // Selección de driver real vs. simulado por variable de entorno — ver
 // README "Cómo correr esto". EN_PI=1 es explícito a propósito (nunca por
@@ -46,14 +47,18 @@ const esp32: ClienteEsp32 = enPi
 
 const padronCache = new PadronCache(process.env.PADRON_DB_PATH ?? "./padron.db");
 
-// Estado en memoria — lo que hoy sería "lo último que se le mostraría a
-// la pantalla táctil". simulacro/evento-activo se repueblan solos al
-// reconectar porque son retained; el padrón vive en SQLite (ver
+// Estado en memoria que además se le empuja a la pantalla por SSE.
+// simulacro/evento-activo/accountability se repueblan solos al reconectar
+// porque los dos primeros son retained; el padrón vive en SQLite (ver
 // PadronCache) porque tiene que sobrevivir a un restart sin red.
 let simulacroCache: PayloadSimulacroMqtt | null = null;
 let eventoActivoCache: PayloadEventoActivoMqtt | null = null;
+let accountabilityCache: PayloadAccountabilityMqtt | null = null;
+let releActivo = false;
+let esp32HeartbeatOk = false;
 let panelState: EstadoPanel = { fase: "bloqueado" };
 let temporizadorCuentaRegresiva: NodeJS.Timeout | null = null;
+let cuentaRegresivaFinTs: number | null = null;
 
 const client = conectar();
 
@@ -79,24 +84,28 @@ async function manejarMensajeMqtt(resto: string, raw: string): Promise<void> {
     const payload = JSON.parse(raw) as PayloadPadronMqtt;
     padronCache.reemplazar(payload.operadores);
     console.log(`[padron] actualizado — ${payload.operadores.length} operador(es) habilitados`);
+    pantalla.notificar();
     return;
   }
 
   if (resto === "simulacro") {
     simulacroCache = raw === "null" ? null : (JSON.parse(raw) as PayloadSimulacroMqtt);
     console.log("[simulacro] próximo programado:", simulacroCache ?? "ninguno");
+    pantalla.notificar();
     return;
   }
 
   if (resto === "evento-activo") {
     eventoActivoCache = raw === "null" ? null : (JSON.parse(raw) as PayloadEventoActivoMqtt);
     if (!eventoActivoCache) {
+      releActivo = false;
       esp32.fijarRele(false);
       // Reset de las lámparas de alarma al cerrar el evento — así la
-      // pantalla física (lámpara steady de "esto es lo que se disparó")
-      // no queda encendida después de que el backend confirma el cierre.
+      // lámpara steady de "esto es lo que se disparó" no queda encendida
+      // después de que el backend confirma el cierre.
       for (const boton of BOTONES_CON_LAMPARA) esp32.fijarLampara(boton, false);
-      console.log("[evento-activo] ninguno — pantalla volvería a estado normal");
+      console.log("[evento-activo] ninguno — pantalla vuelve a estado normal");
+      pantalla.notificar();
       return;
     }
     console.log(
@@ -106,18 +115,19 @@ async function manejarMensajeMqtt(resto: string, raw: string): Promise<void> {
     // TODO (ver README, "Decisión pendiente: relé local inmediato o
     // esperar al backend"): hoy el relé solo se activa cuando llega la
     // confirmación de evento-activo del backend, no apenas se envía el
-    // propio disparo — falta decidir si el ESP32 debería sonar la
-    // sirena local de inmediato al confirmar el envío, sin esperar el
-    // viaje de ida y vuelta a Backend Online.
-    esp32.fijarRele(eventoActivoCache.activarRele);
+    // propio disparo.
+    releActivo = eventoActivoCache.activarRele;
+    esp32.fijarRele(releActivo);
+    pantalla.notificar();
     return;
   }
 
   if (resto.startsWith("accountability/")) {
-    const payload = JSON.parse(raw) as PayloadAccountabilityMqtt;
+    accountabilityCache = JSON.parse(raw) as PayloadAccountabilityMqtt;
     console.log(
-      `[accountability] evento ${payload.eventoId}: ${payload.ok} ok / ${payload.ayuda} ayuda / ${payload.pendiente} pendiente (de ${payload.notificados})`
+      `[accountability] evento ${accountabilityCache.eventoId}: ${accountabilityCache.ok} ok / ${accountabilityCache.ayuda} ayuda / ${accountabilityCache.pendiente} pendiente (de ${accountabilityCache.notificados})`
     );
+    pantalla.notificar();
     return;
   }
 }
@@ -141,6 +151,7 @@ function dispatch(entrada: EntradaPanel): void {
         break;
 
       case "iniciar_cuenta_regresiva":
+        cuentaRegresivaFinTs = Date.now() + CUENTA_REGRESIVA_MS;
         console.log(`[panel] cuenta regresiva iniciada (${CUENTA_REGRESIVA_MS / 1000}s) — CANCELAR para abortar`);
         temporizadorCuentaRegresiva = setTimeout(() => dispatch({ tipo: "cuenta_regresiva_terminada" }), CUENTA_REGRESIVA_MS);
         break;
@@ -150,16 +161,19 @@ function dispatch(entrada: EntradaPanel): void {
           clearTimeout(temporizadorCuentaRegresiva);
           temporizadorCuentaRegresiva = null;
         }
+        cuentaRegresivaFinTs = null;
         if (anterior.fase === "confirmando") esp32.fijarLampara(anterior.boton, false);
         console.log("[panel] cuenta regresiva cancelada — 100% local, no se publicó nada");
         break;
 
       case "publicar_evento":
+        cuentaRegresivaFinTs = null;
         publicarDisparo(efecto.boton, efecto.operador);
         esp32.fijarLampara(efecto.boton, true);
         break;
     }
   }
+  pantalla.notificar();
 }
 
 /** PROG1–4 sin asignar todavía (eso es config de pantalla táctil, ver README) — se manda el nombre literal del botón. */
@@ -188,12 +202,12 @@ function publicarDisparo(boton: BotonAlarma, operador: { operadorId: string; rol
 esp32.onEvento((evento) => {
   if (evento.tipo === "heartbeat") {
     esp32HeartbeatOk = evento.ok;
+    pantalla.notificar();
     return;
   }
   if (evento.tipo === "llave") {
     console.log(`[esp32] llave → ${evento.estado}`);
     dispatch({ tipo: evento.estado === "habilitado" ? "llave_habilitada" : "llave_bloqueada" });
-    if (evento.estado === "habilitado" && panelState.fase === "pidiendo_pin") void pedirPinYValidar();
     return;
   }
   if (evento.tipo === "boton") {
@@ -203,29 +217,43 @@ esp32.onEvento((evento) => {
   }
 });
 
-/**
- * Solo para el flujo de desarrollo sin pantalla táctil (ver
- * ClienteEsp32Simulado.leerPin) — en la Pi real, el PIN se tipea en el
- * teclado numérico en pantalla, que dispara `dispatch({tipo:"pin_valido"|"pin_invalido", ...})`
- * directamente desde el handler de esa UI (todavía no construida).
- */
-async function pedirPinYValidar(): Promise<void> {
-  if (!(esp32 instanceof ClienteEsp32Simulado)) return;
-  const pin = await esp32.leerPin();
-  const resultado = await validarPin(pin, padronCache.obtenerTodos());
-  if (resultado.resultado === "valido" && resultado.operadorId && resultado.rol) {
-    dispatch({
-      tipo: "pin_valido",
-      operador: { operadorId: resultado.operadorId, legajo: resultado.legajo, rol: resultado.rol },
-    });
-  } else {
-    dispatch({ tipo: "pin_invalido" });
-  }
+// --- Pantalla táctil (ver lib/pantalla.ts) ---
+
+function estadoParaPantalla(): EstadoParaPantalla {
+  return {
+    panel: panelState,
+    modo: (process.env.MODO_EVENTO === "SIMULACRO" ? "SIMULACRO" : "REAL") as "REAL" | "SIMULACRO",
+    releActivo,
+    padronCount: padronCache.obtenerTodos().length,
+    eventoActivo: eventoActivoCache,
+    accountability: accountabilityCache,
+    simulacro: simulacroCache,
+    esp32HeartbeatOk,
+    cuentaRegresivaFinTs,
+  };
 }
 
-// --- Heartbeat periódico ---
+const pantalla = crearServidorPantalla({
+  obtenerEstado: estadoParaPantalla,
+  onPin: async (pin) => {
+    const resultado = await validarPin(pin, padronCache.obtenerTodos());
+    if (resultado.resultado === "valido" && resultado.operadorId && resultado.rol) {
+      dispatch({
+        tipo: "pin_valido",
+        operador: { operadorId: resultado.operadorId, legajo: resultado.legajo, rol: resultado.rol },
+      });
+      return { resultado: "valido" };
+    }
+    dispatch({ tipo: "pin_invalido" });
+    return { resultado: "invalido" };
+  },
+  onCancelar: () => dispatch({ tipo: "boton_presionado", boton: "CANCELAR" }),
+});
+pantalla.server.listen(PUERTO_PANTALLA, () => {
+  console.log(`[pantalla] escuchando en :${PUERTO_PANTALLA}`);
+});
 
-let esp32HeartbeatOk = false;
+// --- Heartbeat periódico ---
 
 function enviarHeartbeat(): void {
   const payload: PayloadHeartbeatMqtt = {

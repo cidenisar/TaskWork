@@ -2,9 +2,10 @@
 
 El programa que corre en la Raspberry Pi de cada sitio: habla MQTT con
 `backend-server`, valida el PIN del operador localmente contra el padrón
-cacheado, y maneja el ciclo llave→PIN→botón→cuenta regresiva→envío de un
-evento real. Pantalla táctil (información + configuración) todavía sin
-construir — ver "Qué falta" más abajo.
+cacheado, maneja el ciclo llave→PIN→botón→cuenta regresiva→envío de un
+evento real, y sirve la pantalla táctil (adaptada del wireframe de
+Cowork) con el estado en vivo. Historial/diagnóstico/configuración de la
+pantalla siguen sin construir — ver "Qué falta" más abajo.
 
 ## Corrección de arquitectura (2026-08-28)
 
@@ -52,9 +53,17 @@ sección 5.3) para el razonamiento completo.
   binarios prebuilt, sin necesitar compilador).
 - **`lib/esp32Simulado.ts`** — para desarrollar sin hardware: los botones
   se disparan por teclado (`1`-`8`, `o`, `c`, `k` para la llave), lámparas
-  y relé se loguean por consola. Expone además `leerPin()` — solo para
-  este flujo de desarrollo sin pantalla táctil (la Pi real pediría el PIN
-  por el teclado numérico en pantalla, todavía sin construir).
+  y relé se loguean por consola. El PIN **no** se pide por teclado — se
+  tipea en la pantalla táctil real (ver siguiente punto), en modo
+  simulado igual que en la Pi real.
+- **`lib/pantalla.ts` + `pantalla/index.html`** — el servidor de la
+  pantalla táctil: sirve el HTML (adaptado del wireframe "Consola
+  Disparador" de Cowork, mismos colores/tipografía) y lo mantiene al día
+  con Server-Sent Events (`GET /eventos`). Dos rutas de entrada nada más
+  — `POST /pin` (identifica al operador) y `POST /cancelar` (mismo efecto
+  100% local que el botón físico, invariante 3) — ninguna otra ruta
+  existe que pueda disparar un evento, la pantalla no tiene forma de
+  violar el invariante 1 aunque quisiera.
 - **`logic/panel.ts`** — la máquina de estados del panel, **pura**
   (`reducirPanel(estado, entrada) -> {estado, efectos}`, sin I/O ni
   timers reales) — codifica los invariantes 1, 3 y 5 tal cual, no una
@@ -70,7 +79,9 @@ sección 5.3) para el razonamiento completo.
   cliente ESP32 (real o simulado según `EN_PI`), el reductor del panel
   (los timers de la cuenta regresiva SÍ son reales acá, con
   `setTimeout`/`clearTimeout` — el reductor solo decide qué hacer, index.ts
-  hace que pase).
+  hace que pase), y el servidor de la pantalla (`pantalla.notificar()`
+  después de cualquier cambio relevante — dispatch del panel, mensaje
+  MQTT entrante).
 
 ## Cómo correr esto en Windows sin la Pi
 
@@ -82,7 +93,10 @@ npm run dev
 
 En una terminal interactiva (no en background) para que la botonera
 simulada por teclado funcione. Necesita un broker Mosquitto (el mismo que
-ya usa `backend-server`/`consola-simulador`).
+ya usa `backend-server`/`consola-simulador`). Abrir
+`http://localhost:8080` (o el puerto de `PUERTO_PANTALLA`) en un
+navegador para ver la pantalla — es la misma UI que correría en la Pi
+real en Chromium modo kiosco.
 
 **En la Pi real:** `EN_PI=1` + `ESP32_PUERTO`/`ESP32_BAUD` en `.env` —
 `serialport` y `better-sqlite3` ya están en `package.json` con binarios
@@ -108,13 +122,12 @@ prebuilt, no hace falta compilador en la Pi tampoco.
 
 ## Qué falta (a propósito)
 
-- **Pantalla táctil** — sigue sin construirse. Ya existe un wireframe
-  HTML/CSS/JS completo y clickeable (artifact "Consola Disparador",
-  pensado para Chromium en modo kiosco) — el próximo paso natural es
-  adaptar ESE wireframe a un servidor real en `index.ts`, no diseñar una
-  UI nueva desde cero.
-- **PIN por teclado numérico en pantalla** — hoy solo existe
-  `leerPin()` por stdin, para desarrollo sin pantalla.
+- **Historial local, diagnóstico/modo prueba y configuración de PROG1–4**
+  — la pantalla ya navega a esas tres secciones desde el menú, pero
+  muestran "no construido todavía" (mismo criterio que el propio módulo
+  Mobile de la Especificación para pantallas sin wireframear). Necesitan
+  datos que `index.ts` todavía no guarda (historial de eventos locales) o
+  no existe (self-test real de sirena/conectividad/batería/ESP32).
 - **Tipo de evento de PROG1–4** — hoy se manda el nombre literal del
   botón (`"PROG1"`) como `tipo`; la asignación real (ej. PROG1 → "Viento")
   es una pantalla de configuración que todavía no existe. Sin esa
@@ -135,9 +148,11 @@ prebuilt, no hace falta compilador en la Pi tampoco.
   acá (no hay firmware real todavía contra el cual confirmarlo) — ambos a
   validar en cuanto exista el ESP32 con su firmware.
 - **El flujo interactivo por teclado de punta a punta** (girar la llave,
-  tipear el PIN, presionar un botón) — `ClienteEsp32Simulado` exige una
-  TTY real y este entorno de desarrollo no tiene una interactiva para un
-  proceso en background.
+  presionar un botón) — `ClienteEsp32Simulado` exige una TTY real y este
+  entorno de desarrollo no tiene una interactiva para un proceso en
+  background. La pantalla en sí (servidor + HTML + PIN por HTTP) **sí**
+  se validó de punta a punta — ver abajo — solo el teclado del ESP32
+  simulado queda sin poder probarse acá.
 
 ## Validado de punta a punta (2026-08-28) contra backend-server + Mosquitto reales
 
@@ -168,6 +183,43 @@ directamente:
 Operador de prueba, auditoría y eventos de prueba borrados al terminar.
 `npm run typecheck` limpio, 25/25 tests (13 nuevos de `logic/panel.ts`, 8
 de `lib/esp32.ts`, 4 de `logic/pin.ts` de la v1).
+
+## Validado visualmente (2026-08-28) — la pantalla táctil
+
+Mismo problema que el teclado del ESP32 simulado: no hay una TTY real acá
+para tipear un PIN en la pantalla como lo haría un operador. Se validó
+igual, con Playwright, contra el mismo servidor y el mismo HTML de
+producción (`lib/pantalla.ts` + `pantalla/index.html`) — un script de
+prueba llama a `reducirPanel` directo (el mismo camino que tomaría el
+callback de eventos del ESP32 en `index.ts`) para ir avanzando el estado,
+y en cada paso Playwright saca una captura real del navegador:
+
+1. **Bloqueado** — "PANEL BLOQUEADO — GIRE LA LLAVE".
+2. **Pidiendo PIN** — teclado numérico 0-9, puntos de PIN.
+3. **Habilitado** — pantalla principal con modo, sirena, padrón, operador
+   identificado (legajo + rol) y próximo simulacro.
+4. **Aviso de evento en otra consola** — banner informativo (azul,
+   "sitio vecino") superpuesto sin bloquear la pantalla principal —
+   invariante de la Especificación de que este aviso nunca bloquea nada.
+5. **Confirmando** — cuenta regresiva con el botón CANCELAR y el mensaje
+   real que se enviaría (`EV_MENSAJES`).
+6. **Enviado** — accountability en vivo (ok/ayuda/pendiente).
+7. **Menú** — navegación a Historial/Diagnóstico/Configuración.
+
+Las 7 capturas se revisaron una por una — coinciden con el diseño del
+wireframe de Cowork. Servidor de prueba y capturas borrados al terminar.
+
+### Decisión de diseño encontrada al adaptar el wireframe
+
+El wireframe original tenía un ícono de candado en la pantalla que se
+podía tocar para simular girar la llave — eso viola el invariante 5
+("el PIN es la única autoridad para habilitar el panel", y la llave es
+física). En la pantalla real ese ícono es **puramente informativo** — no
+tiene `data-act`, no hace nada al tocarlo. También se sacó la sección de
+"panel físico" que el wireframe dibujaba debajo de la pantalla (los 10
+botones + la llave, para mostrar cómo se ve el mueble completo en la
+demo) — la pantalla real solo sirve la pantalla, el panel físico existe
+de verdad al lado, no hace falta dibujarlo.
 
 ## Decisiones pendientes (para no perderlas de vista)
 

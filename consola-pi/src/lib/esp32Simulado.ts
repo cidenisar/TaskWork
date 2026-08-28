@@ -5,11 +5,11 @@
 // queda sin recibir nada (mismo criterio que el resto de este proyecto:
 // avisar, no fallar en silencio).
 //
-// También expone `leerPin()` — no es parte de `ClienteEsp32` (la Pi real
-// nunca la llama, ahí el PIN se tipea en el teclado numérico de la
-// pantalla táctil, que todavía no existe) — index.ts la usa solo cuando
-// `esp32 instanceof ClienteEsp32Simulado`, para poder probar el flujo
-// completo sin pantalla.
+// El PIN NO se pide acá — eso lo maneja la pantalla táctil real
+// (lib/pantalla.ts, `POST /pin`), igual en modo simulado que en la Pi
+// real: abrir http://localhost:PUERTO en un navegador y tipear el PIN
+// ahí, no por teclado de la terminal (versión anterior de este archivo lo
+// hacía así, antes de que existiera la pantalla).
 
 import type { BotonFisico, ClienteEsp32, EventoEsp32 } from "./esp32.js";
 
@@ -27,12 +27,10 @@ const MAPA_TECLAS: Record<string, BotonFisico> = {
 };
 
 const CTRL_C = "";
-const BACKSPACE = "";
 
 export class ClienteEsp32Simulado implements ClienteEsp32 {
   private readonly callbacks: Array<(evento: EventoEsp32) => void> = [];
   private llave: "bloqueado" | "habilitado" = "bloqueado";
-  private leyendoPin = false;
 
   constructor() {
     if (!process.stdin.isTTY) {
@@ -47,11 +45,10 @@ export class ClienteEsp32Simulado implements ClienteEsp32 {
     process.stdin.setEncoding("utf8");
     console.log(
       "[esp32-simulado] teclado — 1=INCENDIO 2=SISMO 3=MEDICO 4=TOXICO 5-8=PROG1-4 o=OK c=CANCELAR " +
-        "k=girar llave (bloqueado↔habilitado). Ctrl+C sale."
+        "k=girar llave (bloqueado↔habilitado). El PIN se tipea en la pantalla (navegador). Ctrl+C sale."
     );
     process.stdin.on("data", (tecla: string) => {
       if (tecla === CTRL_C) process.exit(0);
-      if (this.leyendoPin) return; // leerPin tiene su propio listener temporal
       if (tecla === "k") {
         this.llave = this.llave === "bloqueado" ? "habilitado" : "bloqueado";
         console.log(`[esp32-simulado] llave → ${this.llave}`);
@@ -77,31 +74,5 @@ export class ClienteEsp32Simulado implements ClienteEsp32 {
 
   fijarRele(activo: boolean): void {
     console.log(`[esp32-simulado] relé: ${activo ? "🔴 ACTIVADO" : "⚪ desactivado"}`);
-  }
-
-  /** Ver comentario de cabecera — solo para el flujo de desarrollo sin pantalla táctil. */
-  async leerPin(): Promise<string> {
-    if (!process.stdin.isTTY) return "";
-    this.leyendoPin = true;
-    process.stdout.write("PIN: ");
-    return new Promise((resolve) => {
-      let pin = "";
-      const onData = (tecla: string) => {
-        if (tecla === "\r" || tecla === "\n") {
-          process.stdin.off("data", onData);
-          process.stdout.write("\n");
-          this.leyendoPin = false;
-          resolve(pin);
-          return;
-        }
-        if (tecla === BACKSPACE) {
-          pin = pin.slice(0, -1);
-          return;
-        }
-        pin += tecla;
-        process.stdout.write("*");
-      };
-      process.stdin.on("data", onData);
-    });
   }
 }
