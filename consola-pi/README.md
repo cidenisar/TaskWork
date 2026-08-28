@@ -267,6 +267,35 @@ botones + la llave, para mostrar cómo se ve el mueble completo en la
 demo) — la pantalla real solo sirve la pantalla, el panel físico existe
 de verdad al lado, no hace falta dibujarlo.
 
+## Timeout del heartbeat del ESP32 (2026-08-28)
+
+Encontrado al escribir `esp32-firmware/` (el firmware real): `esp32.onEvento`
+solo actualizaba `esp32HeartbeatOk` cuando LLEGABA un heartbeat — si el
+ESP32 se cuelga o se desconecta el UART (deja de mandar heartbeats por
+completo, no manda uno con `ok:false`), `esp32HeartbeatOk` se quedaba
+pegado en el último valor conocido para siempre, y tanto Diagnóstico
+(pantalla) como el heartbeat MQTT de la propia consola seguían
+reportando "OK" de mentira.
+
+Agregado `logic/heartbeatEsp32.ts` (`heartbeatEsp32Vencido`, pura) +
+`chequearHeartbeatEsp32Vencido` en `index.ts` — un `setInterval` cada 1s
+que, si `esp32HeartbeatOk` está en `true` pero pasaron más de
+`ESP32_HEARTBEAT_TIMEOUT_MS` (6s = 3x el intervalo con el que manda su
+heartbeat el firmware real, `HEARTBEAT_MS=2000` en
+`esp32-firmware/src/main.cpp`) desde el último heartbeat recibido, lo
+pasa a `false` y notifica a la pantalla. Margen de 3x para tolerar 1-2
+heartbeats perdidos por ruido en el UART sin marcar "sin respuesta" de
+más.
+
+4 tests nuevos en `logic/heartbeatEsp32.ts` (null siempre vencido, dentro
+del umbral, pasado el umbral, exactamente en el límite). El wiring en sí
+(dos líneas: guardar el timestamp al recibir un heartbeat, llamar a la
+función pura desde el `setInterval`) no se validó contra un proceso
+corriendo — el estado (`esp32HeartbeatOk`, `ultimoHeartbeatEsp32Ts`) es
+privado a `index.ts` y exponerlo solo para este test no se justificaba;
+la lógica de decisión en sí, que es donde está el riesgo real, sí está
+100% cubierta por los 4 tests. `npm run typecheck` limpio, 29/29 tests.
+
 ## Decisiones pendientes (para no perderlas de vista)
 
 - **Duración de la cuenta regresiva** — 5s, tomado del wireframe de

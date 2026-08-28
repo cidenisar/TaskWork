@@ -152,12 +152,8 @@ pio device monitor             # solo tiene algo que mostrar en el build _debug
 - **Sentido del selector de llave y polaridad del relé** — ver arriba.
 - **Timings** (`DEBOUNCE_MS`/`BLINK_MS`/`HEARTBEAT_MS`) — no confirmados
   con el cliente.
-- **`esp32HeartbeatOk` del lado Pi no tiene timeout** — hallazgo de
-  paso al escribir el heartbeat de este firmware:
-  `consola-pi/src/index.ts` solo actualiza `esp32HeartbeatOk` cuando
-  LLEGA un heartbeat; si el ESP32 se cuelga o se desconecta (deja de
-  mandar heartbeats por completo, no manda uno con `ok:false`), la Pi se
-  queda mostrando el último valor conocido para siempre en vez de
-  detectar la ausencia. No es parte de este paquete — queda anotado acá
-  porque se encontró escribiendo el heartbeat del firmware, para no
-  perderlo de vista.
+- ~~`esp32HeartbeatOk` del lado Pi no tiene timeout~~ — **resuelto
+  (2026-08-28)**, ver `consola-pi/README.md`, "Timeout del heartbeat del
+  ESP32". El umbral elegido ahí (`ESP32_HEARTBEAT_TIMEOUT_MS = 6_000`)
+  asume `HEARTBEAT_MS = 2000` de este firmware — si ese valor cambia acá,
+  actualizar también el umbral del lado Pi.

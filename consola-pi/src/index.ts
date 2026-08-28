@@ -15,6 +15,7 @@ import { HistorialLocal } from "./lib/historialLocal.js";
 import { crearServidorPantalla, type EstadoParaPantalla } from "./lib/pantalla.js";
 import { validarPin } from "./logic/pin.js";
 import { reducirPanel, type EstadoPanel, type EntradaPanel, type BotonAlarma } from "./logic/panel.js";
+import { heartbeatEsp32Vencido } from "./logic/heartbeatEsp32.js";
 import type {
   PayloadPadronMqtt,
   PayloadSimulacroMqtt,
@@ -37,6 +38,11 @@ const INTERVALO_HEARTBEAT_MS = 30_000;
 // como punto de partida razonable hasta que se confirme con el cliente).
 const CUENTA_REGRESIVA_MS = 5_000;
 const PUERTO_PANTALLA = Number(process.env.PUERTO_PANTALLA ?? 8080);
+// Ver `chequearHeartbeatEsp32Vencido` más abajo — 3x el intervalo con el
+// que manda su heartbeat el firmware real (HEARTBEAT_MS=2000 en
+// esp32-firmware/src/main.cpp), margen para tolerar 1-2 heartbeats
+// perdidos por ruido en el UART sin marcar "sin respuesta" de más.
+const ESP32_HEARTBEAT_TIMEOUT_MS = 6_000;
 
 // Selección de driver real vs. simulado por variable de entorno — ver
 // README "Cómo correr esto". EN_PI=1 es explícito a propósito (nunca por
@@ -62,6 +68,12 @@ let accountabilityCache: PayloadAccountabilityMqtt | null = null;
 let progCache: PayloadProgMqtt | null = null;
 let releActivo = false;
 let esp32HeartbeatOk = false;
+// Cuándo llegó el último heartbeat del ESP32 — sin esto, si el ESP32 se
+// cuelga o se desconecta el UART (deja de mandar heartbeats por
+// completo, no manda uno con ok:false), `esp32HeartbeatOk` se queda
+// pegado en el último valor conocido para siempre. Ver
+// `chequearHeartbeatEsp32Vencido` más abajo.
+let ultimoHeartbeatEsp32Ts: number | null = null;
 let mqttConectado = false;
 let ultimoTestSirena: "ok" | null = null;
 let panelState: EstadoPanel = { fase: "bloqueado" };
@@ -260,6 +272,7 @@ function publicarDisparo(
 esp32.onEvento((evento) => {
   if (evento.tipo === "heartbeat") {
     esp32HeartbeatOk = evento.ok;
+    ultimoHeartbeatEsp32Ts = Date.now();
     pantalla.notificar();
     return;
   }
@@ -332,6 +345,26 @@ const pantalla = crearServidorPantalla({
 pantalla.server.listen(PUERTO_PANTALLA, () => {
   console.log(`[pantalla] escuchando en :${PUERTO_PANTALLA}`);
 });
+
+// --- Vencimiento del heartbeat del ESP32 ---
+//
+// `esp32.onEvento` (más arriba) solo actualiza `esp32HeartbeatOk` cuando
+// LLEGA un heartbeat — si el ESP32 se cuelga o se desconecta el UART
+// (deja de mandar heartbeats por completo, no manda uno con ok:false),
+// sin esto `esp32HeartbeatOk` se queda pegado en el último valor
+// conocido para siempre, y tanto Diagnóstico (pantalla) como el
+// heartbeat MQTT de la propia consola seguirían reportando "OK" de
+// mentira. Chequeo periódico en vez de un timer por heartbeat porque es
+// más simple y el margen (ver ESP32_HEARTBEAT_TIMEOUT_MS) ya es
+// generoso — no hace falta reaccionar al milisegundo.
+function chequearHeartbeatEsp32Vencido(): void {
+  if (!esp32HeartbeatOk) return; // ya está en false, nada que corregir
+  if (!heartbeatEsp32Vencido(ultimoHeartbeatEsp32Ts, Date.now(), ESP32_HEARTBEAT_TIMEOUT_MS)) return;
+  esp32HeartbeatOk = false;
+  console.log(`[esp32] heartbeat vencido — sin respuesta hace más de ${ESP32_HEARTBEAT_TIMEOUT_MS}ms`);
+  pantalla.notificar();
+}
+setInterval(chequearHeartbeatEsp32Vencido, 1_000);
 
 // --- Heartbeat periódico ---
 
