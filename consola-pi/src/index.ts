@@ -37,6 +37,10 @@ const INTERVALO_HEARTBEAT_MS = 30_000;
 // un número; 5s es el valor usado en el wireframe de pantalla, se toma
 // como punto de partida razonable hasta que se confirme con el cliente).
 const CUENTA_REGRESIVA_MS = 5_000;
+// Cooldown tras LIMITE_INTENTOS_PIN PIN inválidos seguidos (ver
+// logic/panel.ts) — valor de partida, mismo criterio que
+// CUENTA_REGRESIVA_MS: razonable, no confirmado con el cliente.
+const BLOQUEO_PIN_MS = 30_000;
 const PUERTO_PANTALLA = Number(process.env.PUERTO_PANTALLA ?? 8080);
 // Ver `chequearHeartbeatEsp32Vencido` más abajo — 3x el intervalo con el
 // que manda su heartbeat el firmware real (HEARTBEAT_MS=2000 en
@@ -79,6 +83,8 @@ let ultimoTestSirena: "ok" | null = null;
 let panelState: EstadoPanel = { fase: "bloqueado" };
 let temporizadorCuentaRegresiva: NodeJS.Timeout | null = null;
 let cuentaRegresivaFinTs: number | null = null;
+let temporizadorBloqueoPin: NodeJS.Timeout | null = null;
+let bloqueoPinFinTs: number | null = null;
 
 const client = conectar();
 
@@ -230,7 +236,30 @@ function dispatch(entrada: EntradaPanel): void {
         esp32.fijarLampara(efecto.boton, true);
         break;
       }
+
+      case "iniciar_bloqueo_pin":
+        bloqueoPinFinTs = Date.now() + BLOQUEO_PIN_MS;
+        console.log(`[panel] PIN bloqueado temporalmente (${BLOQUEO_PIN_MS / 1000}s) — demasiados intentos inválidos seguidos`);
+        temporizadorBloqueoPin = setTimeout(() => dispatch({ tipo: "bloqueo_pin_terminado" }), BLOQUEO_PIN_MS);
+        break;
+
+      case "cancelar_bloqueo_pin":
+        if (temporizadorBloqueoPin) {
+          clearTimeout(temporizadorBloqueoPin);
+          temporizadorBloqueoPin = null;
+        }
+        bloqueoPinFinTs = null;
+        break;
     }
+  }
+  // La transición "bloqueo_pin_terminado" (el propio temporizador
+  // venciendo) sale de pin_bloqueado sin pasar por el efecto
+  // cancelar_bloqueo_pin (no hay nada que cancelar — es el timer que
+  // acaba de disparar) — limpiar acá el timestamp para que la pantalla
+  // no se quede con un bloqueoPinFinTs vencido colgando.
+  if (panelState.fase !== "pin_bloqueado") {
+    temporizadorBloqueoPin = null;
+    bloqueoPinFinTs = null;
   }
   pantalla.notificar();
 }
@@ -301,6 +330,7 @@ function estadoParaPantalla(): EstadoParaPantalla {
     simulacro: simulacroCache,
     esp32HeartbeatOk,
     cuentaRegresivaFinTs,
+    bloqueoPinFinTs,
     historial: historial.obtenerRecientes(),
     prog: progCache,
     mqttConectado,
@@ -328,6 +358,11 @@ function probarSirena(): void {
 const pantalla = crearServidorPantalla({
   obtenerEstado: estadoParaPantalla,
   onPin: async (pin) => {
+    // Bloqueo temporal (ver logic/panel.ts) — ni siquiera vale la pena
+    // hashear/comparar contra el padrón mientras está bloqueado, y
+    // evita que un intento durante el bloqueo cuente para nada (el
+    // reducer ya lo ignora, pero esto ahorra el trabajo de bcrypt).
+    if (panelState.fase === "pin_bloqueado") return { resultado: "invalido" };
     const resultado = await validarPin(pin, padronCache.obtenerTodos());
     if (resultado.resultado === "valido" && resultado.operadorId && resultado.rol) {
       dispatch({

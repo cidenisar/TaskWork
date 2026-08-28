@@ -296,6 +296,49 @@ privado a `index.ts` y exponerlo solo para este test no se justificaba;
 la lógica de decisión en sí, que es donde está el riesgo real, sí está
 100% cubierta por los 4 tests. `npm run typecheck` limpio, 29/29 tests.
 
+## Bloqueo temporal de PIN (2026-08-28)
+
+La Especificación deja pendiente qué hacer ante varios PIN incorrectos
+seguidos ("bloqueo temporal, aviso al backend, o ambos"). Implementado
+el bloqueo temporal:
+
+- `logic/panel.ts`: `EstadoPanel` suma una fase nueva, `pin_bloqueado`, y
+  `pidiendo_pin` ahora lleva `intentosFallidos: number`. Cada
+  `pin_invalido` lo incrementa (y sigue auditando por `publicar_auth`
+  como siempre); al llegar a `LIMITE_INTENTOS_PIN` (3, exportado desde
+  `panel.ts` — decisión tomada, no confirmada con el cliente) pasa a
+  `pin_bloqueado` y dispara el efecto `iniciar_bloqueo_pin`.
+  `index.ts` arranca un `setTimeout` de `BLOQUEO_PIN_MS` (30s, mismo
+  criterio que `CUENTA_REGRESIVA_MS`: valor de partida razonable) que al
+  vencer dispara `bloqueo_pin_terminado` — vuelve a `pidiendo_pin` con el
+  contador en cero. Girar la llave a bloqueado en medio del bloqueo lo
+  cancela (`cancelar_bloqueo_pin`), mismo patrón que
+  `cancelar_cuenta_regresiva`.
+- Mientras está en `pin_bloqueado`, el reducer ignora cualquier PIN o
+  botón — invariante 5 extendida ("el PIN es la única autoridad", acá
+  ni siquiera el PIN correcto sirve hasta que venza el bloqueo). Del
+  lado de `index.ts`, `onPin` corta antes de siquiera llamar a
+  `validarPin` (ahorra el hash bcrypt) si `panelState.fase ===
+  "pin_bloqueado"`.
+- Pantalla: nueva vista con ícono de candado, "DEMASIADOS INTENTOS
+  INCORRECTOS" y una cuenta regresiva en segundos (mismo estilo que la
+  cuenta regresiva de confirmación) — no muestra el teclado numérico
+  mientras dura.
+
+**Validado:** 8 tests nuevos en `logic/panel.ts` (cuenta los intentos,
+bloquea justo al llegar al límite, un PIN válido en el medio no
+resetea nada, `pin_bloqueado` ignora todo salvo `bloqueo_pin_terminado`
+y `llave_bloqueada`, el desbloqueo natural vuelve el contador a cero, la
+llave cancela el timer pendiente). El wiring completo (`index.ts` +
+`pantalla.ts` + `pantalla/index.html`) validado con Playwright contra
+el servidor y HTML reales, usando el `reducirPanel` real (no un mock):
+3 PIN inválidos vía `POST /pin` de verdad hasta llegar a
+`pin_bloqueado`, confirmado que la pantalla deja de mostrar el teclado
+y muestra la cuenta regresiva, que un intento adicional durante el
+bloqueo no se procesa, que `bloqueo_pin_terminado` vuelve a mostrar el
+teclado, y que girar la llave durante el bloqueo lo cancela. `npm run
+typecheck` limpio, 34/34 tests.
+
 ## Decisiones pendientes (para no perderlas de vista)
 
 - **Duración de la cuenta regresiva** — 5s, tomado del wireframe de
@@ -311,6 +354,12 @@ la lógica de decisión en sí, que es donde está el riesgo real, sí está
   Configuración es de solo lectura. Queda pendiente, del lado del backend,
   construir la pantalla de administración real en Frontend Web (hoy fuera
   de este repo).
-- **Qué pasa ante varios PIN incorrectos seguidos** — la propia
-  Especificación lo deja como pendiente (bloqueo temporal, aviso al
-  backend, o ambos) — no implementado.
+- **Qué pasa ante varios PIN incorrectos seguidos — resuelto
+  (2026-08-28):** bloqueo temporal, ver "Bloqueo temporal de PIN" más
+  abajo. La Especificación mencionaba también "aviso al backend" como
+  alternativa/complemento — no se agregó un mensaje MQTT aparte para
+  esto porque cada intento (válido o no) ya se audita vía `publicar_auth`
+  desde antes; un operador viendo `auditoria_pin` en Supabase ya puede
+  reconstruir que hubo 3 seguidos fallidos. Si hace falta una alerta más
+  inmediata (push/SMS al supervisor), es un cambio aparte del lado
+  backend, no de la consola.

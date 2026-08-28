@@ -39,6 +39,8 @@ export interface EstadoParaPantalla {
   esp32HeartbeatOk: boolean;
   /** epoch ms — cuándo termina la cuenta regresiva actual, si `panel.fase === "confirmando"`. */
   cuentaRegresivaFinTs: number | null;
+  /** epoch ms — cuándo termina el bloqueo temporal de PIN, si `panel.fase === "pin_bloqueado"`. */
+  bloqueoPinFinTs: number | null;
   historial: FilaHistorial[];
   prog: PayloadProgMqtt | null;
   mqttConectado: boolean;

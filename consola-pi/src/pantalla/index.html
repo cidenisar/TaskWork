@@ -257,6 +257,14 @@
       for (var k = 1; k <= 9; k++) html += '<button class="padkey" data-dig="' + k + '">' + k + '</button>';
       html += '<div></div><button class="padkey" data-dig="0">0</button>';
       html += '</div></div>';
+    } else if (panel.fase === "pin_bloqueado") {
+      var restanteBloqueoMs = Math.max(0, (ultimo.bloqueoPinFinTs || 0) - Date.now());
+      html += '<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;color:#f87171;">';
+      html += svgLock().replace('width="15" height="15"', 'width="30" height="30"');
+      html += '<div class="lbl" style="font-size:13px;">DEMASIADOS INTENTOS INCORRECTOS</div>';
+      html += '<div style="font-size:40px; font-weight:600; font-family:\'IBM Plex Mono\',monospace;">' + Math.ceil(restanteBloqueoMs / 1000) + 's</div>';
+      html += '<div class="lbl" style="font-size:11px; color:#5b6472;">ESPERE PARA VOLVER A INTENTAR</div>';
+      html += '</div>';
     } else if (panel.fase === "habilitado") {
       html += '<div style="flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:22px;" data-act="menu">';
       html += '<div class="lbl" style="font-size:14px; color:#f87171; border:1.5px solid #f87171; padding:8px 26px; border-radius:999px;">MODO&nbsp;&nbsp;' + esc(ultimo.modo) + '</div>';

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { reducirPanel, type EstadoPanel, type OperadorIdentificado } from "../src/logic/panel.js";
+import { reducirPanel, type EstadoPanel, type OperadorIdentificado, LIMITE_INTENTOS_PIN } from "../src/logic/panel.js";
 
 const OPERADOR: OperadorIdentificado = { operadorId: "op1", legajo: "1001", rol: "operador" };
 
@@ -19,20 +19,62 @@ test("invariante 5: un PIN válido sin llave habilitada tampoco hace nada", () =
 
 test("girar la llave pasa de bloqueado a pidiendo_pin, sin efectos", () => {
   const r = reducirPanel({ fase: "bloqueado" }, { tipo: "llave_habilitada" });
-  assert.deepEqual(r.estado, { fase: "pidiendo_pin" });
+  assert.deepEqual(r.estado, { fase: "pidiendo_pin", intentosFallidos: 0 });
   assert.deepEqual(r.efectos, []);
 });
 
 test("PIN válido habilita el panel y publica la auditoría", () => {
-  const r = reducirPanel({ fase: "pidiendo_pin" }, { tipo: "pin_valido", operador: OPERADOR });
+  const r = reducirPanel({ fase: "pidiendo_pin", intentosFallidos: 0 }, { tipo: "pin_valido", operador: OPERADOR });
   assert.deepEqual(r.estado, { fase: "habilitado", operador: OPERADOR });
   assert.deepEqual(r.efectos, [{ tipo: "publicar_auth", resultado: "valido", operador: OPERADOR }]);
 });
 
-test("PIN inválido se queda pidiendo PIN pero igual audita (con operador null)", () => {
-  const r = reducirPanel({ fase: "pidiendo_pin" }, { tipo: "pin_invalido" });
-  assert.deepEqual(r.estado, { fase: "pidiendo_pin" });
+test("PIN inválido se queda pidiendo PIN, cuenta el intento y audita (con operador null)", () => {
+  const r = reducirPanel({ fase: "pidiendo_pin", intentosFallidos: 0 }, { tipo: "pin_invalido" });
+  assert.deepEqual(r.estado, { fase: "pidiendo_pin", intentosFallidos: 1 });
   assert.deepEqual(r.efectos, [{ tipo: "publicar_auth", resultado: "invalido", operador: null }]);
+});
+
+test("PIN válido después de algún intento fallido igual habilita (no acumula contra vos)", () => {
+  const r = reducirPanel({ fase: "pidiendo_pin", intentosFallidos: 2 }, { tipo: "pin_valido", operador: OPERADOR });
+  assert.deepEqual(r.estado, { fase: "habilitado", operador: OPERADOR });
+});
+
+test(`bloqueo temporal tras ${LIMITE_INTENTOS_PIN} PIN inválidos seguidos`, () => {
+  let estado: EstadoPanel = { fase: "pidiendo_pin", intentosFallidos: 0 };
+  for (let i = 0; i < LIMITE_INTENTOS_PIN - 1; i++) {
+    const r = reducirPanel(estado, { tipo: "pin_invalido" });
+    assert.equal(r.estado.fase, "pidiendo_pin");
+    estado = r.estado;
+  }
+  const ultimo = reducirPanel(estado, { tipo: "pin_invalido" });
+  assert.deepEqual(ultimo.estado, { fase: "pin_bloqueado" });
+  // sigue auditando el intento que causó el bloqueo, además de bloquear
+  assert.deepEqual(ultimo.efectos, [
+    { tipo: "publicar_auth", resultado: "invalido", operador: null },
+    { tipo: "iniciar_bloqueo_pin" },
+  ]);
+});
+
+test("pin_bloqueado ignora PIN y botones — invariante 5 extendida al bloqueo temporal", () => {
+  const bloqueado: EstadoPanel = { fase: "pin_bloqueado" };
+  const r1 = reducirPanel(bloqueado, { tipo: "pin_valido", operador: OPERADOR });
+  assert.deepEqual(r1.estado, bloqueado);
+  assert.deepEqual(r1.efectos, []);
+  const r2 = reducirPanel(bloqueado, { tipo: "boton_presionado", boton: "INCENDIO" });
+  assert.deepEqual(r2.estado, bloqueado);
+});
+
+test("bloqueo_pin_terminado vuelve a pidiendo_pin con el contador en cero", () => {
+  const r = reducirPanel({ fase: "pin_bloqueado" }, { tipo: "bloqueo_pin_terminado" });
+  assert.deepEqual(r.estado, { fase: "pidiendo_pin", intentosFallidos: 0 });
+  assert.deepEqual(r.efectos, []);
+});
+
+test("girar la llave a bloqueado durante pin_bloqueado cancela el bloqueo pendiente", () => {
+  const r = reducirPanel({ fase: "pin_bloqueado" }, { tipo: "llave_bloqueada" });
+  assert.deepEqual(r.estado, { fase: "bloqueado" });
+  assert.deepEqual(r.efectos, [{ tipo: "cancelar_bloqueo_pin" }]);
 });
 
 test("un botón de alarma habilitado inicia la cuenta regresiva, no publica todavía", () => {
