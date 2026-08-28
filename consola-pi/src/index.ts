@@ -1,59 +1,59 @@
-// Punto de entrada de la consola. Estado de esta primera versión: conecta
-// a MQTT con el contrato real, cachea padrón/próximo simulacro, reacciona
-// a evento-activo activando/desactivando el relé, y detecta presiones de
-// la botonera — pero TODAVÍA NO dispara un evento al presionar
-// "disparado" (ver README, "Qué falta — decisión pendiente": si el botón
-// físico necesita PIN antes de publicar, o es un pulsador de pánico sin
-// autenticación). No hay pantalla táctil todavía — lo que mostraría se
-// loguea por consola como aproximación.
+// Punto de entrada de la consola. Conecta a MQTT con el contrato real,
+// cachea padrón (SQLite)/próximo simulacro, reacciona a evento-activo
+// activando/desactivando el relé, y maneja el ciclo completo
+// llave→PIN→botón→cuenta regresiva→envío a través de la máquina de
+// estados pura de logic/panel.ts. No hay pantalla táctil todavía — lo
+// que mostraría se loguea por consola como aproximación (ver README,
+// "Qué falta").
 
 import "dotenv/config";
-import {
-  conectar,
-  suscribirSaliente,
-  restoDeTopico,
-  publicarEstado,
-  publicarHeartbeat,
-  publicarAuth,
-} from "./lib/mqtt.js";
-import { ReleSimulado, ReleGpioReal, type ReleDriver } from "./lib/rele.js";
-import { BotoneraSimulada, BotoneraGpioReal, type BotoneraDriver } from "./lib/botonera.js";
+import { conectar, suscribirSaliente, restoDeTopico, publicarEstado, publicarHeartbeat, publicarEvento, publicarAuth } from "./lib/mqtt.js";
+import { crearClienteEsp32, type ClienteEsp32, BOTONES_CON_LAMPARA } from "./lib/esp32.js";
+import { abrirPuertoEsp32 } from "./lib/esp32Serial.js";
+import { ClienteEsp32Simulado } from "./lib/esp32Simulado.js";
+import { PadronCache } from "./lib/padronCache.js";
 import { validarPin } from "./logic/pin.js";
+import { reducirPanel, type EstadoPanel, type EntradaPanel, type BotonAlarma } from "./logic/panel.js";
 import type {
   PayloadPadronMqtt,
   PayloadSimulacroMqtt,
   PayloadEventoActivoMqtt,
   PayloadAccountabilityMqtt,
   PayloadHeartbeatMqtt,
-  OperadorPadron,
+  PayloadEventoMqtt,
 } from "./types.js";
 
 const CONSOLA_ID = process.env.CONSOLA_ID;
 if (!CONSOLA_ID) throw new Error("falta CONSOLA_ID en .env");
 
-const FIRMWARE_VERSION = "0.1.0-dev";
+const FIRMWARE_VERSION = "0.2.0-dev";
 const INTERVALO_HEARTBEAT_MS = 30_000;
+// Ventana para cancelar antes de que un botón de alarma se envíe de
+// verdad — ver README, "Decisión pendiente: tiempo de cuenta regresiva"
+// (la Especificación menciona la cuenta regresiva cancelable pero no fija
+// un número; 5s es el valor usado en el wireframe de pantalla, se toma
+// como punto de partida razonable hasta que se confirme con el cliente).
+const CUENTA_REGRESIVA_MS = 5_000;
 
 // Selección de driver real vs. simulado por variable de entorno — ver
 // README "Cómo correr esto". EN_PI=1 es explícito a propósito (nunca por
-// defecto): correr en la Pi real sin haberlo puesto sería instanciar
-// GPIO real sin querer.
+// defecto): correr en la Pi real sin haberlo puesto sería intentar abrir
+// un puerto serie real que no existe en una laptop de desarrollo.
 const enPi = process.env.EN_PI === "1";
-const rele: ReleDriver = enPi ? new ReleGpioReal(Number(process.env.RELE_PIN ?? 17)) : new ReleSimulado();
-const botonera: BotoneraDriver = enPi
-  ? new BotoneraGpioReal({
-      disparado: Number(process.env.PIN_BOTON_DISPARADO ?? 27),
-      ok: Number(process.env.PIN_BOTON_OK ?? 22),
-      cancelar: Number(process.env.PIN_BOTON_CANCELAR ?? 23),
-    })
-  : new BotoneraSimulada();
+const esp32: ClienteEsp32 = enPi
+  ? crearClienteEsp32(abrirPuertoEsp32(process.env.ESP32_PUERTO ?? "/dev/serial0", Number(process.env.ESP32_BAUD ?? 115200)))
+  : new ClienteEsp32Simulado();
+
+const padronCache = new PadronCache(process.env.PADRON_DB_PATH ?? "./padron.db");
 
 // Estado en memoria — lo que hoy sería "lo último que se le mostraría a
-// la pantalla táctil". Se repuebla solo al reconectar porque
-// padron/simulacro/evento-activo son retained.
-let padronCache: OperadorPadron[] = [];
+// la pantalla táctil". simulacro/evento-activo se repueblan solos al
+// reconectar porque son retained; el padrón vive en SQLite (ver
+// PadronCache) porque tiene que sobrevivir a un restart sin red.
 let simulacroCache: PayloadSimulacroMqtt | null = null;
 let eventoActivoCache: PayloadEventoActivoMqtt | null = null;
+let panelState: EstadoPanel = { fase: "bloqueado" };
+let temporizadorCuentaRegresiva: NodeJS.Timeout | null = null;
 
 const client = conectar();
 
@@ -69,16 +69,16 @@ client.on("error", (err) => console.error("[mqtt] error:", err.message));
 client.on("message", (topic, rawPayload) => {
   const resto = restoDeTopico(topic, CONSOLA_ID);
   if (!resto) return;
-  void manejarMensaje(resto, rawPayload.toString()).catch((err) => {
+  void manejarMensajeMqtt(resto, rawPayload.toString()).catch((err) => {
     console.error(`[consola] error procesando ${topic}:`, err);
   });
 });
 
-async function manejarMensaje(resto: string, raw: string): Promise<void> {
+async function manejarMensajeMqtt(resto: string, raw: string): Promise<void> {
   if (resto === "padron") {
     const payload = JSON.parse(raw) as PayloadPadronMqtt;
-    padronCache = payload.operadores;
-    console.log(`[padron] actualizado — ${padronCache.length} operador(es) habilitados`);
+    padronCache.reemplazar(payload.operadores);
+    console.log(`[padron] actualizado — ${payload.operadores.length} operador(es) habilitados`);
     return;
   }
 
@@ -91,7 +91,11 @@ async function manejarMensaje(resto: string, raw: string): Promise<void> {
   if (resto === "evento-activo") {
     eventoActivoCache = raw === "null" ? null : (JSON.parse(raw) as PayloadEventoActivoMqtt);
     if (!eventoActivoCache) {
-      await rele.desactivar();
+      esp32.fijarRele(false);
+      // Reset de las lámparas de alarma al cerrar el evento — así la
+      // pantalla física (lámpara steady de "esto es lo que se disparó")
+      // no queda encendida después de que el backend confirma el cierre.
+      for (const boton of BOTONES_CON_LAMPARA) esp32.fijarLampara(boton, false);
       console.log("[evento-activo] ninguno — pantalla volvería a estado normal");
       return;
     }
@@ -99,8 +103,13 @@ async function manejarMensaje(resto: string, raw: string): Promise<void> {
       `[evento-activo] ${eventoActivoCache.tipo} (${eventoActivoCache.modo}) — ${eventoActivoCache.relacion}` +
         (eventoActivoCache.escenario ? ` — escenario: "${eventoActivoCache.escenario}"` : "")
     );
-    if (eventoActivoCache.activarRele) await rele.activar();
-    else await rele.desactivar();
+    // TODO (ver README, "Decisión pendiente: relé local inmediato o
+    // esperar al backend"): hoy el relé solo se activa cuando llega la
+    // confirmación de evento-activo del backend, no apenas se envía el
+    // propio disparo — falta decidir si el ESP32 debería sonar la
+    // sirena local de inmediato al confirmar el envío, sin esperar el
+    // viaje de ida y vuelta a Backend Online.
+    esp32.fijarRele(eventoActivoCache.activarRele);
     return;
   }
 
@@ -113,57 +122,128 @@ async function manejarMensaje(resto: string, raw: string): Promise<void> {
   }
 }
 
-// Botonera — pide PIN, lo valida contra el padrón cacheado (mismo
-// bcrypt.compare que usaría la pantalla táctil) y publica SIEMPRE la
-// auditoría en `auth` (válido o no) — eso no depende de ninguna decisión
-// pendiente, es la auditoría de todo intento de PIN. Lo que todavía NO
-// hace: publicar el propio evento DISPARADO — necesita saber el TIPO
-// (Incendio/Sismo/Médico/Tóxico), y eso hoy solo lo elegiría la pantalla
-// táctil (todavía sin construir) — ver README "Qué falta".
-botonera.onPresion((boton) => {
-  console.log(`[botonera] botón "${boton}" presionado`);
-  if (boton !== "disparado") return;
-  void manejarBotonDisparado();
-});
+// --- Máquina de estados del panel (ver logic/panel.ts) ---
 
-async function manejarBotonDisparado(): Promise<void> {
-  if (!(botonera instanceof BotoneraSimulada)) {
-    console.log("[botonera] TODO: entrada de PIN por pantalla táctil todavía no implementada.");
-    return;
+function dispatch(entrada: EntradaPanel): void {
+  const anterior = panelState;
+  const resultado = reducirPanel(anterior, entrada);
+  panelState = resultado.estado;
+
+  for (const efecto of resultado.efectos) {
+    switch (efecto.tipo) {
+      case "publicar_auth":
+        publicarAuth(client, CONSOLA_ID as string, {
+          operadorId: efecto.operador?.operadorId ?? null,
+          legajo: efecto.operador?.legajo ?? null,
+          resultado: efecto.resultado,
+          ts: Date.now(),
+        });
+        break;
+
+      case "iniciar_cuenta_regresiva":
+        console.log(`[panel] cuenta regresiva iniciada (${CUENTA_REGRESIVA_MS / 1000}s) — CANCELAR para abortar`);
+        temporizadorCuentaRegresiva = setTimeout(() => dispatch({ tipo: "cuenta_regresiva_terminada" }), CUENTA_REGRESIVA_MS);
+        break;
+
+      case "cancelar_cuenta_regresiva":
+        if (temporizadorCuentaRegresiva) {
+          clearTimeout(temporizadorCuentaRegresiva);
+          temporizadorCuentaRegresiva = null;
+        }
+        if (anterior.fase === "confirmando") esp32.fijarLampara(anterior.boton, false);
+        console.log("[panel] cuenta regresiva cancelada — 100% local, no se publicó nada");
+        break;
+
+      case "publicar_evento":
+        publicarDisparo(efecto.boton, efecto.operador);
+        esp32.fijarLampara(efecto.boton, true);
+        break;
+    }
   }
-  const pin = await botonera.leerPin();
-  const resultado = await validarPin(pin, padronCache);
-  publicarAuth(client, CONSOLA_ID as string, {
-    operadorId: resultado.operadorId,
-    legajo: resultado.legajo,
-    resultado: resultado.resultado,
-    ts: Date.now(),
-  });
-  if (resultado.resultado === "invalido") {
-    console.log("[botonera] PIN inválido — auditado, no se dispara nada.");
-    return;
-  }
-  console.log(
-    `[botonera] PIN válido (legajo ${resultado.legajo}, rol ${resultado.rol}) — ` +
-      "TODO: falta elegir el TIPO de evento (pantalla táctil) para poder publicar el DISPARADO."
-  );
 }
 
-// Heartbeat periódico — payload real, valores de batería/red en null
-// porque esta primera versión no lee ningún sensor todavía (ver README).
+/** PROG1–4 sin asignar todavía (eso es config de pantalla táctil, ver README) — se manda el nombre literal del botón. */
+function tipoEventoDeBoton(boton: BotonAlarma): string {
+  return boton;
+}
+
+function publicarDisparo(boton: BotonAlarma, operador: { operadorId: string; rol: "operador" | "admin" }): void {
+  const payload: PayloadEventoMqtt = {
+    eventoId: crypto.randomUUID(),
+    tipo: tipoEventoDeBoton(boton),
+    estado: "DISPARADO",
+    notificacionEnviada: true,
+    origen: "consola",
+    consolaId: CONSOLA_ID as string,
+    operadorId: operador.operadorId,
+    operadorRol: operador.rol,
+    modo: (process.env.MODO_EVENTO === "SIMULACRO" ? "SIMULACRO" : "REAL") as "REAL" | "SIMULACRO",
+    simulacroProgramadoId: null,
+    ts: Date.now(),
+  };
+  publicarEvento(client, CONSOLA_ID as string, payload);
+  console.log(`[panel] DISPARADO publicado: ${payload.tipo} (${payload.modo}), operador ${operador.operadorId}`);
+}
+
+esp32.onEvento((evento) => {
+  if (evento.tipo === "heartbeat") {
+    esp32HeartbeatOk = evento.ok;
+    return;
+  }
+  if (evento.tipo === "llave") {
+    console.log(`[esp32] llave → ${evento.estado}`);
+    dispatch({ tipo: evento.estado === "habilitado" ? "llave_habilitada" : "llave_bloqueada" });
+    if (evento.estado === "habilitado" && panelState.fase === "pidiendo_pin") void pedirPinYValidar();
+    return;
+  }
+  if (evento.tipo === "boton") {
+    console.log(`[esp32] botón "${evento.tecla}" presionado`);
+    dispatch({ tipo: "boton_presionado", boton: evento.tecla });
+    return;
+  }
+});
+
+/**
+ * Solo para el flujo de desarrollo sin pantalla táctil (ver
+ * ClienteEsp32Simulado.leerPin) — en la Pi real, el PIN se tipea en el
+ * teclado numérico en pantalla, que dispara `dispatch({tipo:"pin_valido"|"pin_invalido", ...})`
+ * directamente desde el handler de esa UI (todavía no construida).
+ */
+async function pedirPinYValidar(): Promise<void> {
+  if (!(esp32 instanceof ClienteEsp32Simulado)) return;
+  const pin = await esp32.leerPin();
+  const resultado = await validarPin(pin, padronCache.obtenerTodos());
+  if (resultado.resultado === "valido" && resultado.operadorId && resultado.rol) {
+    dispatch({
+      tipo: "pin_valido",
+      operador: { operadorId: resultado.operadorId, legajo: resultado.legajo, rol: resultado.rol },
+    });
+  } else {
+    dispatch({ tipo: "pin_invalido" });
+  }
+}
+
+// --- Heartbeat periódico ---
+
+let esp32HeartbeatOk = false;
+
 function enviarHeartbeat(): void {
   const payload: PayloadHeartbeatMqtt = {
     bateria: null,
     caminoRed: null,
-    esp32HeartbeatOk: true,
+    esp32HeartbeatOk,
     firmwareVersion: FIRMWARE_VERSION,
     ts: Date.now(),
   };
   publicarHeartbeat(client, CONSOLA_ID as string, payload);
 }
-// Un solo setInterval para toda la vida del proceso (no uno por cada
-// reconexión) — `client.publish` de la librería mqtt bufferea mientras
-// está desconectado y reenvía al reconectar, así que no hace falta
-// reiniciar nada acá.
+// Un solo setInterval para toda la vida del proceso — client.publish de
+// la librería mqtt bufferea mientras está desconectado y reenvía al
+// reconectar, así que no hace falta reiniciar nada en cada reconexión.
 enviarHeartbeat();
 setInterval(enviarHeartbeat, INTERVALO_HEARTBEAT_MS);
+
+process.on("SIGINT", () => {
+  padronCache.cerrar();
+  process.exit(0);
+});
