@@ -25,7 +25,7 @@ export async function sincronizarPadronDeSitio(db: Db, mqttClient: MqttClient, s
   ]);
 
   const payload: PayloadPadronMqtt = {
-    operadores: operadores.map((o) => ({ legajo: o.legajo, pinHash: o.pin_hash, rol: o.rol })),
+    operadores: operadores.map((o) => ({ id: o.id, legajo: o.legajo, pinHash: o.pin_hash, rol: o.rol })),
     actualizadoAt: new Date().toISOString(),
   };
 

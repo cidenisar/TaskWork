@@ -460,7 +460,7 @@ export class Db {
 
   async getOperadoresActivosDeSitio(
     sitioId: string
-  ): Promise<Array<{ legajo: string | null; pin_hash: string; rol: "operador" | "admin" }>> {
+  ): Promise<Array<{ id: string; legajo: string | null; pin_hash: string; rol: "operador" | "admin" }>> {
     // Alcance "organización" (ver ficha) ve todos los sitios — se resuelve
     // trayendo primero los de alcance puntual sobre este sitio, más los de
     // alcance organización de la misma organización que el sitio.
@@ -473,23 +473,25 @@ export class Db {
 
     const { data: puntuales, error: err1 } = await this.client
       .from("operadores_sitios")
-      .select("operadores(legajo, pin_hash, rol, estado)")
+      .select("operadores(id, legajo, pin_hash, rol, estado)")
       .eq("sitio_id", sitioId);
     if (err1) throw err1;
 
     const { data: deOrganizacion, error: err2 } = await this.client
       .from("operadores")
-      .select("legajo, pin_hash, rol, estado")
+      .select("id, legajo, pin_hash, rol, estado")
       .eq("organizacion_id", sitio.organizacion_id)
       .eq("alcance_tipo", "organizacion");
     if (err2) throw err2;
 
-    type Fila = { legajo: string | null; pin_hash: string; rol: "operador" | "admin"; estado: string };
+    type Fila = { id: string; legajo: string | null; pin_hash: string; rol: "operador" | "admin"; estado: string };
     const puntualesFilas = (puntuales ?? [])
       .map((r: { operadores: unknown }) => r.operadores as unknown as Fila)
       .filter(Boolean);
     const todas = [...puntualesFilas, ...((deOrganizacion ?? []) as Fila[])];
 
-    return todas.filter((o) => o.estado === "activo").map(({ legajo, pin_hash, rol }) => ({ legajo, pin_hash, rol }));
+    return todas
+      .filter((o) => o.estado === "activo")
+      .map(({ id, legajo, pin_hash, rol }) => ({ id, legajo, pin_hash, rol }));
   }
 }

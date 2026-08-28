@@ -759,6 +759,15 @@ corrida de arranque, y capturado el mensaje retained publicado con el
 operador real de prueba ("Admin Test", legajo 9001, rol admin) — el
 padrón llegó solo, sin ningún disparo manual.
 
+> **Actualización (2026-08-28):** `OperadorPadron` no traía `id` — la
+> consola podía validar el PIN localmente contra `pinHash`, pero no tenía
+> forma de reportar el `operadorId` real en `PayloadAuthMqtt`/
+> `PayloadEventoMqtt` (los dos lo piden), solo el legajo. Encontrado al
+> diseñar el firmware real de la consola (`consola-pi/`). Agregado `id` al
+> payload y a `Db.getOperadoresActivosDeSitio`. Validado contra Supabase y
+> Mosquitto reales: el mensaje retained en `consolas/{id}/padron` ahora
+> incluye el `id` real del operador.
+
 ### Sincronización de "próximo simulacro"
 
 `sincronizarSimulacroDeSitio` existía desde la sesión anterior (motor de

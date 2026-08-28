@@ -200,8 +200,19 @@ export interface PayloadHeartbeatMqtt {
 /** Payload del tópico `consolas/{id}/estado` (Pi → Backend + LWT del broker). */
 export type PayloadEstadoMqtt = "online" | "offline";
 
-/** Payload de `consolas/{id}/padron` (Backend → Pi, retain). */
+/**
+ * Payload de `consolas/{id}/padron` (Backend → Pi, retain).
+ *
+ * `id` es el `operadores.id` real — imprescindible: la consola valida el
+ * PIN localmente contra `pinHash` (ver README "Autenticación de las
+ * consolas contra Mosquitto"/PIN), pero después tiene que poder mandar
+ * `operadorId` real en `PayloadAuthMqtt`/`PayloadEventoMqtt` (ambos lo
+ * piden) — sin este campo la consola no tenía forma de saber el id de
+ * quién validó, solo el legajo. Encontrado al diseñar el firmware real de
+ * la consola (`consola-pi/`, 2026-08-28).
+ */
 export interface OperadorPadron {
+  id: string;
   legajo: string | null;
   pinHash: string;
   rol: "operador" | "admin";
