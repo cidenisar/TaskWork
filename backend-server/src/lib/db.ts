@@ -346,11 +346,23 @@ export class Db {
    * de las otras consultas de simulacros, esta SÍ trae el nombre del sitio
    * (join a `sitios`) — es la única que lo necesita, no vale la pena
    * traerlo en las demás.
+   *
+   * `organizacionId` es obligatorio y siempre se aplica — `simulacros_programados`
+   * no tiene su propia columna `organizacion_id` (solo `sitio_id`), así
+   * que el filtro va vía `sitios!inner(organizacion_id)`. Sin esto, este
+   * método (que usa `service_role`, sin RLS) devolvía el historial de
+   * TODAS las organizaciones cuando `sitioId` venía `null` — hallazgo de
+   * revisión de código al construir la pantalla de Historial en
+   * Frontend Web, ver backend-server/README.md. `sitioId`, si viene, se
+   * combina con el filtro de organización — un sitio de otra
+   * organización simplemente no matchea nada, no hace falta validarlo
+   * aparte.
    */
-  async getHistorialSimulacros(sitioId: string | null): Promise<FilaHistorialSimulacro[]> {
+  async getHistorialSimulacros(organizacionId: string, sitioId: string | null): Promise<FilaHistorialSimulacro[]> {
     let query = this.client
       .from("simulacros_programados")
-      .select("sitio_id, tipo_evento_id, fecha_hora, estado, sitios(nombre), tipos_evento(nombre)");
+      .select("sitio_id, tipo_evento_id, fecha_hora, estado, sitios!inner(nombre, organizacion_id), tipos_evento(nombre)")
+      .eq("sitios.organizacion_id", organizacionId);
     if (sitioId) query = query.eq("sitio_id", sitioId);
     const { data, error } = await query;
     if (error) throw error;

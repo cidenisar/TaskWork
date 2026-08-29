@@ -1270,6 +1270,41 @@ tienen ninguna validación pura propia que testear: sin body, la única
 lógica es auth + estado, ya cubierta por la validación end-to-end de
 arriba, mismo criterio que `manejarCrearOperador`/`manejarResetearPin`).
 
+## Hallazgo de seguridad: `GET /simulacros/cumplimiento` filtraba entre organizaciones (2026-08-29)
+
+Encontrado al leer `db.ts` para construir la pantalla de Historial en
+Frontend Web (que iba a llamar a este endpoint sin `sitioId`, el caso
+que disparaba el problema). `Db.getHistorialSimulacros(sitioId)` usa
+`service_role` (sin RLS) y, cuando `sitioId` venía `null` — el caso
+normal, un admin viendo el cumplimiento de todos sus sitios a la vez —
+no aplicaba **ningún** filtro de organización: devolvía el historial de
+simulacros de **todas** las organizaciones del proyecto, no solo la del
+admin que llamaba. `simulacros_programados` no tiene su propia columna
+`organizacion_id` (solo `sitio_id`) — el filtro faltante no era un
+`.eq()` obvio de agregar sin pensarlo, había que ir vía `sitios`.
+
+**Corregido**: `getHistorialSimulacros` ahora exige `organizacionId` y
+lo aplica siempre, vía `sitios!inner(organizacion_id)` +
+`.eq("sitios.organizacion_id", organizacionId)` — `sitioId`, si viene,
+se combina con ese filtro (un sitio de otra organización simplemente no
+matchea nada, no hace falta validarlo aparte con una consulta extra).
+El handler (`manejarCumplimiento`) le pasa `operador.organizacionId`
+(ya lo tenía disponible, resuelto del JWT).
+
+Validado contra Supabase y backend-server reales, no solo por
+inspección: armé una **segunda organización** de prueba con su propio
+sitio/tipo de evento/simulacro (`estado: "realizado"`), más un
+simulacro real en la organización real — llamé a
+`GET /simulacros/cumplimiento` real (sin `sitioId`, el caso que tenía
+el leak) con un JWT de admin real de la organización real, y confirmé
+que el sitio de la organización de prueba **no aparece** en el
+resultado, mientras que el `(sitio, tipo)` real sí, con `alDia: true`
+correcto. Organización, sitio, tipo de evento y simulacros de prueba
+borrados al terminar. `npm run typecheck` limpio, 102/102 tests (sin
+tests unitarios nuevos — `getHistorialSimulacros` es I/O puro, sin
+lógica de decisión propia que testear más allá de la query en sí, ya
+cubierta por la validación end-to-end).
+
 ## Qué NO está implementado todavía (a propósito, ver la ficha)
 
 Nada por ahora — el último ítem señalado acá (el contador incremental de

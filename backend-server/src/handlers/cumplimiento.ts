@@ -36,6 +36,6 @@ export async function manejarCumplimiento(
     return { status: 403, body: { error: "se requiere rol admin" } };
   }
 
-  const historial = await db.getHistorialSimulacros(sitioIdFiltro);
+  const historial = await db.getHistorialSimulacros(operador.organizacionId, sitioIdFiltro);
   return { status: 200, body: calcularCumplimiento(historial) };
 }
