@@ -6,7 +6,7 @@ import { SelectorSitio } from "./routes/SelectorSitio";
 import { Operadores } from "./routes/Operadores";
 import { Pendientes } from "./routes/Pendientes";
 import { Accountability } from "./routes/Accountability";
-import { Placeholder } from "./routes/Placeholder";
+import { Panorama } from "./routes/Panorama";
 
 export function App() {
   return (
@@ -42,10 +42,7 @@ export function App() {
             path="/panorama"
             element={
               <ProtectedRoute>
-                <Placeholder
-                  titulo="Panorama de Sitios"
-                  nota="Todavía no construida — ver ROADMAP.md. El login y el selector de sitio ya llevan hasta acá."
-                />
+                <Panorama />
               </ProtectedRoute>
             }
           />

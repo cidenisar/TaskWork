@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { NavLink } from "react-router-dom";
 import { useAuth } from "../lib/auth";
 import "./Topbar.css";
@@ -10,7 +11,7 @@ function iniciales(nombre: string): string {
     .join("");
 }
 
-export function Topbar({ titulo }: { titulo: string }) {
+export function Topbar({ titulo, extra }: { titulo: string; extra?: ReactNode }) {
   const { operador, cerrarSesion } = useAuth();
   if (!operador) return null;
 
@@ -38,6 +39,7 @@ export function Topbar({ titulo }: { titulo: string }) {
           Pendientes
         </NavLink>
       </nav>
+      {extra}
       <div className="scope-chip">
         <span className="av">{iniciales(operador.nombre)}</span>
         <b>{operador.nombre}</b>

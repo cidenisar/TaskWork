@@ -64,8 +64,12 @@ ahora); falta construir el resto del Frontend:
   Supabase real (Auth + resolución de operador + alcance de sitios).
   `npm run typecheck`/`build` limpios; falta la prueba con un browser
   real de punta a punta (sin headless disponible en este entorno).
-- **Panorama de Sitios** — stub por ahora (`Placeholder.tsx`), el
-  selector de sitio ya navega hasta ahí.
+- ~~**Panorama de Sitios**~~ — **hecho (2026-08-29)**, `/panorama`, ver
+  `frontend-web/README.md`. Validado contra Supabase real (3 sitios
+  reales, uno con evento armado a propósito). Gaps deliberados: sin el
+  mapa esquemático ilustrativo del wireframe (usaba posiciones
+  inventadas, no las coordenadas reales de `sitios.lat/lng`) ni "último
+  simulacro" para sitios sin evento (eso es de Historial).
 - ~~**Administración de operadores**~~ — **hecho (2026-08-29)**, ver
   `frontend-web/README.md`. Validado además contra backend-server y
   Supabase reales (no solo compilación). Gap conocido: no hay forma de
@@ -133,16 +137,16 @@ RLS del punto 2 (elegir punto de encuentro, ver historial propio).
 ## Próximo paso sugerido
 
 - **Seguir con Frontend Web, pantalla por pantalla.** Con login +
-  selector de sitio + Operadores + Pendientes + Accountability en vivo
-  ya reales, las siguientes candidatas con backend ya listo son
+  selector de sitio + Operadores + Pendientes + Accountability en vivo +
+  Panorama ya reales, las siguientes candidatas con backend ya listo son
   **Historial / cumplimiento de simulacros** (`GET /simulacros/cumplimiento`,
   sin ninguna escritura nueva que armar) y **Alta y revocación de
   códigos de acceso** (hay un gap de backend real que cerrar primero,
-  ver arriba). **Panorama de Sitios** también queda ahí — es el otro
-  destino ya linkeado desde el selector (`/panorama`, todavía stub).
-- Antes de llegar a **Accountability en vivo** (la pantalla real detrás
-  de `/sitio/:id`), conviene cerrar el gap de RLS del punto 2 — sin eso
-  ni esa pantalla ni Mobile pueden leer puntos de encuentro/eventos.
+  ver arriba). Nota: el gap de RLS del punto 2 es específico de
+  **Mobile** (una sesión de `persona`, no de admin) — no bloqueó
+  Accountability en vivo ni Panorama, `org_isolation` ya le da a un
+  admin lectura completa; sigue pendiente solo para cuando se arranque
+  Mobile de verdad.
 - Si se prioriza field-testing (avanzar consola física en preparación
   para probarla) en cambio, confirmar con el cliente los valores
   marcados como "no confirmados" arriba (pinout, timings, duración de

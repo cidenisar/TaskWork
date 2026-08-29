@@ -309,6 +309,103 @@ input:focus-visible {
   border-radius: var(--radius);
 }
 
+/* ---------- grilla de tarjetas de sitio — Selector de Sitio, Panorama de Sitios ---------- */
+.sites-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+}
+.site-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.05rem 1.15rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 0.12s,
+    transform 0.12s;
+}
+.site-card:hover {
+  border-color: var(--accent);
+  transform: translateY(-1px);
+}
+.site-card.active-event {
+  border-color: var(--help-strong);
+  background: linear-gradient(180deg, var(--help-bg), var(--surface) 55%);
+}
+.site-card .sc-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.site-card .sc-name {
+  font-size: 1.02rem;
+  font-weight: 700;
+  line-height: 1.25;
+}
+.sc-foot {
+  display: flex;
+  align-items: center;
+  padding-top: 0.65rem;
+  border-top: 1px solid var(--border);
+  margin-top: auto;
+}
+.sc-cta {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+.sc-cta svg {
+  width: 12px;
+  height: 12px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2.2;
+}
+@media (max-width: 900px) {
+  .sites-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* status-pill base — cada pantalla define sus propias variantes de color (.live/.quiet, .active/.inactive, .ok/.ayuda/.pendiente, ...) */
+.status-pill {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  padding: 0.25rem 0.55rem;
+  border-radius: 999px;
+}
+.status-pill::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+@keyframes pulse-op {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
 .scrim {
   position: fixed;
   inset: 0;

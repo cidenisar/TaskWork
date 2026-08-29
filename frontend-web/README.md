@@ -220,6 +220,45 @@ totales agregados, el desglose por punto, los embeds de
 consolas del sitio, todos correctos. Datos de prueba borrados al
 terminar. `npm run typecheck`/`build` limpios.
 
+## Panorama de Sitios (2026-08-29)
+
+Ver Cowork "Panorama de Sitios". Ruta `/panorama` — el otro destino que
+ya linkeaba el Selector de Sitio (`panorama-cta`), hasta ahora un stub.
+Reusa `getEventoActivo`/`getContadores` de `lib/accountability.ts` y
+`listarConsolas` de `lib/consolas.ts`: es literalmente la misma
+pregunta ("¿este sitio tiene un evento en curso, y cómo va?") hecha
+para todos los sitios de la organización a la vez.
+
+- **Solo para admins de alcance `"organizacion"`** — un admin de
+  alcance `"sitio"` ni ve el CTA hacia acá en el Selector, pero nada le
+  impide teclear `/panorama` directo; `org_isolation` técnicamente lo
+  dejaría (no distingue `alcance_tipo`, ver `backend-server/README.md`),
+  así que el guardado (`<Navigate to="/" />` si `alcanceTipo !==
+  "organizacion"`) se hace a nivel de aplicación — el alcance es un
+  límite de producto, no solo de RLS.
+- **Grilla de tarjetas por sitio** — evento activo con sus KPIs (mismos
+  cuatro números que la franja de Accountability, resumidos) o "sin
+  novedades"; clic en una tarjeta navega a `/sitio/:id`.
+- **De paso**: `.sites-grid`/`.site-card`/`.status-pill` (base) —
+  duplicados entre esta pantalla y el Selector de Sitio — pasaron a
+  `styles/tokens.css`. `<Topbar>` suma un prop `extra` opcional (usado
+  acá para el badge "Solo monitoreo").
+
+**Deliberadamente no construido**: el "mapa esquemático" ilustrativo
+del wireframe (usa posiciones x/y inventadas para dibujar pines, no
+ligadas a `sitios.lat`/`lng` reales — portarlo tal cual habría sido
+fiel al wireframe pero falso a los datos reales; usar las coordenadas
+reales necesitaría una librería de mapas, fuera de alcance de este
+corte) y el texto de "último simulacro" para sitios sin evento activo
+(eso es terreno de Historial, todavía sin construir, ver `../ROADMAP.md`).
+
+Validado contra Supabase real: los 3 sitios reales de la organización,
+uno con un evento real armado a propósito — confirmado que aparece
+como activo con sus totales agregados correctos, que los otros dos NO
+muestran ningún evento fantasma, y que cada sitio trae sus consolas
+reales. Datos de prueba borrados al terminar. `npm run typecheck`/
+`build` limpios.
+
 ## Cómo correr esto
 
 ```
@@ -231,9 +270,9 @@ npm run dev
 ## Qué falta (a propósito, ver `../ROADMAP.md`)
 
 Con login + selector de sitio + Operadores + Pendientes +
-Accountability en vivo, van 4 de las 8 pantallas del wireframe
-unificado (Pendientes es una pestaña, no la pantalla de Padrón
-completa) — el resto (Panorama, Puntos, Padrón/Importar/Códigos de
-acceso, Consolas administrables, Sitios, Simulacros) queda para las
+Accountability en vivo + Panorama, van 5 de las 8 pantallas del
+wireframe unificado (Pendientes es una pestaña, no la pantalla de
+Padrón completa) — el resto (Puntos, Padrón/Importar/Códigos de acceso,
+Consolas administrables, Sitios, Simulacros e Historial) queda para las
 próximas sesiones, una por una. `backend-server` ya tiene listo lo que
 varias de ellas necesitan (ver `../ROADMAP.md`, sección 3).
