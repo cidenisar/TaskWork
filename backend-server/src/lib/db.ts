@@ -21,6 +21,7 @@ import type {
   FilaHistorialSimulacro,
   RolOperador,
   AlcanceTipo,
+  EstadoPersona,
 } from "../types.js";
 import type { ConfirmacionInicial, EventoPuntoInicial } from "../logic/eventos.js";
 import type { RegistroAuditoriaPin } from "../logic/auth.js";
@@ -759,6 +760,25 @@ export class Db {
       .from("personas")
       .update({ push_token: pushToken, push_token_actualizado_at: new Date().toISOString() })
       .eq("id", personaId);
+    if (error) throw error;
+  }
+
+  // --- Aprobar/rechazar autoregistro (ver handlers/personas.ts, "Precauciones..." no aplica acá, ver "Aprobar/rechazar un autoregistro") ---
+
+  /** Para aprobar/rechazar — trae `estado` y `pushToken` para que el handler decida si hay que avisar por push. */
+  async getPersonaPorId(personaId: string): Promise<{ id: string; organizacionId: string; estado: EstadoPersona; pushToken: string | null } | null> {
+    const { data, error } = await this.client
+      .from("personas")
+      .select("id, organizacion_id, estado, push_token")
+      .eq("id", personaId)
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) return null;
+    return { id: data.id, organizacionId: data.organizacion_id, estado: data.estado, pushToken: data.push_token };
+  }
+
+  async actualizarEstadoPersona(personaId: string, estado: EstadoPersona): Promise<void> {
+    const { error } = await this.client.from("personas").update({ estado }).eq("id", personaId);
     if (error) throw error;
   }
 }

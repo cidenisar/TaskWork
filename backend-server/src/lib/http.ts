@@ -7,11 +7,19 @@
 
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import type { MqttClient } from "mqtt";
+import type { App } from "firebase-admin/app";
 import type { Db } from "./db.js";
 import { manejarConfirmacion } from "../handlers/confirmaciones.js";
 import { manejarCumplimiento } from "../handlers/cumplimiento.js";
 import { manejarCrearOperador, manejarResetearPin } from "../handlers/operadores.js";
-import { manejarReclamarPersona, manejarAutoregistro, manejarCanjearCodigo, manejarActualizarPushToken } from "../handlers/personas.js";
+import {
+  manejarReclamarPersona,
+  manejarAutoregistro,
+  manejarCanjearCodigo,
+  manejarActualizarPushToken,
+  manejarAprobarPersona,
+  manejarRechazarPersona,
+} from "../handlers/personas.js";
 import { permitirIntento } from "./rateLimit.js";
 
 // De sobra para el body más grande que maneja este servidor (una
@@ -122,7 +130,7 @@ async function manejarPostConBody(
   }
 }
 
-export function crearServidorHttp(db: Db, mqttClient: MqttClient): Server {
+export function crearServidorHttp(db: Db, mqttClient: MqttClient, pushApp: App | null): Server {
   return createServer((req, res) => {
     if (req.method === "OPTIONS") {
       res.writeHead(204, {
@@ -177,6 +185,39 @@ export function crearServidorHttp(db: Db, mqttClient: MqttClient): Server {
           responderJson(res, resultado.status, resultado.body);
         } catch (err) {
           console.error("[http] error procesando POST /operadores/:id/resetear-pin:", err);
+          responderJson(res, 500, { error: "error interno" });
+        }
+      })();
+      return;
+    }
+
+    // /personas/{id}/aprobar y /personas/{id}/rechazar — mismo criterio de
+    // "sin router" que /operadores/:id/resetear-pin: sin body, así que
+    // tampoco pasan por manejarPostConBody.
+    const aprobarMatch = /^\/personas\/([^/]+)\/aprobar$/.exec(url.pathname);
+    if (req.method === "POST" && aprobarMatch) {
+      const personaId = aprobarMatch[1];
+      void (async () => {
+        try {
+          const resultado = await manejarAprobarPersona(db, pushApp, auth, personaId);
+          responderJson(res, resultado.status, resultado.body);
+        } catch (err) {
+          console.error("[http] error procesando POST /personas/:id/aprobar:", err);
+          responderJson(res, 500, { error: "error interno" });
+        }
+      })();
+      return;
+    }
+
+    const rechazarMatch = /^\/personas\/([^/]+)\/rechazar$/.exec(url.pathname);
+    if (req.method === "POST" && rechazarMatch) {
+      const personaId = rechazarMatch[1];
+      void (async () => {
+        try {
+          const resultado = await manejarRechazarPersona(db, auth, personaId);
+          responderJson(res, resultado.status, resultado.body);
+        } catch (err) {
+          console.error("[http] error procesando POST /personas/:id/rechazar:", err);
           responderJson(res, 500, { error: "error interno" });
         }
       })();

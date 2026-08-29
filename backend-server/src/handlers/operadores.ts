@@ -28,8 +28,8 @@ export type ResultadoResetearPin =
   | { status: 403; body: { error: string } }
   | { status: 404; body: { error: string } };
 
-/** Auth compartida por los dos handlers de este archivo — JWT → operador → rol admin. */
-async function autenticarAdmin(
+/** Auth compartida por los dos handlers de este archivo — JWT → operador → rol admin. También la usa handlers/personas.ts para aprobar/rechazar un autoregistro. */
+export async function autenticarAdmin(
   db: Db,
   authorizationHeader: string | undefined | null
 ): Promise<{ ok: true; organizacionId: string } | { ok: false; status: 401 | 403; error: string }> {

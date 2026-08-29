@@ -286,6 +286,9 @@ frontend → broker → backend está bien, independiente de ese bloqueo.
   tres rutas (`http.ts`) más un límite puntual por legajo+DNI en
   `/personas/reclamar` (`handlers/personas.ts`), ver "Precauciones al
   habilitar Anonymous Sign-ins" más abajo.
+- **Aprobar/rechazar un autoregistro** — `POST /personas/:id/aprobar` y
+  `POST /personas/:id/rechazar`, solo admins, ver esa sección más abajo.
+  Aprobar además avisa por push a la persona, si ya tiene `push_token`.
 
 ### Despacho real de push/SMS
 
@@ -1209,6 +1212,64 @@ dashboard. Es una capa adicional independiente de esto — vale la pena
 como defensa en profundidad si el volumen de abuso real lo justifica,
 pero no la habilité ni la probé; queda como decisión del usuario.
 
+### Aprobar/rechazar un autoregistro (2026-08-29)
+
+Paso siguiente natural tras el rate limiting: el autoregistro
+(`/personas/autoregistro`) deja a la persona en
+`estado: "pendiente_aprobacion"` — alguien tiene que revisarla y pasarla
+a `"activo"` (o rechazarla) antes de que reciba alertas de verdad.
+
+**No queda como escritura directa de Frontend contra Supabase**, aunque
+`org_isolation` (`FOR ALL`) técnicamente se lo permitiría a un admin —
+mismo argumento que "Alta de operadores y login web para admins":
+aprobar necesita además avisarle a la persona por push que ya puede
+usar la app, y Frontend nunca tiene las credenciales de Firebase.
+
+- **`POST /personas/:id/aprobar`** y **`POST /personas/:id/rechazar`** —
+  sin body, solo admins (misma auth que `handlers/operadores.ts`,
+  reexportada de ahí — `autenticarAdmin` — en vez de duplicarla). `404`
+  si el id no existe o es de otra organización (mismo criterio que
+  `resetear-pin`: no delatar que existe). `409` si la persona no está
+  en `pendiente_aprobacion` (ya fue aprobada/rechazada, o nunca pasó
+  por autoregistro) — evita reaprobar/rechazar dos veces sin querer.
+- Aprobar hace dos cosas: `personas.estado → "activo"`, y si la persona
+  ya tiene `push_token` (pudo haberlo mandado mientras esperaba, ver
+  `POST /personas/push-token`) intenta un push de aviso ("Registro
+  aprobado — ya podés usar la app"). **El envío es best-effort, igual
+  que la invitación por email de `POST /operadores`**: sin
+  `push_token` todavía, con Firebase sin configurar, o con un token
+  inválido/vencido, la aprobación en sí NO se deshace — devuelve `200`
+  con `notificado: false` (y `errorNotificacion` con el detalle) en vez
+  de fallar toda la operación por un problema de una parte opcional.
+  Rechazar es más simple: solo cambia el estado, sin ningún aviso (no
+  hay nada útil que avisarle a alguien a quien se le rechazó el alta).
+- `personas` no tiene ninguna columna de motivo de rechazo en el
+  esquema actual — `rechazar` no pide ni guarda un motivo. Si hiciera
+  falta después, es un cambio de esquema aparte.
+
+Validado contra Supabase real, con un admin de prueba (JWT real, no
+`service_role`) y un segundo operador `rol: "operador"` para confirmar
+el `403`: sin `Authorization` → `401`; sin ser admin → `403`; id
+inexistente → `404`; persona ya `activo` → `409`; aprobar una pendiente
+sin `push_token` → `200` `notificado: false` sin intentar nada; re-
+aprobar la misma → `409`; aprobar una pendiente CON `push_token` pero
+sin pasarle el cliente de push al handler → `200` `notificado: false`,
+`errorNotificacion: "Firebase no configurado"`; **con Firebase real
+configurado y un token inválido a propósito** (no hay un dispositivo de
+prueba real) → `200` igual, `notificado: false`,
+`errorNotificacion` con el error real de FCM (`"the registration token
+is not a valid FCM registration token"`) — confirma que un fallo de
+FCM de verdad no rompe la aprobación, no solo el caso simulado de
+"Firebase no configurado"; rechazar una pendiente → `200`
+`estado: "rechazado"`, confirmado en la base; rechazar sin ser admin →
+`403`. Todas las cuentas de Auth y filas de prueba borradas al
+terminar (incluida la desvinculación del admin de prueba del operador
+real que se usó). `npm run typecheck` limpio, 102/102 tests (sin tests
+unitarios nuevos — a diferencia de `logic/`, estos dos handlers no
+tienen ninguna validación pura propia que testear: sin body, la única
+lógica es auth + estado, ya cubierta por la validación end-to-end de
+arriba, mismo criterio que `manejarCrearOperador`/`manejarResetearPin`).
+
 ## Qué NO está implementado todavía (a propósito, ver la ficha)
 
 Nada por ahora — el último ítem señalado acá (el contador incremental de
@@ -1319,11 +1380,7 @@ ambos quedaron `no_realizado` en la base. `npm run typecheck` limpio,
   Supabase) ya se hizo — y con eso habilitado se cerró primero el rate
   limiting de los tres endpoints, ver "Precauciones al habilitar
   Anonymous Sign-ins".
-- **Aprobar/rechazar un autoregistro** (`personas.estado:
-  "pendiente_aprobacion" → "activo"/"rechazado"`) no tiene una pantalla
-  ni un endpoint propio todavía — es una escritura directa de Frontend
-  contra Supabase (misma lógica que dar de baja un operador, ver "Alta
-  de operadores"), pero ninguna pantalla de Cowork la cubre puntualmente
-  todavía. Cuando exista, avisarle a la persona que ya puede usar la
-  app (push, si para entonces ya tiene `push_token`) es la parte que sí
-  necesitaría lógica de backend.
+- ~~Aprobar/rechazar un autoregistro~~ — **resuelto (2026-08-29)**, ver
+  "Aprobar/rechazar un autoregistro". Falta todavía la pantalla de
+  Cowork que llame a estos dos endpoints — ninguna la cubre puntualmente
+  por ahora — pero el backend ya está listo para cuando exista.

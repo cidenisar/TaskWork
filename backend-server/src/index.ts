@@ -27,10 +27,14 @@ import type {
 
 const db = new Db(crearClienteDb());
 const mqttClient = conectar();
-const despachador = new Despachador(crearClientePush(), crearClienteSms());
+// Un solo cliente de Firebase para todo el proceso — lo usa tanto el
+// despacho de emergencias (Despachador) como el aviso de "tu autoregistro
+// fue aprobado" (POST /personas/:id/aprobar, ver http.ts).
+const pushApp = crearClientePush();
+const despachador = new Despachador(pushApp, crearClienteSms());
 
 const httpPort = Number(process.env.HTTP_PORT ?? 8090);
-crearServidorHttp(db, mqttClient).listen(httpPort, () => {
+crearServidorHttp(db, mqttClient, pushApp).listen(httpPort, () => {
   console.log(`[http] escuchando en :${httpPort} — POST /confirmaciones (canal de Mobile)`);
 });
 

@@ -6,10 +6,13 @@
 // crea sola al instalar la app, sin ninguna pantalla de login) — lo
 // único que hace falta es un `auth_user_id` real para vincular.
 
+import type { App } from "firebase-admin/app";
 import type { Db } from "../lib/db.js";
 import { extraerBearerToken } from "../logic/confirmar.js";
 import { validarReclamarPersona, validarAutoregistro, validarCanjearCodigo, validarActualizarPushToken } from "../logic/personas.js";
 import { permitirIntento } from "../lib/rateLimit.js";
+import { autenticarAdmin } from "./operadores.js";
+import { enviarPush } from "../lib/push.js";
 
 type ResultadoBase =
   | { status: 400; body: { error: string } }
@@ -205,4 +208,91 @@ export async function manejarActualizarPushToken(
 
   await db.actualizarPushTokenPersona(persona.id, validacion.payload.pushToken);
   return { status: 200, body: { ok: true } };
+}
+
+// --- Aprobar/rechazar un autoregistro (ver README, "Aprobar/rechazar un
+// autoregistro") — a diferencia de los cuatro handlers de arriba, estos
+// dos son para Frontend Web, solo-admin (misma auth que
+// handlers/operadores.ts, reusada de ahí en vez de duplicarla). No queda
+// como escritura directa de Frontend contra Supabase (aunque RLS
+// técnicamente lo permitiría, `org_isolation` es FOR ALL) porque aprobar
+// necesita además avisarle a la persona por push que ya puede usar la
+// app — Frontend nunca tiene las credenciales de Firebase.
+
+type ResultadoAdmin =
+  | { status: 401; body: { error: string } }
+  | { status: 403; body: { error: string } }
+  | { status: 404; body: { error: string } }
+  | { status: 409; body: { error: string } };
+
+export type ResultadoAprobarPersona =
+  | ResultadoAdmin
+  | { status: 200; body: { id: string; estado: "activo"; notificado: boolean; errorNotificacion?: string } };
+
+export type ResultadoRechazarPersona = ResultadoAdmin | { status: 200; body: { id: string; estado: "rechazado" } };
+
+/** Común a aprobar/rechazar: auth de admin + que la persona exista, sea de su organización, y esté pendiente de aprobación. */
+async function autenticarYBuscarPendiente(
+  db: Db,
+  authorizationHeader: string | undefined | null,
+  personaId: string
+): Promise<{ ok: true; persona: { id: string; pushToken: string | null } } | { ok: false; status: 401 | 403 | 404 | 409; error: string }> {
+  const auth = await autenticarAdmin(db, authorizationHeader);
+  if (!auth.ok) return { ok: false, status: auth.status, error: auth.error };
+
+  const persona = await db.getPersonaPorId(personaId);
+  // Mismo 404 tanto si no existe como si es de otra organización — mismo
+  // criterio que manejarResetearPin, no darle a un admin ajeno ninguna
+  // pista de que ese id existe en algún lado.
+  if (!persona || persona.organizacionId !== auth.organizacionId) {
+    return { ok: false, status: 404, error: `no existe la persona ${personaId}` };
+  }
+  if (persona.estado !== "pendiente_aprobacion") {
+    return { ok: false, status: 409, error: `esta persona no tiene un autoregistro pendiente de aprobación (estado actual: ${persona.estado})` };
+  }
+  return { ok: true, persona: { id: persona.id, pushToken: persona.pushToken } };
+}
+
+export async function manejarAprobarPersona(
+  db: Db,
+  pushApp: App | null,
+  authorizationHeader: string | undefined | null,
+  personaId: string
+): Promise<ResultadoAprobarPersona> {
+  const busqueda = await autenticarYBuscarPendiente(db, authorizationHeader, personaId);
+  if (!busqueda.ok) return { status: busqueda.status, body: { error: busqueda.error } };
+
+  await db.actualizarEstadoPersona(personaId, "activo");
+
+  // El aviso por push es best-effort — igual que la invitación por email
+  // en manejarCrearOperador, un fallo acá (sin token todavía, Firebase no
+  // configurado, token inválido) no debe deshacer la aprobación en sí.
+  if (!busqueda.persona.pushToken) {
+    return { status: 200, body: { id: personaId, estado: "activo", notificado: false } };
+  }
+  if (!pushApp) {
+    return { status: 200, body: { id: personaId, estado: "activo", notificado: false, errorNotificacion: "Firebase no configurado" } };
+  }
+  try {
+    await enviarPush(pushApp, busqueda.persona.pushToken, {
+      titulo: "Registro aprobado",
+      cuerpo: "Ya podés usar la app para recibir alertas de tu sitio.",
+      data: { tipo: "autoregistro_aprobado", personaId },
+    });
+    return { status: 200, body: { id: personaId, estado: "activo", notificado: true } };
+  } catch (err) {
+    return { status: 200, body: { id: personaId, estado: "activo", notificado: false, errorNotificacion: String(err) } };
+  }
+}
+
+export async function manejarRechazarPersona(
+  db: Db,
+  authorizationHeader: string | undefined | null,
+  personaId: string
+): Promise<ResultadoRechazarPersona> {
+  const busqueda = await autenticarYBuscarPendiente(db, authorizationHeader, personaId);
+  if (!busqueda.ok) return { status: busqueda.status, body: { error: busqueda.error } };
+
+  await db.actualizarEstadoPersona(personaId, "rechazado");
+  return { status: 200, body: { id: personaId, estado: "rechazado" } };
 }
