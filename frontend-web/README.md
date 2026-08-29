@@ -82,26 +82,70 @@ todo.
 - `/` — protegida (`ProtectedRoute`, ver `src/components/`). Selector
   de sitio; auto-resuelve a una sola opción con CTA si el alcance es un
   único sitio.
+- `/operadores` — protegida. Alta/edición/baja-reactivación/reseteo de
+  PIN, ver "Administración de Operadores (2026-08-29)" más abajo.
 - `/panorama`, `/sitio/:id` — protegidas, **todavía stubs**
   (`src/routes/Placeholder.tsx`) — el Panorama de Sitios y el
   Accountability en vivo reales no están construidos aún, ver
-  `../ROADMAP.md`. El objetivo de este primer corte era dejar el flujo
-  de login + selector navegable de punta a punta contra datos reales,
-  no las 8 pantallas completas de una vez.
+  `../ROADMAP.md`.
+
+Nav mínima en el `<Topbar>` (Sitios / Operadores) — un rail lateral de
+verdad queda para cuando haya más pantallas que lo justifiquen (ver
+`../ROADMAP.md`).
+
+## Administración de Operadores (2026-08-29)
+
+Ver Cowork "Administración de Operadores". Alta, edición, baja/
+reactivación y reseteo de PIN de operadores — mismo criterio de
+"backend solo donde hace falta" que ya documenta
+`backend-server/README.md`:
+
+- **Alta** (`POST /operadores`) y **reseteo de PIN**
+  (`POST /operadores/:id/resetear-pin`) pasan por `backend-server` —
+  necesitan generar y hashear un PIN, e invitar por email si
+  corresponde, ninguna de las dos cosas es posible desde el navegador.
+- **Editar** (nombre/legajo/rol/alcance) y **dar de baja/reactivar**
+  son escritura directa contra Supabase — `org_isolation` ya se lo
+  permite a un admin, y no necesitan generar nada del lado del
+  servidor.
+
+**Deviación deliberada del wireframe**: el wireframe no tiene campo de
+email en el formulario de alta — acá se agregó uno opcional ("Email
+para login web"), visible solo cuando el rol es Admin, porque
+`POST /operadores` sí soporta invitar por email en el momento de
+crear, y sin el campo esa capacidad quedaba inalcanzable desde la UI.
+
+**Gap conocido, no resuelto acá** (ver `../ROADMAP.md`): no hay forma
+de invitar por email a un operador que ya existe — la Admin API de
+Supabase solo se llama desde `POST /operadores`, en el momento de
+crearlo. Si se edita un operador para pasarlo a rol Admin más tarde,
+esta pantalla no le da login web automáticamente; haría falta un
+endpoint nuevo del lado del backend.
+
+**Validado contra Supabase y backend-server reales** (no solo
+compilación): con un admin de prueba (JWT real) se probaron las mismas
+queries/llamadas que usa `lib/operadores.ts`/`lib/sitios.ts` —
+`listarSitiosDeOrganizacion`, `listarOperadores` (incluido el join con
+`operadores_sitios`), `POST /operadores` real (devuelve un PIN de 4
+dígitos), `POST /operadores/:id/resetear-pin` real (da un PIN distinto
+al anterior), edición y baja/reactivación por escritura directa
+(confirmadas releyendo después de cada escritura), y el caso de error
+real (`sitiosIds` vacío con `alcanceTipo: "sitio"` → `400`). Todo el
+dato de prueba borrado al terminar. `npm run typecheck` y
+`npm run build` limpios.
 
 ## Cómo correr esto
 
 ```
-cp .env.example .env   # completar con las credenciales reales de Supabase (clave anon)
+cp .env.example .env   # completar con las credenciales reales (Supabase anon key + URL de backend-server)
 npm install
 npm run dev
 ```
 
 ## Qué falta (a propósito, ver `../ROADMAP.md`)
 
-Este primer corte es el flujo de entrada (`/login` + `/`) de punta a
-punta contra Supabase real — el resto de las 8 pantallas del wireframe
-unificado (Panorama, Accountability en vivo, Puntos, Operadores,
-Personal/Padrón, Consolas, Sitios, Simulacros) quedan para las próximas
-sesiones, una por una. `backend-server` ya tiene listo lo que varias de
-ellas necesitan (ver `../ROADMAP.md`, sección 3).
+Con login + selector de sitio + Operadores, van 2 de las 8 pantallas
+del wireframe unificado — el resto (Panorama, Accountability en vivo,
+Puntos, Personal/Padrón, Consolas, Sitios, Simulacros) queda para las
+próximas sesiones, una por una. `backend-server` ya tiene listo lo que
+varias de ellas necesitan (ver `../ROADMAP.md`, sección 3).

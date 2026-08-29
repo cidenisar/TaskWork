@@ -3,6 +3,7 @@ import { AuthProvider } from "./lib/auth";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { Login } from "./routes/Login";
 import { SelectorSitio } from "./routes/SelectorSitio";
+import { Operadores } from "./routes/Operadores";
 import { Placeholder } from "./routes/Placeholder";
 
 export function App() {
@@ -16,6 +17,14 @@ export function App() {
             element={
               <ProtectedRoute>
                 <SelectorSitio />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/operadores"
+            element={
+              <ProtectedRoute>
+                <Operadores />
               </ProtectedRoute>
             }
           />

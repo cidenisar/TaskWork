@@ -1,3 +1,4 @@
+import { NavLink } from "react-router-dom";
 import { useAuth } from "../lib/auth";
 import "./Topbar.css";
 
@@ -25,6 +26,15 @@ export function Topbar({ titulo }: { titulo: string }) {
         </div>
       </div>
       <h1>{titulo}</h1>
+      {/* Nav mínima — hasta que haya suficientes pantallas para justificar un rail lateral, ver ROADMAP.md */}
+      <nav className="topbar-nav">
+        <NavLink to="/" end className={({ isActive }) => (isActive ? "on" : "")}>
+          Sitios
+        </NavLink>
+        <NavLink to="/operadores" className={({ isActive }) => (isActive ? "on" : "")}>
+          Operadores
+        </NavLink>
+      </nav>
       <div className="scope-chip">
         <span className="av">{iniciales(operador.nombre)}</span>
         <b>{operador.nombre}</b>

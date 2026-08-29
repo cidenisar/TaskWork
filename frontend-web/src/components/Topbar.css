@@ -43,7 +43,29 @@
 }
 .topbar h1 {
   font-size: 1.3rem;
+  margin-right: 1.4rem;
+}
+.topbar-nav {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
   margin-right: auto;
+  font-size: 0.8rem;
+  color: var(--text-dim);
+}
+.topbar-nav a {
+  text-decoration: none;
+  color: inherit;
+  padding: 0.3rem 0;
+  border-bottom: 2px solid transparent;
+}
+.topbar-nav a:hover {
+  color: var(--text);
+}
+.topbar-nav a.on {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+  font-weight: 600;
 }
 .scope-chip {
   display: flex;

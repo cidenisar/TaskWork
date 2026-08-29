@@ -66,9 +66,10 @@ ahora); falta construir el resto del Frontend:
   real de punta a punta (sin headless disponible en este entorno).
 - **Panorama de Sitios** y **Accountability en vivo** — stubs por ahora
   (`Placeholder.tsx`), el selector de sitio ya navega hasta ahí.
-- **Administración de operadores** — alta (`POST /operadores`), reset de
-  PIN (`POST /operadores/:id/resetear-pin`), baja (escritura directa
-  contra Supabase, `org_isolation` ya lo permite).
+- ~~**Administración de operadores**~~ — **hecho (2026-08-29)**, ver
+  `frontend-web/README.md`. Validado además contra backend-server y
+  Supabase reales (no solo compilación). Gap conocido: no hay forma de
+  invitar por email a un operador que ya existe (solo al crearlo).
 - **Aprobar/rechazar autoregistro** — `POST /personas/:id/aprobar` y
   `/rechazar`, listos, sin ninguna pantalla que los llame todavía.
 - **Historial / cumplimiento de simulacros** — `GET /simulacros/cumplimiento`.
@@ -119,13 +120,12 @@ RLS del punto 2 (elegir punto de encuentro, ver historial propio).
 
 ## Próximo paso sugerido
 
-- **Seguir con Frontend Web, pantalla por pantalla.** Con el login y el
-  selector de sitio ya reales, la siguiente con más sentido es
-  **Administración de Operadores** — el backend ya está 100% listo
-  (`POST /operadores`, `/resetear-pin`) y el wireframe de Cowork
-  correspondiente ya está identificado (artifact "Administración de
-  Operadores"). **Aprobar/rechazar autoregistro** es la otra candidata
-  obvia por el mismo motivo (backend ya listo, sin pantalla).
+- **Seguir con Frontend Web, pantalla por pantalla.** Con login +
+  selector de sitio + Operadores ya reales, **Aprobar/rechazar
+  autoregistro** es la siguiente candidata obvia — backend 100% listo
+  (`POST /personas/:id/aprobar`/`/rechazar`), sin ninguna pantalla
+  todavía. El wireframe de Cowork que más se le parece es
+  "Administración de Padrón de Personas" (pestaña "Pendientes").
 - Antes de llegar a **Accountability en vivo** (la pantalla real detrás
   de `/sitio/:id`), conviene cerrar el gap de RLS del punto 2 — sin eso
   ni esa pantalla ni Mobile pueden leer puntos de encuentro/eventos.
