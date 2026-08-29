@@ -970,18 +970,23 @@ cambia, el PIN nuevo valida) y sobre un id inexistente (`404`). Operadores
 y cuentas de Auth de prueba borrados al terminar — `getOperadorPorAuthUserId`
 de "Admin Test" quedó revertido a `auth_user_id: null` como estaba.
 
-**Qué NO se pudo validar:** una invitación por email que llegue a buen
-puerto de verdad. El proyecto de Supabase de este entorno no tiene un
-proveedor SMTP propio configurado — `inviteUserByEmail` devolvió `"email
-rate limit exceeded"` (el límite integrado de Supabase para envío de
-mails sin SMTP propio es muy bajo) en cada intento real. El código del
-camino de éxito (vincular `auth_user_id` tras una invitación que sí
-funciona) está escrito y tipado, pero no se ejecutó de punta a punta
-contra un envío real — **antes de usar esto en producción, configurar un
-proveedor SMTP en el dashboard de Supabase (Authentication → Email)**.
-El camino de degradación (operador creado igual, `invitado: false` +
-`errorInvitacion` con el detalle) sí se validó de punta a punta, porque
-es exactamente lo que pasó en cada intento.
+**Actualización (2026-08-29) — SMTP propio configurado y probado con un
+envío real.** En la validación original de esta sección, el proyecto no
+tenía SMTP propio y `inviteUserByEmail` devolvía `"email rate limit
+exceeded"` en cada intento (el límite integrado de Supabase sin SMTP
+propio es muy bajo). El usuario configuró Gmail como proveedor SMTP
+(`smtp.gmail.com`, contraseña de aplicación — no la contraseña de la
+cuenta). Primer intento con SMTP ya activo: `535 5.7.8 Username and
+Password not accepted` (la contraseña de aplicación mal cargada);
+corregido, reintentado: `inviteUserByEmail` devolvió `error: null` con
+el usuario creado, confirmado también contra `auth_logs`
+(`path: "/invite", status: 200`) — y el usuario confirmó haber recibido
+el mail de verdad en su casilla. Cuenta de invitación de prueba borrada
+después de confirmar la recepción (dejar una invitación real sin usar
+colgando no tenía sentido). El camino de degradación (SMTP fallando →
+operador creado igual, `invitado: false` + `errorInvitacion` con el
+detalle) ya se había validado antes y sigue vigente para cuando el
+límite de envío de Gmail se agote o el SMTP falle por otra razón.
 
 `npm run typecheck` limpio, 84/84 tests (14 nuevos: validación pura del
 body + generación de PIN, ver `test/operadores.test.ts`).
@@ -1216,12 +1221,12 @@ ambos quedaron `no_realizado` en la base. `npm run typecheck` limpio,
   necesitaría que el backend genere el evento él mismo). Ver README,
   "Simulacro sorpresa" — se optó por seguir dependiendo de un humano
   (que sabe la fecha aunque el resto del sitio no) para disparar.
-- **Configurar un proveedor SMTP propio en Supabase** antes de que la
-  invitación por email de `POST /operadores`/`provisionar-admin.mjs` se
-  use de verdad — el envío integrado de Supabase (sin SMTP propio) tiene
-  un rate limit muy bajo, ya se agotó validando esto (ver "Alta de
-  operadores y login web para admins"). Sin esto, invitar a más de un
-  par de admins seguidos empieza a fallar.
+- ~~Configurar un proveedor SMTP propio en Supabase~~ — **resuelto
+  (2026-08-29)**: Gmail vía contraseña de aplicación, probado con un
+  envío real que llegó a destino (ver "Alta de operadores y login web
+  para admins"). Ojo con el límite de envío de Gmail (500/día en
+  cuentas normales) si esto crece — para volumen más alto conviene
+  pasar a un proveedor transaccional (Resend, SendGrid, etc.).
 - ~~Autoregistro de `personas` por código de acceso~~ — **resuelto
   (2026-08-29)**, ver "Autoregistro de personas (Mobile)". Queda un
   paso manual pendiente antes de que funcione de verdad: **habilitar
