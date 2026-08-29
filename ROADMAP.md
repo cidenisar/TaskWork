@@ -1,0 +1,127 @@
+# Roadmap — qué falta implementar
+
+Consolidado desde los 4 componentes del repo (cada uno mantiene su propia
+sección de "Decisiones pendientes" / "Qué falta" más detallada — este
+archivo es el índice para arrancar una sesión nueva sin tener que releer
+los 4 READMEs enteros). Última actualización: 2026-08-29.
+
+Orden de prioridad acordado con el cliente: **backend pulido primero,
+después Frontend Web + Mobile, consola física al final** (ya bastante
+avanzada, ver más abajo).
+
+## 1. Backend-server — prácticamente al día
+
+No hay ningún endpoint roto ni a medio hacer. Lo único deliberadamente
+diferido:
+
+- **Auto-disparo de un simulacro sorpresa por el propio backend** — hoy
+  sigue dependiendo de un humano que lo dispare desde una consola a la
+  hora exacta (ver backend-server/README.md, "Decisiones pendientes").
+  Cambio de arquitectura más grande, no bloquea nada de lo que sigue.
+- **Límite de Gmail (500 envíos/día)** para las invitaciones de
+  operadores — alcanza para el volumen actual; si crece, pasar a un
+  proveedor transaccional (Resend, SendGrid).
+- **Rate limiting en memoria, un solo proceso** — si algún día hay más
+  de una instancia de `backend-server` detrás de un balanceador, hay
+  que mover esto a Redis/Postgres.
+- **CAPTCHA de Supabase (hCaptcha/Turnstile)** para Anonymous Sign-ins —
+  capa opcional de defensa en profundidad, no configurada.
+
+## 2. Gap real encontrado hoy: Mobile no puede leer casi nada por RLS
+
+Al revisar qué le falta a Mobile para funcionar de punta a punta,
+encontré que **`puntos_encuentro`, `eventos`, `confirmaciones`,
+`eventos_puntos_estado`, `sitios` y `tipos_evento` solo tienen la
+política `org_isolation`** (admin-only, vía
+`internal.auth_organizacion_id()`) — igual que estaban antes de agregar
+`personas_self_read`. Una sesión de Mobile (persona, no operador) no
+puede leer ninguna de esas tablas.
+
+Para la alerta en sí no es un problema — `armarMensajeDespacho` ya manda
+`eventoId`, `tipo` y `sitioId` resueltos como texto plano dentro del
+`data` del push. **Pero para que la persona pueda elegir a qué punto de
+encuentro se dirige y confirmar `POST /confirmaciones` con un `puntoId`
+real, hoy no tiene forma de enterarse de la lista de puntos habilitados
+de ese evento.** Tampoco puede ver su propio historial de
+confirmaciones pasadas.
+
+Dos formas de cerrarlo (a decidir cuando se arranque Mobile de verdad):
+
+- Política RLS nueva, tipo `puntos_encuentro_lectura_publica_del_sitio` /
+  `confirmaciones_self_read` (mismo patrón que `personas_self_read`).
+- O un endpoint de lectura dedicado (`GET /eventos/:id/puntos`,
+  `GET /personas/:id/confirmaciones`) — más control, pero un ida y
+  vuelta más contra el backend en vez de ir directo a Supabase.
+
+## 3. Frontend Web — no existe código todavía
+
+El backend ya soporta estas pantallas (según los wireframes de Cowork
+leídos hasta ahora); falta construir el Frontend en sí:
+
+- **Login + selector de sitio** — email/contraseña, Supabase Auth, listo
+  del lado backend (SMTP propio configurado y probado).
+- **Administración de operadores** — alta (`POST /operadores`), reset de
+  PIN (`POST /operadores/:id/resetear-pin`), baja (escritura directa
+  contra Supabase, `org_isolation` ya lo permite).
+- **Aprobar/rechazar autoregistro** — `POST /personas/:id/aprobar` y
+  `/rechazar`, listos, sin ninguna pantalla que los llame todavía.
+- **Historial / cumplimiento de simulacros** — `GET /simulacros/cumplimiento`.
+- **Accountability en vivo durante un evento** — la tabla
+  `accountability_contadores` y su RLS están listos; falta la vista.
+- **Gestión de sitios / consolas / puntos de encuentro / PROG1-4** — hoy
+  todo por SQL directo, sin ninguna pantalla — ni falta ni sobra
+  backend, es 100% trabajo de Frontend + escritura directa a Supabase
+  (org_isolation ya lo permite para un admin).
+- **Alta y revocación de códigos de acceso** (`codigos_acceso`) — **acá
+  sí falta backend**: no hay ningún endpoint que cree un código
+  (`getCodigoAccesoPorCodigo`/`intentarUsarCodigo` solo lo consumen).
+  Si la creación necesita algo más que un INSERT simple (generar el
+  código en sí, por ejemplo), conviene un endpoint dedicado igual que
+  `POST /operadores`; si es un INSERT plano, puede ser escritura
+  directa de Frontend.
+
+## 4. Mobile — no existe código todavía
+
+Backend listo para: sesión anónima de Supabase Auth (`signInAnonymously()`,
+ya habilitado), `POST /personas/reclamar`, `/autoregistro`,
+`/canjear-codigo`, `/push-token`, lectura de la propia fila
+(`personas_self_read`), recepción de push (FCM) y `POST /confirmaciones`.
+
+Pendiente antes de poder construir la app de punta a punta: el gap de
+RLS del punto 2 (elegir punto de encuentro, ver historial propio).
+
+## 5. Consola física — dejada para el final, pero ya bastante avanzada
+
+- **`consola-pi`** (Node/TS, corre en la Raspberry Pi): flujo completo
+  llave→PIN→botón→cuenta regresiva→envío, bloqueo temporal de PIN,
+  timeout de heartbeat del ESP32, pantallas de Historial/Diagnóstico/
+  Configuración. Pendiente:
+  - Failover de conectividad (Ethernet→WiFi→4G) — hoy solo reconecta al
+    mismo host, no rota de interfaz.
+  - Batería/UPS real en Diagnóstico — muestra "N/D", necesita hardware.
+  - Filesystem de solo lectura / boot por NVMe / UPS — configuración de
+    la Pi física, fuera del alcance del software.
+  - Duración de la cuenta regresiva (5s) y si el relé local espera la
+    confirmación del backend o no — valores sin confirmar con el
+    cliente.
+- **`esp32-firmware`** (C++/PlatformIO): pendiente confirmar pinout
+  exacto contra el DevKit real, sentido del selector de llave/polaridad
+  del relé, y los timings (`DEBOUNCE_MS`/`BLINK_MS`/`HEARTBEAT_MS`) —
+  todo sin hardware real todavía para probarlo.
+- **`consola-simulador`** (HTML/JS, para probar sin hardware): al día,
+  sin pendientes señalados.
+
+## Próximo paso sugerido
+
+Dos caminos razonables para la próxima sesión, no mutuamente excluyentes:
+
+1. **Cerrar el gap de RLS del punto 2** antes de arrancar Mobile — es
+   chico y evita descubrirlo a mitad de construir la app.
+   Alternativamente, si se puede tener acceso completo a los wireframes
+   de Cowork (**Frontend Web**, **Mobile**), avanzar directo con el
+   armado de esas dos interfaces, ya con el backend que las soporta
+   casi completo.
+2. Si se prioriza field-testing (avanzar consola física en preparación
+   para probarla), confirmar con el cliente los valores marcados como
+   "no confirmados" arriba (pinout, timings, duración de cuenta
+   regresiva) antes de tocar hardware real.
