@@ -274,6 +274,10 @@ frontend → broker → backend está bien, independiente de ese bloqueo.
   `POST /operadores/:id/resetear-pin`, solo admins, ver esa sección más
   abajo. Es el primer endpoint pensado para que lo llame el Frontend
   Web (no Mobile ni las consolas).
+- **Autoregistro de personas desde Mobile** — `POST /personas/reclamar`,
+  `/autoregistro` y `/canjear-codigo`, ver esa sección más abajo. Sin
+  email ni contraseña — la identidad del dispositivo es una sesión
+  anónima de Supabase Auth que Mobile ya trae.
 
 ### Despacho real de push/SMS
 
@@ -978,6 +982,97 @@ es exactamente lo que pasó en cada intento.
 `npm run typecheck` limpio, 84/84 tests (14 nuevos: validación pura del
 body + generación de PIN, ver `test/operadores.test.ts`).
 
+### Autoregistro de personas (Mobile) (2026-08-29)
+
+El esquema ya tenía `codigos_acceso`/`codigos_acceso_usos` y
+`personas.origen`/`estado` con los valores para esto
+(`pendiente_aprobacion`, `rechazado`, `autoregistro`, `codigo_acceso`)
+pero sin ningún código que los usara. El wireframe de Cowork "Mobile —
+App de Personal" (pantallas "registro") resolvió la duda: **no hay
+ningún campo de email ni contraseña en los tres flujos** — la identidad
+del dispositivo es el JWT que Mobile ya trae en el header
+`Authorization`, de una sesión anónima de Supabase Auth
+(`supabase.auth.signInAnonymously()`, invisible en el wireframe porque
+no hace falta ninguna pantalla para eso — "no hace falta volver a
+loguearte" dice la pantalla de "te encontramos", justo porque la sesión
+ya existía). Estos tres endpoints no crean ninguna cuenta — solo
+vinculan o crean la fila de `personas` que le corresponde a la sesión
+que ya tiene el JWT.
+
+Tres endpoints, cualquier JWT válido alcanza (a diferencia de
+`/operadores`, acá no hace falta ningún rol — una sesión anónima
+alcanza, es justamente el punto):
+
+- **`POST /personas/reclamar`** — "soy personal fijo, ya estoy en el
+  padrón" (pantalla `screenRegLoginFijo` del wireframe). `{ legajo,
+  dni }` → busca una `personas` existente con ese legajo+dni exactos.
+  `404` si no hay match (Mobile pasa a autoregistro). Si hay match: si
+  ya estaba vinculada a la MISMA sesión, `200` idempotente
+  (`yaEstabaVinculada: true`); si estaba sin vincular, la vincula y
+  devuelve `200`; si ya estaba vinculada a OTRA sesión, `409` — nunca
+  pisar silenciosamente a quien la reclamó primero, le robaría las
+  alertas.
+- **`POST /personas/autoregistro`** — "no me encontraron, pido el
+  alta" (pantalla `screenRegAltaFijo`, personal fijo no encontrado en
+  el padrón — típico de una incorporación reciente). `{ nombre, dni,
+  legajo, telefono, sitioId }` → crea la persona con
+  `estado: "pendiente_aprobacion"`, `origen: "autoregistro"`, vinculada
+  a la sesión. **No se acepta automático a propósito** — el wireframe
+  lo dice explícito: "no se acepta automáticamente, porque esto dispara
+  alertas reales de seguridad". Un admin la aprueba después (cambiar
+  `estado` a `"activo"` o `"rechazado"` — eso sí es una escritura
+  directa de Frontend contra Supabase, `org_isolation` alcanza, no hay
+  nada sensible de por medio). `409` si la sesión ya tiene una persona
+  vinculada (evita duplicados por reintento/doble tap).
+- **`POST /personas/canjear-codigo`** — "soy eventual/contratista,
+  tengo un código" (pantalla `screenRegCodigo`). `{ codigo, nombre,
+  telefono, dni }` (`dni` opcional — solo se cruza contra el DNI propio
+  del código si es de tipo `"individual"` y lo trae cargado) → valida
+  el código (existe, `estado: "vigente"`, no vencido, cupo disponible)
+  y crea la persona **activa al instante** (`estado: "activo"`,
+  `origen: "codigo_acceso"`, `tipo: "eventual"`) — sin aprobación,
+  también a propósito ("se valida solo, al instante, sin que nadie
+  tenga que aprobarlo", dice el wireframe: poseer el código pre-generado
+  por un admin YA es la autorización). Consume un uso del código
+  (`codigos_acceso.usos_actuales += 1`, fila nueva en
+  `codigos_acceso_usos`) — **de forma atómica**, ver
+  `fn_intentar_usar_codigo` (migración aplicada directamente, no hay
+  carpeta de migraciones en este repo): un solo `UPDATE ... WHERE
+  usos_actuales < tope_usos RETURNING *` en vez de "leer, chequear en
+  JS, escribir" — dos personas canjeando el mismo código de lote al
+  mismo tiempo no pueden pasar las dos el chequeo antes de que ninguna
+  escriba (TOCTOU); Postgres serializa las filas que toca el UPDATE
+  solo. El código pasa a `"agotado"` solo cuando el uso que se acaba de
+  consumir llega al tope, en el mismo UPDATE.
+
+Validado de punta a punta contra Supabase real. **Con una salvedad
+real: `signInAnonymously()` está deshabilitado en el proyecto de este
+entorno** (`"Anonymous sign-ins are disabled"`, `422
+anonymous_provider_disabled`) — **hay que habilitarlo a mano en el
+dashboard de Supabase (Authentication → Providers → Anonymous
+Sign-ins) antes de que Mobile pueda usar esto de verdad.** El código de
+los tres handlers no distingue una sesión anónima de una con
+email/contraseña (`auth.getUser(token)` no mira `is_anonymous`), así
+que la lógica sí se validó de punta a punta — sustituyendo la sesión
+anónima por el mismo patrón `createUser` + `signInWithPassword` ya
+usado para el admin de prueba —, pero la capacidad de Supabase en sí
+(`signInAnonymously()` funcionando) no se pudo probar acá. Casos
+cubiertos: sin `Authorization` → `401` en las tres rutas; `reclamar`
+sin match → `404`, con match sin vincular → `200`, reintento misma
+sesión → `200` idempotente, desde otra sesión → `409`; `autoregistro`
+crea con `pendiente_aprobacion` y los campos correctos, repetido desde
+la misma sesión → `409`, con `sitioId` inventado → `400`; `canjear-codigo`
+con un código real de tope 2: primer y segundo uso `201` (el segundo
+deja el código en `"agotado"`), tercer intento → `400`, código
+inventado → `404`; **y la prueba que de verdad importaba**: dos
+canjes disparados en simultáneo (`Promise.all`) contra un código de
+`tope_usos: 1` — terminó exactamente un `201` y un `400`, y
+`usos_actuales` en `1`, no `2`, confirmando que `fn_intentar_usar_codigo`
+evita la carrera de verdad, no solo en la teoría. Personas, códigos y
+cuentas de Auth de prueba borrados al terminar. `npm run typecheck`
+limpio, 96/96 tests (12 nuevos: validación pura de los tres bodies, ver
+`test/personas.test.ts`).
+
 ## Qué NO está implementado todavía (a propósito, ver la ficha)
 
 Nada por ahora — el último ítem señalado acá (el contador incremental de
@@ -1082,9 +1177,17 @@ ambos quedaron `no_realizado` en la base. `npm run typecheck` limpio,
   un rate limit muy bajo, ya se agotó validando esto (ver "Alta de
   operadores y login web para admins"). Sin esto, invitar a más de un
   par de admins seguidos empieza a fallar.
-- **Autoregistro de `personas` por código de acceso** — el esquema ya
-  tiene `codigos_acceso`/`codigos_acceso_usos` y
-  `personas.origen: "codigo_acceso"`/`"autoregistro"`, pero no hay
-  ningún código todavía que valide un código y cree/vincule la persona.
-  Mobile lo va a necesitar para que alguien sin alta manual previa
-  pueda entrar solo. No arrancado todavía.
+- ~~Autoregistro de `personas` por código de acceso~~ — **resuelto
+  (2026-08-29)**, ver "Autoregistro de personas (Mobile)". Queda un
+  paso manual pendiente antes de que funcione de verdad: **habilitar
+  "Anonymous Sign-ins" en el dashboard de Supabase** (Authentication →
+  Providers) — está deshabilitado por defecto, y es lo que le da a
+  Mobile su JWT sin ninguna pantalla de login.
+- **Aprobar/rechazar un autoregistro** (`personas.estado:
+  "pendiente_aprobacion" → "activo"/"rechazado"`) no tiene una pantalla
+  ni un endpoint propio todavía — es una escritura directa de Frontend
+  contra Supabase (misma lógica que dar de baja un operador, ver "Alta
+  de operadores"), pero ninguna pantalla de Cowork la cubre puntualmente
+  todavía. Cuando exista, avisarle a la persona que ya puede usar la
+  app (push, si para entonces ya tiene `push_token`) es la parte que sí
+  necesitaría lógica de backend.

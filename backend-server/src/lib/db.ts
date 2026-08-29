@@ -621,4 +621,135 @@ export class Db {
     const { error } = await this.client.from("operadores").update({ pin_hash: pinHash }).eq("id", operadorId);
     if (error) throw error;
   }
+
+  // --- Alta de personas desde Mobile (ver handlers/personas.ts) ---
+
+  /** Para el flujo "reclamar" (personal fijo ya en el padrón) — null si no hay ningún match exacto de legajo+dni. */
+  async getPersonaPorLegajoYDni(legajo: string, dni: string): Promise<{ id: string; authUserId: string | null } | null> {
+    const { data, error } = await this.client.from("personas").select("id, auth_user_id").eq("legajo", legajo).eq("dni", dni).limit(1).maybeSingle();
+    if (error) throw error;
+    if (!data) return null;
+    return { id: data.id, authUserId: data.auth_user_id };
+  }
+
+  async vincularAuthUserPersona(personaId: string, authUserId: string): Promise<void> {
+    const { error } = await this.client.from("personas").update({ auth_user_id: authUserId }).eq("id", personaId);
+    if (error) throw error;
+  }
+
+  /** `sitioId` viene de Mobile, sin validar — a diferencia de getSitioOrganizacionId (que asume un caller confiable y explota con `.single()`), acá null en vez de tirar si no existe. */
+  async getSitioParaAutoregistro(sitioId: string): Promise<{ id: string; organizacionId: string } | null> {
+    const { data, error } = await this.client.from("sitios").select("id, organizacion_id").eq("id", sitioId).maybeSingle();
+    if (error) throw error;
+    if (!data) return null;
+    return { id: data.id, organizacionId: data.organizacion_id };
+  }
+
+  async crearPersonaAutoregistro(input: {
+    organizacionId: string;
+    sitioId: string;
+    nombre: string;
+    dni: string;
+    legajo: string | null;
+    telefono: string;
+    authUserId: string;
+  }): Promise<string> {
+    const { data, error } = await this.client
+      .from("personas")
+      .insert({
+        organizacion_id: input.organizacionId,
+        sitio_id: input.sitioId,
+        nombre: input.nombre,
+        dni: input.dni,
+        legajo: input.legajo,
+        telefono: input.telefono,
+        tipo: "fijo",
+        estado: "pendiente_aprobacion",
+        origen: "autoregistro",
+        auth_user_id: input.authUserId,
+      })
+      .select("id")
+      .single();
+    if (error) throw error;
+    return data.id as string;
+  }
+
+  async getCodigoAccesoPorCodigo(codigo: string): Promise<{
+    id: string;
+    tipo: "individual" | "lote";
+    dni: string | null;
+    empresa: string;
+    sitioId: string;
+    organizacionId: string;
+    vencimiento: string;
+    estado: "vigente" | "vencido" | "agotado" | "revocado";
+  } | null> {
+    const { data, error } = await this.client
+      .from("codigos_acceso")
+      .select("id, tipo, dni, empresa, sitio_id, organizacion_id, vencimiento, estado")
+      .eq("codigo", codigo)
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) return null;
+    return {
+      id: data.id,
+      tipo: data.tipo,
+      dni: data.dni,
+      empresa: data.empresa,
+      sitioId: data.sitio_id,
+      organizacionId: data.organizacion_id,
+      vencimiento: data.vencimiento,
+      estado: data.estado,
+    };
+  }
+
+  /**
+   * Intento atómico de consumir un uso del código (ver migración
+   * `fn_intentar_usar_codigo` — evita la carrera de dos personas
+   * canjeando el mismo código de lote al mismo tiempo). Null si para
+   * cuando el UPDATE corrió de verdad el código ya no tenía cupo, o
+   * dejó de estar vigente — aunque `getCodigoAccesoPorCodigo` lo haya
+   * visto vigente un instante antes.
+   */
+  async intentarUsarCodigo(codigoId: string): Promise<boolean> {
+    const { data, error } = await this.client.rpc("fn_intentar_usar_codigo", { p_codigo_id: codigoId });
+    if (error) throw error;
+    return Array.isArray(data) && data.length > 0;
+  }
+
+  async crearPersonaPorCodigo(input: {
+    organizacionId: string;
+    sitioId: string;
+    nombre: string;
+    dni: string;
+    telefono: string;
+    empresa: string;
+    vencimiento: string;
+    authUserId: string;
+  }): Promise<string> {
+    const { data, error } = await this.client
+      .from("personas")
+      .insert({
+        organizacion_id: input.organizacionId,
+        sitio_id: input.sitioId,
+        nombre: input.nombre,
+        dni: input.dni,
+        telefono: input.telefono,
+        empresa: input.empresa,
+        vencimiento: input.vencimiento,
+        tipo: "eventual",
+        estado: "activo",
+        origen: "codigo_acceso",
+        auth_user_id: input.authUserId,
+      })
+      .select("id")
+      .single();
+    if (error) throw error;
+    return data.id as string;
+  }
+
+  async registrarUsoCodigo(codigoId: string, personaId: string): Promise<void> {
+    const { error } = await this.client.from("codigos_acceso_usos").insert({ codigo_id: codigoId, persona_id: personaId });
+    if (error) throw error;
+  }
 }

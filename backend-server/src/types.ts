@@ -323,3 +323,38 @@ export interface PayloadCrearOperadorHttp {
   /** Si se manda, se invita a esta persona al Frontend Web (ver Db.invitarOperadorPorEmail). Solo tiene sentido con rol "admin". */
   email: string | null;
 }
+
+// --- Alta de personas desde Mobile (ver handlers/personas.ts) ---
+//
+// Ninguno de los tres flujos pide email/contraseña — el wireframe de
+// Cowork ("Mobile — App de Personal", pantallas "registro") no tiene un
+// solo campo de ese tipo. La identidad del dispositivo es el JWT que
+// Mobile ya trae en el header `Authorization` (una sesión anónima de
+// Supabase Auth — `supabase.auth.signInAnonymously()` del lado
+// cliente, invisible en el wireframe porque no hace falta ninguna
+// pantalla para eso); estos tres endpoints solo vinculan o crean la
+// fila de `personas` que le corresponde a esa sesión.
+
+/** Body de `POST /personas/reclamar` — "soy personal fijo, ya estoy en el padrón". */
+export interface PayloadReclamarPersonaHttp {
+  legajo: string;
+  dni: string;
+}
+
+/** Body de `POST /personas/autoregistro` — "no me encontraron, pido el alta" (queda pendiente_aprobacion). */
+export interface PayloadAutoregistroHttp {
+  nombre: string;
+  dni: string;
+  legajo: string | null;
+  telefono: string;
+  sitioId: string;
+}
+
+/** Body de `POST /personas/canjear-codigo` — "soy eventual/contratista, tengo un código". */
+export interface PayloadCanjearCodigoHttp {
+  codigo: string;
+  nombre: string;
+  telefono: string;
+  /** Solo se cruza contra el DNI del código si el código es de tipo "individual" y trae uno cargado. */
+  dni: string | null;
+}
