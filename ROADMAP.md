@@ -64,8 +64,8 @@ ahora); falta construir el resto del Frontend:
   Supabase real (Auth + resolución de operador + alcance de sitios).
   `npm run typecheck`/`build` limpios; falta la prueba con un browser
   real de punta a punta (sin headless disponible en este entorno).
-- **Panorama de Sitios** y **Accountability en vivo** — stubs por ahora
-  (`Placeholder.tsx`), el selector de sitio ya navega hasta ahí.
+- **Panorama de Sitios** — stub por ahora (`Placeholder.tsx`), el
+  selector de sitio ya navega hasta ahí.
 - ~~**Administración de operadores**~~ — **hecho (2026-08-29)**, ver
   `frontend-web/README.md`. Validado además contra backend-server y
   Supabase reales (no solo compilación). Gap conocido: no hay forma de
@@ -77,8 +77,15 @@ ahora); falta construir el resto del Frontend:
   Importar/Códigos de acceso (las otras 3 pestañas de esa pantalla)
   siguen sin construir.
 - **Historial / cumplimiento de simulacros** — `GET /simulacros/cumplimiento`.
-- **Accountability en vivo durante un evento** — la tabla
-  `accountability_contadores` y su RLS están listos; falta la vista.
+- ~~**Accountability en vivo durante un evento**~~ — **hecho
+  (2026-08-29)**, `/sitio/:id`, ver `frontend-web/README.md`. Validado
+  contra Supabase real, incluido confirmar que el trigger de Postgres
+  puebla `accountability_contadores` solo. Gaps conocidos, deliberados:
+  sin deshabilitar/rehabilitar puntos de encuentro por evento (necesita
+  diseño de backend propio) ni "marcar visto" (no hay ese campo en el
+  esquema); refresco por polling cada 10s, no Realtime; el strip de
+  consolas no muestra batería/camino de red/firmware (no se sincronizan
+  a Supabase hoy).
 - **Gestión de sitios / consolas / puntos de encuentro / PROG1-4 /
   Padrón (alta manual, importar)** — hoy todo por SQL directo, sin
   ninguna pantalla — ni falta ni sobra backend, es 100% trabajo de
@@ -126,11 +133,13 @@ RLS del punto 2 (elegir punto de encuentro, ver historial propio).
 ## Próximo paso sugerido
 
 - **Seguir con Frontend Web, pantalla por pantalla.** Con login +
-  selector de sitio + Operadores + Pendientes ya reales, las siguientes
-  candidatas con backend ya listo son **Alta y revocación de códigos de
-  acceso** (ver el gap de backend que falta ahí, arriba) y **Historial /
-  cumplimiento de simulacros** (`GET /simulacros/cumplimiento`, sin
-  ninguna escritura nueva que armar).
+  selector de sitio + Operadores + Pendientes + Accountability en vivo
+  ya reales, las siguientes candidatas con backend ya listo son
+  **Historial / cumplimiento de simulacros** (`GET /simulacros/cumplimiento`,
+  sin ninguna escritura nueva que armar) y **Alta y revocación de
+  códigos de acceso** (hay un gap de backend real que cerrar primero,
+  ver arriba). **Panorama de Sitios** también queda ahí — es el otro
+  destino ya linkeado desde el selector (`/panorama`, todavía stub).
 - Antes de llegar a **Accountability en vivo** (la pantalla real detrás
   de `/sitio/:id`), conviene cerrar el gap de RLS del punto 2 — sin eso
   ni esa pantalla ni Mobile pueden leer puntos de encuentro/eventos.

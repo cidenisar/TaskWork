@@ -163,6 +163,63 @@ De paso: `.intro`/`.empty` (usados por las tres pantallas hasta ahora)
 pasaron a `styles/tokens.css`, y `.btn-ok`/`.icon-btn.good`/`.bad`
 (variantes de color para aprobar/reactivar) se sumaron ahí también.
 
+## Accountability en vivo (2026-08-29)
+
+Ver Cowork "Accountability en Vivo". La pantalla real detrás de
+`/sitio/:id` — hasta ahora era el stub `Placeholder.tsx` desde el
+primer corte de login + selector. Reusa el `<Topbar>` compartido de la
+app (nav + logout) en vez del rail/topbar propios del wireframe; la
+franja de evento (tipo, quién lo disparó, reloj transcurrido) se agrega
+debajo, no en vez de la nav.
+
+Todo lectura directa contra Supabase — **cero llamadas a
+backend-server**, `org_isolation` ya le da a un admin acceso completo a
+`eventos`/`confirmaciones`/`accountability_contadores`/
+`puntos_encuentro`/`consolas` de su organización:
+
+- **Franja de evento** — tipo, operador que lo disparó, consola de
+  origen, modo (real/simulacro) y reloj transcurrido (tick cada
+  segundo, calculado client-side desde `iniciado_at`).
+- **KPIs + puntos de encuentro** — leídos de
+  `accountability_contadores` (el contador incremental que ya mantiene
+  un trigger de Postgres, no hace falta recontar `confirmaciones` a
+  mano). Se muestran TODOS los puntos activos del sitio, no solo los
+  que ya tienen gente. Clic en un punto filtra la tabla de al lado.
+- **Tabla de personal** — de `confirmaciones` con `personas` y
+  `puntos_encuentro` embebidos; filtro por estado (chips) + búsqueda
+  por nombre/DNI/legajo, clic en una fila abre el drawer compartido con
+  el detalle (incluida la nota si pidió ayuda) y un link `tel:` para
+  llamar.
+- **Consolas del sitio** — nombre, en línea/sin conexión, último
+  heartbeat. Simplificado respecto al wireframe: batería, camino de red
+  activo y firmware no se sincronizan a Supabase hoy (viven solo en la
+  Pi/ESP32), ver `../ROADMAP.md`.
+- **Refresco por polling cada 10s**, no Supabase Realtime — para no
+  sumar una dependencia nueva en este primer corte. Queda anotado como
+  posible mejora.
+- **"Sin evento en curso"** — estado propio, no está en el wireframe
+  (que asume que siempre hay un evento activo para poder mostrar la
+  pantalla armada).
+
+**Deliberadamente no construido** (ver el wireframe completo y
+`../ROADMAP.md`): deshabilitar/rehabilitar un punto de encuentro con
+aviso a las personas — necesita diseño de backend propio
+(`puntos_encuentro.activo` ya existe pero es un flag permanente, no
+"deshabilitado para ESTE evento"); "marcar visto" desde la ficha de una
+persona — no hay ningún campo de "visto" en el esquema. **Frontend Web
+nunca dispara ni cierra eventos** — eso lo sigue haciendo solo la
+consola física (ver Cowork "Panorama de Sitios"), por eso no hay ningún
+botón de cerrar evento acá.
+
+Validado contra Supabase real: evento `en_curso` real (tipo, operador,
+consola reales) más 3 confirmaciones de prueba (ok/ayuda con
+nota/pendiente) — confirmado que **el trigger de Postgres pobló
+`accountability_contadores` solo**, sin insertarlo a mano; los
+totales agregados, el desglose por punto, los embeds de
+`personas`/`puntos_encuentro` en el detalle, y el listado real de
+consolas del sitio, todos correctos. Datos de prueba borrados al
+terminar. `npm run typecheck`/`build` limpios.
+
 ## Cómo correr esto
 
 ```
@@ -173,10 +230,10 @@ npm run dev
 
 ## Qué falta (a propósito, ver `../ROADMAP.md`)
 
-Con login + selector de sitio + Operadores + Pendientes, van 3 de las 8
-pantallas del wireframe unificado (Pendientes es una pestaña, no la
-pantalla de Padrón completa) — el resto (Panorama, Accountability en
-vivo, Puntos, Padrón/Importar/Códigos de acceso, Consolas, Sitios,
-Simulacros) queda para las próximas sesiones, una por una.
-`backend-server` ya tiene listo lo que varias de ellas necesitan (ver
-`../ROADMAP.md`, sección 3).
+Con login + selector de sitio + Operadores + Pendientes +
+Accountability en vivo, van 4 de las 8 pantallas del wireframe
+unificado (Pendientes es una pestaña, no la pantalla de Padrón
+completa) — el resto (Panorama, Puntos, Padrón/Importar/Códigos de
+acceso, Consolas administrables, Sitios, Simulacros) queda para las
+próximas sesiones, una por una. `backend-server` ya tiene listo lo que
+varias de ellas necesitan (ver `../ROADMAP.md`, sección 3).

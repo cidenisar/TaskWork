@@ -5,6 +5,7 @@ import { Login } from "./routes/Login";
 import { SelectorSitio } from "./routes/SelectorSitio";
 import { Operadores } from "./routes/Operadores";
 import { Pendientes } from "./routes/Pendientes";
+import { Accountability } from "./routes/Accountability";
 import { Placeholder } from "./routes/Placeholder";
 
 export function App() {
@@ -52,10 +53,7 @@ export function App() {
             path="/sitio/:id"
             element={
               <ProtectedRoute>
-                <Placeholder
-                  titulo="Accountability en vivo"
-                  nota="Todavía no construida — ver ROADMAP.md. El login y el selector de sitio ya llevan hasta acá."
-                />
+                <Accountability />
               </ProtectedRoute>
             }
           />
