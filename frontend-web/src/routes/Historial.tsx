@@ -16,6 +16,7 @@
 // cancelación) no está en esta pantalla, ver ROADMAP.md.
 
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { useAuth } from "../lib/auth";
 import { obtenerCumplimiento, type EstadoCumplimiento } from "../lib/simulacros";
 import { formatearFecha } from "../lib/tiempoRelativo";
@@ -73,7 +74,8 @@ export function Historial() {
           <div className="eyebrow">Administración · cumplimiento del programa de simulacros</div>
           <p>
             Estado de cumplimiento por sitio y tipo de evento: cuándo fue el último simulacro efectivamente disparado, si sigue habiendo
-            uno programado, y si está al día. Programar un simulacro nuevo todavía no tiene pantalla propia, ver ROADMAP.md.
+            uno programado, y si está al día. Para programar/editar/cancelar un simulacro, ver{" "}
+            <Link to="/simulacros/programador">Programador de Simulacros</Link>.
           </p>
         </div>
 

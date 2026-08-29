@@ -421,6 +421,14 @@ input:focus-visible {
 .intro p b {
   color: var(--text);
 }
+.intro p a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.intro p a:hover {
+  color: var(--accent-dim);
+}
 .empty {
   text-align: center;
   padding: 2.5rem 1rem;
@@ -650,6 +658,32 @@ input:focus-visible {
   background: var(--accent);
   border-color: var(--accent);
   color: var(--accent-ink);
+}
+
+/* selector de sitio inyectado en el <Topbar> vía `extra` — Puntos de
+   encuentro, Programador de Simulacros */
+.site-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  margin-right: 0.9rem;
+}
+.site-picker label {
+  font-size: 0.62rem;
+  color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+}
+.site-picker select {
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  color: var(--text);
+  border-radius: 7px;
+  padding: 0.35rem 0.6rem;
+  font-size: 0.8rem;
+  font-family: inherit;
+  min-width: 220px;
 }
 
 /* callout informativo con ícono — distinto de `.note-box` (que ya usa

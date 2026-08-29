@@ -549,6 +549,64 @@ Validado contra Supabase real (no mocks), en dos partes:
 
 `npm run typecheck`/`build` limpios.
 
+## Programador de Simulacros (2026-08-29)
+
+`/simulacros/programador` — alta/edición/cancelación de simulacros
+programados (puntuales o recurrentes), ver Cowork "Programador de
+Simulacros" y `lib/programador.ts`. Cierra el par con
+`/simulacros/historial` (ya construida antes — la mitad de lectura de
+la misma wireframe): cada pantalla tiene un link a la otra en su
+`intro`, en vez de repetir la sección de historial acá también (el
+wireframe sí la repite, porque es una SPA de una sola pantalla en
+memoria — acá hubiera sido la misma agregación mostrada dos veces).
+
+Desvíos deliberados del wireframe:
+- El selector de sitio (en el `<Topbar>`, reusando `.site-picker` ya
+  hoisteado por Puntos de encuentro) sale de `listarSitiosVisibles`
+  (alcance real del admin), no de una lista fija — mismo criterio que
+  Puntos de encuentro, mismo motivo (`org_isolation` en
+  `simulacros_programados` solo valida organización, no `alcance_tipo`,
+  vía join a `sitios`).
+- El tipo de evento sale de `tipos_evento` real de la organización
+  (Incendio/Médico/Sismo/Tóxico/OK en los datos reales de prueba), no
+  del mapa `INCENDIO/SISMO/MEDICO/TOXICO/VIENTO` fijo del wireframe —
+  con color de badge por nombre normalizado y un gris de default para
+  cualquier tipo que no esté en la lista de colores conocidos (ej.
+  "OK").
+- Solo se expone la recurrencia "posición" (Ocurrencia + Día, ej.
+  "Primer Lunes de cada mes", mensual) — el esquema real también
+  soporta "intervalo" (cada N semanas/meses) y una `cadaMeses`
+  configurable, pero el wireframe tampoco los ofrece.
+- La hora se pide y se muestra en UTC explícito, con una aclaración en
+  el formulario ("Hora UTC — este sistema no ajusta por huso horario
+  del sitio") — el sistema entero trata `fecha_hora` como UTC literal,
+  sin conversión de zona horaria por sitio en ningún lado (confirmado
+  en `backend-server/src/logic/recurrencia.ts`). De paso, esto expuso
+  una inconsistencia real (no introducida acá, ya existente):
+  `lib/tiempoRelativo.ts` (`formatearFecha`, usado por Historial) formatea
+  con `toLocaleDateString`, que usa el huso del navegador — inofensivo
+  hoy porque solo muestra la fecha sin hora y Argentina está a solo 3
+  horas de UTC, pero técnicamente incorrecto y podría mostrar el día
+  equivocado cerca de medianoche UTC. No lo corregí (cambiaría el
+  comportamiento visible de una pantalla ya validada, fuera del alcance
+  de esta) — queda anotado en `../ROADMAP.md`.
+
+A diferencia de Puntos de encuentro, programar/editar/cancelar pasan
+por **backend-server** (`POST/PATCH/DELETE /simulacros`, nuevos) — ver
+`backend-server/README.md` para el porqué completo (motor de fechas +
+re-publicación MQTT a la consola física). Listar sitios/tipos/próximos
+sigue siendo lectura directa (`org_isolation`).
+
+Validado con 24 chequeos reales contra un `backend-server` corriendo de
+verdad (alta puntual y recurrente con la fecha inicial calculada
+verificada por día de semana/posición reales, validación de
+sitio/tipo ajeno, edición, intento de mover de sitio, cancelación
+(delete real), estados terminales, aislamiento completo de
+organización) — ver el detalle en `backend-server/README.md`. Más 6
+tests unitarios nuevos del motor de fechas
+(`primeraOcurrenciaDesde`), 108/108 pasando. `npm run typecheck`/`build`
+limpios.
+
 ## Cómo correr esto
 
 ```
@@ -562,9 +620,8 @@ npm run dev
 Con login + selector de sitio + Operadores + Padrón de Personas
 (Padrón + Pendientes + Importar + Códigos de acceso, las 4 pestañas
 completas) + Accountability en vivo + Panorama + Historial + Puntos de
-encuentro, la pantalla de "Administración de Padrón de Personas" queda
-100% construida y las demás pantallas base también (Historial es solo
-la mitad de "Programador de Simulacros" — falta el programador en sí).
-Queda: Consolas administrables, Sitios, y el Programador de Simulacros
-(alta/edición/cancelación). `backend-server` ya tiene listo lo que
-varias de ellas necesitan (ver `../ROADMAP.md`, sección 3).
+encuentro + Programador de Simulacros, todas las pantallas base del
+wireframe unificado están construidas. Queda: **Consolas** y
+**Sitios** (administración, no la vista en vivo). `backend-server` ya
+tiene listo lo que necesitan — todo escritura directa a Supabase, sin
+backend nuevo (ver `../ROADMAP.md`, sección 3).

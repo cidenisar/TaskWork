@@ -39,7 +39,7 @@ export function Topbar({ titulo, extra }: { titulo: string; extra?: ReactNode })
         <NavLink to="/personas/padron" className={location.pathname.startsWith("/personas") ? "on" : ""}>
           Personas
         </NavLink>
-        <NavLink to="/simulacros/historial" className={({ isActive }) => (isActive ? "on" : "")}>
+        <NavLink to="/simulacros/programador" className={location.pathname.startsWith("/simulacros") ? "on" : ""}>
           Simulacros
         </NavLink>
         <NavLink to="/puntos-encuentro" className={({ isActive }) => (isActive ? "on" : "")}>

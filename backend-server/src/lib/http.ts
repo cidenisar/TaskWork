@@ -12,6 +12,7 @@ import type { Db } from "./db.js";
 import { manejarConfirmacion } from "../handlers/confirmaciones.js";
 import { manejarCumplimiento } from "../handlers/cumplimiento.js";
 import { manejarCrearOperador, manejarResetearPin } from "../handlers/operadores.js";
+import { manejarProgramarSimulacro, manejarEditarSimulacro, manejarCancelarSimulacro } from "../handlers/simulacro.js";
 import {
   manejarReclamarPersona,
   manejarAutoregistro,
@@ -135,7 +136,7 @@ export function crearServidorHttp(db: Db, mqttClient: MqttClient, pushApp: App |
     if (req.method === "OPTIONS") {
       res.writeHead(204, {
         "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+        "Access-Control-Allow-Methods": "GET, POST, PATCH, DELETE, OPTIONS",
         "Access-Control-Allow-Headers": "Content-Type, Authorization",
       });
       res.end();
@@ -161,6 +162,33 @@ export function crearServidorHttp(db: Db, mqttClient: MqttClient, pushApp: App |
           responderJson(res, resultado.status, resultado.body);
         } catch (err) {
           console.error("[http] error procesando GET /simulacros/cumplimiento:", err);
+          responderJson(res, 500, { error: "error interno" });
+        }
+      })();
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/simulacros") {
+      void manejarPostConBody(req, res, "POST /simulacros", (body) => manejarProgramarSimulacro(db, mqttClient, auth, body));
+      return;
+    }
+
+    // /simulacros/{id} — PATCH edita, DELETE cancela. Mismo criterio de
+    // "sin router" que /operadores/:id/resetear-pin.
+    const simulacroIdMatch = /^\/simulacros\/([^/]+)$/.exec(url.pathname);
+    if (req.method === "PATCH" && simulacroIdMatch) {
+      const id = simulacroIdMatch[1];
+      void manejarPostConBody(req, res, "PATCH /simulacros/:id", (body) => manejarEditarSimulacro(db, mqttClient, auth, id, body));
+      return;
+    }
+    if (req.method === "DELETE" && simulacroIdMatch) {
+      const id = simulacroIdMatch[1];
+      void (async () => {
+        try {
+          const resultado = await manejarCancelarSimulacro(db, mqttClient, auth, id);
+          responderJson(res, resultado.status, resultado.body);
+        } catch (err) {
+          console.error("[http] error procesando DELETE /simulacros/:id:", err);
           responderJson(res, 500, { error: "error interno" });
         }
       })();

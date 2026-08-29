@@ -55,6 +55,38 @@ export function calcularProximaOcurrencia(regla: ReglaRecurrencia, fechaActual: 
 }
 
 /**
+ * Primera ocurrencia de `regla` que cae en o después de `ahora` —
+ * distinto de `calcularProximaOcurrencia`, que siempre salta
+ * `cadaMeses` meses adelante del mes de la fecha que le pasás (tiene
+ * sentido para "ya se resolvió esta, generá la siguiente", pero da un
+ * resultado incorrecto si lo usás para el alta inicial: si hoy es el 3
+ * y el admin programa "Primer Lunes", `calcularProximaOcurrencia` con
+ * `fechaActual = ahora` se saltaría el lunes 6 de ESTE mes y ofrecería
+ * el del mes que viene). Usado por el handler de alta/edición de
+ * simulacros (ver handlers/simulacro.ts) — nunca por el motor de
+ * resolución, que sigue usando `calcularProximaOcurrencia` tal cual.
+ *
+ * `horas`/`minutos` son la hora que eligió el admin en el formulario —
+ * se prueba primero ese día-de-semana en el mes de `ahora`, a esa
+ * hora; si ya pasó, se cae al camino normal de `calcularProximaOcurrencia`
+ * (que sí sabe saltar correctamente al próximo salto de `cadaMeses`).
+ * No soporta `tipo: "intervalo"` — no tiene un "día calculable en este
+ * período" análogo, y la pantalla de Frontend Web que arma esto no
+ * ofrece esa forma de regla (ver frontend-web/README.md).
+ */
+export function primeraOcurrenciaDesde(
+  regla: Extract<ReglaRecurrencia, { tipo: "posicion" }>,
+  ahora: Date,
+  horas: number,
+  minutos: number
+): Date {
+  const ancla = new Date(Date.UTC(ahora.getUTCFullYear(), ahora.getUTCMonth(), 1, horas, minutos, 0));
+  const candidatoEsteMes = nEsimoDiaSemanaDelMes(ancla, regla.diaSemana, regla.posicion);
+  if (candidatoEsteMes.getTime() >= ahora.getTime()) return candidatoEsteMes;
+  return calcularProximaOcurrencia(regla, candidatoEsteMes);
+}
+
+/**
  * @param unaFechaDelMes cualquier fecha del mes objetivo alcanza — solo se
  *   usan año/mes/hora de acá, el día se recalcula desde cero.
  * @param posicion 1..4 = la N-ésima ocurrencia de ese día de semana en el

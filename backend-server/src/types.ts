@@ -324,6 +324,35 @@ export interface PayloadCrearOperadorHttp {
   email: string | null;
 }
 
+/**
+ * Body de `POST /simulacros` y `PATCH /simulacros/:id` (ver
+ * handlers/simulacro.ts) — programar/editar un simulacro pasa por acá
+ * (no es escritura directa a Supabase como Puntos de encuentro) por
+ * dos motivos: la fecha concreta de una ocurrencia recurrente nueva
+ * necesita el mismo motor de fechas que ya usa el backend para generar
+ * la ocurrencia siguiente (`primeraOcurrenciaDesde`, ver
+ * logic/recurrencia.ts — reimplementarlo en el cliente arriesgaba una
+ * diferencia sutil, ej. en el corte de fin de mes), y porque programar/
+ * editar/cancelar tiene que re-publicar `consolas/{id}/simulacro` al
+ * toque (necesita el cliente MQTT, que solo vive acá).
+ *
+ * `cadaMeses` no se expone todavía — siempre 1 (mensual). El wireframe
+ * de Cowork ("Programador de Simulacros") tampoco lo ofrece.
+ */
+export interface PayloadProgramarSimulacroHttp {
+  sitioId: string;
+  tipoEventoId: string;
+  puntual: boolean;
+  /** Obligatorio si puntual — "YYYY-MM-DD". */
+  fecha: string | null;
+  /** "HH:MM", 24hs. */
+  hora: string;
+  /** Obligatorio si !puntual — 0=domingo .. 6=sábado (getUTCDay()). */
+  diaSemana: 0 | 1 | 2 | 3 | 4 | 5 | 6 | null;
+  /** Obligatorio si !puntual — 1..4 = la N-ésima ocurrencia; -1 = la última. */
+  posicion: 1 | 2 | 3 | 4 | -1 | null;
+}
+
 // --- Alta de personas desde Mobile (ver handlers/personas.ts) ---
 //
 // Ninguno de los tres flujos pide email/contraseña — el wireframe de

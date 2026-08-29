@@ -19,7 +19,7 @@ export interface RespuestaBackend<T> {
  */
 export async function llamarBackend<T = unknown>(
   path: string,
-  opciones: { method: "GET" | "POST"; body?: unknown } = { method: "GET" }
+  opciones: { method: "GET" | "POST" | "PATCH" | "DELETE"; body?: unknown } = { method: "GET" }
 ): Promise<RespuestaBackend<T | { error: string }>> {
   if (!BACKEND_URL) {
     throw new Error("Falta VITE_BACKEND_URL — copiar .env.example a .env y completar.");

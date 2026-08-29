@@ -108,8 +108,7 @@ ahora); falta construir el resto del Frontend:
   arreglé un hallazgo de seguridad real: `GET /simulacros/cumplimiento`
   sin `sitioId` filtraba el historial de simulacros de TODAS las
   organizaciones, no solo la del admin que llamaba — ver
-  `backend-server/README.md`, "Hallazgo de seguridad". El programador
-  de simulacros en sí (alta/edición/cancelación) sigue sin pantalla.
+  `backend-server/README.md`, "Hallazgo de seguridad".
 - ~~**Accountability en vivo durante un evento**~~ — **hecho
   (2026-08-29)**, `/sitio/:id`, ver `frontend-web/README.md`. Validado
   contra Supabase real, incluido confirmar que el trigger de Postgres
@@ -131,6 +130,25 @@ ahora); falta construir el resto del Frontend:
   en el bundle global — ver nota en `frontend-web/README.md` sobre la
   deuda restante (`.field` sigue duplicado con reglas distintas entre
   Login y Accountability).
+- ~~**Programador de Simulacros (alta/edición/cancelación)**~~ —
+  **hecho (2026-08-29)**, `/simulacros/programador`, ver
+  `frontend-web/README.md` y `backend-server/README.md`. A diferencia
+  de la mayoría de las pantallas de administración, esta SÍ necesitó
+  backend nuevo (`POST/PATCH/DELETE /simulacros`) — no por RLS, sino
+  porque la fecha inicial de un simulacro recurrente necesita el mismo
+  motor de fechas que ya usa el backend (nueva función
+  `primeraOcurrenciaDesde`, ver `logic/recurrencia.ts`) y porque hay
+  que re-publicar `consolas/{id}/simulacro` al toque (el cliente MQTT
+  solo vive en backend-server). Validado con 24 chequeos reales contra
+  un backend corriendo de verdad + 6 tests unitarios nuevos del motor
+  de fechas (108/108 pasando). De paso, notada (no corregida, fuera de
+  alcance) una inconsistencia real de zona horaria:
+  `lib/tiempoRelativo.ts` en Frontend Web formatea fechas con el huso
+  del navegador en vez de UTC, mientras que todo el sistema (incluida
+  esta pantalla nueva) trata `fecha_hora` como UTC literal sin
+  conversión — inofensivo hoy (solo se ve la fecha, no la hora, y
+  Argentina está a 3hs de UTC) pero podría mostrar el día equivocado
+  cerca de medianoche UTC. Ver `frontend-web/README.md`.
 - **Gestión de sitios / consolas / PROG1-4** — hoy todo por SQL
   directo, sin ninguna pantalla — ni falta ni sobra backend, es 100%
   trabajo de Frontend + escritura directa a Supabase (org_isolation ya
@@ -178,16 +196,22 @@ RLS del punto 2 (elegir punto de encuentro, ver historial propio).
 - **Seguir con Frontend Web, pantalla por pantalla.** Con login +
   selector de sitio + Operadores + Padrón de Personas completo (Padrón +
   Pendientes + Importar + Códigos de acceso) + Accountability en vivo +
-  Panorama + Historial + Puntos de encuentro ya reales, lo que queda es:
-  **Consolas** y **Sitios** (administración, no la vista en vivo — todo
-  escritura directa, sin backend nuevo que armar), y el **Programador de
-  Simulacros** (alta/edición/cancelación — Historial, la mitad de
-  lectura, ya está). Notas pendientes, ninguna bloquea lo anterior:
+  Panorama + Historial + Puntos de encuentro + Programador de
+  Simulacros ya reales, todas las pantallas base del wireframe unificado
+  están construidas. Lo que queda es **Consolas** y **Sitios**
+  (administración, no la vista en vivo) — ahí sí, todo escritura
+  directa, sin backend nuevo que armar (a diferencia del Programador de
+  Simulacros, que necesitó `POST/PATCH/DELETE /simulacros` nuevos, ver
+  sección 3). Notas pendientes, ninguna bloquea lo anterior:
   - El gap de RLS del punto 2 es específico de **Mobile** (una sesión de
     `persona`, no de admin) — sigue pendiente solo para cuando se
     arranque Mobile de verdad.
   - El gap de `personas.estado = 'vencido'` (sección 1, arriba) es
     trabajo de `backend-server` (un barrido periódico nuevo).
+  - La inconsistencia de zona horaria en `lib/tiempoRelativo.ts`
+    (sección 3, Programador de Simulacros) — usa el huso del navegador
+    en vez de UTC, inofensivo hoy pero vale la pena corregirlo la
+    próxima vez que se toque esa función.
   - La deuda de colisiones CSS globales notada en
     `frontend-web/README.md` (`.field` duplicado entre Login y
     Accountability con reglas distintas) — conviene resolverla la

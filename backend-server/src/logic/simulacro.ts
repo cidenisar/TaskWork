@@ -4,7 +4,62 @@
 // trae/escribe las filas de simulacros_programados y llama a estas funciones.
 
 import { calcularProximaOcurrencia } from "./recurrencia.js";
-import type { SimulacroProgramado } from "../types.js";
+import type { SimulacroProgramado, PayloadProgramarSimulacroHttp } from "../types.js";
+
+// --- Validación de POST /simulacros y PATCH /simulacros/:id ---
+
+export type ResultadoValidacionSimulacro =
+  | { ok: true; payload: PayloadProgramarSimulacroHttp }
+  | { ok: false; error: string };
+
+function esStringNoVacio(v: unknown): v is string {
+  return typeof v === "string" && v.trim().length > 0;
+}
+
+const FORMA_FECHA = /^\d{4}-\d{2}-\d{2}$/;
+const FORMA_HORA = /^\d{2}:\d{2}$/;
+const POSICIONES_VALIDAS = new Set([1, 2, 3, 4, -1]);
+
+export function validarProgramarSimulacro(body: unknown): ResultadoValidacionSimulacro {
+  if (typeof body !== "object" || body === null) {
+    return { ok: false, error: "body debe ser un objeto JSON" };
+  }
+  const b = body as Record<string, unknown>;
+
+  if (!esStringNoVacio(b.sitioId)) return { ok: false, error: "sitioId es obligatorio" };
+  if (!esStringNoVacio(b.tipoEventoId)) return { ok: false, error: "tipoEventoId es obligatorio" };
+  if (typeof b.puntual !== "boolean") return { ok: false, error: "puntual debe ser boolean" };
+  if (!esStringNoVacio(b.hora) || !FORMA_HORA.test(b.hora as string)) return { ok: false, error: 'hora debe tener el formato "HH:MM"' };
+
+  if (b.puntual) {
+    if (!esStringNoVacio(b.fecha) || !FORMA_FECHA.test(b.fecha as string)) {
+      return { ok: false, error: 'fecha es obligatoria (formato "YYYY-MM-DD") cuando puntual es true' };
+    }
+    return {
+      ok: true,
+      payload: { sitioId: b.sitioId as string, tipoEventoId: b.tipoEventoId as string, puntual: true, fecha: b.fecha as string, hora: b.hora as string, diaSemana: null, posicion: null },
+    };
+  }
+
+  if (typeof b.diaSemana !== "number" || !Number.isInteger(b.diaSemana) || b.diaSemana < 0 || b.diaSemana > 6) {
+    return { ok: false, error: "diaSemana debe ser un entero entre 0 (domingo) y 6 (sábado) cuando puntual es false" };
+  }
+  if (typeof b.posicion !== "number" || !POSICIONES_VALIDAS.has(b.posicion)) {
+    return { ok: false, error: "posicion debe ser 1, 2, 3, 4 (N-ésima) o -1 (última) cuando puntual es false" };
+  }
+  return {
+    ok: true,
+    payload: {
+      sitioId: b.sitioId as string,
+      tipoEventoId: b.tipoEventoId as string,
+      puntual: false,
+      fecha: null,
+      hora: b.hora as string,
+      diaSemana: b.diaSemana as PayloadProgramarSimulacroHttp["diaSemana"],
+      posicion: b.posicion as PayloadProgramarSimulacroHttp["posicion"],
+    },
+  };
+}
 
 /**
  * "El próximo simulacro" para el broadcast anticipado a las consolas (ver

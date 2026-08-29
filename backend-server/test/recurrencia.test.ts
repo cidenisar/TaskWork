@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { calcularProximaOcurrencia } from "../src/logic/recurrencia.js";
+import { calcularProximaOcurrencia, primeraOcurrenciaDesde } from "../src/logic/recurrencia.js";
 import type { ReglaRecurrencia } from "../src/types.js";
 
 test("intervalo semanas: suma N*7 días, conserva la hora", () => {
@@ -68,4 +68,49 @@ test("posicion: semestral (cadaMeses: 6)", () => {
   const resultado = calcularProximaOcurrencia(regla, new Date("2026-03-04T00:00:00.000Z")); // ya es 1er miércoles de marzo
   // 6 meses después: septiembre 2026. 1° de septiembre es martes → 1er miércoles es el 2.
   assert.equal(resultado.toISOString(), "2026-09-02T00:00:00.000Z");
+});
+
+// primeraOcurrenciaDesde — usada al programar un simulacro recurrente
+// nuevo desde Frontend Web (ver logic/simulacro.ts, handlers/simulacro.ts).
+// Enero 2026: el 1° es jueves. "Primer lunes de enero 2026" = 5 de enero.
+
+test("primeraOcurrenciaDesde: este mes todavía no pasó -> usa este mes", () => {
+  const regla: ReglaRecurrencia = { tipo: "posicion", diaSemana: 1, posicion: 1, cadaMeses: 1 };
+  const resultado = primeraOcurrenciaDesde(regla, new Date("2026-01-03T08:00:00.000Z"), 10, 0);
+  assert.equal(resultado.toISOString(), "2026-01-05T10:00:00.000Z");
+});
+
+test("primeraOcurrenciaDesde: hoy ES el día pero la hora elegida todavía no llegó -> hoy mismo", () => {
+  const regla: ReglaRecurrencia = { tipo: "posicion", diaSemana: 1, posicion: 1, cadaMeses: 1 };
+  const resultado = primeraOcurrenciaDesde(regla, new Date("2026-01-05T08:00:00.000Z"), 10, 0);
+  assert.equal(resultado.toISOString(), "2026-01-05T10:00:00.000Z");
+});
+
+test("primeraOcurrenciaDesde: este mes ya pasó -> salta al próximo salto de cadaMeses", () => {
+  const regla: ReglaRecurrencia = { tipo: "posicion", diaSemana: 1, posicion: 1, cadaMeses: 1 };
+  // 10 de enero 2026 es posterior al 5 de enero (primer lunes).
+  const resultado = primeraOcurrenciaDesde(regla, new Date("2026-01-10T08:00:00.000Z"), 10, 0);
+  // Febrero 2026: 1° es domingo -> primer lunes es el 2.
+  assert.equal(resultado.toISOString(), "2026-02-02T10:00:00.000Z");
+});
+
+test("primeraOcurrenciaDesde: hoy ES el día pero la hora elegida ya pasó -> salta al mes que viene, no se repite este mes", () => {
+  const regla: ReglaRecurrencia = { tipo: "posicion", diaSemana: 1, posicion: 1, cadaMeses: 1 };
+  const resultado = primeraOcurrenciaDesde(regla, new Date("2026-01-05T12:00:00.000Z"), 10, 0);
+  assert.equal(resultado.toISOString(), "2026-02-02T10:00:00.000Z");
+});
+
+test("primeraOcurrenciaDesde: posición 'último' (viernes) todavía no llegó este mes", () => {
+  const regla: ReglaRecurrencia = { tipo: "posicion", diaSemana: 5, posicion: -1, cadaMeses: 1 };
+  // Julio 2026: el último viernes es el 31.
+  const resultado = primeraOcurrenciaDesde(regla, new Date("2026-07-01T00:00:00.000Z"), 14, 0);
+  assert.equal(resultado.toISOString(), "2026-07-31T14:00:00.000Z");
+});
+
+test("primeraOcurrenciaDesde: posición 'último' ya pasó este mes -> mes siguiente", () => {
+  const regla: ReglaRecurrencia = { tipo: "posicion", diaSemana: 5, posicion: -1, cadaMeses: 1 };
+  // Agosto 2026: último viernes es el 28 — probamos desde el 29/ago, ya pasado.
+  const resultado = primeraOcurrenciaDesde(regla, new Date("2026-08-29T12:00:00.000Z"), 14, 0);
+  // Septiembre 2026: último viernes es el 25.
+  assert.equal(resultado.toISOString(), "2026-09-25T14:00:00.000Z");
 });

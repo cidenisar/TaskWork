@@ -462,6 +462,99 @@ export class Db {
     if (error) throw error;
   }
 
+  /** `true` si `tipoEventoId` es un tipo real de `organizacionId` (o global, `organizacion_id IS NULL`) — mismo motivo que `sitiosPertenecenAOrganizacion`: service_role bypasea RLS, así que el handler tiene que confirmarlo él mismo antes de programar un simulacro con ese tipo. */
+  async tipoEventoPerteneceAOrganizacion(tipoEventoId: string, organizacionId: string): Promise<boolean> {
+    const { data, error } = await this.client
+      .from("tipos_evento")
+      .select("id, organizacion_id")
+      .eq("id", tipoEventoId)
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) return false;
+    return data.organizacion_id === null || data.organizacion_id === organizacionId;
+  }
+
+  /**
+   * Alta de un simulacro programado por un admin (ver
+   * handlers/simulacro.ts, manejarProgramarSimulacro) — a diferencia de
+   * `insertProximaOcurrenciaSimulacro` (que genera la ocurrencia
+   * SIGUIENTE de un programa ya existente), esta es la primera fila de
+   * un programa nuevo, puntual o recurrente. `sorpresa`/`escenario`/
+   * `rotacionTipos` no los pone hoy ninguna pantalla — quedan en sus
+   * default (false/null/null) hasta que se necesiten (ver
+   * frontend-web/README.md).
+   */
+  async crearSimulacroProgramado(fila: {
+    sitioId: string;
+    tipoEventoId: string;
+    puntual: boolean;
+    fechaHora: string;
+    recurrencia: SimulacroProgramado["recurrencia"];
+  }): Promise<SimulacroProgramado> {
+    const { data, error } = await this.client
+      .from("simulacros_programados")
+      .insert({
+        sitio_id: fila.sitioId,
+        tipo_evento_id: fila.tipoEventoId,
+        puntual: fila.puntual,
+        fecha_hora: fila.fechaHora,
+        recurrencia: fila.recurrencia,
+        estado: "programado",
+      })
+      .select(Db.SELECT_SIMULACRO)
+      .single();
+    if (error) throw error;
+    return this.mapFilasSimulacro([data])[0];
+  }
+
+  /**
+   * Trae sitio_id + estado de un simulacro programado, sin más — el
+   * primer paso de editar/cancelar (ver handlers/simulacro.ts): hace
+   * falta saber a qué sitio pertenece ANTES de poder confirmar que ese
+   * sitio es de la organización del admin que llama (service_role
+   * bypasea RLS, así que nada más lo hace por vos).
+   */
+  async getSitioYEstadoDeSimulacro(id: string): Promise<{ sitioId: string; estado: EstadoSimulacro } | null> {
+    const { data, error } = await this.client.from("simulacros_programados").select("sitio_id, estado").eq("id", id).maybeSingle();
+    if (error) throw error;
+    return data ? { sitioId: data.sitio_id, estado: data.estado } : null;
+  }
+
+  /**
+   * Edita un simulacro que sigue sin resolverse (`programado` o
+   * `pendiente_confirmacion` — el wireframe permite editar/cancelar
+   * cualquiera de los dos, ver frontend-web/README.md). Devuelve null
+   * si mientras tanto pasó a un estado terminal (alguien lo disparó, o
+   * venció) — el caller lo trata como "ya no se puede editar", no como
+   * un error.
+   */
+  async editarSimulacroProgramado(
+    id: string,
+    fila: { tipoEventoId: string; puntual: boolean; fechaHora: string; recurrencia: SimulacroProgramado["recurrencia"] }
+  ): Promise<SimulacroProgramado | null> {
+    const { data, error } = await this.client
+      .from("simulacros_programados")
+      .update({ tipo_evento_id: fila.tipoEventoId, puntual: fila.puntual, fecha_hora: fila.fechaHora, recurrencia: fila.recurrencia })
+      .eq("id", id)
+      .in("estado", ["programado", "pendiente_confirmacion"])
+      .select(Db.SELECT_SIMULACRO)
+      .maybeSingle();
+    if (error) throw error;
+    return data ? this.mapFilasSimulacro([data])[0] : null;
+  }
+
+  /** Cancela (borra) un simulacro que sigue sin resolverse — `true` si había uno para borrar, `false` si ya pasó a un estado terminal mientras tanto. */
+  async cancelarSimulacroProgramado(id: string): Promise<boolean> {
+    const { data, error } = await this.client
+      .from("simulacros_programados")
+      .delete()
+      .eq("id", id)
+      .in("estado", ["programado", "pendiente_confirmacion"])
+      .select("id");
+    if (error) throw error;
+    return (data ?? []).length > 0;
+  }
+
   /** Todos los sitios — para el barrido periódico de sincronización de padrón (ver handlers/padron.ts). */
   async getTodosLosSitiosIds(): Promise<string[]> {
     const { data, error } = await this.client.from("sitios").select("id");

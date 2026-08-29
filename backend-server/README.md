@@ -1394,6 +1394,69 @@ efectivamente se resolvieron, no el tamaño de la lista de vencidos) y
 ambos quedaron `no_realizado` en la base. `npm run typecheck` limpio,
 70/70 tests. Datos de prueba limpiados.
 
+## Programar/editar/cancelar un simulacro desde Frontend Web (2026-08-29)
+
+`POST /simulacros`, `PATCH /simulacros/:id`, `DELETE /simulacros/:id` —
+el Programador de Simulacros de Frontend Web (ver
+`frontend-web/README.md`). A diferencia de Puntos de encuentro (que es
+escritura directa a Supabase, sin pasar por acá), esto necesita
+backend por dos motivos reales:
+
+1. **La fecha concreta de una ocurrencia recurrente nueva** necesita el
+   mismo motor de fechas que ya usa el backend para generar la
+   ocurrencia SIGUIENTE cuando se resuelve una (`calcularProximaOcurrencia`,
+   ver `logic/recurrencia.ts`) — pero esa función asume "la fecha que le
+   pasás es una ocurrencia YA resuelta, generame la del mes que viene",
+   no sirve para el alta inicial: si hoy es el 3 y el admin programa
+   "Primer Lunes", `calcularProximaOcurrencia` con `fechaActual = ahora`
+   se saltearía el lunes 6 de ESTE mes. Nueva función
+   `primeraOcurrenciaDesde` (mismo archivo) resuelve esto: prueba
+   primero el mes de "ahora"; si esa ocurrencia ya pasó, recién ahí cae
+   al camino normal de `calcularProximaOcurrencia`. Reimplementar este
+   cálculo en el cliente arriesgaba una diferencia sutil (ej. en el
+   corte de fin de mes, que ya tiene su propia lógica no trivial) entre
+   dos implementaciones independientes — mismo criterio que ya se usó
+   para no replicar `logic/cumplimiento.ts` en el Frontend.
+2. **Programar/editar/cancelar tienen que re-publicar
+   `consolas/{id}/simulacro` al toque** (`sincronizarSimulacroDeSitio`,
+   ya existía) — el cliente MQTT solo vive acá. Sin este paso, un
+   cambio hecho desde Frontend Web tardaría hasta 15 minutos en llegar
+   a la consola física (el intervalo del barrido de respaldo,
+   `sincronizarSimulacroDeTodosLosSitios`) en vez de reflejarse al
+   instante.
+
+Diseño: `cadaMeses` no se expone todavía (siempre 1, mensual) — el
+wireframe de Cowork tampoco lo ofrece; `sorpresa`/`escenario`/
+`rotacionTipos` (columnas reales del esquema) tampoco los pone esta
+primera versión del programador, quedan en sus default (false/null/
+null). Editar/cancelar funcionan sobre un simulacro en `programado` O
+`pendiente_confirmacion` (el wireframe permite ambos); uno ya resuelto
+(`realizado`/`no_realizado`) responde `409`. Un id de otra organización
+responde `404` (no `403`) tanto al editar como al cancelar — no hay
+por qué confirmarle a nadie que un id ajeno existe. Cancelar es un
+`DELETE` real de la fila (no una transición de estado): el modelo de
+`estado_simulacro` no tiene un valor "cancelado", y el wireframe
+tampoco lo pide — el simulacro puntual/ocurrencia simplemente
+desaparece de "Próximos".
+
+Validado con 24 chequeos contra un `backend-server` real corriendo en
+este entorno (Supabase real, MQTT no alcanzable desde acá — connect
+ECONNREFUSED al broker configurado, entorno de esta sesión sin salida
+a ese puerto; irrelevante para lo que se probó, `client.publish()` no
+bloquea ni tira si el cliente MQTT no está conectado, solo encola):
+alta puntual con fecha/hora exacta, alta recurrente con la fecha
+inicial calculada cayendo en el día de semana/posición correctos (ej.
+"primer lunes" verificado con `getUTCDay()`), rechazo de sitio/tipo de
+otra organización (`400`), lectura directa (RLS) trayendo lo recién
+creado, editar con el cambio reflejado, editar intentando mover de
+sitio (`400`, un simulacro no cambia de sitio — hay que cancelarlo y
+programar uno nuevo), cancelar borra la fila de verdad, cancelar/editar
+sobre algo ya resuelto (`409`) o inexistente (`404`), y aislamiento de
+organización completo (editar/cancelar un simulacro ajeno da `404`, sin
+tocarlo; lectura directa cruzada vacía). Además, 6 tests unitarios
+nuevos para `primeraOcurrenciaDesde` (ver `test/recurrencia.test.ts`),
+108/108 tests pasando. Datos de prueba borrados al terminar.
+
 ## Decisiones pendientes (para no perderlas de vista)
 
 - Auto-disparo de un simulacro sorpresa por el propio backend (sin que un

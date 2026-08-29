@@ -8,6 +8,7 @@ import { Padron } from "./routes/Padron";
 import { Pendientes } from "./routes/Pendientes";
 import { Importar } from "./routes/Importar";
 import { Historial } from "./routes/Historial";
+import { Programador } from "./routes/Programador";
 import { Codigos } from "./routes/Codigos";
 import { Accountability } from "./routes/Accountability";
 import { Panorama } from "./routes/Panorama";
@@ -64,6 +65,14 @@ export function App() {
             element={
               <ProtectedRoute>
                 <Historial />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/simulacros/programador"
+            element={
+              <ProtectedRoute>
+                <Programador />
               </ProtectedRoute>
             }
           />
