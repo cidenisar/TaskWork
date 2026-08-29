@@ -15,18 +15,7 @@ main {
   margin: 0 auto;
 }
 .toolbar {
-  display: flex;
-  align-items: center;
   justify-content: space-between;
-  gap: 1rem;
-  flex-wrap: wrap;
-}
-.toolbar .tb-count {
-  font-size: 0.8rem;
-  color: var(--text-dim);
-}
-.toolbar .tb-count b {
-  color: var(--text);
 }
 .search {
   background: var(--surface-2);
@@ -38,17 +27,7 @@ main {
   font-family: inherit;
   width: 220px;
 }
-.toolbar-right {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-}
 
-.list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-}
 .op-row {
   background: var(--surface);
   border: 1px solid var(--border);

@@ -9,6 +9,7 @@ import { Historial } from "./routes/Historial";
 import { Codigos } from "./routes/Codigos";
 import { Accountability } from "./routes/Accountability";
 import { Panorama } from "./routes/Panorama";
+import { Puntos } from "./routes/Puntos";
 
 export function App() {
   return (
@@ -61,6 +62,14 @@ export function App() {
             element={
               <ProtectedRoute>
                 <Panorama />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/puntos-encuentro"
+            element={
+              <ProtectedRoute>
+                <Puntos />
               </ProtectedRoute>
             }
           />

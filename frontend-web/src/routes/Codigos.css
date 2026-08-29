@@ -14,23 +14,7 @@ main {
 }
 
 .toolbar {
-  display: flex;
-  align-items: center;
   justify-content: space-between;
-  gap: 1rem;
-  flex-wrap: wrap;
-}
-.toolbar .tb-count {
-  font-size: 0.8rem;
-  color: var(--text-dim);
-}
-.toolbar .tb-count b {
-  color: var(--text);
-}
-.toolbar-right {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
 }
 
 .hint-box {
@@ -41,11 +25,6 @@ main {
   padding: 0.6rem 0.8rem;
 }
 
-.list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-}
 .code-row {
   background: var(--surface);
   border: 1px solid var(--border);

@@ -352,6 +352,32 @@ input:focus-visible {
   border-color: var(--help);
 }
 
+/* barra de herramientas (contador + acciones/filtros) y lista vertical —
+   Operadores, Pendientes, Códigos de acceso, Historial, Puntos de encuentro */
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.toolbar .tb-count {
+  font-size: 0.8rem;
+  color: var(--text-dim);
+}
+.toolbar .tb-count b {
+  color: var(--text);
+}
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+.toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
 /* ---------- intro + empty-state, repetidos en toda pantalla de administración ---------- */
 .intro {
   display: flex;
@@ -501,6 +527,34 @@ input:focus-visible {
   color: var(--accent-ink);
 }
 
+/* callout informativo con ícono — distinto de `.note-box` (que ya usa
+   Accountability.css con paleta de ayuda/rojo para una advertencia; acá
+   es paleta info/azul para una aclaración, nombre distinto a propósito
+   para no chocar — ver Puntos de encuentro) */
+.info-box {
+  background: var(--info-bg);
+  border: 1px solid var(--info);
+  border-radius: var(--radius);
+  padding: 0.85rem 1rem;
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  line-height: 1.5;
+  display: flex;
+  gap: 0.6rem;
+}
+.info-box svg {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  stroke: var(--info);
+  fill: none;
+  stroke-width: 2.2;
+  margin-top: 1px;
+}
+.info-box b {
+  color: var(--text);
+}
+
 .scrim {
   position: fixed;
   inset: 0;
@@ -589,7 +643,8 @@ input:focus-visible {
   color: var(--text-dim);
 }
 .dfield input,
-.dfield select {
+.dfield select,
+.dfield textarea {
   background: var(--surface-2);
   border: 1px solid var(--border-strong);
   border-radius: 8px;
@@ -597,6 +652,9 @@ input:focus-visible {
   color: var(--text);
   font-size: 0.86rem;
   font-family: inherit;
+}
+.dfield textarea {
+  resize: vertical;
 }
 .dfield .hint {
   font-size: 0.68rem;

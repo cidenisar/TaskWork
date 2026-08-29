@@ -375,6 +375,68 @@ otro sitio real de la misma organización, y confirmado además que
 aplicación es la única protección real, no un refuerzo redundante).
 Datos de prueba borrados al terminar. `npm run typecheck` limpio.
 
+## Administración de Puntos de Encuentro (2026-08-29)
+
+`/puntos-encuentro`, ver Cowork "Administración de Puntos de
+Encuentro". Alta, edición y baja de los puntos de encuentro de un
+sitio — nombre + descripción/ubicación en texto libre, sin coordenadas
+ni mapa (no hay ese campo en el esquema real de `puntos_encuentro`:
+`id, sitio_id, nombre, descripcion, activo, created_at, updated_at`).
+"Dar de baja" acá es alta/baja de **configuración permanente**,
+distinto del "Deshabilitar punto" temporal del dashboard de
+Accountability en vivo (dura lo que dura un evento) — la pantalla deja
+esa aclaración explícita, igual que el wireframe.
+
+Desvío deliberado del wireframe: ahí el selector de sitio era un mapa
+`SITIOS` fijo con 3 sitios hardcodeados; acá sale de
+`listarSitiosVisibles(operador)` (la misma función que ya usan
+Panorama y el Selector de Sitio), o sea **ya filtrado por el alcance
+real del admin logueado** — no por elección de estilo, sino porque
+`org_isolation` en `puntos_encuentro` solo verifica el límite de
+ORGANIZACIÓN (`sitio_id IN (select id from sitios where
+organizacion_id = auth_organizacion_id())`), igual que el resto de las
+tablas — no distingue `alcance_tipo` (mismo hallazgo que
+Accountability en vivo). Como acá no hay forma de llegar a un
+`sitioId` por URL (a diferencia de `/sitio/:id`), alcanza con que el
+selector nunca ofrezca un sitio fuera de alcance — no hace falta un
+gate explícito adicional.
+
+Validado contra Supabase real (RLS, no mocks): un admin real de
+alcance `"sitio"` vinculado a un sitio real —
+crear/listar/editar/dar de baja/reactivar un punto en su propio sitio,
+todo OK; intento de **insertar** un punto en el sitio de **otra
+organización** bloqueado por RLS (`org_isolation` hereda el `USING`
+como `WITH CHECK` al no tener uno propio); intento de **leer** un
+punto de otra organización devuelve vacío. Datos de prueba borrados al
+terminar. `npm run typecheck`/`build` limpios.
+
+De paso, revisando las pantallas ya construidas para sumar esta,
+encontré (no en esta pantalla, en las anteriores) **colisiones reales
+de nombres de clase CSS** — todo el CSS es global (no hay CSS Modules
+ni scoping), así que dos pantallas con la misma clase pero reglas
+distintas chocan en el bundle final según orden de import, no según
+qué pantalla está montada. Concretamente: `.toolbar`/`.toolbar
+.tb-count`/`.list`/`.toolbar-right` estaban duplicados (con pequeñas
+diferencias) en Operadores/Códigos/Pendientes/Historial — ya se
+hoistearon a `styles/tokens.css` (dejando solo el delta real en cada
+pantalla, ej. `justify-content` o `gap`), lo que de paso corrige una
+colisión silenciosa: Historial heredaba sin querer `justify-content:
+space-between` de Operadores.css (invisible en la práctica porque
+`margin-right:auto` en `.tb-count` ya consumía todo el espacio, pero
+accidental igual). También noté que `.field` está definido de formas
+incompatibles en `Login.css` y `Accountability.css` (mismo nombre,
+layouts distintos) — no lo toqué porque no lo necesitaba para esta
+pantalla (usé `.site-picker`, nombre nuevo, para el selector de sitio
+en el `<Topbar>`), pero **queda como deuda real para la próxima vez
+que se agregue o edite una pantalla con un campo de formulario suelto
+fuera de un drawer** — conviene resolverlo entonces, revisando las dos
+pantallas a la vez en lugar de adivinar cuál "gana" en el bundle.
+También agregué `.info-box` (paleta info/azul) a tokens.css en vez de
+reusar `.note-box` (que ya existe en Accountability.css con paleta de
+ayuda/rojo) — incluso siendo la primera reutilización, nombres iguales
+con reglas distintas es exactamente el problema de arriba, así que
+esta vez el nombre nuevo fue a propósito, no un descuido.
+
 ## Cómo correr esto
 
 ```
@@ -386,12 +448,12 @@ npm run dev
 ## Qué falta (a propósito, ver `../ROADMAP.md`)
 
 Con login + selector de sitio + Operadores + Pendientes +
-Accountability en vivo + Panorama + Historial + Códigos de acceso, van
-7 de las 8 pantallas del wireframe unificado (Pendientes y Códigos son
+Accountability en vivo + Panorama + Historial + Códigos de acceso +
+Puntos de encuentro, van 8 pantallas reales (Pendientes y Códigos son
 dos de las cuatro pestañas de "Administración de Padrón de Personas" —
 faltan Padrón e Importar; Historial es solo la mitad de "Programador de
-Simulacros" — falta el programador en sí) — el resto (Puntos de
-encuentro, Padrón/Importar, Consolas administrables, Sitios, y el
-Programador de simulacros) queda para las próximas sesiones, una por
-una. `backend-server` ya tiene listo lo que varias de ellas necesitan
-(ver `../ROADMAP.md`, sección 3).
+Simulacros" — falta el programador en sí) — el resto (Padrón/Importar,
+Consolas administrables, Sitios, y el Programador de simulacros) queda
+para las próximas sesiones, una por una. `backend-server` ya tiene
+listo lo que varias de ellas necesitan (ver `../ROADMAP.md`, sección
+3).

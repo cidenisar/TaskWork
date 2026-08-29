@@ -16,18 +16,10 @@ main {
 }
 
 .toolbar {
-  display: flex;
-  align-items: center;
   gap: 0.6rem;
-  flex-wrap: wrap;
 }
 .toolbar .tb-count {
-  font-size: 0.8rem;
-  color: var(--text-dim);
   margin-right: auto;
-}
-.toolbar .tb-count b {
-  color: var(--text);
 }
 .fselect {
   background: var(--surface-2);

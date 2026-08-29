@@ -13,11 +13,6 @@ main {
   margin: 0 auto;
 }
 
-.list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-}
 .pend-row {
   background: var(--surface);
   border: 1px solid var(--pending-strong);

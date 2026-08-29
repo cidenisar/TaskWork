@@ -98,11 +98,22 @@ ahora); falta construir el resto del Frontend:
   esquema); refresco por polling cada 10s, no Realtime; el strip de
   consolas no muestra batería/camino de red/firmware (no se sincronizan
   a Supabase hoy).
-- **Gestión de sitios / consolas / puntos de encuentro / PROG1-4 /
-  Padrón (alta manual, importar)** — hoy todo por SQL directo, sin
-  ninguna pantalla — ni falta ni sobra backend, es 100% trabajo de
-  Frontend + escritura directa a Supabase (org_isolation ya lo permite
-  para un admin).
+- ~~**Puntos de encuentro**~~ — **hecho (2026-08-29)**,
+  `/puntos-encuentro`, ver `frontend-web/README.md`. Sin coordenadas ni
+  mapa (no existen en el esquema real). Selector de sitio ya filtrado
+  por el alcance real del admin (mismo criterio que Panorama), a
+  diferencia del wireframe que usaba un mapa de sitios fijo. Validado
+  contra Supabase real, incluido confirmar que RLS bloquea insertar/leer
+  puntos de otra organización. De paso se hoistearon a
+  `styles/tokens.css` varias clases CSS duplicadas entre pantallas
+  (`.toolbar`/`.list`/`.toolbar-right`) que colisionaban silenciosamente
+  en el bundle global — ver nota en `frontend-web/README.md` sobre la
+  deuda restante (`.field` sigue duplicado con reglas distintas entre
+  Login y Accountability).
+- **Gestión de sitios / consolas / PROG1-4 / Padrón (alta manual,
+  importar)** — hoy todo por SQL directo, sin ninguna pantalla — ni
+  falta ni sobra backend, es 100% trabajo de Frontend + escritura
+  directa a Supabase (org_isolation ya lo permite para un admin).
 - ~~**Alta y revocación de códigos de acceso**~~ — **hecho
   (2026-08-29)**, `/personas/codigos`, ver `frontend-web/README.md`.
   Reevaluación: resultó no necesitar backend nuevo — generar/revocar no
@@ -145,17 +156,21 @@ RLS del punto 2 (elegir punto de encuentro, ver historial propio).
 
 - **Seguir con Frontend Web, pantalla por pantalla.** Con login +
   selector de sitio + Operadores + Pendientes + Accountability en vivo +
-  Panorama + Historial + Códigos de acceso ya reales (7 de 8), lo que
-  queda es: **Padrón** (alta manual + import CSV/Excel, las otras dos
-  pestañas de "Administración de Padrón de Personas"), **Puntos de
-  encuentro**, **Consolas** y **Sitios** (administración, no la vista
-  en vivo — todo escritura directa, sin backend nuevo que armar), y el
-  **Programador de Simulacros** (alta/edición/cancelación — Historial,
-  la mitad de lectura, ya está). Nota: el gap de RLS del punto 2 es
-  específico de **Mobile** (una sesión de `persona`, no de admin) — no
-  bloqueó ninguna pantalla de Frontend Web construida hasta ahora,
-  `org_isolation` ya le da a un admin lectura completa; sigue pendiente
-  solo para cuando se arranque Mobile de verdad.
+  Panorama + Historial + Códigos de acceso + Puntos de encuentro ya
+  reales, lo que queda es: **Padrón** (alta manual + import CSV/Excel,
+  las otras dos pestañas de "Administración de Padrón de Personas"),
+  **Consolas** y **Sitios** (administración, no la vista en vivo — todo
+  escritura directa, sin backend nuevo que armar), y el **Programador de
+  Simulacros** (alta/edición/cancelación — Historial, la mitad de
+  lectura, ya está). Nota: el gap de RLS del punto 2 es específico de
+  **Mobile** (una sesión de `persona`, no de admin) — no bloqueó ninguna
+  pantalla de Frontend Web construida hasta ahora, `org_isolation` ya le
+  da a un admin lectura completa; sigue pendiente solo para cuando se
+  arranque Mobile de verdad. También queda pendiente la deuda de
+  colisiones CSS globales notada en `frontend-web/README.md`
+  (`.field` duplicado entre Login y Accountability con reglas
+  distintas) — conviene resolverla la próxima vez que se toque una de
+  esas dos pantallas.
 - Si se prioriza field-testing (avanzar consola física en preparación
   para probarla) en cambio, confirmar con el cliente los valores
   marcados como "no confirmados" arriba (pinout, timings, duración de
