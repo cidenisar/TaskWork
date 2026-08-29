@@ -103,13 +103,12 @@ ahora); falta construir el resto del Frontend:
   ninguna pantalla — ni falta ni sobra backend, es 100% trabajo de
   Frontend + escritura directa a Supabase (org_isolation ya lo permite
   para un admin).
-- **Alta y revocación de códigos de acceso** (`codigos_acceso`) — **acá
-  sí falta backend**: no hay ningún endpoint que cree un código
-  (`getCodigoAccesoPorCodigo`/`intentarUsarCodigo` solo lo consumen).
-  Si la creación necesita algo más que un INSERT simple (generar el
-  código en sí, por ejemplo), conviene un endpoint dedicado igual que
-  `POST /operadores`; si es un INSERT plano, puede ser escritura
-  directa de Frontend.
+- ~~**Alta y revocación de códigos de acceso**~~ — **hecho
+  (2026-08-29)**, `/personas/codigos`, ver `frontend-web/README.md`.
+  Reevaluación: resultó no necesitar backend nuevo — generar/revocar no
+  usa `service_role`, es escritura directa (`org_isolation`). Validado
+  con el circuito completo: un código generado por un admin real se
+  canjeó de verdad desde Mobile (`POST /personas/canjear-codigo`).
 
 ## 4. Mobile — no existe código todavía
 
@@ -146,14 +145,17 @@ RLS del punto 2 (elegir punto de encuentro, ver historial propio).
 
 - **Seguir con Frontend Web, pantalla por pantalla.** Con login +
   selector de sitio + Operadores + Pendientes + Accountability en vivo +
-  Panorama + Historial ya reales, la siguiente candidata obvia es
-  **Alta y revocación de códigos de acceso** — hay un gap de backend
-  real que cerrar primero (ver arriba, sección 3). Nota: el gap de RLS
-  del punto 2 es específico de
-  **Mobile** (una sesión de `persona`, no de admin) — no bloqueó
-  Accountability en vivo ni Panorama, `org_isolation` ya le da a un
-  admin lectura completa; sigue pendiente solo para cuando se arranque
-  Mobile de verdad.
+  Panorama + Historial + Códigos de acceso ya reales (7 de 8), lo que
+  queda es: **Padrón** (alta manual + import CSV/Excel, las otras dos
+  pestañas de "Administración de Padrón de Personas"), **Puntos de
+  encuentro**, **Consolas** y **Sitios** (administración, no la vista
+  en vivo — todo escritura directa, sin backend nuevo que armar), y el
+  **Programador de Simulacros** (alta/edición/cancelación — Historial,
+  la mitad de lectura, ya está). Nota: el gap de RLS del punto 2 es
+  específico de **Mobile** (una sesión de `persona`, no de admin) — no
+  bloqueó ninguna pantalla de Frontend Web construida hasta ahora,
+  `org_isolation` ya le da a un admin lectura completa; sigue pendiente
+  solo para cuando se arranque Mobile de verdad.
 - Si se prioriza field-testing (avanzar consola física en preparación
   para probarla) en cambio, confirmar con el cliente los valores
   marcados como "no confirmados" arriba (pinout, timings, duración de

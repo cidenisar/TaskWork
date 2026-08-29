@@ -6,6 +6,7 @@ import { SelectorSitio } from "./routes/SelectorSitio";
 import { Operadores } from "./routes/Operadores";
 import { Pendientes } from "./routes/Pendientes";
 import { Historial } from "./routes/Historial";
+import { Codigos } from "./routes/Codigos";
 import { Accountability } from "./routes/Accountability";
 import { Panorama } from "./routes/Panorama";
 
@@ -44,6 +45,14 @@ export function App() {
             element={
               <ProtectedRoute>
                 <Historial />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/personas/codigos"
+            element={
+              <ProtectedRoute>
+                <Codigos />
               </ProtectedRoute>
             }
           />

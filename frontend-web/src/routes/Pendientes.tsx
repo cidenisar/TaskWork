@@ -121,7 +121,7 @@ export function Pendientes() {
                 </div>
                 <div className="site-chip-sm">{p.sitioNombre}</div>
                 <div className="pend-when">Solicitado {tiempoRelativo(p.creadaEn)}</div>
-                <div className="p-actions">
+                <div className="row-actions">
                   <button className="icon-btn bad" type="button" disabled={accionEnCursoId === p.id} onClick={() => void onRechazar(p)}>
                     <svg viewBox="0 0 24 24">
                       <path d="M18 6L6 18M6 6l12 12" />

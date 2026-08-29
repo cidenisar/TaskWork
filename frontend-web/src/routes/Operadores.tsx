@@ -303,7 +303,7 @@ export function Operadores() {
                       <span className={f.estado === "activo" ? "status-pill active" : "status-pill inactive"}>
                         {f.estado === "activo" ? "Activo" : "Dado de baja"}
                       </span>
-                      <div className="op-actions">
+                      <div className="row-actions">
                         {f.estado === "activo" && (
                           <button className="icon-btn" type="button" disabled={accionEnCursoId === f.id} onClick={() => void onResetearPin(f)}>
                             <svg viewBox="0 0 24 24">
@@ -377,7 +377,7 @@ export function Operadores() {
             </div>
             <div className="dfield">
               <label>Rol</label>
-              <div className="role-toggle">
+              <div className="seg-toggle">
                 <button type="button" className={drawer.rol === "operador" ? "on" : ""} onClick={() => setDrawer({ ...drawer, rol: "operador" })}>
                   Operador
                 </button>
@@ -389,7 +389,7 @@ export function Operadores() {
             </div>
             <div className="dfield">
               <label>Alcance</label>
-              <div className="scope-toggle">
+              <div className="seg-toggle">
                 <button type="button" className={drawer.alcanceTipo === "sitio" ? "on" : ""} onClick={() => setDrawer({ ...drawer, alcanceTipo: "sitio" })}>
                   Sitio(s) puntuales
                 </button>

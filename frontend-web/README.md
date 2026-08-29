@@ -299,6 +299,49 @@ inserción), `alDia` da `true` porque el último resuelto fue
 `realizado`, y `proximoProgramado` no es `null`. Todo el dato de
 prueba borrado al terminar. `npm run typecheck`/`build` limpios.
 
+## Códigos de acceso (2026-08-29)
+
+Ver Cowork "Administración de Padrón de Personas" (pestaña "Códigos de
+acceso"). Ruta `/personas/codigos`. Un código generado acá es lo que
+alguien ingresa en Mobile (`POST /personas/canjear-codigo`, construido
+en una sesión anterior) para autoregistrarse al instante.
+
+**Reevaluación de `../ROADMAP.md`**: decía "acá sí falta backend". Al
+diseñar esta pantalla encontré que no es así — generar y revocar un
+código no necesita `service_role` (no hay PIN que hashear ni email que
+invitar), `org_isolation` ya le permite a un admin escribir en
+`codigos_acceso` directo. Es escritura directa contra Supabase, mismo
+criterio que editar/dar de baja un operador.
+
+- **Formato del código** — `EMPRESA-XXXX` (3 letras + 4 hex mayúsculas),
+  mismo formato que el wireframe, pero generado con
+  `crypto.getRandomValues` en vez de `Math.random()` — es un código que
+  le da acceso real a alguien para empezar a recibir alertas, mismo
+  criterio que el PIN de operadores.
+- **Unicidad** — hay un índice único real `(organizacion_id, codigo)`
+  en la base; si un intento choca (2^16 combinaciones por prefijo, muy
+  improbable pero real), se reintenta con un código nuevo en vez de
+  fallar.
+- **Individual** (atado a un DNI, `tope_usos: 1`) vs. **lote/cuadrilla**
+  (`tope_usos` configurable, compartido) — mismo drawer con un toggle,
+  igual que el wireframe.
+
+Validado contra Supabase y backend-server reales, con el circuito
+**completo**, no solo la escritura: un admin real generó un código
+individual (formato confirmado `EMPRESA-XXXX`), y ese mismo código se
+canjeó de verdad desde una sesión de Mobile real
+(`POST /personas/canjear-codigo`) — la persona quedó `activo` y el
+código quedó `agotado` con `usos_actuales: 1`. También validado
+`listarCodigos` (embed `sitios(nombre)`) y `revocarCodigo` (escritura
+directa, confirmada al releer). Todo el dato de prueba borrado al
+terminar. `npm run typecheck`/`build` limpios.
+
+De paso: `.confirm-row`/`.cr-text`/`.cr-actions` (ya duplicados entre
+Operadores y esta pantalla) y un `.row-actions` genérico (antes
+`.op-actions`/`.p-actions`, dos nombres para lo mismo) pasan a
+`styles/tokens.css`, junto con `.seg-toggle` (antes `.role-toggle`/
+`.scope-toggle` en Operadores) y `.btn-secondary`.
+
 ## Cómo correr esto
 
 ```
@@ -310,11 +353,12 @@ npm run dev
 ## Qué falta (a propósito, ver `../ROADMAP.md`)
 
 Con login + selector de sitio + Operadores + Pendientes +
-Accountability en vivo + Panorama + Historial, van 6 de las 8 pantallas
-del wireframe unificado (Pendientes es una pestaña, e Historial es solo
-la mitad de "Programador de Simulacros" — falta el programador en sí)
-— el resto (Puntos de encuentro, Padrón/Importar/Códigos de acceso,
-Consolas administrables, Sitios, y el Programador de simulacros)
-queda para las próximas sesiones, una por una. `backend-server` ya
-tiene listo lo que varias de ellas necesitan (ver `../ROADMAP.md`,
-sección 3).
+Accountability en vivo + Panorama + Historial + Códigos de acceso, van
+7 de las 8 pantallas del wireframe unificado (Pendientes y Códigos son
+dos de las cuatro pestañas de "Administración de Padrón de Personas" —
+faltan Padrón e Importar; Historial es solo la mitad de "Programador de
+Simulacros" — falta el programador en sí) — el resto (Puntos de
+encuentro, Padrón/Importar, Consolas administrables, Sitios, y el
+Programador de simulacros) queda para las próximas sesiones, una por
+una. `backend-server` ya tiene listo lo que varias de ellas necesitan
+(ver `../ROADMAP.md`, sección 3).

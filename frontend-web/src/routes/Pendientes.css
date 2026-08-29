@@ -66,9 +66,4 @@ main {
   color: var(--text-faint);
   flex: none;
 }
-.p-actions {
-  flex: none;
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-}
+/* .row-actions (antes .p-actions acá) vive en styles/tokens.css. */

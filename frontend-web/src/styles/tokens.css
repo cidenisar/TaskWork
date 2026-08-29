@@ -242,6 +242,81 @@ input:focus-visible {
 .btn-ok:hover:not(:disabled) {
   filter: brightness(1.08);
 }
+.btn-secondary {
+  background: var(--surface-2);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  padding: 0.55rem 1rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  white-space: nowrap;
+}
+.btn-secondary:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.btn-secondary svg {
+  width: 14px;
+  height: 14px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2.4;
+}
+
+/* toggle segmentado de 2 opciones — Operadores (rol/alcance), Códigos de acceso (tipo) */
+.seg-toggle {
+  display: flex;
+  gap: 0.5rem;
+}
+.seg-toggle button {
+  flex: 1;
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  color: var(--text-dim);
+  border-radius: 8px;
+  padding: 0.5rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+.seg-toggle button.on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+
+/* botones de acción al final de una fila de lista — Operadores, Pendientes, Códigos de acceso */
+.row-actions {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+/* confirmación inline dentro de una fila (reemplaza la fila mientras se confirma) — Operadores (dar de baja), Códigos de acceso (revocar) */
+.confirm-row {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.confirm-row .cr-text {
+  font-size: 0.82rem;
+  color: var(--text);
+}
+.confirm-row .cr-text b {
+  color: var(--help);
+}
+.confirm-row .cr-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex: none;
+}
 .icon-btn {
   background: var(--surface-2);
   border: 1px solid var(--border-strong);
