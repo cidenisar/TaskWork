@@ -1,0 +1,176 @@
+/* Sistema de diseño — copiado tal cual de los wireframes de Cowork
+   ("Login y Selector de Sitio", "Emergencias Refinería — Wireframe
+   unificado"): control-room oscuro por default, acento naranja,
+   Big Shoulders Display para títulos, IBM Plex Sans para el cuerpo,
+   IBM Plex Mono para números/datos. Cualquier pantalla nueva de
+   Frontend Web debería reusar estas variables en vez de inventar
+   colores — así se mantienen todas visualmente como un solo sistema. */
+
+:root {
+  color-scheme: dark;
+  --bg: #0a0e13;
+  --surface: #121820;
+  --surface-2: #1a2129;
+  --surface-3: #212a33;
+  --border: #2b3540;
+  --border-strong: #3d4a56;
+  --text: #eef2f5;
+  --text-dim: #9fadb8;
+  --text-faint: #6b7885;
+  --accent: #ff8c2b;
+  --accent-dim: #c9711f;
+  --accent-ink: #23140a;
+  --ok: #35c47a;
+  --ok-bg: rgba(53, 196, 122, 0.14);
+  --ok-strong: rgba(53, 196, 122, 0.5);
+  --help: #ef4a52;
+  --help-bg: rgba(239, 74, 82, 0.16);
+  --help-strong: rgba(239, 74, 82, 0.55);
+  --pending: #f2b544;
+  --pending-bg: rgba(242, 181, 68, 0.15);
+  --pending-strong: rgba(242, 181, 68, 0.5);
+  --info: #4f9fe0;
+  --info-bg: rgba(79, 159, 224, 0.14);
+  --shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  --radius: 12px;
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    color-scheme: light;
+    --bg: #eef1f4;
+    --surface: #ffffff;
+    --surface-2: #f5f7f9;
+    --surface-3: #e9edf1;
+    --border: #d7dee4;
+    --border-strong: #bcc7cf;
+    --text: #141b22;
+    --text-dim: #4d5964;
+    --text-faint: #7c8891;
+    --accent: #d9660a;
+    --accent-dim: #b8560a;
+    --accent-ink: #ffffff;
+    --ok: #1f9d58;
+    --ok-bg: rgba(31, 157, 88, 0.1);
+    --ok-strong: rgba(31, 157, 88, 0.4);
+    --help: #d5323a;
+    --help-bg: rgba(213, 50, 58, 0.09);
+    --help-strong: rgba(213, 50, 58, 0.35);
+    --pending: #a86a08;
+    --pending-bg: rgba(168, 106, 8, 0.1);
+    --pending-strong: rgba(168, 106, 8, 0.4);
+    --info: #2b74c4;
+    --info-bg: rgba(43, 116, 196, 0.1);
+    --shadow: 0 8px 24px rgba(20, 27, 34, 0.1);
+  }
+}
+
+/* Toggle explícito de tema (cuando se agregue un selector de tema en la UI) */
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #eef1f4;
+  --surface: #ffffff;
+  --surface-2: #f5f7f9;
+  --surface-3: #e9edf1;
+  --border: #d7dee4;
+  --border-strong: #bcc7cf;
+  --text: #141b22;
+  --text-dim: #4d5964;
+  --text-faint: #7c8891;
+  --accent: #d9660a;
+  --accent-dim: #b8560a;
+  --accent-ink: #ffffff;
+  --ok: #1f9d58;
+  --ok-bg: rgba(31, 157, 88, 0.1);
+  --ok-strong: rgba(31, 157, 88, 0.4);
+  --help: #d5323a;
+  --help-bg: rgba(213, 50, 58, 0.09);
+  --help-strong: rgba(213, 50, 58, 0.35);
+  --pending: #a86a08;
+  --pending-bg: rgba(168, 106, 8, 0.1);
+  --pending-strong: rgba(168, 106, 8, 0.4);
+  --info: #2b74c4;
+  --info-bg: rgba(43, 116, 196, 0.1);
+  --shadow: 0 8px 24px rgba(20, 27, 34, 0.1);
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0a0e13;
+  --surface: #121820;
+  --surface-2: #1a2129;
+  --surface-3: #212a33;
+  --border: #2b3540;
+  --border-strong: #3d4a56;
+  --text: #eef2f5;
+  --text-dim: #9fadb8;
+  --text-faint: #6b7885;
+  --accent: #ff8c2b;
+  --accent-dim: #c9711f;
+  --accent-ink: #23140a;
+  --ok: #35c47a;
+  --ok-bg: rgba(53, 196, 122, 0.14);
+  --ok-strong: rgba(53, 196, 122, 0.5);
+  --help: #ef4a52;
+  --help-bg: rgba(239, 74, 82, 0.16);
+  --help-strong: rgba(239, 74, 82, 0.55);
+  --pending: #f2b544;
+  --pending-bg: rgba(242, 181, 68, 0.15);
+  --pending-strong: rgba(242, 181, 68, 0.5);
+  --info: #4f9fe0;
+  --info-bg: rgba(79, 159, 224, 0.14);
+  --shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+* {
+  box-sizing: border-box;
+}
+html,
+body,
+#root {
+  height: 100%;
+}
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "IBM Plex Sans", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+.num {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+}
+h1,
+h2,
+h3 {
+  font-family: "Big Shoulders Display", "Arial Narrow", sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.01em;
+  text-wrap: balance;
+  margin: 0;
+}
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
+a {
+  color: inherit;
+}
+button:focus-visible,
+a:focus-visible,
+input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+.app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}

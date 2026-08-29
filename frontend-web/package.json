@@ -1,0 +1,29 @@
+{
+  "name": "frontend-web",
+  "version": "0.1.0",
+  "description": "Frontend Web — panel de administración para HSE/operadores admin. Login (Supabase Auth) + selector de sitio + pantallas de gestión (operadores, personal, sitios, consolas, simulacros, accountability en vivo). SPA que habla directo contra Supabase (RLS) y, para lo que necesita service_role, contra backend-server.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit -p tsconfig.json && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.4",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^7.18.3"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.5",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^6.1.1",
+    "typescript": "^5.6.0",
+    "vite": "^8.2.2"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

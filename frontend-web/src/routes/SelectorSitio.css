@@ -1,0 +1,227 @@
+main {
+  flex: 1;
+  padding: 1.4rem 1.5rem 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.4rem;
+  max-width: 1180px;
+  width: 100%;
+  margin: 0 auto;
+}
+.intro {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.intro .eyebrow {
+  font-size: 0.7rem;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  font-weight: 600;
+}
+.intro p {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 0.88rem;
+  max-width: 66ch;
+  line-height: 1.5;
+}
+
+.single-redirect {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.6rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.9rem;
+  text-align: center;
+  max-width: 460px;
+  margin: 2rem auto;
+}
+.single-redirect .sr-eyebrow {
+  font-size: 0.68rem;
+  color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.single-redirect .sr-site {
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+.single-redirect .sr-note {
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  max-width: 40ch;
+  line-height: 1.5;
+}
+.cta-btn {
+  background: var(--accent);
+  color: var(--accent-ink);
+  border: none;
+  border-radius: 8px;
+  padding: 0.65rem 1.4rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+.cta-btn:hover {
+  background: var(--accent-dim);
+}
+
+.panorama-cta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  background: linear-gradient(135deg, var(--info-bg), var(--surface) 65%);
+  border: 1px solid var(--info);
+  border-radius: var(--radius);
+  padding: 1.1rem 1.3rem;
+}
+.panorama-cta .pc-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+.panorama-cta .pc-sub {
+  font-size: 0.76rem;
+  color: var(--text-dim);
+  margin-top: 0.2rem;
+}
+.panorama-cta button {
+  flex: none;
+  background: var(--info);
+  color: #061622;
+  border: none;
+  border-radius: 8px;
+  padding: 0.6rem 1.1rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+.panorama-cta button:hover {
+  filter: brightness(1.08);
+}
+
+.sites-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+}
+.site-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.05rem 1.15rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 0.12s,
+    transform 0.12s;
+}
+.site-card:hover {
+  border-color: var(--accent);
+  transform: translateY(-1px);
+}
+.site-card.active-event {
+  border-color: var(--help-strong);
+  background: linear-gradient(180deg, var(--help-bg), var(--surface) 55%);
+}
+.site-card .sc-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.site-card .sc-name {
+  font-size: 1.02rem;
+  font-weight: 700;
+  line-height: 1.25;
+}
+.status-pill {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  padding: 0.25rem 0.55rem;
+  border-radius: 999px;
+}
+.status-pill::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.status-pill.live {
+  color: var(--help);
+  background: var(--help-bg);
+  animation: pulse-op 1.6s ease-in-out infinite;
+}
+.status-pill.quiet {
+  color: var(--ok);
+  background: var(--ok-bg);
+}
+@keyframes pulse-op {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+.sc-sub {
+  font-size: 0.76rem;
+  color: var(--text-dim);
+}
+.sc-foot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-top: 0.65rem;
+  border-top: 1px solid var(--border);
+  margin-top: auto;
+}
+.sc-cta {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+.sc-cta svg {
+  width: 12px;
+  height: 12px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2.2;
+}
+
+.empty-state {
+  background: var(--surface);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius);
+  padding: 2rem;
+  text-align: center;
+  color: var(--text-dim);
+  font-size: 0.85rem;
+}
+
+@media (max-width: 900px) {
+  .sites-grid {
+    grid-template-columns: 1fr;
+  }
+  .panorama-cta {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
