@@ -282,6 +282,10 @@ frontend → broker → backend está bien, independiente de ese bloqueo.
   política RLS `personas_self_read` (lectura directa contra Supabase,
   sin backend de por medio) + `POST /personas/push-token`, ver esa
   sección más abajo.
+- **Rate limiting en los endpoints de autoregistro** — por IP en las
+  tres rutas (`http.ts`) más un límite puntual por legajo+DNI en
+  `/personas/reclamar` (`handlers/personas.ts`), ver "Precauciones al
+  habilitar Anonymous Sign-ins" más abajo.
 
 ### Despacho real de push/SMS
 
@@ -1123,6 +1127,88 @@ organización vía `org_isolation`, sin cambios. Personas y cuentas de
 Auth de prueba borradas al terminar. `npm run typecheck` limpio, 98/98
 tests.
 
+### Precauciones al habilitar Anonymous Sign-ins (2026-08-29)
+
+Los tres endpoints de autoregistro (`/personas/reclamar`,
+`/autoregistro`, `/canjear-codigo`) piden solo un JWT válido — sin
+ningún rol particular, a propósito, porque Mobile los llama desde una
+sesión anónima de Supabase Auth (`signInAnonymously()`, ver
+"Autoregistro de personas (Mobile)" más arriba). Habilitar Anonymous
+Sign-ins en el dashboard es lo que hace que eso funcione — pero también
+significa que **cualquiera puede conseguir un JWT válido gratis, sin
+verificar absolutamente nada** (ni email, ni teléfono, ni CAPTCHA por
+default). Antes de habilitarlo hacía falta cerrar lo que eso abre.
+
+**Lo que NO cambia**: ninguna política RLS se vuelve más permisiva por
+tener "cualquier sesión autenticada" — `org_isolation` sigue exigiendo
+`operadores.rol='admin'` y `personas_self_read` sigue exigiendo
+`auth_user_id = auth.uid()` de la propia fila. Una sesión anónima no
+gana acceso a nada ajeno solo por existir.
+
+**El riesgo real que sí abre**: sin ningún límite, alguien con una
+sesión anónima gratis puede scriptear intentos contra los tres
+endpoints:
+
+- **`/personas/reclamar`** — adivinar `legajo` + `dni` de una persona
+  real y vincular esa sesión a su fila. Es el de mayor riesgo de los
+  tres: en un sistema de emergencias, eso significa empezar a recibir
+  y poder confirmar **las alertas de otra persona** en su lugar — un
+  problema de suplantación de identidad, no solo de datos.
+- **`/personas/canjear-codigo`** — probar códigos de acceso hasta
+  acertar uno vigente.
+- **`/personas/autoregistro`** — de menor riesgo (cada intento exitoso
+  solo crea una fila `pendiente_aprobacion`, un admin la revisa antes
+  de que haga nada), pero igual vale acotar el volumen.
+
+**Qué se construyó**: `src/lib/rateLimit.ts` — limitador en memoria,
+ventana fija por clave (`permitirIntento(clave, maxIntentos, ventanaMs)`),
+sin librería externa (mismo criterio de "no traer algo más para esto"
+del resto del repo). Aplicado en dos capas:
+
+- **Por IP** (`http.ts`, `limitarPorIp`), en las tres rutas — la
+  protección general contra cualquier script insistiendo: 20
+  intentos/15min en `reclamar` y `canjear-codigo`, 10/hora en
+  `autoregistro`. Números elegidos para tolerar una IP compartida real
+  (wifi del sitio, NAT corporativo — varias personas registrándose el
+  mismo rato desde la misma IP) sin frenar el uso legítimo, pero
+  cortando un script insistente mucho antes de que tenga chance de
+  acertar nada. Usa `req.socket.remoteAddress` — no `X-Forwarded-For`,
+  porque no hay proxy inverso delante en este entorno y confiar en un
+  header que el cliente puede mandar directamente sería falso; si el
+  día de mañana hay un balanceador delante, esto tiene que pasar a
+  confiar en ese header SOLO cuando lo pone el proxy conocido.
+- **Por objetivo puntual, solo en `reclamar`** (`handlers/personas.ts`) —
+  además del límite por IP, un límite de 10 intentos/30min por
+  `legajo+dni` exacto. Es la protección extra para el endpoint de mayor
+  riesgo: sin esto, alguien con muchas sesiones anónimas distintas (o
+  detrás de muchas IPs) podría seguir probando contra la MISMA persona
+  ajena sin que el límite por IP lo frene. **Decisión deliberada**: no
+  se agregó el equivalente en `canjear-codigo` — ahí el código mismo ya
+  se autolimita por `tope_usos` (una vez agotado, `fn_intentar_usar_codigo`
+  deja de aceptar usos sin importar cuántos JWTs distintos lo intenten)
+  y el límite por IP alcanza para el riesgo que queda.
+
+**Limitación conocida**: el estado vive en memoria de un solo proceso
+— no se comparte entre instancias. Alcanza para el tamaño actual de
+este despliegue (un único proceso de `backend-server`); si en algún
+momento hay más de una instancia corriendo en paralelo detrás de un
+balanceador, esto necesitaría moverse a Redis o Postgres para que el
+límite sea real entre todas.
+
+**Validado**: 4 tests nuevos para `rateLimit.ts` (102/102 en total,
+`npm run typecheck` limpio) más una prueba end-to-end contra Supabase
+real — 10 intentos contra el mismo legajo+DNI inventado se aceptan, el
+11° devuelve `429`, y un legajo+DNI distinto en paralelo no se ve
+afectado (las claves no se cruzan). Todas las cuentas de Auth de prueba
+borradas al terminar.
+
+**Opcional, no configurado por mí**: Supabase tiene su propio soporte
+de CAPTCHA (hCaptcha/Turnstile) para `signInAnonymously()` y el resto
+de los flujos de Auth, bajo Authentication → Attack Protection en el
+dashboard. Es una capa adicional independiente de esto — vale la pena
+como defensa en profundidad si el volumen de abuso real lo justifica,
+pero no la habilité ni la probé; queda como decisión del usuario.
+
 ## Qué NO está implementado todavía (a propósito, ver la ficha)
 
 Nada por ahora — el último ítem señalado acá (el contador incremental de
@@ -1228,11 +1314,11 @@ ambos quedaron `no_realizado` en la base. `npm run typecheck` limpio,
   cuentas normales) si esto crece — para volumen más alto conviene
   pasar a un proveedor transaccional (Resend, SendGrid, etc.).
 - ~~Autoregistro de `personas` por código de acceso~~ — **resuelto
-  (2026-08-29)**, ver "Autoregistro de personas (Mobile)". Queda un
-  paso manual pendiente antes de que funcione de verdad: **habilitar
-  "Anonymous Sign-ins" en el dashboard de Supabase** (Authentication →
-  Providers) — está deshabilitado por defecto, y es lo que le da a
-  Mobile su JWT sin ninguna pantalla de login.
+  (2026-08-29)**, ver "Autoregistro de personas (Mobile)". El paso
+  manual pendiente (habilitar "Anonymous Sign-ins" en el dashboard de
+  Supabase) ya se hizo — y con eso habilitado se cerró primero el rate
+  limiting de los tres endpoints, ver "Precauciones al habilitar
+  Anonymous Sign-ins".
 - **Aprobar/rechazar un autoregistro** (`personas.estado:
   "pendiente_aprobacion" → "activo"/"rechazado"`) no tiene una pantalla
   ni un endpoint propio todavía — es una escritura directa de Frontend

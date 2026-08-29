@@ -9,12 +9,25 @@
 import type { Db } from "../lib/db.js";
 import { extraerBearerToken } from "../logic/confirmar.js";
 import { validarReclamarPersona, validarAutoregistro, validarCanjearCodigo, validarActualizarPushToken } from "../logic/personas.js";
+import { permitirIntento } from "../lib/rateLimit.js";
 
 type ResultadoBase =
   | { status: 400; body: { error: string } }
   | { status: 401; body: { error: string } }
   | { status: 404; body: { error: string } }
-  | { status: 409; body: { error: string } };
+  | { status: 409; body: { error: string } }
+  | { status: 429; body: { error: string } };
+
+// Ver README, "Precauciones al habilitar Anonymous Sign-ins" — además
+// del límite por IP (http.ts), `reclamar` tiene esto: un límite por
+// legajo+DNI puntual, para que alguien con muchas IPs distintas (o
+// muchas sesiones anónimas detrás de la misma IP) no pueda seguir
+// probando contra la MISMA identidad ajena. Es el endpoint de mayor
+// riesgo de los tres — adivinar legajo+DNI de una persona real
+// significaría empezar a recibir SUS alertas en vez de la persona
+// real, en un sistema donde eso importa de verdad.
+const LIMITE_INTENTOS_RECLAMO_POR_OBJETIVO = 10;
+const VENTANA_INTENTOS_RECLAMO_MS = 30 * 60_000;
 
 export type ResultadoReclamarPersona = ResultadoBase | { status: 200; body: { id: string; yaEstabaVinculada: boolean } };
 
@@ -46,6 +59,11 @@ export async function manejarReclamarPersona(
 
   const validacion = validarReclamarPersona(rawBody);
   if (!validacion.ok) return { status: 400, body: { error: validacion.error } };
+
+  const claveObjetivo = `reclamar:${validacion.payload.legajo}:${validacion.payload.dni}`;
+  if (!permitirIntento(claveObjetivo, LIMITE_INTENTOS_RECLAMO_POR_OBJETIVO, VENTANA_INTENTOS_RECLAMO_MS)) {
+    return { status: 429, body: { error: "demasiados intentos contra ese legajo/DNI — esperá un rato" } };
+  }
 
   const persona = await db.getPersonaPorLegajoYDni(validacion.payload.legajo, validacion.payload.dni);
   if (!persona) {

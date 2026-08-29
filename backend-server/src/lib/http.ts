@@ -12,6 +12,7 @@ import { manejarConfirmacion } from "../handlers/confirmaciones.js";
 import { manejarCumplimiento } from "../handlers/cumplimiento.js";
 import { manejarCrearOperador, manejarResetearPin } from "../handlers/operadores.js";
 import { manejarReclamarPersona, manejarAutoregistro, manejarCanjearCodigo, manejarActualizarPushToken } from "../handlers/personas.js";
+import { permitirIntento } from "./rateLimit.js";
 
 // De sobra para el body más grande que maneja este servidor (una
 // confirmación, con `notaAyuda` de texto libre incluido) — sin esto,
@@ -56,6 +57,27 @@ function responderJson(res: ServerResponse, status: number, body: unknown): void
 interface ResultadoHandler {
   status: number;
   body: unknown;
+}
+
+// Ver README, "Precauciones al habilitar Anonymous Sign-ins" —
+// `signInAnonymously()` le da a cualquiera un JWT válido gratis, sin
+// verificación de ningún tipo. Sin límite de intentos, los tres
+// endpoints de autoregistro quedaban con la única protección de
+// "adiviná legajo+DNI o el código" y listo. Por IP, sin proxy inverso
+// delante en este entorno — la dirección del socket es la real, el
+// cliente no la puede falsear. Si algún día hay un balanceador/proxy
+// delante, esto tiene que pasar a confiar en `X-Forwarded-For` SOLO
+// del proxy conocido, nunca en lo que mande el cliente directo.
+function obtenerIp(req: IncomingMessage): string {
+  return req.socket.remoteAddress ?? "desconocida";
+}
+
+/** `true` si hay cupo (y lo consume); si no, ya respondió 429 y el caller debe cortar ahí. */
+function limitarPorIp(req: IncomingMessage, res: ServerResponse, ruta: string, maxIntentos: number, ventanaMs: number): boolean {
+  const clave = `ip:${ruta}:${obtenerIp(req)}`;
+  if (permitirIntento(clave, maxIntentos, ventanaMs)) return true;
+  responderJson(res, 429, { error: "demasiados intentos — esperá un rato antes de volver a probar" });
+  return false;
 }
 
 /**
@@ -162,16 +184,24 @@ export function crearServidorHttp(db: Db, mqttClient: MqttClient): Server {
     }
 
     if (req.method === "POST" && url.pathname === "/personas/reclamar") {
+      // 20 intentos / 15 min por IP — generoso para tolerar varias
+      // personas reclamando desde la misma IP compartida (wifi del
+      // sitio, NAT corporativo) el día que arranca el autoregistro,
+      // pero corta un script insistiendo. Ver también el límite por
+      // legajo+DNI puntual dentro del handler.
+      if (!limitarPorIp(req, res, "personas-reclamar", 20, 15 * 60_000)) return;
       void manejarPostConBody(req, res, "POST /personas/reclamar", (body) => manejarReclamarPersona(db, auth, body));
       return;
     }
 
     if (req.method === "POST" && url.pathname === "/personas/autoregistro") {
+      if (!limitarPorIp(req, res, "personas-autoregistro", 10, 60 * 60_000)) return;
       void manejarPostConBody(req, res, "POST /personas/autoregistro", (body) => manejarAutoregistro(db, auth, body));
       return;
     }
 
     if (req.method === "POST" && url.pathname === "/personas/canjear-codigo") {
+      if (!limitarPorIp(req, res, "personas-canjear-codigo", 20, 15 * 60_000)) return;
       void manejarPostConBody(req, res, "POST /personas/canjear-codigo", (body) => manejarCanjearCodigo(db, auth, body));
       return;
     }
