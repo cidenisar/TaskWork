@@ -3,7 +3,12 @@
 // test/personas.test.ts). Los handlers (src/handlers/personas.ts)
 // deciden auth/padrón/persistencia; esto solo confirma la forma del dato.
 
-import type { PayloadReclamarPersonaHttp, PayloadAutoregistroHttp, PayloadCanjearCodigoHttp } from "../types.js";
+import type {
+  PayloadReclamarPersonaHttp,
+  PayloadAutoregistroHttp,
+  PayloadCanjearCodigoHttp,
+  PayloadActualizarPushTokenHttp,
+} from "../types.js";
 
 function esStringNoVacio(v: unknown): v is string {
   return typeof v === "string" && v.trim().length > 0;
@@ -62,4 +67,11 @@ export function validarCanjearCodigo(body: unknown): ResultadoValidacion<Payload
       dni: b.dni ? (b.dni as string).trim() : null,
     },
   };
+}
+
+export function validarActualizarPushToken(body: unknown): ResultadoValidacion<PayloadActualizarPushTokenHttp> {
+  if (typeof body !== "object" || body === null) return { ok: false, error: "body debe ser un objeto JSON" };
+  const b = body as Record<string, unknown>;
+  if (!esStringNoVacio(b.pushToken)) return { ok: false, error: "pushToken es obligatorio" };
+  return { ok: true, payload: { pushToken: (b.pushToken as string).trim() } };
 }

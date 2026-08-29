@@ -278,6 +278,10 @@ frontend → broker → backend está bien, independiente de ese bloqueo.
   `/autoregistro` y `/canjear-codigo`, ver esa sección más abajo. Sin
   email ni contraseña — la identidad del dispositivo es una sesión
   anónima de Supabase Auth que Mobile ya trae.
+- **Que Mobile pueda ver su propio estado y registrar su push token** —
+  política RLS `personas_self_read` (lectura directa contra Supabase,
+  sin backend de por medio) + `POST /personas/push-token`, ver esa
+  sección más abajo.
 
 ### Despacho real de push/SMS
 
@@ -1072,6 +1076,47 @@ evita la carrera de verdad, no solo en la teoría. Personas, códigos y
 cuentas de Auth de prueba borrados al terminar. `npm run typecheck`
 limpio, 96/96 tests (12 nuevos: validación pura de los tres bodies, ver
 `test/personas.test.ts`).
+
+### Que Mobile pueda ver su propio estado y registrar su push token (2026-08-29)
+
+Hallazgo al terminar el autoregistro: una `persona` no tenía **ningún**
+acceso de lectura por RLS. Las 17 políticas `org_isolation` dependen de
+`internal.auth_organizacion_id()`, que solo resuelve consultando
+`operadores` — para una sesión de Mobile (vinculada vía
+`personas.auth_user_id`, nunca aparece en `operadores`) esa función
+siempre da `null`, así que `organizacion_id = null` nunca es cierto
+para ninguna fila. Sin esto, Mobile no tenía forma de consultar directo
+contra Supabase si ya la aprobaron tras un autoregistro (`personas.estado`)
+— la única foto que tenía era la del momento exacto de la respuesta de
+`POST /personas/autoregistro`.
+
+**Política nueva, `personas_self_read`** (además de `org_isolation` —
+son permisivas, se combinan con OR): una persona puede leer **su
+propia fila, nada más** — ni la de nadie más, ni escribir nada (`FOR
+SELECT` únicamente). Un admin sigue viendo toda la organización como
+antes, vía `org_isolation`.
+
+Deliberadamente **no** se agregó una política de auto-escritura — una
+persona pudiendo tocar cualquier columna de su propia fila es un riesgo
+real: nada le impediría escribir `estado: "activo"` a mano y
+auto-aprobarse el autoregistro, o cambiarse el `dni`. Para lo único que
+Mobile necesita escribir (renovar su token de FCM cuando rota) hay un
+endpoint aparte, **`POST /personas/push-token`** — `{ pushToken }`,
+cualquier JWT válido con una persona vinculada, solo puede tocar
+`push_token`/`push_token_actualizado_at`, ninguna otra columna.
+
+Validado contra Supabase real, con clientes `anon` reales (no
+`service_role`) para probar la política de RLS tal cual la vería
+Mobile: una sesión lee su propia fila con su `estado` real; no puede
+leer la fila de otra persona (`null`); haciendo `select()` de toda la
+tabla ve exactamente una fila, la suya; un intento de `UPDATE` sobre la
+fila ajena afecta 0 filas. `POST /personas/push-token` actualiza
+`push_token` sin tocar ningún otro campo, `401` sin auth, `404` sin
+persona vinculada. Confirmado además que la política nueva no rompió
+nada existente: un admin real sigue viendo las dos personas de su
+organización vía `org_isolation`, sin cambios. Personas y cuentas de
+Auth de prueba borradas al terminar. `npm run typecheck` limpio, 98/98
+tests.
 
 ## Qué NO está implementado todavía (a propósito, ver la ficha)
 

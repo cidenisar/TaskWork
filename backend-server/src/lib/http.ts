@@ -11,7 +11,7 @@ import type { Db } from "./db.js";
 import { manejarConfirmacion } from "../handlers/confirmaciones.js";
 import { manejarCumplimiento } from "../handlers/cumplimiento.js";
 import { manejarCrearOperador, manejarResetearPin } from "../handlers/operadores.js";
-import { manejarReclamarPersona, manejarAutoregistro, manejarCanjearCodigo } from "../handlers/personas.js";
+import { manejarReclamarPersona, manejarAutoregistro, manejarCanjearCodigo, manejarActualizarPushToken } from "../handlers/personas.js";
 
 // De sobra para el body más grande que maneja este servidor (una
 // confirmación, con `notaAyuda` de texto libre incluido) — sin esto,
@@ -173,6 +173,11 @@ export function crearServidorHttp(db: Db, mqttClient: MqttClient): Server {
 
     if (req.method === "POST" && url.pathname === "/personas/canjear-codigo") {
       void manejarPostConBody(req, res, "POST /personas/canjear-codigo", (body) => manejarCanjearCodigo(db, auth, body));
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/personas/push-token") {
+      void manejarPostConBody(req, res, "POST /personas/push-token", (body) => manejarActualizarPushToken(db, auth, body));
       return;
     }
 

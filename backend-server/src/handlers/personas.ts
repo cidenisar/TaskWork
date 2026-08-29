@@ -8,7 +8,7 @@
 
 import type { Db } from "../lib/db.js";
 import { extraerBearerToken } from "../logic/confirmar.js";
-import { validarReclamarPersona, validarAutoregistro, validarCanjearCodigo } from "../logic/personas.js";
+import { validarReclamarPersona, validarAutoregistro, validarCanjearCodigo, validarActualizarPushToken } from "../logic/personas.js";
 
 type ResultadoBase =
   | { status: 400; body: { error: string } }
@@ -167,4 +167,24 @@ export async function manejarCanjearCodigo(
   await db.registrarUsoCodigo(codigoAcceso.id, id);
 
   return { status: 201, body: { id, estado: "activo", empresa: codigoAcceso.empresa, sitioId: codigoAcceso.sitioId, vencimiento: codigoAcceso.vencimiento } };
+}
+
+export type ResultadoActualizarPushToken = ResultadoBase | { status: 200; body: { ok: true } };
+
+export async function manejarActualizarPushToken(
+  db: Db,
+  authorizationHeader: string | undefined | null,
+  rawBody: unknown
+): Promise<ResultadoActualizarPushToken> {
+  const auth = await autenticarSesion(db, authorizationHeader);
+  if (!auth.ok) return { status: auth.status, body: { error: auth.error } };
+
+  const validacion = validarActualizarPushToken(rawBody);
+  if (!validacion.ok) return { status: 400, body: { error: validacion.error } };
+
+  const persona = await db.getPersonaPorAuthUserId(auth.authUserId);
+  if (!persona) return { status: 404, body: { error: "esta sesión no tiene ninguna persona vinculada" } };
+
+  await db.actualizarPushTokenPersona(persona.id, validacion.payload.pushToken);
+  return { status: 200, body: { ok: true } };
 }

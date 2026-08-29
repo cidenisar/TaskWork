@@ -752,4 +752,13 @@ export class Db {
     const { error } = await this.client.from("codigos_acceso_usos").insert({ codigo_id: codigoId, persona_id: personaId });
     if (error) throw error;
   }
+
+  /** Solo toca `push_token` — ver types.ts PayloadActualizarPushTokenHttp para por qué esto es un endpoint aparte y no una escritura directa contra Supabase. */
+  async actualizarPushTokenPersona(personaId: string, pushToken: string): Promise<void> {
+    const { error } = await this.client
+      .from("personas")
+      .update({ push_token: pushToken, push_token_actualizado_at: new Date().toISOString() })
+      .eq("id", personaId);
+    if (error) throw error;
+  }
 }

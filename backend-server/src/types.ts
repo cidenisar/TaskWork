@@ -358,3 +358,16 @@ export interface PayloadCanjearCodigoHttp {
   /** Solo se cruza contra el DNI del código si el código es de tipo "individual" y trae uno cargado. */
   dni: string | null;
 }
+
+/**
+ * Body de `POST /personas/push-token` — Mobile registra/renueva su
+ * token de FCM. Endpoint aparte (no una escritura directa contra
+ * Supabase, aunque ahora hay lectura propia vía RLS — ver migración
+ * `personas_self_read`) porque una fila de `personas` self-editable
+ * por su dueño es un riesgo si se permite tocar cualquier columna
+ * (alguien podría auto-aprobarse escribiendo `estado: "activo"` a
+ * mano) — este endpoint solo puede tocar `push_token`.
+ */
+export interface PayloadActualizarPushTokenHttp {
+  pushToken: string;
+}

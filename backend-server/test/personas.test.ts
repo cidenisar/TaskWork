@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { validarReclamarPersona, validarAutoregistro, validarCanjearCodigo } from "../src/logic/personas.js";
+import { validarReclamarPersona, validarAutoregistro, validarCanjearCodigo, validarActualizarPushToken } from "../src/logic/personas.js";
 
 // --- validarReclamarPersona ---
 
@@ -96,4 +96,18 @@ test("validarCanjearCodigo rechaza campos obligatorios faltantes", () => {
 
 test("validarCanjearCodigo rechaza dni que no sea string ni null", () => {
   assert.equal(validarCanjearCodigo(codigoValido({ dni: 30123456 })).ok, false);
+});
+
+// --- validarActualizarPushToken ---
+
+test("validarActualizarPushToken acepta un token no vacío", () => {
+  const r = validarActualizarPushToken({ pushToken: "fcm-token-xyz" });
+  assert.equal(r.ok, true);
+  if (r.ok) assert.equal(r.payload.pushToken, "fcm-token-xyz");
+});
+
+test("validarActualizarPushToken rechaza token faltante o vacío", () => {
+  assert.equal(validarActualizarPushToken({}).ok, false);
+  assert.equal(validarActualizarPushToken({ pushToken: "" }).ok, false);
+  assert.equal(validarActualizarPushToken({ pushToken: "   " }).ok, false);
 });
