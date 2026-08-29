@@ -26,6 +26,17 @@ diferido:
   que mover esto a Redis/Postgres.
 - **CAPTCHA de Supabase (hCaptcha/Turnstile)** para Anonymous Sign-ins —
   capa opcional de defensa en profundidad, no configurada.
+- **`personas.estado = 'vencido'` nunca se pone solo** (hallazgo
+  2026-08-29, construyendo Padrón de Personas en Frontend Web) — el
+  enum lo tiene, pensado para personal eventual pasado su vencimiento,
+  pero no hay ningún barrido periódico que lo aplique (a diferencia de
+  `simulacros_programados`, que sí tiene uno). Como el despacho de
+  alertas filtra por `estado === 'activo'`, una persona eventual con el
+  contrato vencido sigue recibiendo alertas reales indefinidamente
+  hasta que un admin la dé de baja a mano. Arreglo: un barrido
+  periódico nuevo en `backend-server` (mismo patrón que el de
+  simulacros vencidos), que marque `vencido` cuando
+  `vencimiento < hoy` para `tipo = 'eventual' AND estado = 'activo'`.
 
 ## 2. Gap real encontrado hoy: Mobile no puede leer casi nada por RLS
 
@@ -76,10 +87,20 @@ ahora); falta construir el resto del Frontend:
   invitar por email a un operador que ya existe (solo al crearlo).
 - ~~**Aprobar/rechazar autoregistro**~~ — **hecho (2026-08-29)**,
   `/personas/pendientes`, ver `frontend-web/README.md`. Validado contra
-  backend-server y Supabase reales. Nota: solo la pestaña "Pendientes"
-  del wireframe "Administración de Padrón de Personas" — Padrón/
-  Importar/Códigos de acceso (las otras 3 pestañas de esa pantalla)
-  siguen sin construir.
+  backend-server y Supabase reales.
+- ~~**Padrón (alta manual) e Importar (CSV)**~~ — **hecho
+  (2026-08-29)**, `/personas/padron` y `/personas/importar`, ver
+  `frontend-web/README.md`. Con esto "Administración de Padrón de
+  Personas" queda completa (4/4 pestañas). Import es CSV real (no
+  .xlsx), parseado y diffeado de verdad contra Supabase — no una
+  simulación como el wireframe. Validado con 14 chequeos de lógica pura
+  (parseo/diff, sin red) + 10 chequeos reales contra Supabase (alta,
+  DNI duplicado, edición, baja/reactivación, aislamiento de
+  organización). De paso, encontrado y corregido un hallazgo real de
+  colisión CSS (`.status-pill.vencido` con significados opuestos en dos
+  pantallas — ver `frontend-web/README.md`), y encontrado (sin
+  corregir, es trabajo de backend) el gap de `personas.estado =
+  'vencido'` documentado arriba en la sección 1.
 - ~~**Historial / cumplimiento de simulacros**~~ — **hecho
   (2026-08-29)**, `/simulacros/historial`, ver `frontend-web/README.md`.
   Armada como matriz de cumplimiento (sitio × tipo), no un log fila por
@@ -110,10 +131,10 @@ ahora); falta construir el resto del Frontend:
   en el bundle global — ver nota en `frontend-web/README.md` sobre la
   deuda restante (`.field` sigue duplicado con reglas distintas entre
   Login y Accountability).
-- **Gestión de sitios / consolas / PROG1-4 / Padrón (alta manual,
-  importar)** — hoy todo por SQL directo, sin ninguna pantalla — ni
-  falta ni sobra backend, es 100% trabajo de Frontend + escritura
-  directa a Supabase (org_isolation ya lo permite para un admin).
+- **Gestión de sitios / consolas / PROG1-4** — hoy todo por SQL
+  directo, sin ninguna pantalla — ni falta ni sobra backend, es 100%
+  trabajo de Frontend + escritura directa a Supabase (org_isolation ya
+  lo permite para un admin).
 - ~~**Alta y revocación de códigos de acceso**~~ — **hecho
   (2026-08-29)**, `/personas/codigos`, ver `frontend-web/README.md`.
   Reevaluación: resultó no necesitar backend nuevo — generar/revocar no
@@ -155,22 +176,22 @@ RLS del punto 2 (elegir punto de encuentro, ver historial propio).
 ## Próximo paso sugerido
 
 - **Seguir con Frontend Web, pantalla por pantalla.** Con login +
-  selector de sitio + Operadores + Pendientes + Accountability en vivo +
-  Panorama + Historial + Códigos de acceso + Puntos de encuentro ya
-  reales, lo que queda es: **Padrón** (alta manual + import CSV/Excel,
-  las otras dos pestañas de "Administración de Padrón de Personas"),
+  selector de sitio + Operadores + Padrón de Personas completo (Padrón +
+  Pendientes + Importar + Códigos de acceso) + Accountability en vivo +
+  Panorama + Historial + Puntos de encuentro ya reales, lo que queda es:
   **Consolas** y **Sitios** (administración, no la vista en vivo — todo
   escritura directa, sin backend nuevo que armar), y el **Programador de
   Simulacros** (alta/edición/cancelación — Historial, la mitad de
-  lectura, ya está). Nota: el gap de RLS del punto 2 es específico de
-  **Mobile** (una sesión de `persona`, no de admin) — no bloqueó ninguna
-  pantalla de Frontend Web construida hasta ahora, `org_isolation` ya le
-  da a un admin lectura completa; sigue pendiente solo para cuando se
-  arranque Mobile de verdad. También queda pendiente la deuda de
-  colisiones CSS globales notada en `frontend-web/README.md`
-  (`.field` duplicado entre Login y Accountability con reglas
-  distintas) — conviene resolverla la próxima vez que se toque una de
-  esas dos pantallas.
+  lectura, ya está). Notas pendientes, ninguna bloquea lo anterior:
+  - El gap de RLS del punto 2 es específico de **Mobile** (una sesión de
+    `persona`, no de admin) — sigue pendiente solo para cuando se
+    arranque Mobile de verdad.
+  - El gap de `personas.estado = 'vencido'` (sección 1, arriba) es
+    trabajo de `backend-server` (un barrido periódico nuevo).
+  - La deuda de colisiones CSS globales notada en
+    `frontend-web/README.md` (`.field` duplicado entre Login y
+    Accountability con reglas distintas) — conviene resolverla la
+    próxima vez que se toque una de esas dos pantallas.
 - Si se prioriza field-testing (avanzar consola física en preparación
   para probarla) en cambio, confirmar con el cliente los valores
   marcados como "no confirmados" arriba (pinout, timings, duración de

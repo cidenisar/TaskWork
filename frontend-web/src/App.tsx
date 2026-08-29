@@ -4,7 +4,9 @@ import { ProtectedRoute } from "./components/ProtectedRoute";
 import { Login } from "./routes/Login";
 import { SelectorSitio } from "./routes/SelectorSitio";
 import { Operadores } from "./routes/Operadores";
+import { Padron } from "./routes/Padron";
 import { Pendientes } from "./routes/Pendientes";
+import { Importar } from "./routes/Importar";
 import { Historial } from "./routes/Historial";
 import { Codigos } from "./routes/Codigos";
 import { Accountability } from "./routes/Accountability";
@@ -34,10 +36,26 @@ export function App() {
             }
           />
           <Route
+            path="/personas/padron"
+            element={
+              <ProtectedRoute>
+                <Padron />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/personas/pendientes"
             element={
               <ProtectedRoute>
                 <Pendientes />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/personas/importar"
+            element={
+              <ProtectedRoute>
+                <Importar />
               </ProtectedRoute>
             }
           />

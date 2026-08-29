@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { NavLink } from "react-router-dom";
+import { NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "../lib/auth";
 import "./Topbar.css";
 
@@ -13,6 +13,7 @@ function iniciales(nombre: string): string {
 
 export function Topbar({ titulo, extra }: { titulo: string; extra?: ReactNode }) {
   const { operador, cerrarSesion } = useAuth();
+  const location = useLocation();
   if (!operador) return null;
 
   const alcanceTxt = operador.alcanceTipo === "organizacion" ? "toda la organización" : "sitio asignado";
@@ -35,17 +36,14 @@ export function Topbar({ titulo, extra }: { titulo: string; extra?: ReactNode })
         <NavLink to="/operadores" className={({ isActive }) => (isActive ? "on" : "")}>
           Operadores
         </NavLink>
-        <NavLink to="/personas/pendientes" className={({ isActive }) => (isActive ? "on" : "")}>
-          Pendientes
+        <NavLink to="/personas/padron" className={location.pathname.startsWith("/personas") ? "on" : ""}>
+          Personas
         </NavLink>
         <NavLink to="/simulacros/historial" className={({ isActive }) => (isActive ? "on" : "")}>
           Simulacros
         </NavLink>
         <NavLink to="/puntos-encuentro" className={({ isActive }) => (isActive ? "on" : "")}>
           Puntos
-        </NavLink>
-        <NavLink to="/personas/codigos" className={({ isActive }) => (isActive ? "on" : "")}>
-          Códigos
         </NavLink>
       </nav>
       {extra}

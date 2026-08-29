@@ -1,6 +1,9 @@
 /* Ver Cowork "Administración de Padrón de Personas", pestaña
    "Pendientes de aprobación". Primitivas compartidas (botones, toast,
-   .intro, .empty) viven en styles/tokens.css. */
+   .intro, .empty, .p-id/.p-av/.p-name/.p-sub/.site-chip-sm) viven en
+   styles/tokens.css — el color del avatar (pending) se pone inline en
+   Pendientes.tsx, no acá, porque `.p-av` es compartido con Padrón (que
+   usa el color info por default). */
 
 main {
   flex: 1;
@@ -22,39 +25,6 @@ main {
   align-items: center;
   gap: 1rem;
   flex-wrap: wrap;
-}
-.p-id {
-  display: flex;
-  align-items: center;
-  gap: 0.7rem;
-  flex: 1 1 220px;
-  min-width: 0;
-}
-.p-av {
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
-  background: var(--pending-bg);
-  color: var(--pending);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 700;
-  font-size: 0.72rem;
-  flex: none;
-}
-.p-name {
-  font-size: 0.9rem;
-  font-weight: 700;
-}
-.p-sub {
-  font-size: 0.72rem;
-  color: var(--text-faint);
-}
-.site-chip-sm {
-  flex: 1 1 170px;
-  font-size: 0.72rem;
-  color: var(--text-dim);
 }
 .pend-when {
   font-size: 0.68rem;

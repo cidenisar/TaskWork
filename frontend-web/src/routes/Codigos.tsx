@@ -13,6 +13,7 @@ import { useToast } from "../lib/useToast";
 import { Topbar } from "../components/Topbar";
 import { Toast } from "../components/Toast";
 import { Drawer } from "../components/Drawer";
+import { PersonasTabs } from "../components/PersonasTabs";
 import "./Codigos.css";
 
 interface FormularioDrawer {
@@ -133,8 +134,9 @@ export function Codigos() {
 
   return (
     <div className="app">
-      <Topbar titulo="Códigos de acceso" />
+      <Topbar titulo="Padrón de Personas" />
       <main>
+        <PersonasTabs count={filas?.length} />
         <div className="intro">
           <div className="eyebrow">Administración · autoregistro de personal eventual</div>
           <p>

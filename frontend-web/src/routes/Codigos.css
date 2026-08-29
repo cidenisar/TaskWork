@@ -62,15 +62,7 @@ main {
 .code-use b {
   color: var(--text);
 }
-.tipo-pill {
-  flex: none;
-  font-size: 0.64rem;
-  font-weight: 700;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-  padding: 0.22rem 0.55rem;
-  border-radius: 999px;
-}
+/* .tipo-pill base vive en styles/tokens.css (compartida con Padrón). */
 .tipo-pill.individual {
   color: var(--info);
   background: var(--info-bg);
@@ -84,7 +76,16 @@ main {
   color: var(--ok);
   background: var(--ok-bg);
 }
-.status-pill.vencido,
+/* Ojo: `.status-pill.vencido` acá va SCOPEADO a `.code-row` a propósito
+   — sin el scope, esta regla (gris/apagado) chocaba globalmente con la
+   de Historial.css (rojo/alerta, cumplimiento de simulacros): mismo
+   nombre de clase, dos significados opuestos. Como el CSS es global (no
+   hay CSS Modules), y Codigos.css se importa después que Historial.css
+   en el bundle, la de acá terminaba ganando SIEMPRE — el "vencido" de
+   Historial se veía gris en vez de rojo. Hallazgo real, corregido acá
+   (ver Padrón de Personas, que reutiliza el `.vencido` de Historial
+   sin problema ahora que está desambiguado). */
+.code-row .status-pill.vencido,
 .status-pill.agotado,
 .status-pill.revocado {
   color: var(--text-faint);

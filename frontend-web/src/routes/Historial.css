@@ -21,16 +21,6 @@ main {
 .toolbar .tb-count {
   margin-right: auto;
 }
-.fselect {
-  background: var(--surface-2);
-  border: 1px solid var(--border-strong);
-  border-radius: 8px;
-  padding: 0.4rem 0.6rem;
-  font-size: 0.8rem;
-  color: var(--text);
-  font-family: inherit;
-}
-
 .table-panel {
   background: var(--surface);
   border: 1px solid var(--border);

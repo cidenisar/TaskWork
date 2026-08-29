@@ -376,6 +376,26 @@ input:focus-visible {
   display: flex;
   align-items: center;
   gap: 0.6rem;
+  flex-wrap: wrap;
+}
+.search {
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  padding: 0.45rem 0.7rem;
+  font-size: 0.8rem;
+  color: var(--text);
+  font-family: inherit;
+  width: 220px;
+}
+.fselect {
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  padding: 0.4rem 0.6rem;
+  font-size: 0.8rem;
+  color: var(--text);
+  font-family: inherit;
 }
 
 /* ---------- intro + empty-state, repetidos en toda pantalla de administración ---------- */
@@ -497,6 +517,111 @@ input:focus-visible {
   border-radius: 50%;
   background: currentColor;
 }
+/* variantes activo/inactivo genéricas — Operadores, Padrón de Personas.
+   Cuidado si se agrega un `.status-pill.vencido` nuevo: ya hay uno en
+   Historial.css (rojo/alerta, cumplimiento de simulacros) — no
+   redeclarar sin querer con otro significado, como pasó con el de
+   Códigos de acceso (ver nota ahí). */
+.status-pill.active {
+  color: var(--ok);
+  background: var(--ok-bg);
+}
+.status-pill.inactive {
+  color: var(--text-faint);
+  background: var(--surface-2);
+}
+
+/* avatar circular con iniciales + nombre/subtítulo — Pendientes, Padrón
+   de Personas. Sin color propio a propósito: cada pantalla define el
+   suyo (Pendientes lo pone en pending vía estilo inline, igual que
+   hacía el wireframe) para poder compartir el layout sin heredar sin
+   querer el color de la otra pantalla. */
+.p-id {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  flex: 1 1 220px;
+  min-width: 0;
+}
+.p-av {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.72rem;
+  flex: none;
+  background: var(--info-bg);
+  color: var(--info);
+}
+.p-name {
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+.p-sub {
+  font-size: 0.72rem;
+  color: var(--text-faint);
+}
+.site-chip-sm {
+  flex: 1 1 170px;
+  font-size: 0.72rem;
+  color: var(--text-dim);
+}
+
+/* pill de tipo — Códigos de acceso (.individual/.lote), Padrón de
+   Personas (.fijo/.eventual) — mismo tamaño, cada pantalla define sus
+   propios colores de variante con nombres que no chocan entre sí. */
+.tipo-pill {
+  flex: none;
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  padding: 0.22rem 0.55rem;
+  border-radius: 999px;
+}
+
+/* tira de pestañas — las 4 pantallas de "Administración de Padrón de
+   Personas" (Padrón, Pendientes, Importar, Códigos de acceso) */
+.tabs {
+  display: flex;
+  gap: 0.35rem;
+  border-bottom: 1px solid var(--border);
+}
+.tab-btn {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-faint);
+  font-size: 0.84rem;
+  font-weight: 600;
+  padding: 0.7rem 0.9rem;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+.tab-btn:hover {
+  color: var(--text);
+}
+.tab-btn.on {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+.tab-count {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.68rem;
+  background: var(--surface-3);
+  color: var(--text-dim);
+  border-radius: 999px;
+  padding: 0.05rem 0.4rem;
+}
+.tab-btn.on .tab-count {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
 @keyframes pulse-op {
   0%,
   100% {
@@ -663,6 +788,16 @@ input:focus-visible {
 .dfield .err {
   font-size: 0.72rem;
   color: var(--help);
+}
+
+/* aclaración chica de fondo apagado, dentro de un drawer o una lista —
+   Padrón de Personas, Importar */
+.import-note {
+  font-size: 0.76rem;
+  color: var(--text-faint);
+  background: var(--surface-2);
+  border-radius: 8px;
+  padding: 0.6rem 0.8rem;
 }
 
 .toast {

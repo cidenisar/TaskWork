@@ -11,6 +11,7 @@ import { tiempoRelativo } from "../lib/tiempoRelativo";
 import { useToast } from "../lib/useToast";
 import { Topbar } from "../components/Topbar";
 import { Toast } from "../components/Toast";
+import { PersonasTabs } from "../components/PersonasTabs";
 import "./Pendientes.css";
 
 function iniciales(nombre: string): string {
@@ -90,8 +91,9 @@ export function Pendientes() {
 
   return (
     <div className="app">
-      <Topbar titulo="Pendientes de aprobación" />
+      <Topbar titulo="Padrón de Personas" />
       <main>
+        <PersonasTabs count={filas?.length} />
         <div className="intro">
           <div className="eyebrow">Administración · autoregistro de personal</div>
           <p>
@@ -111,7 +113,9 @@ export function Pendientes() {
             {filas.map((p) => (
               <div className="pend-row" key={p.id}>
                 <div className="p-id">
-                  <div className="p-av">{iniciales(p.nombre)}</div>
+                  <div className="p-av" style={{ background: "var(--pending-bg)", color: "var(--pending)" }}>
+                    {iniciales(p.nombre)}
+                  </div>
                   <div>
                     <div className="p-name">{p.nombre}</div>
                     <div className="p-sub">

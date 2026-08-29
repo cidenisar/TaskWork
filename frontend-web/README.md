@@ -437,6 +437,118 @@ ayuda/rojo) — incluso siendo la primera reutilización, nombres iguales
 con reglas distintas es exactamente el problema de arriba, así que
 esta vez el nombre nuevo fue a propósito, no un descuido.
 
+## Padrón de Personas: pestañas "Padrón" e "Importar" (2026-08-29)
+
+`/personas/padron` y `/personas/importar` — las dos pestañas que
+faltaban de "Administración de Padrón de Personas" (las otras dos,
+Pendientes y Códigos de acceso, ya estaban). Con esto la pantalla del
+wireframe queda completa. Cambio de estructura: las 4 pestañas ahora
+comparten una tira `<PersonasTabs>` (nuevo componente) debajo del
+`<Topbar>` — antes cada una tenía su propio título de página suelto sin
+ninguna señal visual de que son parte de la misma sección. Desvío
+deliberado del wireframe: ahí las 4 pestañas viven en una sola pantalla
+con estado en memoria (SPA de una sola página); acá siguen siendo 4
+rutas separadas (mismo patrón que el resto de Frontend Web) con la tira
+de pestañas como nexo visual — y por eso solo se muestra el contador en
+la pestaña **activa**, no en las 4 a la vez: mostrarlo en las otras 3
+pediría cargar sus datos de antemano solo para un número. La nav
+principal del `<Topbar>` también se simplificó: "Pendientes" y
+"Códigos" (que apuntaban cada una a su propia ruta) se unificaron en un
+solo link "Personas" → `/personas/padron`, resaltado en cualquiera de
+las 4 subrutas.
+
+**Padrón** (`Padron.tsx`/`lib/personas.ts`): lista con
+búsqueda/filtros (tipo, estado), alta manual, editar, dar de
+baja/reactivar — mismo patrón que Operadores, todo escritura directa
+(`org_isolation` ya se lo permite a un admin, sin filtrar por sitio —
+consistente con Pendientes/Códigos, que son pestañas de la misma
+pantalla). Solo personal **fijo**: el eventual/contratista entra por
+código de acceso, nunca desde acá. El DNI es la clave real de identidad
+— hay un índice único `(organizacion_id, dni)` en la base (confirmado
+contra el esquema real), así que dos personas nunca pueden compartir
+DNI en la misma organización sin importar el tipo; el alta/edición
+atrapa el `23505` de Postgres y lo muestra como un mensaje claro en vez
+de un error crudo.
+
+**Importar** (`Importar.tsx`/`lib/importarPadron.ts`): desvío
+deliberado grande del wireframe, documentado en detalle en el propio
+archivo. Ahí "importar" es un botón que simula subir un archivo fijo
+(`padron_agosto.xlsx`) con datos inventados; acá se sube un **CSV real**
+(no el binario de Excel — se rechaza un .xlsx/.xls con un mensaje
+pidiendo exportarlo como CSV primero) que se parsea y se diffea de
+verdad contra el padrón real: parser CSV propio (RFC 4180 simplificado,
+delimitador coma o punto y coma, campos con o sin comillas — sin sumar
+una librería nueva solo para esto), upsert por DNI. El diff separa 5
+casos: **altas** (DNI nuevo), **cambios** (teléfono/legajo/sitio/nombre
+distintos), **posibles bajas** (fijo activo que no aparece en el
+archivo), **conflictos** (el DNI ya pertenece a alguien no-fijo — el
+import no lo puede "convertir" a fijo sin que un admin lo decida a
+propósito) y **errores de sitio** (el nombre de sitio del archivo no
+coincide con ninguno real). "Confirmar import" aplica altas y cambios
+fila por fila (no en una sola transacción, para que un problema puntual
+en una fila no tire abajo el resto); las posibles bajas **nunca se
+aplican solas** — quedan en la misma pantalla de resultado, cada una
+con su propio botón de "Dar de baja", hasta que un admin resuelve cada
+una a mano (desvío del wireframe: prometía que reaparecerían en la
+pestaña Padrón para revisar más tarde, pero no hay ningún campo en el
+esquema para persistir "no apareció en el último import" — prometer
+esa persistencia hubiera sido deshonesto, así que quedan resueltas ahí
+mismo en el momento en lugar de diferidas).
+
+**Hallazgo real, de paso**: revisando el esquema para diseñar esto
+encontré que `personas.estado` tiene un valor `'vencido'` en el enum,
+pensado para personal eventual pasado su fecha de vencimiento — pero
+**nada en `backend-server` lo pone nunca en `'vencido'` automáticamente**
+(a diferencia de `codigos_acceso`, que si vence lo refleja al leerlo, y
+de `simulacros_programados`, que tiene un barrido periódico real). Y la
+lógica de despacho de alertas (`logic/eventos.ts`) filtra estrictamente
+por `estado === 'activo'` — así que hoy, una persona eventual cuyo
+contrato venció sigue recibiendo alertas reales indefinidamente si
+nadie la da de baja a mano. No lo arreglé acá (es trabajo de
+`backend-server`: un barrido periódico nuevo, mismo patrón que el de
+simulacros vencidos) — lo dejo anotado en `../ROADMAP.md`. La pantalla
+de Padrón igual puede mostrar y filtrar por `vencido` si algún día algo
+lo pone en ese estado (reutiliza el `.status-pill.vencido` ya existente
+de Historial, ver más abajo).
+
+**Otro hallazgo, de una colisión de CSS YA EXISTENTE** (no introducida
+acá, pero encontrada al ir a reusar `.status-pill.vencido` para esta
+pantalla): `.status-pill.vencido` estaba declarado dos veces con
+significados **opuestos** — en `Codigos.css` como gris/apagado (un
+código vencido/agotado/revocado, mismo tratamiento que "inactivo") y en
+`Historial.css` como rojo/alerta (un simulacro vencido, requiere
+atención). Como el CSS es global y `Codigos.css` se importa después que
+`Historial.css` en el bundle, la regla gris ganaba siempre — el
+"Vencido" de Historial se veía gris en vez de rojo, sin que nadie lo
+hubiera notado. Corregido escopeando la de Códigos a `.code-row
+.status-pill.vencido` (mayor especificidad, sin tocar el JSX). De paso
+se hoistearon a `styles/tokens.css`: `.status-pill.active`/`.inactive`
+(Operadores + Padrón), `.p-id`/`.p-av`/`.p-name`/`.p-sub`/
+`.site-chip-sm` (Pendientes + Padrón — `.p-av` sin color propio a
+propósito, cada pantalla define el suyo), `.tipo-pill` base (Códigos +
+Padrón), `.search`/`.fselect` (Operadores/Historial + Padrón),
+`.import-note` (nuevo, Padrón + Importar), y la tira `.tabs`/`.tab-btn`/
+`.tab-count` (las 4 pestañas).
+
+Validado contra Supabase real (no mocks), en dos partes:
+- **Lógica pura de parseo/diff** (`lib/importarPadron.ts`, sin ningún
+  import de Supabase a propósito — se puede probar sin red ni
+  credenciales): parseo con delimitador coma/punto y coma, comillas con
+  delimitador embebido, encabezado incompleto, filas con datos
+  faltantes, y los 5 casos del diff (alta/cambio/posible
+  baja/conflicto/error de sitio) — 14 chequeos contra el módulo real,
+  todos pasaron.
+- **Escritura real contra Supabase** (RLS): alta manual, DNI duplicado
+  en la misma organización → `23505` real, editar, dar de baja/
+  reactivar, alta con `origen: 'import'`, `listarPadron` incluye
+  activo/de_baja pero **excluye** `pendiente_aprobacion` (confirmando
+  que la separación entre pestañas Padrón/Pendientes es real, no solo
+  visual), y aislamiento de organización (no se puede leer ni escribir
+  una persona en el sitio de otra organización) — 10 chequeos, todos
+  pasaron. Datos de prueba borrados al terminar.
+
+`npm run typecheck`/`build` limpios.
+
 ## Cómo correr esto
 
 ```
@@ -447,13 +559,12 @@ npm run dev
 
 ## Qué falta (a propósito, ver `../ROADMAP.md`)
 
-Con login + selector de sitio + Operadores + Pendientes +
-Accountability en vivo + Panorama + Historial + Códigos de acceso +
-Puntos de encuentro, van 8 pantallas reales (Pendientes y Códigos son
-dos de las cuatro pestañas de "Administración de Padrón de Personas" —
-faltan Padrón e Importar; Historial es solo la mitad de "Programador de
-Simulacros" — falta el programador en sí) — el resto (Padrón/Importar,
-Consolas administrables, Sitios, y el Programador de simulacros) queda
-para las próximas sesiones, una por una. `backend-server` ya tiene
-listo lo que varias de ellas necesitan (ver `../ROADMAP.md`, sección
-3).
+Con login + selector de sitio + Operadores + Padrón de Personas
+(Padrón + Pendientes + Importar + Códigos de acceso, las 4 pestañas
+completas) + Accountability en vivo + Panorama + Historial + Puntos de
+encuentro, la pantalla de "Administración de Padrón de Personas" queda
+100% construida y las demás pantallas base también (Historial es solo
+la mitad de "Programador de Simulacros" — falta el programador en sí).
+Queda: Consolas administrables, Sitios, y el Programador de Simulacros
+(alta/edición/cancelación). `backend-server` ya tiene listo lo que
+varias de ellas necesitan (ver `../ROADMAP.md`, sección 3).
