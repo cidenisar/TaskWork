@@ -53,13 +53,19 @@ Dos formas de cerrarlo (a decidir cuando se arranque Mobile de verdad):
   `GET /personas/:id/confirmaciones`) — más control, pero un ida y
   vuelta más contra el backend en vez de ir directo a Supabase.
 
-## 3. Frontend Web — no existe código todavía
+## 3. Frontend Web — arrancado (2026-08-29)
 
-El backend ya soporta estas pantallas (según los wireframes de Cowork
-leídos hasta ahora); falta construir el Frontend en sí:
+Nuevo componente `frontend-web/` (Vite + React + TS, CSS plano portado
+de los wireframes de Cowork — ver `frontend-web/README.md`). El backend
+ya soporta estas pantallas (según los wireframes de Cowork leídos hasta
+ahora); falta construir el resto del Frontend:
 
-- **Login + selector de sitio** — email/contraseña, Supabase Auth, listo
-  del lado backend (SMTP propio configurado y probado).
+- ~~**Login + selector de sitio**~~ — **hecho (2026-08-29)**, contra
+  Supabase real (Auth + resolución de operador + alcance de sitios).
+  `npm run typecheck`/`build` limpios; falta la prueba con un browser
+  real de punta a punta (sin headless disponible en este entorno).
+- **Panorama de Sitios** y **Accountability en vivo** — stubs por ahora
+  (`Placeholder.tsx`), el selector de sitio ya navega hasta ahí.
 - **Administración de operadores** — alta (`POST /operadores`), reset de
   PIN (`POST /operadores/:id/resetear-pin`), baja (escritura directa
   contra Supabase, `org_isolation` ya lo permite).
@@ -113,15 +119,17 @@ RLS del punto 2 (elegir punto de encuentro, ver historial propio).
 
 ## Próximo paso sugerido
 
-Dos caminos razonables para la próxima sesión, no mutuamente excluyentes:
-
-1. **Cerrar el gap de RLS del punto 2** antes de arrancar Mobile — es
-   chico y evita descubrirlo a mitad de construir la app.
-   Alternativamente, si se puede tener acceso completo a los wireframes
-   de Cowork (**Frontend Web**, **Mobile**), avanzar directo con el
-   armado de esas dos interfaces, ya con el backend que las soporta
-   casi completo.
-2. Si se prioriza field-testing (avanzar consola física en preparación
-   para probarla), confirmar con el cliente los valores marcados como
-   "no confirmados" arriba (pinout, timings, duración de cuenta
-   regresiva) antes de tocar hardware real.
+- **Seguir con Frontend Web, pantalla por pantalla.** Con el login y el
+  selector de sitio ya reales, la siguiente con más sentido es
+  **Administración de Operadores** — el backend ya está 100% listo
+  (`POST /operadores`, `/resetear-pin`) y el wireframe de Cowork
+  correspondiente ya está identificado (artifact "Administración de
+  Operadores"). **Aprobar/rechazar autoregistro** es la otra candidata
+  obvia por el mismo motivo (backend ya listo, sin pantalla).
+- Antes de llegar a **Accountability en vivo** (la pantalla real detrás
+  de `/sitio/:id`), conviene cerrar el gap de RLS del punto 2 — sin eso
+  ni esa pantalla ni Mobile pueden leer puntos de encuentro/eventos.
+- Si se prioriza field-testing (avanzar consola física en preparación
+  para probarla) en cambio, confirmar con el cliente los valores
+  marcados como "no confirmados" arriba (pinout, timings, duración de
+  cuenta regresiva) antes de tocar hardware real.
