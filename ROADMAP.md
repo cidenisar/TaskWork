@@ -80,7 +80,15 @@ ahora); falta construir el resto del Frontend:
   del wireframe "Administración de Padrón de Personas" — Padrón/
   Importar/Códigos de acceso (las otras 3 pestañas de esa pantalla)
   siguen sin construir.
-- **Historial / cumplimiento de simulacros** — `GET /simulacros/cumplimiento`.
+- ~~**Historial / cumplimiento de simulacros**~~ — **hecho
+  (2026-08-29)**, `/simulacros/historial`, ver `frontend-web/README.md`.
+  Armada como matriz de cumplimiento (sitio × tipo), no un log fila por
+  fila — es lo que el endpoint real devuelve. De paso encontré y
+  arreglé un hallazgo de seguridad real: `GET /simulacros/cumplimiento`
+  sin `sitioId` filtraba el historial de simulacros de TODAS las
+  organizaciones, no solo la del admin que llamaba — ver
+  `backend-server/README.md`, "Hallazgo de seguridad". El programador
+  de simulacros en sí (alta/edición/cancelación) sigue sin pantalla.
 - ~~**Accountability en vivo durante un evento**~~ — **hecho
   (2026-08-29)**, `/sitio/:id`, ver `frontend-web/README.md`. Validado
   contra Supabase real, incluido confirmar que el trigger de Postgres
@@ -138,11 +146,10 @@ RLS del punto 2 (elegir punto de encuentro, ver historial propio).
 
 - **Seguir con Frontend Web, pantalla por pantalla.** Con login +
   selector de sitio + Operadores + Pendientes + Accountability en vivo +
-  Panorama ya reales, las siguientes candidatas con backend ya listo son
-  **Historial / cumplimiento de simulacros** (`GET /simulacros/cumplimiento`,
-  sin ninguna escritura nueva que armar) y **Alta y revocación de
-  códigos de acceso** (hay un gap de backend real que cerrar primero,
-  ver arriba). Nota: el gap de RLS del punto 2 es específico de
+  Panorama + Historial ya reales, la siguiente candidata obvia es
+  **Alta y revocación de códigos de acceso** — hay un gap de backend
+  real que cerrar primero (ver arriba, sección 3). Nota: el gap de RLS
+  del punto 2 es específico de
   **Mobile** (una sesión de `persona`, no de admin) — no bloqueó
   Accountability en vivo ni Panorama, `org_isolation` ya le da a un
   admin lectura completa; sigue pendiente solo para cuando se arranque

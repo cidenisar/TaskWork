@@ -1,0 +1,86 @@
+/* Historial de cumplimiento de simulacros — ver Cowork "Programador de
+   Simulacros" (sección "Historial de cumplimiento"; acá se rearmó como
+   matriz (sitio × tipo de evento) para calzar con la forma real que
+   devuelve GET /simulacros/cumplimiento — ver lib/simulacros.ts). Chips
+   de filtro y status-pill base viven en styles/tokens.css. */
+
+main {
+  flex: 1;
+  padding: 1.4rem 1.5rem 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.2rem;
+  max-width: 1080px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+.toolbar .tb-count {
+  font-size: 0.8rem;
+  color: var(--text-dim);
+  margin-right: auto;
+}
+.toolbar .tb-count b {
+  color: var(--text);
+}
+.fselect {
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  padding: 0.4rem 0.6rem;
+  font-size: 0.8rem;
+  color: var(--text);
+  font-family: inherit;
+}
+
+.table-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.84rem;
+}
+thead th {
+  text-align: left;
+  font-size: 0.66rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+  font-weight: 600;
+  padding: 0.6rem 0.9rem;
+  border-bottom: 1px solid var(--border);
+}
+tbody td {
+  padding: 0.6rem 0.9rem;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+tbody tr:last-child td {
+  border-bottom: none;
+}
+.t-nombre {
+  font-weight: 600;
+}
+.t-sub {
+  font-size: 0.72rem;
+  color: var(--text-faint);
+}
+
+.status-pill.aldia {
+  color: var(--ok);
+  background: var(--ok-bg);
+}
+.status-pill.vencido {
+  color: var(--help);
+  background: var(--help-bg);
+}

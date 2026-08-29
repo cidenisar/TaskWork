@@ -406,6 +406,26 @@ input:focus-visible {
   }
 }
 
+/* chips de filtro — Accountability en vivo, Historial de cumplimiento */
+.chip-group {
+  display: flex;
+  gap: 0.35rem;
+}
+.chip {
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2);
+  color: var(--text-dim);
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.32rem 0.65rem;
+  border-radius: 999px;
+}
+.chip.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+
 .scrim {
   position: fixed;
   inset: 0;

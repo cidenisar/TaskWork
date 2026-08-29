@@ -259,6 +259,46 @@ muestran ningún evento fantasma, y que cada sitio trae sus consolas
 reales. Datos de prueba borrados al terminar. `npm run typecheck`/
 `build` limpios.
 
+## Historial de simulacros (2026-08-29)
+
+Ver Cowork "Programador de Simulacros" (sección "Historial de
+cumplimiento") y `backend-server/README.md` ("Vista de cumplimiento").
+Ruta `/simulacros/historial`. A diferencia de las pantallas anteriores,
+pasa por **backend-server** (`GET /simulacros/cumplimiento`), no
+lectura directa — la granularidad real (por `(sitio, tipo de evento)`,
+no un log de cada ocurrencia pasada) ya la calcula
+`logic/cumplimiento.ts` del backend; replicarla en el cliente sería
+duplicar esa lógica.
+
+**Deviación deliberada del wireframe**: "Programador de Simulacros"
+muestra un log fila por fila de cada ocurrencia pasada, de un sitio a
+la vez (con un selector de sitio). El endpoint real da un resumen por
+`(sitio, tipo)` — el último resuelto, el próximo programado, y si está
+al día — no un historial completo fila por fila. Portar el wireframe
+tal cual hubiera significado inventar datos que el backend no
+devuelve; en cambio se armó como una **matriz de cumplimiento**
+(tabla, filtrable por sitio y por "al día"/"vencidos"), que es lo que
+el dato real permite mostrar bien — y calza con lo que el propio
+comentario de `logic/cumplimiento.ts` dice que le importa a un
+responsable de seguridad. El programador de simulacros en sí (alta,
+edición, cancelación) no está en esta pantalla, ver `../ROADMAP.md`.
+
+**Hallazgo real en el camino**: al leer `db.ts` para armar esta
+pantalla, encontré que `GET /simulacros/cumplimiento` sin `sitioId`
+(el caso normal acá — un admin viendo el cumplimiento de todos sus
+sitios) devolvía el historial de **todas las organizaciones** del
+proyecto, no solo la del admin que llamaba — corregido del lado del
+backend antes de construir esta pantalla, ver
+`backend-server/README.md`, "Hallazgo de seguridad".
+
+Validado contra backend-server y Supabase reales: tres filas de prueba
+para el mismo `(sitio, tipo)` — un `no_realizado` viejo, un
+`realizado` más reciente, y un `programado` a futuro — confirmado que
+`ultimoResuelto` elige el más reciente por fecha (no por orden de
+inserción), `alDia` da `true` porque el último resuelto fue
+`realizado`, y `proximoProgramado` no es `null`. Todo el dato de
+prueba borrado al terminar. `npm run typecheck`/`build` limpios.
+
 ## Cómo correr esto
 
 ```
@@ -270,9 +310,11 @@ npm run dev
 ## Qué falta (a propósito, ver `../ROADMAP.md`)
 
 Con login + selector de sitio + Operadores + Pendientes +
-Accountability en vivo + Panorama, van 5 de las 8 pantallas del
-wireframe unificado (Pendientes es una pestaña, no la pantalla de
-Padrón completa) — el resto (Puntos, Padrón/Importar/Códigos de acceso,
-Consolas administrables, Sitios, Simulacros e Historial) queda para las
-próximas sesiones, una por una. `backend-server` ya tiene listo lo que
-varias de ellas necesitan (ver `../ROADMAP.md`, sección 3).
+Accountability en vivo + Panorama + Historial, van 6 de las 8 pantallas
+del wireframe unificado (Pendientes es una pestaña, e Historial es solo
+la mitad de "Programador de Simulacros" — falta el programador en sí)
+— el resto (Puntos de encuentro, Padrón/Importar/Códigos de acceso,
+Consolas administrables, Sitios, y el Programador de simulacros)
+queda para las próximas sesiones, una por una. `backend-server` ya
+tiene listo lo que varias de ellas necesitan (ver `../ROADMAP.md`,
+sección 3).

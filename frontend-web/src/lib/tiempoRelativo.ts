@@ -6,6 +6,11 @@ export function formatearReloj(iniciadoAt: string, ahoraMs: number): string {
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
 
+/** "15/08/2026" — fecha absoluta, para vistas de cumplimiento donde lo relativo ("hace 2 semanas") es menos útil que la fecha exacta. */
+export function formatearFecha(iso: string): string {
+  return new Date(iso).toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric" });
+}
+
 /** "hace 2 horas" / "hace 1 día" — mismo estilo que Cowork "Administración de Padrón de Personas". */
 export function tiempoRelativo(iso: string): string {
   const ms = Date.now() - new Date(iso).getTime();

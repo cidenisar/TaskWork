@@ -5,6 +5,7 @@ import { Login } from "./routes/Login";
 import { SelectorSitio } from "./routes/SelectorSitio";
 import { Operadores } from "./routes/Operadores";
 import { Pendientes } from "./routes/Pendientes";
+import { Historial } from "./routes/Historial";
 import { Accountability } from "./routes/Accountability";
 import { Panorama } from "./routes/Panorama";
 
@@ -35,6 +36,14 @@ export function App() {
             element={
               <ProtectedRoute>
                 <Pendientes />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/simulacros/historial"
+            element={
+              <ProtectedRoute>
+                <Historial />
               </ProtectedRoute>
             }
           />
