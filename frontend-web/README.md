@@ -342,6 +342,39 @@ Operadores y esta pantalla) y un `.row-actions` genérico (antes
 `styles/tokens.css`, junto con `.seg-toggle` (antes `.role-toggle`/
 `.scope-toggle` en Operadores) y `.btn-secondary`.
 
+## Hallazgo de seguridad: Accountability en vivo no respetaba el alcance del admin (2026-08-29)
+
+Encontrado en una revisión general del proyecto (no al construir una
+pantalla nueva). `/sitio/:id` (Accountability en vivo) tomaba el
+`sitioId` de la URL y consultaba Supabase directo, sin chequear que ese
+sitio estuviera dentro del **alcance** del admin logueado. El Selector
+de Sitio y Panorama de Sitios sí filtran qué sitios *mostrar* — pero
+nada impedía **teclear la URL directo** con el id de otro sitio de la
+misma organización. Y no era solo un problema de "la pantalla no lo
+esconde": **RLS tampoco lo frena** — `org_isolation` exige rol admin +
+organización, pero no distingue `alcance_tipo` (ver
+`backend-server/README.md`), así que un admin de alcance `"sitio"`
+podía ver el accountability en vivo completo (nombres, DNI, teléfonos,
+estado del evento) de un sitio ajeno a su alcance, dentro de su propia
+organización.
+
+**Corregido**: nueva `sitioEstaEnAlcance(operador, sitioId)` en
+`lib/sitios.ts` — mismo criterio que ya usa Panorama para admins de
+alcance `"sitio"` (`org_isolation` es un límite de organización, el
+alcance es un límite de producto que hay que aplicar en la
+aplicación). Accountability la llama antes de cargar cualquier dato;
+si el sitio no está en el alcance, redirige a `/` sin haber pedido
+nada más. Ante un error de la consulta de alcance en sí, **no
+autoriza** — nunca al revés.
+
+Validado contra Supabase real: un admin de prueba con alcance
+`"sitio"` vinculado a un único sitio — confirmado que
+`sitioEstaEnAlcance` da `true` para su propio sitio y `false` para
+otro sitio real de la misma organización, y confirmado además que
+**RLS sí deja leer ese sitio ajeno** (prueba de que el gate de
+aplicación es la única protección real, no un refuerzo redundante).
+Datos de prueba borrados al terminar. `npm run typecheck` limpio.
+
 ## Cómo correr esto
 
 ```

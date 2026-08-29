@@ -14,8 +14,10 @@
 // solo la consola física, ver Cowork "Panorama de Sitios".
 
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, Navigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
+import { useAuth } from "../lib/auth";
+import { sitioEstaEnAlcance } from "../lib/sitios";
 import { getEventoActivo, getContadores, getConfirmaciones, type EventoActivo, type ContadorPunto, type Totales, type ConfirmacionDetalle } from "../lib/accountability";
 import { listarConsolas, type ConsolaEstado } from "../lib/consolas";
 import { formatearReloj, tiempoRelativo } from "../lib/tiempoRelativo";
@@ -33,7 +35,11 @@ function estadoLabel(e: "ok" | "ayuda" | "pendiente"): string {
 
 export function Accountability() {
   const { id: sitioId } = useParams<{ id: string }>();
+  const { operador } = useAuth();
 
+  // `undefined` = todavía verificando, `null` = fuera del alcance del
+  // admin (redirige), `true` = autorizado a ver este sitio.
+  const [autorizado, setAutorizado] = useState<boolean | undefined>(undefined);
   const [sitioNombre, setSitioNombre] = useState<string | null>(null);
   const [evento, setEvento] = useState<EventoActivo | null>(null);
   const [cargando, setCargando] = useState(true);
@@ -49,14 +55,31 @@ export function Accountability() {
   const [seleccion, setSeleccion] = useState<ConfirmacionDetalle | null>(null);
 
   useEffect(() => {
-    if (!sitioId) return;
+    if (!operador || !sitioId) return;
+    let cancelado = false;
+    setAutorizado(undefined);
+    sitioEstaEnAlcance(operador, sitioId)
+      .then((ok) => {
+        if (!cancelado) setAutorizado(ok);
+      })
+      .catch(() => {
+        // Ante la duda (falla la consulta de alcance), no autorizar — nunca al revés.
+        if (!cancelado) setAutorizado(false);
+      });
+    return () => {
+      cancelado = true;
+    };
+  }, [operador, sitioId]);
+
+  useEffect(() => {
+    if (!sitioId || autorizado !== true) return;
     supabase
       .from("sitios")
       .select("nombre")
       .eq("id", sitioId)
       .maybeSingle()
       .then(({ data }) => setSitioNombre((data?.nombre as string) ?? null));
-  }, [sitioId]);
+  }, [sitioId, autorizado]);
 
   async function cargar(sid: string) {
     setError(null);
@@ -81,12 +104,12 @@ export function Accountability() {
   }
 
   useEffect(() => {
-    if (!sitioId) return;
+    if (!sitioId || autorizado !== true) return;
     void cargar(sitioId);
     const intervalo = window.setInterval(() => void cargar(sitioId), INTERVALO_REFRESCO_MS);
     return () => window.clearInterval(intervalo);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sitioId]);
+  }, [sitioId, autorizado]);
 
   useEffect(() => {
     if (!evento) return;
@@ -94,7 +117,9 @@ export function Accountability() {
     return () => window.clearInterval(tick);
   }, [evento?.id]);
 
-  if (!sitioId) return null;
+  if (!sitioId || !operador) return null;
+  // Fuera del alcance del admin (o alguien intentando un id ajeno a mano) — mismo criterio que Panorama: el alcance es un límite de producto, no solo de RLS.
+  if (autorizado === false) return <Navigate to="/" replace />;
 
   const filtradas = (confirmaciones ?? []).filter((c) => {
     if (filtroPunto && c.puntoId !== filtroPunto) return false;

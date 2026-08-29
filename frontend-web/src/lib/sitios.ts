@@ -19,6 +19,27 @@ async function idsDeSitiosEnAlcance(operador: Operador): Promise<string[] | "org
   return (data ?? []).map((r) => r.sitio_id as string);
 }
 
+/**
+ * ¿Este sitio está dentro del alcance del operador? Para pantallas que
+ * reciben un `sitioId` por URL (Accountability en vivo) — sin esto, un
+ * admin de alcance `"sitio"` podía teclear directo `/sitio/:id` de un
+ * sitio ajeno a su alcance (pero de su misma organización) y ver todo
+ * igual: RLS no lo frena, `org_isolation` no distingue `alcance_tipo`,
+ * solo organización (ver backend-server/README.md). El Selector de
+ * Sitio y Panorama ya filtraban qué mostrar, pero nada impedía navegar
+ * directo con la URL — hallazgo de revisión, ver README.
+ */
+export async function sitioEstaEnAlcance(operador: Operador, sitioId: string): Promise<boolean> {
+  const alcance = await idsDeSitiosEnAlcance(operador);
+  if (alcance === "organizacion") {
+    // Alcance de organización no es un cheque libre — confirma igual que el sitio sea de ESTA organización.
+    const { data, error } = await supabase.from("sitios").select("id").eq("id", sitioId).eq("organizacion_id", operador.organizacionId).maybeSingle();
+    if (error) throw error;
+    return !!data;
+  }
+  return alcance.includes(sitioId);
+}
+
 export async function listarSitiosVisibles(operador: Operador): Promise<SitioConEstado[]> {
   const alcance = await idsDeSitiosEnAlcance(operador);
 
