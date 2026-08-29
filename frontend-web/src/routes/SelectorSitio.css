@@ -8,26 +8,6 @@ main {
   width: 100%;
   margin: 0 auto;
 }
-.intro {
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-}
-.intro .eyebrow {
-  font-size: 0.7rem;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-  color: var(--text-faint);
-  font-weight: 600;
-}
-.intro p {
-  margin: 0;
-  color: var(--text-dim);
-  font-size: 0.88rem;
-  max-width: 66ch;
-  line-height: 1.5;
-}
-
 .single-redirect {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -204,16 +184,6 @@ main {
   stroke: currentColor;
   fill: none;
   stroke-width: 2.2;
-}
-
-.empty-state {
-  background: var(--surface);
-  border: 1px dashed var(--border-strong);
-  border-radius: var(--radius);
-  padding: 2rem;
-  text-align: center;
-  color: var(--text-dim);
-  font-size: 0.85rem;
 }
 
 @media (max-width: 900px) {

@@ -34,6 +34,9 @@ export function Topbar({ titulo }: { titulo: string }) {
         <NavLink to="/operadores" className={({ isActive }) => (isActive ? "on" : "")}>
           Operadores
         </NavLink>
+        <NavLink to="/personas/pendientes" className={({ isActive }) => (isActive ? "on" : "")}>
+          Pendientes
+        </NavLink>
       </nav>
       <div className="scope-chip">
         <span className="av">{iniciales(operador.nombre)}</span>

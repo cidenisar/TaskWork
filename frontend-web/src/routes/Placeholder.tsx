@@ -12,7 +12,7 @@ export function Placeholder({ titulo, nota }: { titulo: string; nota: string }) 
     <div className="app">
       <Topbar titulo={titulo} />
       <main>
-        <div className="empty-state">{nota}</div>
+        <div className="empty">{nota}</div>
       </main>
     </div>
   );

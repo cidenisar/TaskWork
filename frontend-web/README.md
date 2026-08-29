@@ -134,6 +134,35 @@ real (`sitiosIds` vacío con `alcanceTipo: "sitio"` → `400`). Todo el
 dato de prueba borrado al terminar. `npm run typecheck` y
 `npm run build` limpios.
 
+## Pendientes de aprobación (2026-08-29)
+
+Ver Cowork "Administración de Padrón de Personas" (pestaña "Pendientes
+de aprobación") — **solo esa pestaña**, no la pantalla completa de
+Padrón (que también tiene Padrón/Importar/Códigos, ver "Qué falta" más
+abajo). Ruta `/personas/pendientes`.
+
+- **Listar** — lectura directa contra Supabase (`org_isolation` ya le
+  permite a un admin leer cualquier `persona` de su organización, con
+  `estado: "pendiente_aprobacion"`), con el nombre del sitio embebido
+  vía la FK (`sitios(nombre)`).
+- **Aprobar/rechazar** — `POST /personas/:id/aprobar` y `/rechazar`
+  reales, sin paso de confirmación intermedio (mismo criterio que el
+  wireframe: es una cola chica que un admin revisa seguido, no una baja
+  destructiva). Aprobar muestra si el aviso por push llegó a intentarse
+  o no (`notificado`/`errorNotificacion` que devuelve el backend).
+
+Validado contra Supabase y backend-server reales: dos personas de
+prueba en `pendiente_aprobacion`, `listarPendientes` las trae con el
+nombre de sitio resuelto, `rechazar` real pasa una a `rechazado`,
+`aprobar` real (sin `push_token`) pasa la otra a `activo` con
+`notificado: false` sin error, y un re-listado confirma que ninguna
+sigue apareciendo como pendiente. Todo el dato de prueba borrado al
+terminar. `npm run typecheck`/`build` limpios.
+
+De paso: `.intro`/`.empty` (usados por las tres pantallas hasta ahora)
+pasaron a `styles/tokens.css`, y `.btn-ok`/`.icon-btn.good`/`.bad`
+(variantes de color para aprobar/reactivar) se sumaron ahí también.
+
 ## Cómo correr esto
 
 ```
@@ -144,8 +173,10 @@ npm run dev
 
 ## Qué falta (a propósito, ver `../ROADMAP.md`)
 
-Con login + selector de sitio + Operadores, van 2 de las 8 pantallas
-del wireframe unificado — el resto (Panorama, Accountability en vivo,
-Puntos, Personal/Padrón, Consolas, Sitios, Simulacros) queda para las
-próximas sesiones, una por una. `backend-server` ya tiene listo lo que
-varias de ellas necesitan (ver `../ROADMAP.md`, sección 3).
+Con login + selector de sitio + Operadores + Pendientes, van 3 de las 8
+pantallas del wireframe unificado (Pendientes es una pestaña, no la
+pantalla de Padrón completa) — el resto (Panorama, Accountability en
+vivo, Puntos, Padrón/Importar/Códigos de acceso, Consolas, Sitios,
+Simulacros) queda para las próximas sesiones, una por una.
+`backend-server` ya tiene listo lo que varias de ellas necesitan (ver
+`../ROADMAP.md`, sección 3).

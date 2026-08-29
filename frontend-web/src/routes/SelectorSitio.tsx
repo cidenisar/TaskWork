@@ -36,10 +36,10 @@ export function SelectorSitio() {
     <div className="app">
       <Topbar titulo={titulo} />
       <main>
-        {error && <div className="empty-state">No se pudo cargar tus sitios: {error}</div>}
-        {!error && sitios === null && <div className="empty-state">Cargando sitios…</div>}
+        {error && <div className="empty">No se pudo cargar tus sitios: {error}</div>}
+        {!error && sitios === null && <div className="empty">Cargando sitios…</div>}
         {!error && sitios && sitios.length === 0 && (
-          <div className="empty-state">Tu cuenta no tiene ningún sitio asignado todavía. Consultá con un administrador.</div>
+          <div className="empty">Tu cuenta no tiene ningún sitio asignado todavía. Consultá con un administrador.</div>
         )}
         {!error && sitios && sitios.length === 1 && (
           <div className="single-redirect">

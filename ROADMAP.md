@@ -70,15 +70,20 @@ ahora); falta construir el resto del Frontend:
   `frontend-web/README.md`. Validado además contra backend-server y
   Supabase reales (no solo compilación). Gap conocido: no hay forma de
   invitar por email a un operador que ya existe (solo al crearlo).
-- **Aprobar/rechazar autoregistro** — `POST /personas/:id/aprobar` y
-  `/rechazar`, listos, sin ninguna pantalla que los llame todavía.
+- ~~**Aprobar/rechazar autoregistro**~~ — **hecho (2026-08-29)**,
+  `/personas/pendientes`, ver `frontend-web/README.md`. Validado contra
+  backend-server y Supabase reales. Nota: solo la pestaña "Pendientes"
+  del wireframe "Administración de Padrón de Personas" — Padrón/
+  Importar/Códigos de acceso (las otras 3 pestañas de esa pantalla)
+  siguen sin construir.
 - **Historial / cumplimiento de simulacros** — `GET /simulacros/cumplimiento`.
 - **Accountability en vivo durante un evento** — la tabla
   `accountability_contadores` y su RLS están listos; falta la vista.
-- **Gestión de sitios / consolas / puntos de encuentro / PROG1-4** — hoy
-  todo por SQL directo, sin ninguna pantalla — ni falta ni sobra
-  backend, es 100% trabajo de Frontend + escritura directa a Supabase
-  (org_isolation ya lo permite para un admin).
+- **Gestión de sitios / consolas / puntos de encuentro / PROG1-4 /
+  Padrón (alta manual, importar)** — hoy todo por SQL directo, sin
+  ninguna pantalla — ni falta ni sobra backend, es 100% trabajo de
+  Frontend + escritura directa a Supabase (org_isolation ya lo permite
+  para un admin).
 - **Alta y revocación de códigos de acceso** (`codigos_acceso`) — **acá
   sí falta backend**: no hay ningún endpoint que cree un código
   (`getCodigoAccesoPorCodigo`/`intentarUsarCodigo` solo lo consumen).
@@ -121,11 +126,11 @@ RLS del punto 2 (elegir punto de encuentro, ver historial propio).
 ## Próximo paso sugerido
 
 - **Seguir con Frontend Web, pantalla por pantalla.** Con login +
-  selector de sitio + Operadores ya reales, **Aprobar/rechazar
-  autoregistro** es la siguiente candidata obvia — backend 100% listo
-  (`POST /personas/:id/aprobar`/`/rechazar`), sin ninguna pantalla
-  todavía. El wireframe de Cowork que más se le parece es
-  "Administración de Padrón de Personas" (pestaña "Pendientes").
+  selector de sitio + Operadores + Pendientes ya reales, las siguientes
+  candidatas con backend ya listo son **Alta y revocación de códigos de
+  acceso** (ver el gap de backend que falta ahí, arriba) y **Historial /
+  cumplimiento de simulacros** (`GET /simulacros/cumplimiento`, sin
+  ninguna escritura nueva que armar).
 - Antes de llegar a **Accountability en vivo** (la pantalla real detrás
   de `/sitio/:id`), conviene cerrar el gap de RLS del punto 2 — sin eso
   ni esa pantalla ni Mobile pueden leer puntos de encuentro/eventos.

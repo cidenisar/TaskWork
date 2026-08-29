@@ -1,0 +1,74 @@
+/* Ver Cowork "Administración de Padrón de Personas", pestaña
+   "Pendientes de aprobación". Primitivas compartidas (botones, toast,
+   .intro, .empty) viven en styles/tokens.css. */
+
+main {
+  flex: 1;
+  padding: 1.4rem 1.5rem 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.2rem;
+  max-width: 1080px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+.pend-row {
+  background: var(--surface);
+  border: 1px solid var(--pending-strong);
+  border-radius: var(--radius);
+  padding: 0.9rem 1.1rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.p-id {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  flex: 1 1 220px;
+  min-width: 0;
+}
+.p-av {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--pending-bg);
+  color: var(--pending);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.72rem;
+  flex: none;
+}
+.p-name {
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+.p-sub {
+  font-size: 0.72rem;
+  color: var(--text-faint);
+}
+.site-chip-sm {
+  flex: 1 1 170px;
+  font-size: 0.72rem;
+  color: var(--text-dim);
+}
+.pend-when {
+  font-size: 0.68rem;
+  color: var(--text-faint);
+  flex: none;
+}
+.p-actions {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}

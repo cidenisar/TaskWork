@@ -4,6 +4,7 @@ import { ProtectedRoute } from "./components/ProtectedRoute";
 import { Login } from "./routes/Login";
 import { SelectorSitio } from "./routes/SelectorSitio";
 import { Operadores } from "./routes/Operadores";
+import { Pendientes } from "./routes/Pendientes";
 import { Placeholder } from "./routes/Placeholder";
 
 export function App() {
@@ -25,6 +26,14 @@ export function App() {
             element={
               <ProtectedRoute>
                 <Operadores />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/personas/pendientes"
+            element={
+              <ProtectedRoute>
+                <Pendientes />
               </ProtectedRoute>
             }
           />
