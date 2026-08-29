@@ -288,3 +288,38 @@ export interface PayloadConfirmacionHttp {
   ubicacionLat: number | null;
   ubicacionLng: number | null;
 }
+
+// --- Administración de operadores (Frontend Web, ver handlers/operadores.ts) ---
+//
+// Un operador es UNA fila con dos accesos posibles (decisión tomada con
+// el usuario, 2026-08-28, ver README "Alta de operadores y login web
+// para admins"): el PIN (`pin_hash`, siempre — es lo que usa para
+// habilitar una Consola Disparadora) y, opcional, un login de Supabase
+// Auth (`auth_user_id`) para entrar al Frontend Web — solo tiene
+// sentido si `rol === "admin"` (ver migración
+// `auth_organizacion_id_solo_admin_activo`: un `rol: "operador"` nunca
+// obtiene acceso por RLS aunque tuviera `auth_user_id` vinculado).
+
+export type RolOperador = "operador" | "admin";
+export type AlcanceTipo = "sitio" | "organizacion";
+
+/**
+ * Body de `POST /operadores` (Frontend Web → Backend, solo admins). No
+ * es una tabla que Frontend pueda escribir directo vía Supabase pese a
+ * que RLS se lo permitiría (`org_isolation` es `FOR ALL`) — crear un
+ * operador implica generar y hashear un PIN nuevo (`bcryptjs`, ver
+ * consola-pi que lo valida) y, opcional, invitar por email a través de
+ * la Admin API de Supabase Auth (necesita `service_role`, que el
+ * navegador nunca tiene). Ninguna de las dos cosas es posible desde el
+ * cliente.
+ */
+export interface PayloadCrearOperadorHttp {
+  nombre: string;
+  legajo: string | null;
+  rol: RolOperador;
+  alcanceTipo: AlcanceTipo;
+  /** Ids de `sitios` — obligatorio y no vacío si alcanceTipo === "sitio"; vacío si es "organizacion". */
+  sitiosIds: string[];
+  /** Si se manda, se invita a esta persona al Frontend Web (ver Db.invitarOperadorPorEmail). Solo tiene sentido con rol "admin". */
+  email: string | null;
+}

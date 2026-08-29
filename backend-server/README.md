@@ -270,6 +270,10 @@ frontend → broker → backend está bien, independiente de ese bloqueo.
 - **Publicación de `consolas/{id}/prog`** — asignación de PROG1-4 a un
   tipo de evento (`consolas.prog_config`, retained), barrido periódico
   cada 5 min como el padrón; ver "Sincronización de PROG1-4" más abajo.
+- **Alta de operadores y reseteo de PIN** — `POST /operadores` y
+  `POST /operadores/:id/resetear-pin`, solo admins, ver esa sección más
+  abajo. Es el primer endpoint pensado para que lo llame el Frontend
+  Web (no Mobile ni las consolas).
 
 ### Despacho real de push/SMS
 
@@ -848,6 +852,132 @@ PROG sin asignar sigue mandando el nombre literal del botón
 ("PROG2", etc.). Dato de prueba revertido a `null` al terminar — el
 retained volvió a `{"prog1":null,"prog2":null,"prog3":null,"prog4":null}`.
 
+### RLS: auditoría de seguridad antes de arrancar Frontend Web (2026-08-29)
+
+Antes de construir nada para Frontend Web, se auditó el estado de Row
+Level Security del proyecto (`get_advisors`, `pg_policies`) — encontrados
+y corregidos dos problemas reales, no cosméticos:
+
+1. **`accountability_contadores` tenía RLS deshabilitado por completo**
+   — quedaba expuesta a los roles `anon`/`authenticated` vía PostgREST,
+   cualquiera con la clave pública del proyecto podía leer o escribir la
+   tabla entera. Habilitado RLS + agregada la misma política
+   `org_isolation` que ya usan las otras 16 tablas (vía
+   `evento_id → eventos.organizacion_id`, igual que la política de
+   `confirmaciones`). De paso, el trigger que la mantiene
+   (`fn_accountability_actualizar_contador`) tenía `search_path`
+   mutable (otro advisory de seguridad) — corregido fijándolo a
+   `'public', 'pg_temp'`, mismo criterio que ya usaba
+   `internal.auth_organizacion_id()`. Los dos advisories de seguridad
+   quedaron en cero.
+2. **RLS aislaba por organización pero no por rol.** `internal.auth_organizacion_id()`
+   (la función de la que dependen las 17 políticas `org_isolation`) resolvía
+   la organización de CUALQUIER `operadores.auth_user_id` vinculado, sin
+   mirar `rol` ni `estado` — un operador `rol: "operador"` (o uno dado de
+   baja que conservara el vínculo) tenía lectura+escritura completa sobre
+   toda la organización vía Supabase directo: podía editar otros
+   operadores (autopromoverse a admin), sitios, consolas, `prog_config`,
+   lo que fuera. **Decisión tomada con el usuario (2026-08-29): el login
+   de Frontend Web es solo para admins activos.** Un `rol: "operador"`
+   nunca necesita cuenta de Supabase Auth — se autentica con PIN directo
+   en la consola física; `auth_user_id` es exclusivamente para el login
+   del Frontend Web, que es de gestión/administración. Corregida la
+   función:
+   ```sql
+   -- antes: select organizacion_id from operadores where auth_user_id = auth.uid() limit 1;
+   select organizacion_id from operadores
+   where auth_user_id = auth.uid() and rol = 'admin' and estado = 'activo'
+   limit 1;
+   ```
+   Esto cierra los dos problemas a la vez con un solo cambio: un
+   `rol: "operador"` nunca deriva una organización (cero acceso por RLS
+   aunque alguien le vinculara `auth_user_id` a mano), y dar de baja a un
+   admin (`estado = 'de_baja'`) le corta el acceso al instante sin
+   depender de que alguien se acuerde de desvincular su cuenta de Auth.
+
+### Alta de operadores y login web para admins (2026-08-29)
+
+El wireframe de Cowork "Administración de Operadores" (alta/baja/rol/PIN)
+no muestra ningún campo de email — es la pantalla del padrón de PIN de
+la consola física. Pero el esquema ya tenía `operadores.auth_user_id`
+para vincular una cuenta de Supabase Auth, y el wireframe "Login y
+Selector de Sitio" es login por email+contraseña. **Decisión tomada con
+el usuario: es la misma fila de `operadores`, con dos accesos** — el PIN
+(siempre) y, opcional, un login web (solo tiene sentido con
+`rol: "admin"`, ver sección anterior).
+
+Crear un operador o resetearle el PIN **no queda como una escritura
+directa de Frontend contra Supabase**, aunque RLS técnicamente se lo
+permitiría (`org_isolation` es `FOR ALL`) — las dos acciones necesitan
+generar y hashear un PIN nuevo (`bcryptjs`, mismas rondas que
+`consola-pi` usa para comparar) y, si corresponde, invitar por email a
+través de la Admin API de Supabase Auth (`service_role`, que el
+navegador nunca tiene). Dos endpoints nuevos, ambos solo-admin (mismo
+mecanismo de auth que `GET /simulacros/cumplimiento`: JWT → operador →
+chequeo de `rol`):
+
+- **`POST /operadores`** — `{ nombre, legajo, rol, alcanceTipo,
+  sitiosIds, email }`. Genera un PIN de 4 dígitos (`node:crypto
+  randomInt`, no `Math.random` — es el PIN que habilita una emergencia
+  real), lo hashea, crea el operador **en la organización del admin que
+  llama** (nunca la que mande el body — este endpoint usa
+  `service_role`, así que la restricción de organización es manual, no
+  algo que RLS esté aplicando acá). Si `alcanceTipo` es `"sitio"`,
+  valida que los `sitiosIds` pertenezcan de verdad a esa organización
+  antes de vincularlos (`400` si no). Si viene `email`, invita después
+  de crear el operador (no antes: así una invitación fallida no deja un
+  operador a medio crear) — la invitación puede fallar sola sin tirar
+  abajo el alta entera: devuelve `201` igual, con `invitado: false` y
+  `errorInvitacion` con el detalle, para que Frontend pueda mostrar
+  "operador creado, pero la invitación falló — reintentar" sin
+  ambigüedad. Responde el PIN en texto plano **una sola vez**, igual que
+  el wireframe.
+- **`POST /operadores/:id/resetear-pin`** — mismo mecanismo, genera y
+  hashea un PIN nuevo para un operador existente. `404` tanto si el id
+  no existe como si es de otra organización (no hay que darle a un
+  admin de otra organización ninguna pista de que ese id existe en
+  algún lado).
+- Dar de baja un operador, o editar nombre/legajo/rol/alcance sin tocar
+  el PIN, **no necesita ninguno de estos dos endpoints** — es una
+  escritura directa de Frontend contra Supabase, ya cubierta por
+  `org_isolation` (RLS) sin ningún dato sensible de por medio.
+- **`scripts/provisionar-admin.mjs`** — bootstrap del primerísimo admin
+  de una organización (mismo problema que resuelve
+  `provisionar-consola.sh` para la primera consola: `POST /operadores`
+  necesita estar autenticado como un admin que ya existe, así que el
+  primero no puede pasar por ahí). Node plano (no `tsx` — un script de
+  bootstrap no debería depender del toolchain de TypeScript del
+  proyecto), mismo criterio de generación de PIN + invitación por email.
+
+Validado de punta a punta contra Supabase real (JWT real, mismo patrón
+que `POST /confirmaciones`: `admin.auth.admin.createUser` +
+`signInWithPassword` vía `anon` para conseguir el token): sin
+`Authorization` → `401`; token basura → `401`; un operador `rol:
+"operador"` con login → `403` al intentar crear otro operador; alta sin
+email (PIN generado, valida contra el hash guardado con `bcrypt.compare`,
+`auth_user_id` queda `null`); alta con `alcanceTipo: "sitio"` contra un
+sitio real (queda vinculado en `operadores_sitios`) y contra un sitio
+inventado (`400`); `resetear-pin` sobre un operador real (el `pin_hash`
+cambia, el PIN nuevo valida) y sobre un id inexistente (`404`). Operadores
+y cuentas de Auth de prueba borrados al terminar — `getOperadorPorAuthUserId`
+de "Admin Test" quedó revertido a `auth_user_id: null` como estaba.
+
+**Qué NO se pudo validar:** una invitación por email que llegue a buen
+puerto de verdad. El proyecto de Supabase de este entorno no tiene un
+proveedor SMTP propio configurado — `inviteUserByEmail` devolvió `"email
+rate limit exceeded"` (el límite integrado de Supabase para envío de
+mails sin SMTP propio es muy bajo) en cada intento real. El código del
+camino de éxito (vincular `auth_user_id` tras una invitación que sí
+funciona) está escrito y tipado, pero no se ejecutó de punta a punta
+contra un envío real — **antes de usar esto en producción, configurar un
+proveedor SMTP en el dashboard de Supabase (Authentication → Email)**.
+El camino de degradación (operador creado igual, `invitado: false` +
+`errorInvitacion` con el detalle) sí se validó de punta a punta, porque
+es exactamente lo que pasó en cada intento.
+
+`npm run typecheck` limpio, 84/84 tests (14 nuevos: validación pura del
+body + generación de PIN, ver `test/operadores.test.ts`).
+
 ## Qué NO está implementado todavía (a propósito, ver la ficha)
 
 Nada por ahora — el último ítem señalado acá (el contador incremental de
@@ -946,3 +1076,15 @@ ambos quedaron `no_realizado` en la base. `npm run typecheck` limpio,
   necesitaría que el backend genere el evento él mismo). Ver README,
   "Simulacro sorpresa" — se optó por seguir dependiendo de un humano
   (que sabe la fecha aunque el resto del sitio no) para disparar.
+- **Configurar un proveedor SMTP propio en Supabase** antes de que la
+  invitación por email de `POST /operadores`/`provisionar-admin.mjs` se
+  use de verdad — el envío integrado de Supabase (sin SMTP propio) tiene
+  un rate limit muy bajo, ya se agotó validando esto (ver "Alta de
+  operadores y login web para admins"). Sin esto, invitar a más de un
+  par de admins seguidos empieza a fallar.
+- **Autoregistro de `personas` por código de acceso** — el esquema ya
+  tiene `codigos_acceso`/`codigos_acceso_usos` y
+  `personas.origen: "codigo_acceso"`/`"autoregistro"`, pero no hay
+  ningún código todavía que valide un código y cree/vincule la persona.
+  Mobile lo va a necesitar para que alguien sin alta manual previa
+  pueda entrar solo. No arrancado todavía.

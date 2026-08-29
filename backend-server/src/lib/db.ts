@@ -19,6 +19,8 @@ import type {
   EstadoSimulacro,
   SimulacroProgramado,
   FilaHistorialSimulacro,
+  RolOperador,
+  AlcanceTipo,
 } from "../types.js";
 import type { ConfirmacionInicial, EventoPuntoInicial } from "../logic/eventos.js";
 import type { RegistroAuditoriaPin } from "../logic/auth.js";
@@ -205,15 +207,26 @@ export class Db {
     return data as { id: string } | null;
   }
 
-  /** El operador vinculado a esa cuenta (operadores.auth_user_id, ya existía en el esquema) — null si ninguno. */
-  async getOperadorPorAuthUserId(authUserId: string): Promise<{ id: string; rol: "operador" | "admin" } | null> {
+  /**
+   * El operador vinculado a esa cuenta (operadores.auth_user_id, ya
+   * existía en el esquema) — null si ninguno. Incluye
+   * `organizacionId`: lo necesita `handlers/operadores.ts` para
+   * confinar cualquier alta/reseteo que haga un admin a su propia
+   * organización (esto usa `service_role`, que bypasea RLS por
+   * completo — la restricción de organización acá es manual, no algo
+   * que la base ya esté aplicando por nosotros).
+   */
+  async getOperadorPorAuthUserId(
+    authUserId: string
+  ): Promise<{ id: string; rol: RolOperador; organizacionId: string } | null> {
     const { data, error } = await this.client
       .from("operadores")
-      .select("id, rol")
+      .select("id, rol, organizacion_id")
       .eq("auth_user_id", authUserId)
       .maybeSingle();
     if (error) throw error;
-    return data as { id: string; rol: "operador" | "admin" } | null;
+    if (!data) return null;
+    return { id: data.id, rol: data.rol, organizacionId: data.organizacion_id };
   }
 
   /** Para el handler de POST /confirmaciones: a qué sitio pertenece el evento y si sigue en curso. */
@@ -535,5 +548,77 @@ export class Db {
     return todas
       .filter((o) => o.estado === "activo")
       .map(({ id, legajo, pin_hash, rol }) => ({ id, legajo, pin_hash, rol }));
+  }
+
+  // --- Administración de operadores (Frontend Web, ver handlers/operadores.ts) ---
+
+  /** Para confinar el alta de un operador a sitios que de verdad son de la organización del admin que la pide (esto usa service_role — RLS no está protegiendo nada acá). */
+  async sitiosPertenecenAOrganizacion(sitiosIds: string[], organizacionId: string): Promise<boolean> {
+    const { data, error } = await this.client.from("sitios").select("id").eq("organizacion_id", organizacionId).in("id", sitiosIds);
+    if (error) throw error;
+    return (data ?? []).length === sitiosIds.length;
+  }
+
+  async crearOperador(input: {
+    organizacionId: string;
+    nombre: string;
+    legajo: string | null;
+    rol: RolOperador;
+    alcanceTipo: AlcanceTipo;
+    pinHash: string;
+  }): Promise<string> {
+    const { data, error } = await this.client
+      .from("operadores")
+      .insert({
+        organizacion_id: input.organizacionId,
+        nombre: input.nombre,
+        legajo: input.legajo,
+        rol: input.rol,
+        alcance_tipo: input.alcanceTipo,
+        pin_hash: input.pinHash,
+      })
+      .select("id")
+      .single();
+    if (error) throw error;
+    return data.id as string;
+  }
+
+  async vincularSitiosOperador(operadorId: string, sitiosIds: string[]): Promise<void> {
+    const filas = sitiosIds.map((sitioId) => ({ operador_id: operadorId, sitio_id: sitioId }));
+    const { error } = await this.client.from("operadores_sitios").insert(filas);
+    if (error) throw error;
+  }
+
+  /**
+   * Invita por email a través de la Admin API de Supabase Auth
+   * (`inviteUserByEmail` — manda el mail de invitación con el link para
+   * poner contraseña, necesita `service_role`). Devuelve el
+   * `auth_user_id` recién creado para vincularlo al operador — separado
+   * en dos pasos (invitar, después vincular) en vez de un trigger de
+   * Postgres porque la invitación puede fallar (email ya en uso, etc.)
+   * y en ese caso no queremos un operador a medio crear.
+   */
+  async invitarOperadorPorEmail(email: string): Promise<{ ok: true; authUserId: string } | { ok: false; error: string }> {
+    const { data, error } = await this.client.auth.admin.inviteUserByEmail(email);
+    if (error || !data.user) return { ok: false, error: error?.message ?? "invitación sin usuario devuelto" };
+    return { ok: true, authUserId: data.user.id };
+  }
+
+  async vincularAuthUserOperador(operadorId: string, authUserId: string): Promise<void> {
+    const { error } = await this.client.from("operadores").update({ auth_user_id: authUserId }).eq("id", operadorId);
+    if (error) throw error;
+  }
+
+  /** Para el reseteo de PIN: confirma que el operador existe y a qué organización pertenece (mismo motivo que sitiosPertenecenAOrganizacion — service_role bypasea RLS). */
+  async getOperadorPorId(operadorId: string): Promise<{ id: string; organizacionId: string } | null> {
+    const { data, error } = await this.client.from("operadores").select("id, organizacion_id").eq("id", operadorId).maybeSingle();
+    if (error) throw error;
+    if (!data) return null;
+    return { id: data.id, organizacionId: data.organizacion_id };
+  }
+
+  async actualizarPinOperador(operadorId: string, pinHash: string): Promise<void> {
+    const { error } = await this.client.from("operadores").update({ pin_hash: pinHash }).eq("id", operadorId);
+    if (error) throw error;
   }
 }

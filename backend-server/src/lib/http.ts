@@ -8,6 +8,7 @@ import type { MqttClient } from "mqtt";
 import type { Db } from "./db.js";
 import { manejarConfirmacion } from "../handlers/confirmaciones.js";
 import { manejarCumplimiento } from "../handlers/cumplimiento.js";
+import { manejarCrearOperador, manejarResetearPin } from "../handlers/operadores.js";
 
 // De sobra para el body más grande que maneja este servidor (una
 // confirmación, con `notaAyuda` de texto libre incluido) — sin esto,
@@ -108,6 +109,55 @@ export function crearServidorHttp(db: Db, mqttClient: MqttClient): Server {
           responderJson(res, resultado.status, resultado.body);
         } catch (err) {
           console.error("[http] error procesando GET /simulacros/cumplimiento:", err);
+          responderJson(res, 500, { error: "error interno" });
+        }
+      })();
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/operadores") {
+      void (async () => {
+        try {
+          let raw: string;
+          try {
+            raw = await leerBody(req);
+          } catch (err) {
+            if (err instanceof BodyDemasiadoGrandeError) {
+              responderJson(res, 413, { error: "body demasiado grande" });
+              req.destroy();
+              return;
+            }
+            throw err;
+          }
+          let body: unknown;
+          try {
+            body = raw.length > 0 ? JSON.parse(raw) : {};
+          } catch {
+            responderJson(res, 400, { error: "body no es JSON válido" });
+            return;
+          }
+          const resultado = await manejarCrearOperador(db, req.headers.authorization, body);
+          responderJson(res, resultado.status, resultado.body);
+        } catch (err) {
+          console.error("[http] error procesando POST /operadores:", err);
+          responderJson(res, 500, { error: "error interno" });
+        }
+      })();
+      return;
+    }
+
+    // /operadores/{id}/resetear-pin — único path con parámetro de este
+    // servidor; no justifica un router entero por eso (mismo criterio de
+    // "sin framework" del resto del archivo).
+    const resetearPinMatch = /^\/operadores\/([^/]+)\/resetear-pin$/.exec(url.pathname);
+    if (req.method === "POST" && resetearPinMatch) {
+      const operadorId = resetearPinMatch[1];
+      void (async () => {
+        try {
+          const resultado = await manejarResetearPin(db, req.headers.authorization, operadorId);
+          responderJson(res, resultado.status, resultado.body);
+        } catch (err) {
+          console.error("[http] error procesando POST /operadores/:id/resetear-pin:", err);
           responderJson(res, 500, { error: "error interno" });
         }
       })();
