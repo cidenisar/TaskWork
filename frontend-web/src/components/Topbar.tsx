@@ -28,10 +28,13 @@ export function Topbar({ titulo, extra }: { titulo: string; extra?: ReactNode })
         </div>
       </div>
       <h1>{titulo}</h1>
-      {/* Nav mínima — hasta que haya suficientes pantallas para justificar un rail lateral, ver ROADMAP.md */}
+      {/* Nav mínima — hasta que haya suficientes pantallas para justificar un rail lateral, ver ROADMAP.md.
+          "Sitios" (2026-08-30) pasó a nombrar la administración de sitios (alta/edición, `/sitios`) en vez
+          del Selector de Sitio (`/`) — ese quedó como "Inicio", para no tener dos links llamados igual con
+          significados distintos ("elegir con qué sitio trabajar" vs. "administrar la lista de sitios"). */}
       <nav className="topbar-nav">
         <NavLink to="/" end className={({ isActive }) => (isActive ? "on" : "")}>
-          Sitios
+          Inicio
         </NavLink>
         <NavLink to="/operadores" className={({ isActive }) => (isActive ? "on" : "")}>
           Operadores
@@ -45,6 +48,14 @@ export function Topbar({ titulo, extra }: { titulo: string; extra?: ReactNode })
         <NavLink to="/puntos-encuentro" className={({ isActive }) => (isActive ? "on" : "")}>
           Puntos
         </NavLink>
+        <NavLink to="/consolas" className={({ isActive }) => (isActive ? "on" : "")}>
+          Consolas
+        </NavLink>
+        {operador.alcanceTipo === "organizacion" && (
+          <NavLink to="/sitios" className={({ isActive }) => (isActive ? "on" : "")}>
+            Sitios
+          </NavLink>
+        )}
         <NavLink to="/configuracion" className={({ isActive }) => (isActive ? "on" : "")}>
           Configuración
         </NavLink>

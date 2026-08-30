@@ -225,9 +225,8 @@ datos reales:
   `consolas/{id}/prog` (ver backend-server README, "Sincronización de
   PROG1-4"). **Decisión tomada:** no se construye un teclado táctil para
   editar esto en la consola — la asignación se administra centralizada
-  (hoy por SQL, mañana por una pantalla de administración en Frontend
-  Web) y llega sola por MQTT retained, igual que el padrón. La consola
-  solo la muestra y la usa.
+  (`frontend-web/routes/Consolas.tsx`, 2026-08-30) y llega sola por MQTT
+  retained, igual que el padrón. La consola solo la muestra y la usa.
 - **`tipoEventoDeBoton`** (`index.ts`) ahora resuelve PROG1–4 contra el
   `prog` cacheado — si hay una asignación manda el nombre real del tipo
   de evento; sin asignar (o para los botones fijos INCENDIO/SISMO/MEDICO/

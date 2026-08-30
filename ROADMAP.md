@@ -64,7 +64,7 @@ Dos formas de cerrarlo (a decidir cuando se arranque Mobile de verdad):
   `GET /personas/:id/confirmaciones`) — más control, pero un ida y
   vuelta más contra el backend en vez de ir directo a Supabase.
 
-## 3. Frontend Web — arrancado (2026-08-29)
+## 3. Frontend Web — pantallas base completas (2026-08-30)
 
 Nuevo componente `frontend-web/` (Vite + React + TS, CSS plano portado
 de los wireframes de Cowork — ver `frontend-web/README.md`). El backend
@@ -149,10 +149,17 @@ ahora); falta construir el resto del Frontend:
   conversión — inofensivo hoy (solo se ve la fecha, no la hora, y
   Argentina está a 3hs de UTC) pero podría mostrar el día equivocado
   cerca de medianoche UTC. Ver `frontend-web/README.md`.
-- **Gestión de sitios / consolas / PROG1-4** — hoy todo por SQL
-  directo, sin ninguna pantalla — ni falta ni sobra backend, es 100%
-  trabajo de Frontend + escritura directa a Supabase (org_isolation ya
-  lo permite para un admin).
+- ~~**Gestión de sitios / consolas / PROG1-4**~~ — **hecho
+  (2026-08-30)**, `/sitios` (solo alcance organización) y `/consolas`,
+  ver `frontend-web/README.md` ("Administración de Sitios y Consolas").
+  Confirmó la hipótesis: no hizo falta backend nuevo, 100% escritura
+  directa a Supabase. Deliberadamente acotado: Sitios es solo
+  nombre (sin mapa/geofence/adaptador de control de accesos — columnas
+  reales pero sin ningún código que las lea) y sin baja (no hay columna
+  de estado); PROG1-4 sigue sin disparo puntual, llega por el mismo
+  barrido de 5 min que el padrón (límite conocido, no nuevo). De paso,
+  el link de nav "Sitios" (que apuntaba al Selector de Sitio) pasó a
+  llamarse "Inicio" para liberar el nombre para la pantalla nueva.
 - ~~**Alta y revocación de códigos de acceso**~~ — **hecho
   (2026-08-29)**, `/personas/codigos`, ver `frontend-web/README.md`.
   Reevaluación: resultó no necesitar backend nuevo — generar/revocar no
@@ -232,16 +239,15 @@ RLS del punto 2 (elegir punto de encuentro, ver historial propio).
 
 ## Próximo paso sugerido
 
-- **Seguir con Frontend Web, pantalla por pantalla.** Con login +
-  selector de sitio + Operadores + Padrón de Personas completo (Padrón +
-  Pendientes + Importar + Códigos de acceso) + Accountability en vivo +
-  Panorama + Historial + Puntos de encuentro + Programador de
-  Simulacros ya reales, todas las pantallas base del wireframe unificado
-  están construidas. Lo que queda es **Consolas** y **Sitios**
-  (administración, no la vista en vivo) — ahí sí, todo escritura
-  directa, sin backend nuevo que armar (a diferencia del Programador de
-  Simulacros, que necesitó `POST/PATCH/DELETE /simulacros` nuevos, ver
-  sección 3). Notas pendientes, ninguna bloquea lo anterior:
+- **Frontend Web — todas las pantallas base del wireframe unificado ya
+  están construidas** (login + selector de sitio + Operadores + Padrón
+  de Personas completo + Accountability en vivo + Panorama + Historial +
+  Puntos de encuentro + Programador de Simulacros + Configuración +
+  Sitios + Consolas). Lo que sigue es elegir entre: (a) las ideas
+  superadoras charladas para SMS (aviso de recordatorio, WhatsApp
+  Business API — ver sección 3), (b) empezar Mobile (sección 4, no
+  existe código todavía), o (c) las notas pendientes de abajo, ninguna
+  bloquea nada de lo anterior:
   - El gap de RLS del punto 2 es específico de **Mobile** (una sesión de
     `persona`, no de admin) — sigue pendiente solo para cuando se
     arranque Mobile de verdad.

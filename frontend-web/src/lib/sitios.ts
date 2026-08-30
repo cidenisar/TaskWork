@@ -77,3 +77,38 @@ export async function listarSitiosVisibles(operador: Operador): Promise<SitioCon
     eventoActivo: eventoPorSitio.get(s.id as string) ?? null,
   }));
 }
+
+/**
+ * Alta/edición de sitios (ver routes/Sitios.tsx) — mismo criterio que
+ * Puntos de Encuentro: escritura directa contra Supabase, `org_isolation`
+ * ya se lo permite a un admin para su organización.
+ *
+ * Deliberadamente no expuesto acá: `adaptador_control_accesos`,
+ * `lat`/`lng`/`geofence_geojson` — columnas reales en `sitios` pero sin
+ * ningún código que las lea todavía (ni backend-server ni Frontend Web,
+ * confirmado) — no tiene sentido construir UI para configurar algo que
+ * nada usa hoy. Tampoco hay "dar de baja": a diferencia de
+ * `puntos_encuentro`/`operadores`/`personas`, `sitios` no tiene columna
+ * de estado — de acá no se puede borrar un sitio (tiene FKs desde medio
+ * repo: consolas, personas, eventos, códigos de acceso...).
+ */
+export interface SitioAdmin {
+  id: string;
+  nombre: string;
+}
+
+export async function listarSitiosAdmin(organizacionId: string): Promise<SitioAdmin[]> {
+  const { data, error } = await supabase.from("sitios").select("id, nombre").eq("organizacion_id", organizacionId).order("nombre");
+  if (error) throw error;
+  return (data ?? []).map((s) => ({ id: s.id as string, nombre: s.nombre as string }));
+}
+
+export async function crearSitio(organizacionId: string, nombre: string): Promise<void> {
+  const { error } = await supabase.from("sitios").insert({ organizacion_id: organizacionId, nombre });
+  if (error) throw error;
+}
+
+export async function actualizarSitio(id: string, nombre: string): Promise<void> {
+  const { error } = await supabase.from("sitios").update({ nombre, updated_at: new Date().toISOString() }).eq("id", id);
+  if (error) throw error;
+}

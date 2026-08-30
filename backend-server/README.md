@@ -908,11 +908,14 @@ tipo ya resueltos, no los ids — la consola nunca necesita consultar
 `tipos_evento`, solo manda el nombre tal cual le llegó en
 `PayloadEventoMqtt.tipo` cuando se presiona ese botón.
 
-Sin UI de administración todavía (Frontend Web no forma parte de este
-repo) — `prog_config` se completa a mano por SQL hasta que exista esa
-pantalla; `Db.getProgConfigDeConsola` resuelve los ids a nombres en el
+**UI de administración: `frontend-web/routes/Consolas.tsx` (2026-08-30)**
+— escritura directa contra Supabase (`org_isolation`), sin endpoint
+nuevo acá; `Db.getProgConfigDeConsola` resuelve los ids a nombres en el
 momento de publicar, así que un cambio en el nombre de un tipo de evento
-se refleja solo, sin tocar `prog_config`.
+se refleja solo, sin tocar `prog_config`. Ver `frontend-web/README.md`,
+"Administración de Sitios y Consolas" — sigue sin existir un disparo
+puntual (un cambio tarda hasta 5 minutos en llegar a la consola física
+vía el barrido periódico), esto no cambió.
 
 **Mismo patrón que el padrón** (`handlers/prog.ts`,
 `sincronizarProgDeTodasLasConsolas` + `barridoPorSitio`, cada 5 min,

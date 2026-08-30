@@ -89,9 +89,10 @@ todo.
   Accountability en vivo reales no están construidos aún, ver
   `../ROADMAP.md`.
 
-Nav mínima en el `<Topbar>` (Sitios / Operadores / Personas / Simulacros /
-Puntos / Configuración) — un rail lateral de verdad queda para cuando
-haya más pantallas que lo justifiquen (ver `../ROADMAP.md`).
+Nav mínima en el `<Topbar>` (Inicio / Operadores / Personas / Simulacros /
+Puntos / Consolas / Sitios* / Configuración, *solo alcance organización)
+— un rail lateral de verdad queda para cuando haya más pantallas que lo
+justifiquen (ver `../ROADMAP.md`).
 
 ## Administración de Operadores (2026-08-29)
 
@@ -631,6 +632,60 @@ Pantalla nueva en la nav del `<Topbar>` ("Configuración"), ruta
 `/configuracion` agregada a `App.tsx`. `npm run typecheck`/`build`
 limpios; validado de punta a punta junto con el backend, ver
 `backend-server/README.md`.
+
+## Administración de Sitios y Consolas (2026-08-30)
+
+Las dos pantallas que quedaban del wireframe original — ver
+`ROADMAP.md`, "Gestión de sitios / consolas / PROG1-4". Mismo criterio
+que el resto de administración: escritura directa contra Supabase
+(`org_isolation`), sin endpoints nuevos en backend-server.
+
+**`/sitios`** (`lib/sitios.ts`, `crearSitio`/`actualizarSitio`) — alta y
+renombrado de sitios, **solo para admins de alcance "organización"**
+(mismo guardado de aplicación que ya usa Panorama de Sitios — RLS no
+distingue `alcance_tipo`, ver backend-server/README.md). Deliberadamente
+acotado a solo `nombre`: `adaptador_control_accesos`/`lat`/`lng`/
+`geofence_geojson` son columnas reales en `sitios` pero **nada las lee
+todavía**, ni acá ni en backend-server — no tenía sentido construir UI
+para configurar algo sin ningún efecto. Tampoco hay baja: `sitios` no
+tiene columna de estado (a diferencia de puntos/operadores/personas), un
+sitio tiene demasiadas FKs (consolas, personas, eventos, códigos...)
+para borrarlo con seguridad desde una pantalla.
+
+Ojo con el nombre: **el link de nav que antes decía "Sitios" (`/`, el
+Selector de Sitio) pasó a llamarse "Inicio"** — el nombre "Sitios" quedó
+libre para esta pantalla nueva, que es la dueña real de esa palabra (es
+el CRUD de la tabla `sitios`). Eran dos cosas distintas compitiendo por
+el mismo nombre ("elegir con qué sitio trabajar" vs. "administrar la
+lista de sitios") — cambiar la etiqueta del link existente fue más
+simple que inventarle un nombre raro a la pantalla nueva.
+
+**`/consolas`** (`lib/consolas.ts`) — alta/edición/baja-reactivación de
+consolas + la asignación de PROG1-4 a un tipo de evento
+(`consolas.prog_config`, ver backend-server/README.md, "Sincronización
+de PROG1-4", y consola-pi/README.md — la pantalla de administración que
+faltaba ahí). Con selector de sitio (`listarSitiosVisibles`, mismo
+criterio que Puntos de Encuentro) — a diferencia de Sitios, un admin de
+alcance "sitio" sí administra las consolas de su propio sitio.
+`en_linea`/`ultimo_heartbeat` son de solo lectura, los sigue escribiendo
+backend-server desde el heartbeat MQTT real — esta pantalla nunca los
+toca, solo los muestra con `tiempoRelativo`.
+
+**Importante sobre PROG1-4**: escribir `prog_config` acá **no publica
+nada por MQTT al toque** — llega a la consola física por el mismo
+barrido periódico que ya sincroniza el padrón (cada 5 min, o al
+reiniciar backend-server), confirmado que tampoco existe un disparo
+puntual para el padrón pese a que Frontend Web ya lo administra hace
+rato — mismo patrón, mismo límite conocido, no es un bug de esta
+pantalla. Ver `backend-server/README.md` para el disparo puntual que
+falta agregar el día que se priorice.
+
+Validado con inserts/updates reales equivalentes a los que ejecuta esta
+pantalla (sitio de prueba, consola de prueba con PROG1 → un tipo real,
+baja/reactivación, borrado al final) contra el proyecto real — el join
+`prog_config → tipos_evento` resolvió el nombre correcto, coherente con
+lo que ya usa backend-server para publicar el `prog` real. `npm run
+typecheck`/`build` limpios.
 
 ## Cómo correr esto
 

@@ -14,6 +14,8 @@ import { Accountability } from "./routes/Accountability";
 import { Panorama } from "./routes/Panorama";
 import { Puntos } from "./routes/Puntos";
 import { Configuracion } from "./routes/Configuracion";
+import { Sitios } from "./routes/Sitios";
+import { Consolas } from "./routes/Consolas";
 
 export function App() {
   return (
@@ -114,6 +116,22 @@ export function App() {
             element={
               <ProtectedRoute>
                 <Configuracion />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/sitios"
+            element={
+              <ProtectedRoute>
+                <Sitios />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/consolas"
+            element={
+              <ProtectedRoute>
+                <Consolas />
               </ProtectedRoute>
             }
           />
