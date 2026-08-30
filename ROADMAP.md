@@ -198,26 +198,38 @@ punto 2, cerrado 2026-08-30), recepción de push (FCM) y
 `POST /confirmaciones`. Ya no queda ningún gap conocido de backend/RLS
 bloqueando construir la app de punta a punta.
 
-Construido: sesión anónima automática (sin login), dos de los tres
-flujos de registro ("ya estoy en el padrón", "tengo un código"),
-pantalla de estado de cuenta (pendiente/rechazado/de baja/vencido),
-"Mis alertas" (historial + confirmar una alerta en curso eligiendo
-punto de encuentro), registro del token de push. Validado de punta a
-punta contra Supabase/backend-server reales (mismo mecanismo que
-`consola-virtual.html` para disparar un evento real) — ver
+Construido: sesión anónima automática (sin login), los **tres** flujos
+de registro ("ya estoy en el padrón", "tengo un código", "soy nuevo" —
+ver abajo), pantalla de estado de cuenta (pendiente/rechazado/de
+baja/vencido), "Mis alertas" (historial + confirmar una alerta en curso
+eligiendo punto de encuentro), registro del token de push. Validado de
+punta a punta contra Supabase/backend-server reales (mismo mecanismo
+que `consola-virtual.html` para disparar un evento real) — ver
 `mobile/README.md`, "Validado".
 
-Falta a propósito, ver `mobile/README.md` para el detalle completo de
-cada uno:
+**Autoregistro** ("no me encontraron, pido el alta") — **resuelto
+(2026-08-30)**. La decisión pendiente (cómo sabe la app qué sitios
+existen antes de tener una persona vinculada) se resolvió al preguntarle
+al usuario: reveló una restricción real que cambió el plan — los
+teléfonos de la planta tienen políticas de MDM que no dejan instalar
+APKs sueltos, hace falta pasar por una tienda de apps de verdad, lo que
+descartaba "un build por organización" como única salida práctica.
+Se construyó en cambio **una sola app + un código de organización**
+(`organizaciones.codigo_acceso_app`, que un admin comparte con su
+personal, configurable desde Frontend Web/Configuración) — ver
+`backend-server/README.md`, "Autoregistro: código de organización",
+para el detalle completo (incluido el endpoint nuevo,
+`POST /organizaciones/resolver-codigo`).
 
-- **Autoregistro** ("no me encontraron, pido el alta") — necesita
-  decidir con el usuario cómo resuelve el sitio (app por organización +
-  RLS acotada / endpoint nuevo / política abierta), no es solo escribir
-  la pantalla.
+Falta a propósito, ver `mobile/README.md` para el detalle completo:
+
 - **Push real** (recepción en segundo plano) — necesita un development
   build de Expo y un teléfono físico, no se pudo probar en este
   sandbox. El registro del token en sí (`POST /personas/push-token`) sí
-  está validado de punta a punta con un token inventado.
+  está validado de punta a punta con un token inventado. Dato relevante
+  para cuando se priorice: la restricción de MDM de arriba también
+  aplica acá — Expo Go no sirve para probar push reales, y el build
+  final tiene que salir por una tienda de apps igual.
 
 ## 5. Consola física — dejada para el final, pero ya bastante avanzada
 

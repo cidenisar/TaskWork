@@ -1278,6 +1278,57 @@ vacío transitorio se autocorrige en la próxima vez que se abre la
 pantalla. Anotado acá por si vuelve a aparecer después de la próxima
 migración de RLS que se toque.
 
+### Autoregistro: código de organización (2026-08-30)
+
+Decisión pendiente desde que se arrancó Mobile (ver `mobile/README.md`,
+"Qué falta"): `POST /personas/autoregistro` pide un `sitioId`, pero
+antes de tener una `personas` vinculada no hay forma segura de que la
+app sepa qué sitios existen para el selector (`sitios` es
+`org_isolation`, admin-only). Se le preguntó al usuario cómo resolverlo
+y salió una restricción real que cambió el plan: **los teléfonos de la
+planta tienen políticas de MDM que no dejan instalar APKs sueltos** —
+hace falta pasar por una tienda de apps de verdad, lo que descarta "un
+build distinto por organización" como única solución práctica (cada
+cliente nuevo necesitaría su propia publicación).
+
+**Resuelto con una sola app + un código de organización**, mismo
+espíritu que un código de acceso a un workspace de Slack o un dominio
+de SSO: `organizaciones.codigo_acceso_app` (columna nueva, texto único,
+nullable — `null` = autoregistro deshabilitado para esa organización
+hasta que un admin configure uno; migración
+`organizaciones_codigo_acceso_app`). Un admin lo comparte con su
+personal (cartelera, onboarding) — no es un secreto criptográfico, pero
+tampoco queda abierto a cualquiera: sin el código correcto, `sitios` de
+esa organización sigue sin ser legible.
+
+**`POST /organizaciones/resolver-codigo`** (nuevo,
+`handlers/organizaciones.ts`) — mismo criterio de auth que
+`/personas/reclamar`/`/autoregistro`/`/canjear-codigo` (cualquier JWT
+válido alcanza, incluida una sesión anónima; reusa `autenticarSesion`
+de `handlers/personas.ts` en vez de duplicarla). `{ codigo }` →
+`{ organizacionId, organizacionNombre, sitios: [{id, nombre}] }` o
+`404` si el código no existe. Rate limiting por IP, mismo tier que
+`reclamar`/`canjear-codigo` (20/15min) — adivinar un código no expone
+nada sensible por sí solo, pero tampoco tiene sentido dejarlo abierto a
+fuerza bruta sin límite.
+
+Escritura del código en sí: `frontend-web`, pantalla Configuración
+(`lib/organizacion.ts`, `setCodigoAccesoApp`) — escritura directa
+contra Supabase, mismo criterio que el toggle de SMS. Normalizado en
+mayúsculas/sin espacios de los dos lados (frontend al guardar, backend
+al resolver) para que no importe cómo se haya tipeado.
+
+Validado de punta a punta contra Supabase/backend-server reales:
+código inexistente → `404`; código real (`REFIMODELO`, en minúsculas a
+propósito para probar la normalización) → `200` con la organización y
+sus 3 sitios reales; `POST /personas/autoregistro` con uno de esos
+sitios → `201`, `pendiente_aprobacion`; lectura propia
+(`personas_self_read`) confirma el estado; reintento desde la misma
+sesión → `409` (ya tenía una persona vinculada), mismo comportamiento
+que ya estaba testeado. Dato de prueba borrado al terminar. 116/116
+tests (4 nuevos, validación pura de `validarResolverCodigoOrg`), `npm
+run typecheck` limpio.
+
 ### Precauciones al habilitar Anonymous Sign-ins (2026-08-29)
 
 Los tres endpoints de autoregistro (`/personas/reclamar`,

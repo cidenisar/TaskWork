@@ -21,6 +21,7 @@ import {
   manejarAprobarPersona,
   manejarRechazarPersona,
 } from "../handlers/personas.js";
+import { manejarResolverCodigoOrg } from "../handlers/organizaciones.js";
 import { permitirIntento } from "./rateLimit.js";
 
 // De sobra para el body más grande que maneja este servidor (una
@@ -249,6 +250,16 @@ export function crearServidorHttp(db: Db, mqttClient: MqttClient, pushApp: App |
           responderJson(res, 500, { error: "error interno" });
         }
       })();
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/organizaciones/resolver-codigo") {
+      // Mismo tier que reclamar/canjear-codigo — adivinar un código de
+      // organización no expone nada sensible por sí solo (nombre +
+      // lista de sitios), pero igual conviene no dejarlo abierto a
+      // fuerza bruta sin límite.
+      if (!limitarPorIp(req, res, "organizaciones-resolver-codigo", 20, 15 * 60_000)) return;
+      void manejarPostConBody(req, res, "POST /organizaciones/resolver-codigo", (body) => manejarResolverCodigoOrg(db, auth, body));
       return;
     }
 

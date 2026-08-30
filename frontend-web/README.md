@@ -633,6 +633,18 @@ Pantalla nueva en la nav del `<Topbar>` ("Configuración"), ruta
 limpios; validado de punta a punta junto con el backend, ver
 `backend-server/README.md`.
 
+**Segunda tarjeta agregada (2026-08-30): código de autoregistro en
+Mobile** (`organizaciones.codigo_acceso_app`) — ver
+`backend-server/README.md`, "Autoregistro: código de organización"
+para el porqué completo. Campo de texto + botón "Guardar" (no
+autoguarda como el toggle, a propósito: cambiar el código invalida el
+que ya estaba circulando en cartelera, no es algo para hacer sin
+querer con un clic de más). Normalizado en mayúsculas/sin espacios al
+guardar — mismo formato que va a pedir Mobile. Error de código
+duplicado (`23505`, otra organización ya lo tiene) mostrado con un
+mensaje claro en vez del error crudo de Postgres, mismo criterio que
+`lib/personas.ts` con el DNI duplicado.
+
 ## Administración de Sitios y Consolas (2026-08-30)
 
 Las dos pantallas que quedaban del wireframe original — ver

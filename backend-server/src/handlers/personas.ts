@@ -40,8 +40,8 @@ export type ResultadoCanjearCodigo =
   | ResultadoBase
   | { status: 201; body: { id: string; estado: "activo"; empresa: string; sitioId: string; vencimiento: string } };
 
-/** Auth compartida por los tres handlers — a diferencia de operadores.ts, cualquier JWT válido alcanza (incluida una sesión anónima). */
-async function autenticarSesion(
+/** Auth compartida por los tres handlers — a diferencia de operadores.ts, cualquier JWT válido alcanza (incluida una sesión anónima). Exportada: handlers/organizaciones.ts la reusa (mismo criterio de auth). */
+export async function autenticarSesion(
   db: Db,
   authorizationHeader: string | undefined | null
 ): Promise<{ ok: true; authUserId: string } | { ok: false; status: 401; error: string }> {

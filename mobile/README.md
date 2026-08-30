@@ -49,16 +49,21 @@ alerta manualmente desde "Mis alertas") funciona sin eso.
   tenía (ver `backend-server/README.md`, "Autoregistro de personas
   (Mobile)"). Se guarda en el dispositivo; la próxima vez que se abre
   la app ya existe.
-- **Registro** — dos de los tres flujos documentados en
+- **Registro** — los tres flujos documentados en
   `backend-server/README.md`:
   - **"Ya estoy en el padrón"** (`POST /personas/reclamar`) — legajo +
     DNI.
   - **"Tengo un código de acceso"** (`POST /personas/canjear-codigo`) —
     código + nombre + teléfono (+ DNI si el código lo pide).
-  - **Falta "Autoregistro"** (`POST /personas/autoregistro`, "no me
-    encontraron, pido el alta") — ver "Qué falta" más abajo, es una
-    decisión de diseño pendiente, no una pantalla que falte escribir sin
-    más.
+  - **"Soy nuevo / no me encontraron"** (Autoregistro, dos pasos) — ver
+    `backend-server/README.md`, "Autoregistro: código de organización"
+    para el porqué del primer paso: `CodigoOrganizacion.tsx` pide el
+    código que un admin comparte con su personal (`POST
+    /organizaciones/resolver-codigo`), que resuelve la organización y
+    sus sitios; `Autoregistro.tsx` pide elegir el sitio (si hay más de
+    uno) + nombre/DNI/legajo/teléfono (`POST /personas/autoregistro`).
+    Queda `pendiente_aprobacion` — un admin la aprueba desde Frontend
+    Web como cualquier otro autoregistro.
 - **Estado de la cuenta** — si la persona vinculada no está `activo`
   (`pendiente_aprobacion`, `rechazado`, `de_baja`, `vencido`), una
   pantalla explica cuál es la situación en vez de mostrar el Home como
@@ -107,28 +112,8 @@ credenciales de este repo). `app.json` ya lo referencia.
 
 ## Qué falta (a propósito, ver `ROADMAP.md`)
 
-- **Autoregistro** ("no me encontraron, pido el alta") — el endpoint
-  (`POST /personas/autoregistro`) pide un `sitioId`, pero HOY no hay
-  forma de que una sesión sin persona vinculada sepa qué sitios existen
-  para elegir: `sitios` es `org_isolation` (admin-only), y antes de
-  registrarse no hay ninguna fila de `personas` de la que derivar una
-  organización. Tres caminos posibles, ninguno construido:
-  1. Configurar la app por organización (una variable de entorno con el
-     `organizacion_id`, cada cliente real instala su propio build) y
-     agregar una política RLS de lectura de `sitios` acotada a esa
-     organización.
-  2. Un endpoint nuevo de backend, algo como `GET /sitios/publicos?organizacionId=`.
-  3. Una política RLS abierta (`sitios`, solo `id`+`nombre`) — hoy hay
-     una sola organización real en producción, así que el riesgo de
-     enumeración entre organizaciones es bajo, pero deja de serlo el
-     día que el plan multi-tenant (ver ROADMAP.md, charla del toggle de
-     SMS) sea real.
-  Es una decisión de producto/seguridad, no una que convenga tomar sola
-  — queda pendiente de acordar con el usuario.
 - **Push real** (recepción en segundo plano, permiso, token real) —
   necesita un development build y un teléfono físico, ver arriba.
-- **Autoaprobación de personal fijo nuevo** — depende de que se
-  construya autoregistro primero.
 - **Íconos/splash reales** — quedaron los que trae el template de Expo
   por default; `app.json` no tiene un `notification-icon.png` propio
   todavía (usa el default de `expo-notifications`).
@@ -172,6 +157,19 @@ Todo pasó. Datos y cuentas de Auth de prueba borrados al terminar. Ver
 `backend-server/README.md` para un hallazgo aparte encontrado en el
 camino (recursión infinita en una política RLS, ya arreglada, y una
 nota sobre un plan cacheado por el pooler de conexiones).
+
+**Autoregistro (2026-08-30)**, validado aparte, mismo criterio: código
+inexistente → `404`; código real (`REFIMODELO`, en minúsculas a
+propósito para probar la normalización) → `200` con la organización y
+sus 3 sitios reales; `POST /personas/autoregistro` con uno de esos
+sitios → `201`, `pendiente_aprobacion`; lectura propia
+(`personas_self_read`) confirma el estado; reintento desde la misma
+sesión → `409`. Dato de prueba borrado al terminar. Ver
+`backend-server/README.md`, "Autoregistro: código de organización"
+para el porqué del código (surgió de una restricción real del cliente:
+los teléfonos de la planta tienen MDM que no deja instalar APKs
+sueltos, así que la app tiene que distribuirse por una tienda de
+verdad — descartó "un build por organización" como única salida).
 
 `npm run typecheck` limpio. Sin tests unitarios propios todavía — esta
 app no tiene lógica pura propia (todo es orquestación de I/O contra

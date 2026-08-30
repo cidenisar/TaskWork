@@ -11,16 +11,21 @@ import { Cargando } from "../screens/Cargando";
 import { Bienvenida } from "../screens/Bienvenida";
 import { Reclamar } from "../screens/Reclamar";
 import { Codigo } from "../screens/Codigo";
+import { CodigoOrganizacion } from "../screens/CodigoOrganizacion";
+import { Autoregistro } from "../screens/Autoregistro";
 import { EstadoCuenta } from "../screens/EstadoCuenta";
 import { Home } from "../screens/Home";
 import { Alertas } from "../screens/Alertas";
 import { ConfirmarAlerta } from "../screens/ConfirmarAlerta";
 import type { AlertaPropia } from "../lib/alertas";
+import type { SitioOpcion } from "../lib/registro";
 
 export type RegistroStackParamList = {
   Bienvenida: undefined;
   Reclamar: undefined;
   Codigo: undefined;
+  CodigoOrganizacion: undefined;
+  Autoregistro: { organizacionNombre: string; sitios: SitioOpcion[] };
 };
 
 export type PrincipalStackParamList = {
@@ -64,6 +69,8 @@ export function RootNavigator() {
           <RegistroStack.Screen name="Bienvenida" component={Bienvenida} options={{ title: "Emergencias Refinería" }} />
           <RegistroStack.Screen name="Reclamar" component={Reclamar} options={{ title: "Ya estoy en el padrón" }} />
           <RegistroStack.Screen name="Codigo" component={Codigo} options={{ title: "Tengo un código" }} />
+          <RegistroStack.Screen name="CodigoOrganizacion" component={CodigoOrganizacion} options={{ title: "Soy nuevo" }} />
+          <RegistroStack.Screen name="Autoregistro" component={Autoregistro} options={{ title: "Alta de personal nuevo" }} />
         </RegistroStack.Navigator>
       ) : persona.estado !== "activo" ? (
         // pendiente_aprobacion / rechazado / de_baja / vencido — ninguno

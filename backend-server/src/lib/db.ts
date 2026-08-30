@@ -773,6 +773,29 @@ export class Db {
     if (error) throw error;
   }
 
+  /**
+   * Resuelve el "código de empresa" que un admin comparte con su
+   * personal (`organizaciones.codigo_acceso_app`, ver migración
+   * `organizaciones_codigo_acceso_app`) — el paso previo a
+   * Autoregistro: antes de tener una `personas` vinculada, la app no
+   * tiene ninguna otra forma de saber a qué organización pertenece
+   * quien se está por registrar (`sitios` es admin-only por RLS). Ver
+   * README, "Autoregistro: código de organización".
+   */
+  async getOrganizacionPorCodigo(codigo: string): Promise<{ id: string; nombre: string } | null> {
+    const { data, error } = await this.client.from("organizaciones").select("id, nombre").eq("codigo_acceso_app", codigo).maybeSingle();
+    if (error) throw error;
+    if (!data) return null;
+    return { id: data.id, nombre: data.nombre };
+  }
+
+  /** Sitios de una organización ya resuelta (ver getOrganizacionPorCodigo) — para el selector de sitio que Mobile muestra antes de autoregistrarse. */
+  async getSitiosDeOrganizacion(organizacionId: string): Promise<{ id: string; nombre: string }[]> {
+    const { data, error } = await this.client.from("sitios").select("id, nombre").eq("organizacion_id", organizacionId).order("nombre");
+    if (error) throw error;
+    return (data ?? []).map((s) => ({ id: s.id as string, nombre: s.nombre as string }));
+  }
+
   /** `sitioId` viene de Mobile, sin validar — a diferencia de getSitioOrganizacionId (que asume un caller confiable y explota con `.single()`), acá null en vez de tirar si no existe. */
   async getSitioParaAutoregistro(sitioId: string): Promise<{ id: string; organizacionId: string } | null> {
     const { data, error } = await this.client.from("sitios").select("id, organizacion_id").eq("id", sitioId).maybeSingle();

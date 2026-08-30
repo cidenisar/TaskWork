@@ -1,7 +1,5 @@
 // Pantalla de entrada del registro (ver backend-server/README.md,
-// "Autoregistro de personas (Mobile)") — elegir entre los flujos
-// disponibles. "Soy nuevo/no estoy en el padrón" (autoregistro) queda
-// deliberadamente afuera todavía, ver lib/registro.ts para el porqué.
+// "Autoregistro de personas (Mobile)") — elegir entre los tres flujos.
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { RegistroStackParamList } from "../navigation/RootNavigator";
 import { Pantalla, Titulo, Parrafo, BotonPrimario, BotonSecundario } from "../components/ui";
@@ -17,6 +15,7 @@ export function Bienvenida({ navigation }: Props) {
       </Parrafo>
       <BotonPrimario onPress={() => navigation.navigate("Reclamar")}>Ya estoy en el padrón (personal fijo)</BotonPrimario>
       <BotonSecundario onPress={() => navigation.navigate("Codigo")}>Tengo un código de acceso (eventual/contratista)</BotonSecundario>
+      <BotonSecundario onPress={() => navigation.navigate("CodigoOrganizacion")}>Soy nuevo / no me encontraron en el padrón</BotonSecundario>
     </Pantalla>
   );
 }

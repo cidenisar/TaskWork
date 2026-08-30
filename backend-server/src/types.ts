@@ -389,6 +389,19 @@ export interface PayloadCanjearCodigoHttp {
 }
 
 /**
+ * Body de `POST /organizaciones/resolver-codigo` (ver
+ * handlers/organizaciones.ts) — el paso previo a Autoregistro: Mobile
+ * no puede leer `sitios` (admin-only por RLS) antes de tener una
+ * `personas` vinculada, así que necesita este código (que el admin de
+ * la organización comparte con su personal, ver
+ * `organizaciones.codigo_acceso_app`) para saber a qué organización
+ * pertenece y qué sitios ofrecerle en el selector.
+ */
+export interface PayloadResolverCodigoOrgHttp {
+  codigo: string;
+}
+
+/**
  * Body de `POST /personas/push-token` — Mobile registra/renueva su
  * token de FCM. Endpoint aparte (no una escritura directa contra
  * Supabase, aunque ahora hay lectura propia vía RLS — ver migración
