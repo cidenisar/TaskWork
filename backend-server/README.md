@@ -1202,6 +1202,82 @@ organización vía `org_isolation`, sin cambios. Personas y cuentas de
 Auth de prueba borradas al terminar. `npm run typecheck` limpio, 98/98
 tests.
 
+### RLS: Mobile puede leer puntos de encuentro, eventos y su propio historial (2026-08-30)
+
+Cierra el gap documentado en `ROADMAP.md`, sección 2 ("Mobile no puede
+leer casi nada por RLS") — encontrado al planear Mobile, antes de
+escribir la primera pantalla. `puntos_encuentro`/`eventos`/
+`confirmaciones`/`eventos_puntos_estado`/`tipos_evento` solo tenían
+`org_isolation` (admin-only, vía `internal.auth_organizacion_id()`, que
+solo resuelve consultando `operadores`) — una sesión de Mobile no podía
+elegir a qué punto de encuentro dirigirse durante un evento real, ni ver
+su propio historial de confirmaciones pasadas.
+
+**Cinco políticas nuevas, permisivas (se combinan con `org_isolation`
+vía OR), `FOR SELECT` únicamente** — mismo patrón que `personas_self_read`:
+
+- `confirmaciones_self_read` — sus propias confirmaciones.
+- `eventos_notificado_lectura` — solo eventos donde tiene una
+  confirmación propia (fue notificada), no todos los de la organización.
+- `eventos_puntos_estado_lectura_notificado` — mismo criterio, el estado
+  de los puntos (habilitado/motivo) solo de esos eventos.
+- `puntos_encuentro_lectura_sitio_propio` — los puntos de su propio
+  sitio, sin condición de evento (info no sensible, ya la conoce
+  físicamente) — nombrada tal cual la sugería el ROADMAP.
+- `tipos_evento_lectura_persona` — los tipos de evento de su propia
+  organización (para mostrar el nombre real en el historial).
+
+**Hallazgo real al validar contra Supabase de verdad, no en la teoría**:
+la primera versión de `eventos_notificado_lectura` (subquery inline
+contra `confirmaciones`) causó **recursión infinita** —
+`confirmaciones.org_isolation` (preexistente) referencia `eventos`, que
+con la política nueva volvía a referenciar `confirmaciones`: ciclo
+`confirmaciones → eventos → confirmaciones → ...`
+(`"infinite recursion detected in policy for relation confirmaciones"`),
+arrastrando también a `eventos_puntos_estado` (su `org_isolation`
+también pasa por `eventos`). Mismo problema estructural que
+`operadores.org_isolation` ↔ `internal.auth_organizacion_id()` (que
+también se referencian mutuamente) pero SIN el arreglo que ese caso ya
+tenía: una función `SECURITY DEFINER` rompe el ciclo porque su query
+interna corre con el privilegio del dueño de la función, no vuelve a
+evaluar el RLS de la tabla que consulta. Arreglo: `internal.
+persona_fue_notificada(evento_id)`, `STABLE SECURITY DEFINER` (mismo
+patrón exacto que `auth_organizacion_id()`), usada por las dos políticas
+que antes recursaban.
+
+Validado con clientes `anon` reales (no `service_role`), dos rondas:
+positivos (una persona real lee sus propias confirmaciones, el evento
+donde fue notificada, el estado de los puntos de ese evento, los puntos
+de su sitio, los tipos de evento de su organización — los 5 casos, sin
+el error de recursión) y negativos (no puede leer la fila de otra
+persona, ni un evento donde no tiene confirmación, ni las confirmaciones/
+estado-de-puntos de ese evento ajeno, ni tipos de evento ni puntos de
+encuentro de una organización/sitio distintos — probado con una
+organización temporal real creada para el caso, borrada al terminar).
+Los 5 casos negativos dieron exactamente vacío, ninguno filtró datos
+ajenos. `get_advisors` (seguridad) sin nada nuevo más allá de los
+warnings esperados de "acceso anónimo" en las tablas que ahora
+Mobile puede tocar — intencional, es todo el punto de estas políticas.
+Datos y cuentas de Auth de prueba borrados al terminar.
+
+**Hallazgo aparte, no de la política en sí — un plan cacheado por el
+pooler de conexiones**: al armar la validación de punta a punta contra
+`mobile/` (ver su README), la PRIMERA lectura de `confirmaciones` de una
+sesión nueva devolvía vacío una vez, pese a que la fila existía y la
+política era correcta — el segundo intento (mismo cliente, mismo token,
+un segundo después) la traía bien, consistente. Se reprodujo un par de
+veces y dejó de reproducirse después de "calentar" la conexión con
+otras queries — todo indica un plan de Postgres cacheado en una
+conexión pooleada de antes de aplicar esta misma migración (`rls_
+lectura_mobile_persona`/`arreglar_recursion_rls_mobile`, ambas del
+mismo rato), no algo que un usuario real vaya a ver en producción salvo
+justo después de una migración de RLS. No se le agregó ningún reintento
+al código de la app por esto — la pantalla de alertas de Mobile ya
+recarga sola cada vez que gana foco (`useFocusEffect`), así que un
+vacío transitorio se autocorrige en la próxima vez que se abre la
+pantalla. Anotado acá por si vuelve a aparecer después de la próxima
+migración de RLS que se toque.
+
 ### Precauciones al habilitar Anonymous Sign-ins (2026-08-29)
 
 Los tres endpoints de autoregistro (`/personas/reclamar`,

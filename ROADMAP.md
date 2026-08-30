@@ -38,31 +38,30 @@ diferido:
   simulacros vencidos), que marque `vencido` cuando
   `vencimiento < hoy` para `tipo = 'eventual' AND estado = 'activo'`.
 
-## 2. Gap real encontrado hoy: Mobile no puede leer casi nada por RLS
+## 2. ~~Gap: Mobile no podía leer casi nada por RLS~~ — cerrado (2026-08-30)
 
-Al revisar qué le falta a Mobile para funcionar de punta a punta,
-encontré que **`puntos_encuentro`, `eventos`, `confirmaciones`,
-`eventos_puntos_estado`, `sitios` y `tipos_evento` solo tienen la
-política `org_isolation`** (admin-only, vía
-`internal.auth_organizacion_id()`) — igual que estaban antes de agregar
-`personas_self_read`. Una sesión de Mobile (persona, no operador) no
-puede leer ninguna de esas tablas.
+Al revisar qué le faltaba a Mobile para funcionar de punta a punta, se
+había encontrado que `puntos_encuentro`, `eventos`, `confirmaciones`,
+`eventos_puntos_estado` y `tipos_evento` solo tenían la política
+`org_isolation` (admin-only) — una sesión de Mobile (persona, no
+operador) no podía leer ninguna de esas tablas, así que no podía elegir
+a qué punto de encuentro dirigirse durante un evento real ni ver su
+propio historial de confirmaciones pasadas.
 
-Para la alerta en sí no es un problema — `armarMensajeDespacho` ya manda
-`eventoId`, `tipo` y `sitioId` resueltos como texto plano dentro del
-`data` del push. **Pero para que la persona pueda elegir a qué punto de
-encuentro se dirige y confirmar `POST /confirmaciones` con un `puntoId`
-real, hoy no tiene forma de enterarse de la lista de puntos habilitados
-de ese evento.** Tampoco puede ver su propio historial de
-confirmaciones pasadas.
-
-Dos formas de cerrarlo (a decidir cuando se arranque Mobile de verdad):
-
-- Política RLS nueva, tipo `puntos_encuentro_lectura_publica_del_sitio` /
-  `confirmaciones_self_read` (mismo patrón que `personas_self_read`).
-- O un endpoint de lectura dedicado (`GET /eventos/:id/puntos`,
-  `GET /personas/:id/confirmaciones`) — más control, pero un ida y
-  vuelta más contra el backend en vez de ir directo a Supabase.
+**Resuelto con la primera opción de las dos que estaban anotadas:**
+políticas RLS nuevas (`confirmaciones_self_read`,
+`eventos_notificado_lectura`, `eventos_puntos_estado_lectura_notificado`,
+`puntos_encuentro_lectura_sitio_propio`, `tipos_evento_lectura_persona`)
+en vez de un endpoint de lectura dedicado — mismo patrón directo-a-Supabase
+que ya usa Frontend Web, sin ida y vuelta extra contra el backend. Ver
+`backend-server/README.md`, "RLS: Mobile puede leer puntos de encuentro,
+eventos y su propio historial" para el detalle completo — incluye un
+hallazgo real de recursión infinita en política (`confirmaciones` ↔
+`eventos`) encontrado al validar contra Supabase real, y su arreglo
+(función `SECURITY DEFINER`, mismo patrón que ya usaba
+`internal.auth_organizacion_id()`). Validado con clientes `anon` reales,
+positivos y negativos (aislamiento entre personas/organizaciones/sitios
+ajenos confirmado vacío en los 5 casos).
 
 ## 3. Frontend Web — pantallas base completas (2026-08-30)
 
@@ -187,15 +186,38 @@ ahora); falta construir el resto del Frontend:
   - (También se charló WhatsApp Business API como canal alternativo al
     SMS, más barato/rico — sin investigar todavía.)
 
-## 4. Mobile — no existe código todavía
+## 4. Mobile — primera versión real (2026-08-30)
 
-Backend listo para: sesión anónima de Supabase Auth (`signInAnonymously()`,
-ya habilitado), `POST /personas/reclamar`, `/autoregistro`,
+Nuevo componente `mobile/` (Expo + React Native + TS, ver
+`mobile/README.md` para el porqué del stack). Backend listo para todo lo
+que necesita: sesión anónima de Supabase Auth (`signInAnonymously()`, ya
+habilitado), `POST /personas/reclamar`, `/autoregistro`,
 `/canjear-codigo`, `/push-token`, lectura de la propia fila
-(`personas_self_read`), recepción de push (FCM) y `POST /confirmaciones`.
+(`personas_self_read`), lectura de puntos/eventos/historial propio (ver
+punto 2, cerrado 2026-08-30), recepción de push (FCM) y
+`POST /confirmaciones`. Ya no queda ningún gap conocido de backend/RLS
+bloqueando construir la app de punta a punta.
 
-Pendiente antes de poder construir la app de punta a punta: el gap de
-RLS del punto 2 (elegir punto de encuentro, ver historial propio).
+Construido: sesión anónima automática (sin login), dos de los tres
+flujos de registro ("ya estoy en el padrón", "tengo un código"),
+pantalla de estado de cuenta (pendiente/rechazado/de baja/vencido),
+"Mis alertas" (historial + confirmar una alerta en curso eligiendo
+punto de encuentro), registro del token de push. Validado de punta a
+punta contra Supabase/backend-server reales (mismo mecanismo que
+`consola-virtual.html` para disparar un evento real) — ver
+`mobile/README.md`, "Validado".
+
+Falta a propósito, ver `mobile/README.md` para el detalle completo de
+cada uno:
+
+- **Autoregistro** ("no me encontraron, pido el alta") — necesita
+  decidir con el usuario cómo resuelve el sitio (app por organización +
+  RLS acotada / endpoint nuevo / política abierta), no es solo escribir
+  la pantalla.
+- **Push real** (recepción en segundo plano) — necesita un development
+  build de Expo y un teléfono físico, no se pudo probar en este
+  sandbox. El registro del token en sí (`POST /personas/push-token`) sí
+  está validado de punta a punta con un token inventado.
 
 ## 5. Consola física — dejada para el final, pero ya bastante avanzada
 
@@ -239,18 +261,13 @@ RLS del punto 2 (elegir punto de encuentro, ver historial propio).
 
 ## Próximo paso sugerido
 
-- **Frontend Web — todas las pantallas base del wireframe unificado ya
-  están construidas** (login + selector de sitio + Operadores + Padrón
-  de Personas completo + Accountability en vivo + Panorama + Historial +
-  Puntos de encuentro + Programador de Simulacros + Configuración +
-  Sitios + Consolas). Lo que sigue es elegir entre: (a) las ideas
-  superadoras charladas para SMS (aviso de recordatorio, WhatsApp
-  Business API — ver sección 3), (b) empezar Mobile (sección 4, no
-  existe código todavía), o (c) las notas pendientes de abajo, ninguna
-  bloquea nada de lo anterior:
-  - El gap de RLS del punto 2 es específico de **Mobile** (una sesión de
-    `persona`, no de admin) — sigue pendiente solo para cuando se
-    arranque Mobile de verdad.
+- **Frontend Web completo, Mobile con una primera versión real** (ver
+  secciones 3 y 4). Lo que sigue es elegir entre: (a) cerrar la decisión
+  de Autoregistro en Mobile (necesita al usuario — ver
+  `mobile/README.md`, "Qué falta"), (b) las ideas superadoras charladas
+  para SMS (aviso de recordatorio, WhatsApp Business API — ver sección
+  3), o (c) las notas pendientes de abajo, ninguna bloquea nada de lo
+  anterior:
   - El gap de `personas.estado = 'vencido'` (sección 1, arriba) es
     trabajo de `backend-server` (un barrido periódico nuevo).
   - La inconsistencia de zona horaria en `lib/tiempoRelativo.ts`
