@@ -45,6 +45,9 @@ export function Topbar({ titulo, extra }: { titulo: string; extra?: ReactNode })
         <NavLink to="/puntos-encuentro" className={({ isActive }) => (isActive ? "on" : "")}>
           Puntos
         </NavLink>
+        <NavLink to="/configuracion" className={({ isActive }) => (isActive ? "on" : "")}>
+          Configuración
+        </NavLink>
       </nav>
       {extra}
       <div className="scope-chip">

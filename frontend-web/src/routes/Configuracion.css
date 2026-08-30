@@ -1,0 +1,51 @@
+/* Configuración de organización. Botones/toast/seg-toggle/status-pill
+   (base)/info-box viven en styles/tokens.css — acá solo el layout de la
+   tarjeta, no hay nada de esto en ninguna otra pantalla todavía. */
+
+main {
+  flex: 1;
+  padding: 1.4rem 1.5rem 2.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.2rem;
+  max-width: 760px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.cfg-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.2rem 1.3rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.cfg-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.cfg-card-head h2 {
+  font-size: 1.05rem;
+  margin-bottom: 0.35rem;
+}
+.cfg-card-head p {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 0.84rem;
+  line-height: 1.55;
+  max-width: 52ch;
+}
+.cfg-card-head p code {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.82em;
+  background: var(--surface-2);
+  padding: 0.05rem 0.3rem;
+  border-radius: 4px;
+}
+.cfg-seg {
+  max-width: 320px;
+}

@@ -3,7 +3,7 @@
 Consolidado desde los 4 componentes del repo (cada uno mantiene su propia
 sección de "Decisiones pendientes" / "Qué falta" más detallada — este
 archivo es el índice para arrancar una sesión nueva sin tener que releer
-los 4 READMEs enteros). Última actualización: 2026-08-29.
+los 4 READMEs enteros). Última actualización: 2026-08-30.
 
 Orden de prioridad acordado con el cliente: **backend pulido primero,
 después Frontend Web + Mobile, consola física al final** (ya bastante
@@ -159,6 +159,26 @@ ahora); falta construir el resto del Frontend:
   usa `service_role`, es escritura directa (`org_isolation`). Validado
   con el circuito completo: un código generado por un admin real se
   canjeó de verdad desde Mobile (`POST /personas/canjear-codigo`).
+- ~~**Configuración de organización — toggle de SMS**~~ — **hecho
+  (2026-08-30)**, `/configuracion`, ver `frontend-web/README.md` y
+  `backend-server/README.md` ("Toggle de SMS por organización") para el
+  porqué completo (costo real de SMS masivo, ~USD 0,064/mensaje).
+  Surgieron dos ideas superadoras en la misma charla, **ninguna
+  construida todavía**, quedan para cuando se prioricen:
+  - **Aviso de recordatorio** ("mandar SMS solo a quien no confirmó")
+    — hoy el despacho es un único envío al abrir el evento, sin
+    reintento; esto necesitaría una feature nueva de recordatorio
+    pasado un tiempo, no un simple filtro sobre el envío inicial (en el
+    primer envío nadie confirmó todavía).
+  - **Super admin de plataforma** — no existe hoy (cada admin está
+    acotado a una `organizacion_id`, confirmado). El usuario confirmó
+    que el plan real es multi-tenant (varias organizaciones/clientes
+    distintos) — cuando eso pase de verdad, un rol por encima de
+    `operadores.rol='admin'` va a tener sentido genuino. No se
+    construyó porque hoy sigue siendo una sola organización real en
+    producción.
+  - (También se charló WhatsApp Business API como canal alternativo al
+    SMS, más barato/rico — sin investigar todavía.)
 
 ## 4. Mobile — no existe código todavía
 

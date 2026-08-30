@@ -70,6 +70,23 @@ export class Db {
     return data.nombre as string;
   }
 
+  // Toggle de organizacion (2026-08-30, ver handlers/eventos.ts,
+  // despacharATodos): con esto en false, el despacho salta a quien le toca
+  // SMS (ver canalDePersona) — pensado para que un admin corte el costo de
+  // mandarle SMS a miles de personas sin tener que tocar código ni .env. El
+  // push no se ve afectado (nunca fue el canal caro). Default true en la
+  // columna (ver migración add_sms_habilitado_a_organizaciones) — no
+  // rompe orgs existentes.
+  async getSmsHabilitado(organizacionId: string): Promise<boolean> {
+    const { data, error } = await this.client
+      .from("organizaciones")
+      .select("sms_habilitado")
+      .eq("id", organizacionId)
+      .single();
+    if (error) throw error;
+    return data.sms_habilitado as boolean;
+  }
+
   /**
    * `.ilike()` es case-insensitive pero NO ignora acentos — "MEDICO" no
    * matchea "Médico" (confirmado contra datos reales). El `tipo` que

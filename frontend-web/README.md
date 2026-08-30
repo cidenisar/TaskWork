@@ -89,9 +89,9 @@ todo.
   Accountability en vivo reales no están construidos aún, ver
   `../ROADMAP.md`.
 
-Nav mínima en el `<Topbar>` (Sitios / Operadores) — un rail lateral de
-verdad queda para cuando haya más pantallas que lo justifiquen (ver
-`../ROADMAP.md`).
+Nav mínima en el `<Topbar>` (Sitios / Operadores / Personas / Simulacros /
+Puntos / Configuración) — un rail lateral de verdad queda para cuando
+haya más pantallas que lo justifiquen (ver `../ROADMAP.md`).
 
 ## Administración de Operadores (2026-08-29)
 
@@ -606,6 +606,31 @@ organización) — ver el detalle en `backend-server/README.md`. Más 6
 tests unitarios nuevos del motor de fechas
 (`primeraOcurrenciaDesde`), 108/108 pasando. `npm run typecheck`/`build`
 limpios.
+
+## Configuración de organización (2026-08-30)
+
+`/configuracion` — protegida. Por ahora un único toggle: habilitar/
+deshabilitar el despacho por SMS de **toda la organización**
+(`organizaciones.sms_habilitado`, ver `backend-server/README.md`, "Toggle
+de SMS por organización" para el porqué completo — surgió de que el
+usuario quería poder cortar el gasto de SMS masivo, ~USD 0,064/mensaje,
+sin tocar código). Escritura directa contra Supabase (`lib/organizacion.ts`
+— `org_isolation` en `organizaciones` ya deja a un admin leer/escribir su
+propia fila), mismo criterio que Puntos de Encuentro/Códigos de acceso —
+no hay endpoint nuevo en backend-server para esto, solo la lectura del
+lado del backend al despachar (`Db.getSmsHabilitado`).
+
+Reusa `.seg-toggle` (ya usado en Operadores/Códigos/Programador, vive en
+`styles/tokens.css`) en vez de inventar un componente de switch nuevo. El
+`.info-box` de abajo cambia de texto según el estado — deja explícito que
+el push nunca se ve afectado por este toggle, y que con SMS apagado el
+personal sin push token queda directamente sin ningún aviso (no hay
+reintento/canal alternativo todavía).
+
+Pantalla nueva en la nav del `<Topbar>` ("Configuración"), ruta
+`/configuracion` agregada a `App.tsx`. `npm run typecheck`/`build`
+limpios; validado de punta a punta junto con el backend, ver
+`backend-server/README.md`.
 
 ## Cómo correr esto
 

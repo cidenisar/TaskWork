@@ -13,6 +13,7 @@ import { Codigos } from "./routes/Codigos";
 import { Accountability } from "./routes/Accountability";
 import { Panorama } from "./routes/Panorama";
 import { Puntos } from "./routes/Puntos";
+import { Configuracion } from "./routes/Configuracion";
 
 export function App() {
   return (
@@ -105,6 +106,14 @@ export function App() {
             element={
               <ProtectedRoute>
                 <Accountability />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/configuracion"
+            element={
+              <ProtectedRoute>
+                <Configuracion />
               </ProtectedRoute>
             }
           />

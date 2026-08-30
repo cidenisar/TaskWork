@@ -358,6 +358,59 @@ completo" de OK significa el mismo push/SMS que abrió el evento, o un
 mensaje distinto tipo "todo despejado"?) — queda para la próxima vez que
 se toque este ítem puntual.
 
+### Toggle de SMS por organización (2026-08-30)
+
+**Por qué**: el usuario preguntó si existe un super admin capaz de
+prender/apagar el SMS y de mandarlo solo a quien no confirmó — el costo
+real de SMS masivo (~USD 0,064 por mensaje) hace que mandarle SMS a miles
+de personas en cada evento sea caro. No hay super admin en el sistema hoy
+(cada admin de `operadores` está siempre acotado a una `organizacion_id` —
+confirmado que no hay ningún rol por encima de eso); el usuario confirmó
+que el plan real es multi-tenant (múltiples organizaciones/clientes), así
+que un super admin de plataforma es algo genuino a futuro, pero no hace
+falta para este pedido puntual: alcanza con una config por organización,
+que un admin ya puede tocar sola con los permisos que tiene hoy.
+
+La idea de "mandar SMS solo a quien no confirmó" no aplica al primer envío
+de un evento (en el primer envío nadie confirmó todavía — no hay forma de
+saber de antemano quién va a contestar) — es en realidad una feature
+distinta, un "aviso de recordatorio" a los que siguen pendientes pasado un
+rato, que **no existe todavía** (hoy el despacho es 100% un solo envío al
+abrir el evento, sin reintento — confirmado, no hay nada de esto en el
+código). Quedó anotada como posible próximo paso, no se construyó en esta
+vuelta (el usuario priorizó primero el toggle simple).
+
+**Lo que se construyó**: columna nueva `organizaciones.sms_habilitado`
+(boolean, default `true` — no rompe organizaciones existentes). `Db.
+getSmsHabilitado(organizacionId)` la lee; `handlers/eventos.ts` la resuelve
+una sola vez por evento (junto con personas/puntos/sitioNombre, en paralelo)
+y se la pasa a `despacharATodos`, que ahora filtra de la lista de
+destinatarios a quien le toca SMS (`canalDePersona(p) === "sms"`, ver
+`logic/eventos.ts`) **antes** de intentar el despacho — con la
+organización deshabilitada, esas personas no reciben nada, ni siquiera
+pasan por "modo consola" (ver arriba). El **push nunca se ve afectado** —
+nunca fue el canal caro, no tenía sentido tocarlo. Un log explícito deja
+rastro de cuántos quedaron afuera por el toggle
+(`N omitidos por SMS deshabilitado`), separado del conteo de fallos reales.
+
+La escritura del toggle es directa desde Frontend Web contra Supabase
+(`organizaciones` ya tiene `org_isolation` — un admin puede leer/escribir
+su propia fila de organización sin pasar por un endpoint nuevo acá, mismo
+criterio que Puntos de Encuentro/Operadores) — ver `frontend-web/README.md`,
+pantalla "Configuración".
+
+**Validado de punta a punta (2026-08-30)** contra el proyecto real: con
+`sms_habilitado = false`, un evento real (Incendio, modo SIMULACRO,
+disparado por MQTT igual que lo haría una consola) despachó `0/1`
+destinatarios con el log `1 omitidos por SMS deshabilitado` — la persona
+con canal SMS ni siquiera pasó por "modo consola", la persona con push
+intentó igual (falló con el mismo error esperado de Firebase por ser un
+token de prueba, no relacionado a este cambio). Con `sms_habilitado = true`
+de nuevo, el mismo tipo de evento despachó `1/2` — el SMS volvió a
+imprimirse en "modo consola" con el texto completo, sin el sufijo de
+omitidos. Datos de prueba (los 2 eventos + sus confirmaciones) borrados
+después de confirmar. 112/112 tests, typecheck limpio.
+
 ### Endpoint para las confirmaciones de Mobile
 
 **Decisión tomada (2026-08-27): REST, no MQTT.** La ficha dejaba esto sin
