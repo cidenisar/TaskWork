@@ -1,0 +1,436 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<title>Consola Disparadora — Virtual</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<style>
+  :root {
+    --bg: #0a0e13; --surface: #121820; --surface-2: #1a2129; --surface-3: #212a33;
+    --border: #2b3540; --border-strong: #3d4a56; --text: #eef2f5; --text-dim: #9fadb8; --text-faint: #6b7885;
+    --accent: #ff8c2b; --accent-dim: #c9711f; --accent-ink: #23140a;
+    --ok: #35c47a; --ok-bg: rgba(53,196,122,0.14);
+    --help: #ef4a52; --help-bg: rgba(239,74,82,0.16);
+    --pending: #f2b544; --pending-bg: rgba(242,181,68,0.15);
+    --info: #4f9fe0; --info-bg: rgba(79,159,224,0.14);
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: "IBM Plex Sans", system-ui, sans-serif;
+    display: flex; flex-direction: column; align-items: center;
+    padding: 1.5rem 1rem 3rem;
+    gap: 1.2rem;
+  }
+  h1, h2, h3 { font-family: "Big Shoulders Display", "Arial Narrow", sans-serif; text-transform: uppercase; letter-spacing: 0.02em; margin: 0; }
+  .topbar { display: flex; align-items: center; gap: 0.8rem; }
+  .topbar h1 { font-size: 1.3rem; }
+  .badge { font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; padding: 0.25rem 0.6rem; border-radius: 999px; border: 1px solid var(--border-strong); color: var(--text-faint); }
+  .badge.on { color: var(--ok); border-color: var(--ok); background: var(--ok-bg); }
+  .badge.off { color: var(--help); border-color: var(--help); background: var(--help-bg); }
+
+  .config-bar { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; font-size: 0.78rem; color: var(--text-dim); background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 0.6rem 0.9rem; }
+  .config-bar input, .config-bar select { background: var(--surface-2); border: 1px solid var(--border-strong); color: var(--text); border-radius: 6px; padding: 0.3rem 0.5rem; font-size: 0.78rem; font-family: inherit; }
+  .config-bar button { background: var(--surface-2); border: 1px solid var(--border-strong); color: var(--text); border-radius: 6px; padding: 0.3rem 0.7rem; font-size: 0.78rem; font-family: inherit; cursor: pointer; }
+  .config-bar button:hover { border-color: var(--accent); }
+
+  .consola {
+    width: 380px; max-width: 92vw;
+    background: linear-gradient(180deg, var(--surface-2), var(--surface));
+    border: 1px solid var(--border-strong);
+    border-radius: 20px;
+    padding: 1.3rem;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+    display: flex; flex-direction: column; gap: 1.1rem;
+  }
+
+  .llave-row { display: flex; align-items: center; justify-content: space-between; gap: 0.8rem; }
+  .llave-label { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-faint); font-weight: 700; }
+  .llave-switch { display: flex; border: 1px solid var(--border-strong); border-radius: 999px; overflow: hidden; background: var(--surface-3); }
+  .llave-switch button { flex: 1; background: none; border: none; color: var(--text-dim); font-family: inherit; font-size: 0.76rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; padding: 0.5rem 0.9rem; cursor: pointer; }
+  .llave-switch button.on { background: var(--accent); color: var(--accent-ink); }
+
+  .pantalla {
+    background: #050708;
+    border: 1px solid var(--border-strong);
+    border-radius: 12px;
+    min-height: 210px;
+    padding: 1.1rem;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.7rem;
+    text-align: center;
+  }
+  .pantalla .estado-txt { font-size: 0.98rem; font-weight: 700; }
+  .pantalla .sub-txt { font-size: 0.8rem; color: var(--text-dim); }
+  .pin-dots { display: flex; gap: 0.5rem; }
+  .pin-dots span { width: 14px; height: 14px; border-radius: 50%; border: 1px solid var(--border-strong); background: var(--surface-3); }
+  .pin-dots span.filled { background: var(--accent); border-color: var(--accent); }
+  .keypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; width: 100%; max-width: 220px; }
+  .keypad button {
+    background: var(--surface-2); border: 1px solid var(--border-strong); color: var(--text);
+    border-radius: 8px; padding: 0.7rem 0; font-size: 1rem; font-family: "IBM Plex Mono", monospace; font-weight: 700; cursor: pointer;
+  }
+  .keypad button:hover { border-color: var(--accent); }
+  .keypad button.wide { font-size: 0.72rem; font-family: inherit; }
+
+  .countdown-num { font-family: "IBM Plex Mono", monospace; font-size: 3.2rem; font-weight: 800; color: var(--help); }
+
+  .botonera { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; }
+  .btn-alarma {
+    background: var(--surface-2); border: 1px solid var(--border-strong); color: var(--text);
+    border-radius: 10px; padding: 0.75rem 0.4rem; font-family: "Big Shoulders Display", sans-serif; font-weight: 800;
+    font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.01em; cursor: pointer;
+    display: flex; flex-direction: column; align-items: center; gap: 0.3rem;
+  }
+  .btn-alarma .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--border-strong); }
+  .btn-alarma[data-tipo="INCENDIO"] { border-color: #e11d2e33; }
+  .btn-alarma[data-tipo="INCENDIO"]:hover { border-color: #e11d2e; color: #ff8080; }
+  .btn-alarma[data-tipo="SISMO"]:hover { border-color: #f5c518; color: #f5c518; }
+  .btn-alarma[data-tipo="MEDICO"]:hover { border-color: #22c55e; color: #22c55e; }
+  .btn-alarma[data-tipo="TOXICO"]:hover { border-color: #2563eb; color: #6ea1ff; }
+  .btn-alarma[data-tipo="OK"]:hover { border-color: var(--ok); color: var(--ok); }
+  .btn-alarma:disabled { opacity: 0.35; cursor: default; }
+  .btn-cancelar {
+    width: 100%; background: var(--help-bg); border: 1px solid var(--help); color: var(--help);
+    border-radius: 10px; padding: 0.7rem; font-weight: 700; font-family: inherit; cursor: pointer;
+  }
+  .btn-cancelar:hover { filter: brightness(1.15); }
+
+  .operador-chip { font-size: 0.76rem; color: var(--text-dim); text-align: center; }
+  .operador-chip b { color: var(--text); }
+
+  .log-panel { width: 380px; max-width: 92vw; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 0.8rem 0.9rem; }
+  .log-panel h3 { font-size: 0.9rem; margin-bottom: 0.5rem; }
+  .log { font-family: "IBM Plex Mono", monospace; font-size: 0.7rem; color: var(--text-dim); max-height: 220px; overflow-y: auto; display: flex; flex-direction: column; gap: 0.25rem; }
+  .log .l-pub { color: var(--info); }
+  .log .l-info { color: var(--text-faint); }
+
+  .nota {
+    width: 380px; max-width: 92vw; font-size: 0.74rem; color: var(--text-faint);
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 0.7rem 0.9rem; line-height: 1.5;
+  }
+  .nota b { color: var(--text-dim); }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <h1>🔥 Consola Disparadora — Virtual</h1>
+  <span class="badge" id="badge-conexion">desconectado</span>
+</div>
+
+<div class="config-bar">
+  <label>Broker: </label>
+  <input type="text" id="wsUrl" value="ws://localhost:9001" size="22" />
+  <label>Consola: </label>
+  <select id="consolaId">
+    <option value="0d72961f-ef3f-4724-9e93-ca2fbaeeb9ed">Bomberos (Planta de Refinación Principal)</option>
+  </select>
+  <label>Modo: </label>
+  <select id="modoEvento">
+    <option value="SIMULACRO" selected>SIMULACRO</option>
+    <option value="REAL">REAL</option>
+  </select>
+  <button id="btnConectar">Conectar</button>
+</div>
+
+<div class="consola">
+  <div class="llave-row">
+    <span class="llave-label">Llave</span>
+    <div class="llave-switch">
+      <button id="llaveBloq" class="on">Bloqueado</button>
+      <button id="llaveHab">Habilitado</button>
+    </div>
+  </div>
+
+  <div class="pantalla" id="pantalla"></div>
+
+  <div class="operador-chip" id="operadorChip"></div>
+</div>
+
+<div class="nota">
+  <b>PIN de prueba:</b> <code>1234</code> — operador real de demo, vinculado a esta consola.
+  Se bloquea 30s después de 3 intentos inválidos seguidos, igual que la consola física.
+  En modo <b>SIMULACRO</b> los eventos que dispares acá se marcan como simulacro, no como
+  emergencia real — aun así el backend los procesa de verdad (accountability, notificaciones).
+</div>
+
+<div class="log-panel">
+  <h3>Actividad MQTT</h3>
+  <div class="log" id="log"></div>
+</div>
+
+<script src="mqtt.min.js"></script>
+<script>
+(function () {
+  "use strict";
+
+  // ---------- Config del operador de demo (ver backend-server, script make-consola-operador.ts) ----------
+  var OPERADOR_DEMO = { pin: "1234", operadorId: "082b5218-7a22-410f-a03d-28563f040742", legajo: "DEMO-1", rol: "operador" };
+
+  var CUENTA_REGRESIVA_MS = 5000;
+  var BLOQUEO_PIN_MS = 30000;
+  var LIMITE_INTENTOS_PIN = 3;
+
+  var BOTONES_ALARMA = ["INCENDIO", "SISMO", "MEDICO", "TOXICO", "OK"];
+
+  // ---------- Máquina de estados — puerto fiel de consola-pi/src/logic/panel.ts ----------
+  // (bloqueado | pidiendo_pin | pin_bloqueado | habilitado | confirmando | enviado)
+
+  var panelState = { fase: "bloqueado" };
+  var pinBuffer = "";
+  var temporizadorCuentaRegresiva = null;
+  var temporizadorBloqueoPin = null;
+  var cuentaRegresivaFinTs = null;
+  var bloqueoPinFinTs = null;
+
+  function reducirPanel(estado, entrada) {
+    if (entrada.tipo === "llave_bloqueada") {
+      var efectos = [];
+      if (estado.fase === "confirmando") efectos = [{ tipo: "cancelar_cuenta_regresiva" }];
+      else if (estado.fase === "pin_bloqueado") efectos = [{ tipo: "cancelar_bloqueo_pin" }];
+      return { estado: { fase: "bloqueado" }, efectos: efectos };
+    }
+
+    switch (estado.fase) {
+      case "bloqueado":
+        if (entrada.tipo === "llave_habilitada") return { estado: { fase: "pidiendo_pin", intentosFallidos: 0 }, efectos: [] };
+        return { estado: estado, efectos: [] };
+
+      case "pidiendo_pin":
+        if (entrada.tipo === "pin_valido") {
+          return { estado: { fase: "habilitado", operador: entrada.operador }, efectos: [{ tipo: "publicar_auth", resultado: "valido", operador: entrada.operador }] };
+        }
+        if (entrada.tipo === "pin_invalido") {
+          var intentosFallidos = estado.intentosFallidos + 1;
+          var efectoAuditoria = { tipo: "publicar_auth", resultado: "invalido", operador: null };
+          if (intentosFallidos >= LIMITE_INTENTOS_PIN) {
+            return { estado: { fase: "pin_bloqueado" }, efectos: [efectoAuditoria, { tipo: "iniciar_bloqueo_pin" }] };
+          }
+          return { estado: { fase: "pidiendo_pin", intentosFallidos: intentosFallidos }, efectos: [efectoAuditoria] };
+        }
+        return { estado: estado, efectos: [] };
+
+      case "pin_bloqueado":
+        if (entrada.tipo === "bloqueo_pin_terminado") return { estado: { fase: "pidiendo_pin", intentosFallidos: 0 }, efectos: [] };
+        return { estado: estado, efectos: [] };
+
+      case "habilitado":
+        if (entrada.tipo === "boton_presionado" && entrada.boton !== "CANCELAR") {
+          return { estado: { fase: "confirmando", operador: estado.operador, boton: entrada.boton }, efectos: [{ tipo: "iniciar_cuenta_regresiva" }] };
+        }
+        return { estado: estado, efectos: [] };
+
+      case "confirmando":
+        if (entrada.tipo === "boton_presionado" && entrada.boton === "CANCELAR") {
+          return { estado: { fase: "habilitado", operador: estado.operador }, efectos: [{ tipo: "cancelar_cuenta_regresiva" }] };
+        }
+        if (entrada.tipo === "cuenta_regresiva_terminada") {
+          return { estado: { fase: "enviado", operador: estado.operador, boton: estado.boton }, efectos: [{ tipo: "publicar_evento", boton: estado.boton, operador: estado.operador }] };
+        }
+        return { estado: estado, efectos: [] };
+
+      case "enviado":
+        if (entrada.tipo === "volver_a_reposo") return { estado: { fase: "habilitado", operador: estado.operador }, efectos: [] };
+        return { estado: estado, efectos: [] };
+    }
+    return { estado: estado, efectos: [] };
+  }
+
+  // ---------- MQTT ----------
+  var client = null;
+
+  function consolaId() { return document.getElementById("consolaId").value; }
+  function modoEvento() { return document.getElementById("modoEvento").value; }
+
+  function log(msg, cls) {
+    var l = document.getElementById("log");
+    var div = document.createElement("div");
+    div.className = cls || "l-info";
+    div.textContent = "[" + new Date().toLocaleTimeString() + "] " + msg;
+    l.prepend(div);
+  }
+
+  function conectar() {
+    var url = document.getElementById("wsUrl").value;
+    client = mqtt.connect(url, { clientId: "consola-virtual-" + Math.random().toString(16).slice(2) });
+    client.on("connect", function () {
+      document.getElementById("badge-conexion").textContent = "conectado";
+      document.getElementById("badge-conexion").className = "badge on";
+      log("Conectado a " + url, "l-info");
+    });
+    client.on("close", function () {
+      document.getElementById("badge-conexion").textContent = "desconectado";
+      document.getElementById("badge-conexion").className = "badge off";
+    });
+    client.on("error", function (err) {
+      log("Error de conexión: " + err.message, "l-info");
+    });
+  }
+
+  function publicar(topico, payload) {
+    if (!client || !client.connected) {
+      log("No conectado — no se pudo publicar en " + topico, "l-info");
+      return;
+    }
+    client.publish(topico, JSON.stringify(payload), { qos: 1 });
+    log(topico + " → " + JSON.stringify(payload), "l-pub");
+  }
+
+  function ejecutarEfectos(efectos) {
+    efectos.forEach(function (efecto) {
+      if (efecto.tipo === "publicar_auth") {
+        publicar("consolas/" + consolaId() + "/auth", {
+          operadorId: efecto.operador ? efecto.operador.operadorId : null,
+          legajo: efecto.operador ? efecto.operador.legajo : null,
+          resultado: efecto.resultado,
+          ts: Date.now(),
+        });
+      } else if (efecto.tipo === "publicar_evento") {
+        publicar("consolas/" + consolaId() + "/eventos", {
+          eventoId: (crypto.randomUUID ? crypto.randomUUID() : String(Math.random())),
+          tipo: efecto.boton,
+          estado: "DISPARADO",
+          notificacionEnviada: true,
+          origen: "consola",
+          consolaId: consolaId(),
+          operadorId: efecto.operador.operadorId,
+          operadorRol: efecto.operador.rol,
+          modo: modoEvento(),
+          simulacroProgramadoId: null,
+          ts: Date.now(),
+        });
+      } else if (efecto.tipo === "iniciar_cuenta_regresiva") {
+        cuentaRegresivaFinTs = Date.now() + CUENTA_REGRESIVA_MS;
+        temporizadorCuentaRegresiva = setTimeout(function () { dispatch({ tipo: "cuenta_regresiva_terminada" }); }, CUENTA_REGRESIVA_MS);
+      } else if (efecto.tipo === "cancelar_cuenta_regresiva") {
+        clearTimeout(temporizadorCuentaRegresiva);
+        cuentaRegresivaFinTs = null;
+      } else if (efecto.tipo === "iniciar_bloqueo_pin") {
+        bloqueoPinFinTs = Date.now() + BLOQUEO_PIN_MS;
+        temporizadorBloqueoPin = setTimeout(function () { dispatch({ tipo: "bloqueo_pin_terminado" }); }, BLOQUEO_PIN_MS);
+      } else if (efecto.tipo === "cancelar_bloqueo_pin") {
+        clearTimeout(temporizadorBloqueoPin);
+        bloqueoPinFinTs = null;
+      }
+    });
+  }
+
+  function dispatch(entrada) {
+    var resultado = reducirPanel(panelState, entrada);
+    panelState = resultado.estado;
+    ejecutarEfectos(resultado.efectos);
+    render();
+  }
+
+  // ---------- UI ----------
+
+  function validarPin(pin) {
+    if (pin === OPERADOR_DEMO.pin) {
+      return { operadorId: OPERADOR_DEMO.operadorId, legajo: OPERADOR_DEMO.legajo, rol: OPERADOR_DEMO.rol };
+    }
+    return null;
+  }
+
+  var intervaloRender = null;
+
+  function render() {
+    var pantalla = document.getElementById("pantalla");
+    var operadorChip = document.getElementById("operadorChip");
+    document.getElementById("llaveBloq").className = panelState.fase === "bloqueado" ? "on" : "";
+    document.getElementById("llaveHab").className = panelState.fase !== "bloqueado" ? "on" : "";
+    operadorChip.textContent = "";
+
+    if (panelState.fase === "bloqueado") {
+      pantalla.innerHTML = '<div class="estado-txt">🔒 Consola bloqueada</div><div class="sub-txt">Girá la llave a "Habilitado" para empezar.</div>';
+    } else if (panelState.fase === "pidiendo_pin") {
+      pantalla.innerHTML =
+        '<div class="estado-txt">Ingresá el PIN</div>' +
+        '<div class="pin-dots">' + [0, 1, 2, 3].map(function (i) { return '<span class="' + (i < pinBuffer.length ? "filled" : "") + '"></span>'; }).join("") + '</div>' +
+        (panelState.intentosFallidos > 0 ? '<div class="sub-txt" style="color:var(--help)">PIN inválido — intento ' + panelState.intentosFallidos + ' de 3</div>' : '') +
+        '<div class="keypad" id="keypad"></div>';
+      var keypad = document.getElementById("keypad");
+      ["1", "2", "3", "4", "5", "6", "7", "8", "9", "⌫", "0", "OK"].forEach(function (k) {
+        var b = document.createElement("button");
+        b.textContent = k;
+        if (k === "⌫" || k === "OK") b.className = "wide";
+        b.addEventListener("click", function () { onTeclaPin(k); });
+        keypad.appendChild(b);
+      });
+    } else if (panelState.fase === "pin_bloqueado") {
+      pantalla.innerHTML = '<div class="estado-txt" style="color:var(--help)">⛔ PIN bloqueado</div><div class="sub-txt" id="bloqueoCountdown"></div>';
+    } else if (panelState.fase === "habilitado") {
+      pantalla.innerHTML =
+        '<div class="estado-txt" style="color:var(--ok)">✔ Habilitado</div>' +
+        '<div class="botonera" id="botonera"></div>';
+      operadorChip.innerHTML = 'Operador: <b>' + (panelState.operador.legajo || panelState.operador.operadorId) + '</b> (' + panelState.operador.rol + ')';
+      var botonera = document.getElementById("botonera");
+      BOTONES_ALARMA.forEach(function (tipo) {
+        var b = document.createElement("button");
+        b.className = "btn-alarma";
+        b.setAttribute("data-tipo", tipo);
+        b.innerHTML = '<span class="dot"></span>' + tipo;
+        b.addEventListener("click", function () { dispatch({ tipo: "boton_presionado", boton: tipo }); });
+        botonera.appendChild(b);
+      });
+    } else if (panelState.fase === "confirmando") {
+      pantalla.innerHTML =
+        '<div class="sub-txt">Disparando <b style="color:var(--text)">' + panelState.boton + '</b> en…</div>' +
+        '<div class="countdown-num" id="countdownNum"></div>' +
+        '<button class="btn-cancelar" id="btnCancelar">CANCELAR</button>';
+      document.getElementById("btnCancelar").addEventListener("click", function () { dispatch({ tipo: "boton_presionado", boton: "CANCELAR" }); });
+      operadorChip.innerHTML = 'Operador: <b>' + (panelState.operador.legajo || panelState.operador.operadorId) + '</b>';
+    } else if (panelState.fase === "enviado") {
+      pantalla.innerHTML =
+        '<div class="estado-txt" style="color:var(--help)">🚨 ' + panelState.boton + ' DISPARADO</div>' +
+        '<div class="sub-txt">Evento publicado — ver Panorama de Sitios / Accountability en Frontend Web.</div>' +
+        '<button class="btn-cancelar" style="background:var(--surface-2);border-color:var(--border-strong);color:var(--text-dim)" id="btnVolver">Volver a reposo</button>';
+      document.getElementById("btnVolver").addEventListener("click", function () { dispatch({ tipo: "volver_a_reposo" }); });
+    }
+  }
+
+  function onTeclaPin(k) {
+    if (k === "⌫") {
+      pinBuffer = pinBuffer.slice(0, -1);
+      render();
+      return;
+    }
+    if (k === "OK") {
+      var operador = validarPin(pinBuffer);
+      pinBuffer = "";
+      dispatch(operador ? { tipo: "pin_valido", operador: operador } : { tipo: "pin_invalido" });
+      return;
+    }
+    if (pinBuffer.length < 4) {
+      pinBuffer += k;
+      render();
+      if (pinBuffer.length === 4) {
+        setTimeout(function () { onTeclaPin("OK"); }, 150);
+      }
+    }
+  }
+
+  document.getElementById("llaveHab").addEventListener("click", function () { dispatch({ tipo: "llave_habilitada" }); });
+  document.getElementById("llaveBloq").addEventListener("click", function () { dispatch({ tipo: "llave_bloqueada" }); });
+  document.getElementById("btnConectar").addEventListener("click", conectar);
+
+  // refresco de los contadores en pantalla (cuenta regresiva / bloqueo de pin), 1x por segundo
+  setInterval(function () {
+    if (panelState.fase === "confirmando" && cuentaRegresivaFinTs) {
+      var restante = Math.max(0, Math.ceil((cuentaRegresivaFinTs - Date.now()) / 1000));
+      var el = document.getElementById("countdownNum");
+      if (el) el.textContent = restante;
+    } else if (panelState.fase === "pin_bloqueado" && bloqueoPinFinTs) {
+      var restanteS = Math.max(0, Math.ceil((bloqueoPinFinTs - Date.now()) / 1000));
+      var el2 = document.getElementById("bloqueoCountdown");
+      if (el2) el2.textContent = "Reintentar en " + restanteS + "s…";
+    }
+  }, 200);
+
+  render();
+  conectar();
+})();
+</script>
+
+</body>
+</html>

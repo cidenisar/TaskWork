@@ -189,7 +189,26 @@ RLS del punto 2 (elegir punto de encuentro, ver historial propio).
   del relé, y los timings (`DEBOUNCE_MS`/`BLINK_MS`/`HEARTBEAT_MS`) —
   todo sin hardware real todavía para probarlo.
 - **`consola-simulador`** (HTML/JS, para probar sin hardware): al día,
-  sin pendientes señalados.
+  sin pendientes señalados. Sumada (2026-08-30)
+  **`consola-virtual.html`** — a diferencia de `index.html` (un
+  formulario crudo de MQTT), es la experiencia real de la consola física
+  (llave → PIN → botón → cuenta regresiva → envío) 100% en el navegador,
+  puerto fiel de la máquina de estados de
+  `consola-pi/src/logic/panel.ts`. Trae su propio broker MQTT local sin
+  autenticación (`broker-local.mjs`, `aedes` puro Node — sin Mosquitto,
+  sin herramientas de compilación en Windows) para no depender de
+  infraestructura externa. Validada de punta a punta: un evento
+  disparado desde ahí llega real a `backend-server` y a Supabase. Ver
+  `consola-simulador/README.md`.
+  - **Hallazgo real, encontrado al armar esto (ya corregido y pusheado,
+    2026-08-30)**: los botones físicos **MÉDICO** y **TÓXICO** de la
+    consola se perdían en silencio — `Db.getTipoEventoPorNombre`
+    comparaba con `.ilike()` (case-insensitive, pero no ignora acentos)
+    el `tipo` ASCII fijo del firmware ("MEDICO") contra
+    `tipos_evento.nombre` real, que tiene acentos ("Médico") — cero
+    matches, evento descartado sin avisarle a nadie. Ver
+    `backend-server/README.md`, sección del hallazgo, para el detalle
+    completo y la corrección.
 
 ## Próximo paso sugerido
 
