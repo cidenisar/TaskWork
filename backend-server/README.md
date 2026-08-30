@@ -331,6 +331,22 @@ la cuenta (se frena en la verificación de segundo factor de Twilio) — no es
 un problema del código, sigue bloqueado del lado de la cuenta. El camino
 de fallo gracioso (sin `TWILIO_*`) ya está validado igual que push.
 
+**"Modo consola" del SMS (2026-08-30)**: el usuario probó varios
+proveedores (Twilio, MessageBird, Plivo) y no consiguió terminar de dar de
+alta ninguna cuenta — así que en vez de reemplazar Twilio por otro
+proveedor (que iba a tener el mismo problema), `lib/sms.ts` ya no *falla*
+sin credenciales: **imprime el SMS completo en esta terminal** en vez de
+mandarlo de verdad. `ClienteSms` pasó de `Twilio | null` a un tipo con dos
+modos (`{modo:"twilio"}` / `{modo:"consola"}`); `Despachador` ya no
+necesita el chequeo de null que tenía antes (`crearClienteSms()` nunca
+devuelve null). El comportamiento de **push** no se tocó — sigue fallando
+si falta Firebase, no lo pidieron. Validado de punta a punta con un evento
+real disparado desde `consola-virtual.html`: el SMS de la persona sin
+`push_token` apareció completo en la terminal
+(`[sms] (modo consola...) para +54...: "ALERTA INCENDIO..."`), sin afectar
+el resto del despacho (la persona con `push_token` siguió fallando con el
+mismo error esperado de Firebase). 112/112 tests, typecheck limpio.
+
 **Nota aparte, encontrada al revisar este código (no se tocó todavía):**
 la ficha dice que "OK es un tipo de evento real más, con despacho
 completo" (ver comentario en `handlers/eventos.ts`), pero el código actual

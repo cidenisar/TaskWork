@@ -13,7 +13,10 @@ import type { MensajeDespacho } from "../logic/despacho.js";
 export class Despachador {
   constructor(
     private pushApp: App | null,
-    private smsClient: ClienteSms | null
+    // Nunca null — crearClienteSms() (ver lib/sms.ts) devuelve "modo consola"
+    // si falta Twilio, no null. El push sigue fallando si falta Firebase (no
+    // se tocó ese comportamiento); el SMS ya no necesita ese mismo chequeo.
+    private smsClient: ClienteSms
   ) {}
 
   async despacharAPersona(persona: Persona, mensaje: MensajeDespacho): Promise<void> {
@@ -28,9 +31,6 @@ export class Despachador {
         data: mensaje.data,
       });
     } else {
-      if (!this.smsClient) {
-        throw new Error("Twilio no configurado (ver .env.example, TWILIO_*) — no se pudo enviar el SMS.");
-      }
       await enviarSms(this.smsClient, persona.telefono, mensaje.textoSms);
     }
   }
