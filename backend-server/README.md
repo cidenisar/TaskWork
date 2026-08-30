@@ -1394,6 +1394,51 @@ efectivamente se resolvieron, no el tamaño de la lista de vencidos) y
 ambos quedaron `no_realizado` en la base. `npm run typecheck` limpio,
 70/70 tests. Datos de prueba limpiados.
 
+## Hallazgo de seguridad/correctitud: el botón MÉDICO y el botón TÓXICO de la consola física se perdían en silencio (2026-08-30)
+
+Encontrado al armar una consola virtual de prueba (ver
+`consola-simulador/`), no en una revisión pedida — un hallazgo
+incidental mientras se preparaba el payload MQTT real para probarla.
+
+**El bug**: `Db.getTipoEventoPorNombre` usaba `.ilike("nombre", nombre)`
+— case-insensitive, pero **no ignora acentos**. El `tipo` que manda la
+consola física es siempre texto ASCII fijo del firmware
+(`consola-pi/src/lib/esp32.ts`, `BotonFisico`: `"MEDICO"`, `"TOXICO"`,
+etc. — nombres de firmware, sin acentos por diseño). Pero
+`tipos_evento.nombre` es texto para mostrarse en Frontend Web/Mobile, y
+en los datos reales de este proyecto tiene acentos: **"Médico"**,
+**"Tóxico"**. Confirmado contra la base real:
+`select * from tipos_evento where nombre ilike 'MEDICO'` devuelve **cero
+filas**.
+
+**El impacto real**: en `handlers/eventos.ts`, si `getTipoEventoPorNombre`
+no encuentra nada, el mensaje se descarta con un solo
+`console.error("tipo de evento desconocido")` — no hay ningún camino de
+vuelta a la consola (MQTT es fire-and-forget). Es decir: en cualquier
+organización cuyos tipos de evento tengan acentos (como la real de este
+proyecto), **apretar el botón físico MÉDICO o TÓXICO no dispara nada —
+ninguna alerta, ninguna notificación, nada queda registrado — y quien lo
+apretó no tiene ninguna señal de que falló.** De los 5 botones fijos
+(Incendio/Sismo/Médico/Tóxico/OK), 2 de cada 5 estaban rotos para
+cualquier organización con nombres acentuados — que es el caso real.
+
+**Corregido**: `Db.getTipoEventoPorNombre` ya no filtra por nombre en la
+query — trae todos los tipos visibles para la organización (una lista
+chica, un puñado de filas) y compara normalizado en el servidor, con la
+nueva función pura `normalizarNombreTipo` (`logic/eventos.ts`: minúsculas
++ sin acentos, mismo criterio ya usado en varios lugares de
+`frontend-web`). 4 tests nuevos (`test/eventos.test.ts`). Validado
+además contra Supabase real: `MEDICO`/`TOXICO`/`INCENDIO`/`SISMO`/`OK`
+resuelven todos correctamente ahora, y un nombre que de verdad no existe
+sigue devolviendo `null` (sin falsos positivos).
+
+Esto es aparte de (no reemplaza) el hallazgo similar de CSS en
+`frontend-web/README.md` (colisión de `.status-pill.vencido`) — dos
+bugs de "comparación de texto" distintos, encontrados en sesiones
+separadas, mismo patrón de causa raíz (asumir que dos strings que se
+_ven_ iguales para una persona son iguales para una comparación
+literal).
+
 ## Programar/editar/cancelar un simulacro desde Frontend Web (2026-08-29)
 
 `POST /simulacros`, `PATCH /simulacros/:id`, `DELETE /simulacros/:id` —

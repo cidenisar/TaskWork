@@ -23,6 +23,7 @@ import type {
   AlcanceTipo,
   EstadoPersona,
 } from "../types.js";
+import { normalizarNombreTipo } from "../logic/eventos.js";
 import type { ConfirmacionInicial, EventoPuntoInicial } from "../logic/eventos.js";
 import type { RegistroAuditoriaPin } from "../logic/auth.js";
 import type { NuevaFilaSimulacro } from "../logic/simulacro.js";
@@ -69,15 +70,27 @@ export class Db {
     return data.nombre as string;
   }
 
+  /**
+   * `.ilike()` es case-insensitive pero NO ignora acentos — "MEDICO" no
+   * matchea "Médico" (confirmado contra datos reales). El `tipo` que
+   * manda la consola física es siempre ASCII sin acentos
+   * (`BotonFisico`, nombre de firmware), mientras que
+   * `tipos_evento.nombre` es texto para mostrar y puede tener acentos
+   * (ver logic/eventos.ts, `normalizarNombreTipo`, para el hallazgo
+   * completo) — así que acá se trae todo lo visible para la
+   * organización y se compara normalizado en el server, no en la query.
+   * La lista de tipos por organización es chica (un puñado), no una
+   * tabla grande — traerla entera es barato.
+   */
   async getTipoEventoPorNombre(organizacionId: string, nombre: string): Promise<TipoEvento | null> {
     const { data, error } = await this.client
       .from("tipos_evento")
       .select("id, nombre, es_ok, activa_rele")
-      .or(`organizacion_id.eq.${organizacionId},organizacion_id.is.null`)
-      .ilike("nombre", nombre)
-      .maybeSingle();
+      .or(`organizacion_id.eq.${organizacionId},organizacion_id.is.null`);
     if (error) throw error;
-    return data as TipoEvento | null;
+    const buscado = normalizarNombreTipo(nombre);
+    const match = (data ?? []).find((t) => normalizarNombreTipo(t.nombre as string) === buscado);
+    return (match as TipoEvento | undefined) ?? null;
   }
 
   async existeEvento(eventoId: string): Promise<boolean> {

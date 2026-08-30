@@ -10,6 +10,34 @@
 
 import type { Persona, PuntoEncuentro, TipoEvento, PayloadEventoMqtt } from "../types.js";
 
+/**
+ * Normaliza un nombre de tipo de evento para comparar el `tipo` (texto
+ * plano, ASCII, ej. "MEDICO") que manda la consola física
+ * (`consola-pi/src/lib/esp32.ts`, `BotonFisico` — nombres fijos de
+ * firmware, sin acentos por diseño) contra `tipos_evento.nombre` real de
+ * la organización, que puede tener acentos ("Médico", "Tóxico" — texto
+ * pensado para mostrarse en Frontend Web/Mobile, no para firmware).
+ *
+ * Hallazgo real (2026-08-29, al armar una consola virtual de prueba): un
+ * `.ilike()` plano (case-insensitive pero NO ignora acentos) contra
+ * "MEDICO" no matchea "Médico" — confirmado contra datos reales de
+ * Supabase. Con eso, cualquier organización cuyos tipos de evento usen
+ * acentos (como la real de este proyecto) pierde SILENCIOSAMENTE el
+ * botón Médico y el botón Tóxico de la consola física: el backend loguea
+ * "tipo de evento desconocido" y descarta el mensaje sin avisarle a
+ * nadie — ni una alerta real ni una de prueba sale, y quien apretó el
+ * botón no tiene forma de enterarse (MQTT es fire-and-forget, no hay
+ * camino de vuelta a la pantalla de la consola). Corregido comparando
+ * acá, sin acentos ni mayúsculas — ver Db.getTipoEventoPorNombre.
+ */
+export function normalizarNombreTipo(s: string): string {
+  return s
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
 export interface ConfirmacionInicial {
   evento_id: string;
   persona_id: string;

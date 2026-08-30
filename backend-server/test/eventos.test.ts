@@ -6,6 +6,7 @@ import {
   crearConfirmacionesIniciales,
   activarPuntosParaEvento,
   planificarEvento,
+  normalizarNombreTipo,
 } from "../src/logic/eventos.js";
 import type { Persona, PuntoEncuentro, TipoEvento, PayloadEventoMqtt } from "../src/types.js";
 
@@ -124,4 +125,26 @@ test("planificarEvento: OK sin ningún evento en curso se registra igual, como c
   const payload = payloadEvento({ eventoId: "evt2", tipo: "OK" });
   const plan = planificarEvento(payload, false, tipoOk, null);
   assert.deepEqual(plan, { accion: "abrir_evento", eventoId: "evt2", payload, esCierre: true });
+});
+
+// normalizarNombreTipo — hallazgo real: "MEDICO" (nombre de firmware,
+// BotonFisico) no matcheaba "Médico" (tipos_evento.nombre real, con
+// acentos) contra un simple .ilike(), perdiendo silenciosamente el botón
+// Médico/Tóxico de la consola física en cualquier organización con
+// nombres acentuados (ver logic/eventos.ts y Db.getTipoEventoPorNombre).
+
+test("normalizarNombreTipo: MEDICO (firmware) matchea Médico (nombre real con acento)", () => {
+  assert.equal(normalizarNombreTipo("MEDICO"), normalizarNombreTipo("Médico"));
+});
+
+test("normalizarNombreTipo: TOXICO matchea Tóxico", () => {
+  assert.equal(normalizarNombreTipo("TOXICO"), normalizarNombreTipo("Tóxico"));
+});
+
+test("normalizarNombreTipo: ignora mayúsculas y espacios al borde", () => {
+  assert.equal(normalizarNombreTipo("  Incendio  "), normalizarNombreTipo("INCENDIO"));
+});
+
+test("normalizarNombreTipo: nombres distintos siguen sin matchear", () => {
+  assert.notEqual(normalizarNombreTipo("SISMO"), normalizarNombreTipo("Incendio"));
 });
