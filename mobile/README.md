@@ -105,17 +105,23 @@ segundo plano), que necesita ese build y un teléfono.
 
 **`google-services.json`** (Android) hace falta para eso — es el mismo
 proyecto de Firebase que ya usa `backend-server` (`FIREBASE_PROJECT_ID`
-en su `.env`), así que ya existe, solo falta bajar el archivo de
-configuración de Android desde la consola de Firebase y ponerlo en
-`mobile/google-services.json` (gitignoreado, como el resto de las
-credenciales de este repo). `app.json` ya lo referencia.
+en su `.env`). En local, bajar el archivo de configuración de Android
+desde la consola de Firebase y ponerlo en `mobile/google-services.json`
+(gitignoreado, como el resto de las credenciales de este repo) — `app.config.js`
+ya lo referencia. Para un build de EAS (que no sube archivos
+gitignoreados, ver `DESPLIEGUE-REAL.md`), subirlo como variable de
+entorno de tipo archivo con el nombre `GOOGLE_SERVICES_JSON` (`eas env:create
+--type file --name GOOGLE_SERVICES_JSON --environment <perfil>
+--non-interactive`, apuntando al archivo real) — `app.config.js` (no
+`app.json`, que es estático y no puede leer `process.env`) cae a esa
+variable si está seteada, o al archivo local si no.
 
 ## Qué falta (a propósito, ver `ROADMAP.md`)
 
 - **Push real** (recepción en segundo plano, permiso, token real) —
   necesita un development build y un teléfono físico, ver arriba.
 - **Íconos/splash reales** — quedaron los que trae el template de Expo
-  por default; `app.json` no tiene un `notification-icon.png` propio
+  por default; `app.config.js` no tiene un `notification-icon.png` propio
   todavía (usa el default de `expo-notifications`).
 - **Ubicación** (`ubicacionLat`/`ubicacionLng` en `POST /confirmaciones`)
   — el contrato ya la acepta, esta primera versión siempre manda `null`
