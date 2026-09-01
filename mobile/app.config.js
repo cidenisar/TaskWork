@@ -32,6 +32,12 @@ module.exports = {
       },
       predictiveBackGestureEnabled: false,
       googleServicesFile: process.env.GOOGLE_SERVICES_JSON ?? "./google-services.json",
+      // Android 9+ bloquea HTTP sin cifrar por defecto — EXPO_PUBLIC_BACKEND_URL
+      // hoy es http://<ip>:8090 (todavía no hay dominio/certificado para la VM,
+      // ver DESPLIEGUE-REAL.md), así que sin esto cualquier fetch al backend
+      // falla en el momento, sin ni siquiera llegar a intentar la conexión.
+      // Sacar esto en cuanto backend-server tenga TLS de verdad.
+      usesCleartextTraffic: true,
     },
     web: {
       favicon: "./assets/favicon.png",

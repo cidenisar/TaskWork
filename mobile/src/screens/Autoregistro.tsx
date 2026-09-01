@@ -44,6 +44,8 @@ export function Autoregistro({ route }: Props) {
         return;
       }
       await refrescarPersona(); // pasa a EstadoCuenta("pendiente_aprobacion") sola, ver RootNavigator
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo conectar con el servidor. Probá de nuevo.");
     } finally {
       setEnviando(false);
     }

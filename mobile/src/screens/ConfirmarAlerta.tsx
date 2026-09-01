@@ -33,6 +33,8 @@ export function ConfirmarAlerta({ route, navigation }: Props) {
         return;
       }
       navigation.goBack();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo conectar con el servidor. Probá de nuevo.");
     } finally {
       setEnviando(false);
     }

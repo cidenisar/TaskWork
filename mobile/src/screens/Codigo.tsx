@@ -29,6 +29,8 @@ export function Codigo() {
         return;
       }
       setError(res.error ?? "Error inesperado.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo conectar con el servidor. Probá de nuevo.");
     } finally {
       setEnviando(false);
     }
