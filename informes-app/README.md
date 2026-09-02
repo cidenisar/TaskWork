@@ -68,8 +68,10 @@ Rendición de Gastos, Configuración, Estadísticas).
 
 ### 1. Proyecto de Supabase
 
-Este repo **no tiene un proyecto de Supabase vinculado todavía** — hay que
-crear uno (o reusar uno existente) y correr las migraciones:
+Ya hay un proyecto de Supabase creado y con todas las migraciones aplicadas
+(`Informes`, org de cidenisar@gmail.com, región `sa-east-1`) — `.env.local`
+en este repo ya apunta a ese proyecto. Si en algún momento hace falta
+recrearlo o vincular uno nuevo:
 
 ```bash
 npx supabase login
@@ -95,12 +97,15 @@ cp .env.example .env.local
 
 ### 3. Primer usuario Administrador
 
-El rol lo asigna un Administrador desde Configuración (spec sección 4), pero
-para el primer usuario hay que hacerlo a mano una vez, desde el SQL editor
-de Supabase:
+El rol lo asigna un Administrador desde Configuración (spec sección 4). Ya
+existe un primer Administrador (cidenisar@gmail.com — credencial enviada
+por chat, no vive en el repo). La app todavía no tiene una pantalla de
+registro propia (solo login, a propósito — ver spec sección 4); para dar de
+alta otra cuenta desde cero hay que crearla en Authentication → Add User en
+el dashboard de Supabase y después promoverla una vez desde el SQL editor:
 
 ```sql
-update public.profiles set rol = 'admin' where email = 'tu-email@empresa.com';
+update public.profiles set rol = 'admin' where email = 'otro-admin@empresa.com';
 ```
 
 (El trigger `handle_new_user` crea el `profile` en `rol = 'tecnico'` en

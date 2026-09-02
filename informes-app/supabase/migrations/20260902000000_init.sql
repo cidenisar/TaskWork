@@ -329,8 +329,9 @@ create policy "vehiculo_services_admin_all" on public.vehiculo_services for all
   using (public.is_admin()) with check (public.is_admin());
 
 -- Informes Técnicos: "crear/ver propios" para los tres roles (spec sección 4).
--- La vista agregada de Estadísticas para Supervisor/Admin se resuelve server-side
--- con la service role key, nunca exponiendo una policy de lectura ancha al cliente.
+-- La vista agregada de Estadísticas para Supervisor/Admin se resuelve con policies
+-- de SELECT adicionales gateadas por is_admin_or_supervisor() (ver 20260902000003),
+-- nunca con la service role key.
 create policy "informes_tecnicos_select_own" on public.informes_tecnicos
   for select using (created_by = auth.uid());
 create policy "informes_tecnicos_insert_own" on public.informes_tecnicos
@@ -399,8 +400,8 @@ create policy "config_emails_envio_admin_delete" on public.config_emails_envio f
 create policy "config_general_select" on public.config_general for select using (auth.uid() is not null);
 create policy "config_general_admin_update" on public.config_general for update using (public.is_admin());
 
--- audit_log: solo lectura Admin; las escrituras las hace el backend con la
--- service role key (nunca directo desde el cliente) para que el registro sea confiable.
+-- audit_log: solo lectura Admin. El INSERT admin-only se agrega en una
+-- migración posterior (20260902000002), sin necesitar la service role key.
 create policy "audit_log_select_admin" on public.audit_log for select using (public.is_admin());
 
 -- ---------------------------------------------------------------------------
