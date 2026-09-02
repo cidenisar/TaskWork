@@ -1,0 +1,6 @@
+@import "tailwindcss";
+@import "./wireframe-ui.css";
+
+@theme inline {
+  --font-sans: var(--font-inter);
+}
