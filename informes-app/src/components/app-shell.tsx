@@ -78,10 +78,10 @@ export function AppShell({ profile, children }: { profile: Profile; children: Re
               src={profile.fotoPerfilUrl}
               alt=""
               className="avatar"
-              style={{ borderRadius: 8, objectFit: "contain", background: "var(--panel-2)" }}
+              style={{ width: 44, height: 44, borderRadius: 10, objectFit: "contain", background: "var(--panel-2)" }}
             />
           ) : (
-            <div className="avatar" style={{ borderRadius: 8 }}>
+            <div className="avatar" style={{ width: 44, height: 44, borderRadius: 10, fontSize: 17 }}>
               {(profile.nombreCompleto[0] || "?").toUpperCase()}
             </div>
           )}
