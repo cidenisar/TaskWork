@@ -1,0 +1,380 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Consola Disparadora</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* Paleta y tipografía tomadas del wireframe de Cowork ("Consola
+     Disparador") para que la pantalla real se vea igual — ver README,
+     "Pantalla táctil". Layout adaptado para ocupar toda la pantalla
+     (kiosko), no un mockup de dispositivo dentro de una página. */
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    font-family: 'IBM Plex Mono', ui-monospace, monospace;
+    background: #04060a;
+    color: #e7eaee;
+    overflow: hidden;
+    -webkit-user-select: none; user-select: none;
+  }
+  .lbl { font-family: 'Barlow Semi Condensed', system-ui, sans-serif; letter-spacing: 0.06em; text-transform: uppercase; }
+  button { font-family: inherit; }
+  button:focus-visible { outline: 2px solid #38bdf8; outline-offset: 2px; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+  @media (prefers-reduced-motion: reduce) { * { animation-duration: 0.01ms !important; } }
+
+  .pantalla { height: 100vh; display: flex; flex-direction: column; }
+
+  .statustop { display: flex; align-items: center; justify-content: space-between; padding: 12px 20px; border-bottom: 1px solid #1b1e26; flex-shrink: 0; }
+  .netcluster, .rightcluster { display: flex; align-items: center; gap: 14px; }
+  .netitem { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+  .opchip { display: flex; align-items: center; gap: 5px; color: #38bdf8; border: 1px solid #1b3a4d; background: #0a1c26; padding: 4px 10px; border-radius: 999px; font-size: 11px; }
+  .llavechip { display: flex; align-items: center; gap: 5px; font-size: 11px; padding: 4px 10px; border-radius: 999px; }
+
+  .body-wrap { flex: 1; position: relative; display: flex; flex-direction: column; min-height: 0; }
+  .subnav { display: flex; align-items: center; gap: 10px; padding: 16px 20px 4px; }
+  .backb { all: unset; cursor: pointer; color: #8b94a3; display: flex; }
+  .navrow { all: unset; cursor: pointer; display: flex; align-items: center; justify-content: space-between; padding: 18px 22px; background: #12151b; border: 1px solid #232833; border-radius: 12px; color: #e7eaee; }
+  .listrow { all: unset; cursor: default; display: flex; align-items: center; justify-content: space-between; padding: 14px 20px; background: #12151b; border: 1px solid #232833; border-radius: 10px; }
+
+  .padgrid { display: grid; grid-template-columns: repeat(3, 72px); gap: 16px; }
+  .padkey { all: unset; cursor: pointer; width: 72px; height: 72px; border-radius: 50%; background: #12151b; border: 1px solid #232833; color: #e7eaee; text-align: center; line-height: 72px; font-size: 20px; }
+  .padkey:active { background: #1b1f27; }
+  .pindot { width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid #3b4250; }
+
+  .faultbanner { position: absolute; left: 0; right: 0; bottom: 0; padding: 12px 20px; background: #7c1d1d; display: flex; align-items: center; gap: 10px; animation: pulse 1.6s ease-in-out infinite; z-index: 5; }
+  .avisobanner { position: absolute; left: 0; right: 0; bottom: 0; padding: 12px 20px; display: flex; align-items: center; gap: 10px; z-index: 4; }
+  .avisobanner.mismo { background: #4a2c05; }
+  .avisobanner.vecino { background: #0b2c4a; }
+  .avisobanner .av-tag { font-size: 8px; opacity: 0.75; display: block; margin-bottom: 1px; }
+
+  .oculto { display: none !important; }
+</style>
+</head>
+<body>
+
+<div class="pantalla" id="pantalla"></div>
+
+<script>
+(function () {
+  "use strict";
+
+  // ---- helpers ----
+  function esc(s) { return String(s == null ? "" : s); }
+  function svgEth() { return '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="9" width="16" height="10" rx="1.5"/><path d="M9 9V6a3 3 0 0 1 6 0v3"/></svg>'; }
+  function svgEsp(ok) { return '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="' + (ok ? 'currentColor' : '#f87171') + '" stroke-width="2.4"><path d="M2 12h4l2-7 4 14 2-7h8"/></svg>'; }
+  function svgUser() { return '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.5-6 8-6s8 2 8 6"/></svg>'; }
+  function svgLock() { return '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>'; }
+  function svgUnlock() { return '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 7.6-1.8"/></svg>'; }
+  function svgBack() { return '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M15 18l-6-6 6-6"/></svg>'; }
+  function svgChevron() { return '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#5b6472" stroke-width="2.2"><path d="M9 18l6-6-6-6"/></svg>'; }
+  function svgCheck() { return '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6L9 17l-5-5"/></svg>'; }
+  function svgWarn() { return '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9L2.6 18a2 2 0 0 0 1.7 3h15.4a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg>'; }
+  function svgInfo(color) { return '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="' + color + '" stroke-width="2.4"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>'; }
+
+  var EV_COLORES = {
+    INCENDIO: { bg: "#3a0d10", text: "#f87171" },
+    SISMO: { bg: "#3a2f05", text: "#facc15" },
+    MEDICO: { bg: "#0b3a1a", text: "#4ade80" },
+    TOXICO: { bg: "#0b1c3a", text: "#60a5fa" },
+    OK: { bg: "#1c2027", text: "#e7eaee" },
+  };
+  var EV_MENSAJES = {
+    INCENDIO: "INCENDIO en planta. Diríjase de inmediato al punto de encuentro asignado. Responda ESTOY BIEN o AYUDA.",
+    SISMO: "SISMO detectado. Evacúe en calma hacia el punto de encuentro más cercano. Responda ESTOY BIEN o AYUDA.",
+    MEDICO: "EMERGENCIA MEDICA en planta. Personal de primeros auxilios en alerta. Responda ESTOY BIEN o AYUDA.",
+    TOXICO: "ESCAPE TOXICO detectado. NO salga por su cuenta — espere instrucciones. Responda ESTOY BIEN o AYUDA.",
+    OK: "Emergencia finalizada. Todo despejado. Puede retomar sus actividades normales.",
+  };
+
+  // ---- estado local de navegación (menú/historial/etc — no viene del servidor) ----
+  var pantallaMenu = "reposo"; // reposo | menu | historial | diagnostico | config
+  var pinBuffer = "";
+  var pinError = null;
+
+  // ---- estado del servidor (llega por SSE) ----
+  var ultimo = null;
+
+  function pantallaEl() { return document.getElementById("pantalla"); }
+
+  function ir(destino) { pantallaMenu = destino; pinBuffer = ""; pinError = null; render(); }
+
+  async function enviarPin() {
+    try {
+      var res = await fetch("/pin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pin: pinBuffer }),
+      });
+      var data = await res.json();
+      if (data.resultado !== "valido") {
+        pinError = "PIN incorrecto";
+        pinBuffer = "";
+        render();
+        setTimeout(function () { pinError = null; render(); }, 1500);
+      }
+      // si es válido, el próximo estado llega solo por SSE (fase pasa a "habilitado")
+    } catch (err) {
+      pinError = "Sin conexión con la consola";
+      render();
+    }
+  }
+
+  function presionarDigito(d) {
+    if (pinBuffer.length >= 4) return;
+    pinBuffer += d;
+    render();
+    if (pinBuffer.length === 4) enviarPin();
+  }
+
+  async function cancelarLocal() {
+    // Ver README, invariante 3: CANCELAR nunca toca MQTT — esto solo le
+    // pide al servidor que aplique la misma transición 100% local que el
+    // botón físico. Es una conveniencia táctil del mismo efecto, no un
+    // segundo camino que "dispare" nada.
+    await fetch("/cancelar", { method: "POST" });
+  }
+
+  async function probarSirena() {
+    await fetch("/diagnostico/sirena", { method: "POST" });
+    // el resultado ("ultimoTestSirena") llega solo por el próximo SSE
+  }
+
+  function formatoHora(ts) {
+    return new Date(ts).toLocaleString("es-AR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+  }
+
+  function tile(label, value, color) {
+    return '<div style="text-align:center;"><div class="lbl" style="font-size:11px; color:#5b6472;">' + label + '</div><div style="color:' + color + '; font-size:16px; margin-top:4px;">' + esc(value) + '</div></div>';
+  }
+  function kpi(value, label, color) {
+    return '<div style="text-align:center;"><div style="font-size:28px; color:' + color + '; font-weight:600;">' + value + '</div><div class="lbl" style="font-size:10px; color:' + color + '; opacity:0.7;">' + label + '</div></div>';
+  }
+
+  // ---- Historial (bitácora local de esta consola — ver historialLocal.ts) ----
+  function renderHistorial(filas) {
+    if (!filas.length) {
+      return '<div style="flex:1;display:flex;align-items:center;justify-content:center;color:#3b4250;" class="lbl">sin eventos registrados todavía</div>';
+    }
+    var html = '<div style="flex:1; overflow-y:auto; padding:10px 20px 30px; display:flex; flex-direction:column; gap:10px;">';
+    filas.forEach(function (f) {
+      var colores = EV_COLORES[f.tipo] || EV_COLORES.OK;
+      var esEnviado = f.resultado === "enviado";
+      html += '<div class="listrow">';
+      html += '<div style="display:flex; align-items:center; gap:14px;">';
+      html += '<div class="lbl" style="font-size:13px; color:' + colores.text + '; min-width:110px;">' + esc(f.tipo) + '</div>';
+      html += '<div class="lbl" style="font-size:10px; color:' + (esEnviado ? "#f87171" : "#5b6472") + ';">' + (esEnviado ? "ENVIADO" : "CANCELADO (local)") + '</div>';
+      html += '</div>';
+      html += '<div style="text-align:right;">';
+      html += '<div style="font-size:12px; color:#8b94a3;">' + esc(f.operadorLegajo || f.operadorId || "—") + '</div>';
+      html += '<div class="lbl" style="font-size:10px; color:#5b6472;">' + formatoHora(f.ts) + '</div>';
+      html += '</div></div>';
+    });
+    html += '</div>';
+    return html;
+  }
+
+  // ---- Diagnóstico ----
+  function renderDiagnostico(u) {
+    var html = '<div style="flex:1; display:flex; flex-direction:column; gap:14px; padding:16px 24px 30px; overflow-y:auto;">';
+
+    html += '<div class="listrow"><span class="lbl" style="font-size:12px; color:#8b94a3;">CONECTIVIDAD (BACKEND)</span>';
+    html += '<span class="lbl" style="font-size:12px; color:' + (u.mqttConectado ? "#4ade80" : "#f87171") + ';">' + (u.mqttConectado ? "CONECTADO" : "SIN CONEXION") + '</span></div>';
+
+    html += '<div class="listrow"><span class="lbl" style="font-size:12px; color:#8b94a3;">ESP32 (HEARTBEAT)</span>';
+    html += '<span class="lbl" style="font-size:12px; color:' + (u.esp32HeartbeatOk ? "#4ade80" : "#f87171") + ';">' + (u.esp32HeartbeatOk ? "OK" : "SIN RESPUESTA") + '</span></div>';
+
+    html += '<div class="listrow"><span class="lbl" style="font-size:12px; color:#8b94a3;">SIRENA LOCAL</span>';
+    html += '<div style="display:flex; align-items:center; gap:12px;">';
+    if (u.ultimoTestSirena === "ok") html += '<span class="lbl" style="font-size:11px; color:#4ade80;">ULTIMA PRUEBA: OK</span>';
+    html += '<button class="lbl" data-act="probar-sirena" style="all:unset; cursor:pointer; padding:8px 20px; background:#12151b; border:1px solid #38bdf8; color:#38bdf8; border-radius:8px; font-size:11px;">PROBAR</button>';
+    html += '</div></div>';
+
+    html += '<div class="listrow"><span class="lbl" style="font-size:12px; color:#8b94a3;">BATERIA / UPS</span>';
+    html += '<span class="lbl" style="font-size:12px; color:#5b6472;">N/D — no implementado aún (ver README)</span></div>';
+
+    html += '</div>';
+    return html;
+  }
+
+  // ---- Configuración PROG1–4 (sincronizado desde el backend, ver README — sin teclado táctil de edición) ----
+  function renderConfig(prog) {
+    var html = '<div style="flex:1; display:flex; flex-direction:column; gap:14px; padding:16px 24px 30px;">';
+    html += '<div class="lbl" style="font-size:10px; color:#5b6472; padding:0 4px;">Se asigna desde el sistema central — esta pantalla solo lo muestra.</div>';
+    ["prog1", "prog2", "prog3", "prog4"].forEach(function (clave, i) {
+      var asignado = prog ? prog[clave] : null;
+      html += '<div class="listrow"><span class="lbl" style="font-size:13px; color:#8b94a3;">PROG' + (i + 1) + '</span>';
+      html += '<span class="lbl" style="font-size:13px; color:' + (asignado ? "#e7eaee" : "#3b4250") + ';">' + esc(asignado || "sin asignar") + '</span></div>';
+    });
+    html += '</div>';
+    return html;
+  }
+
+  function render() {
+    if (!ultimo) {
+      pantallaEl().innerHTML = '<div style="flex:1;display:flex;align-items:center;justify-content:center;color:#5b6472;" class="lbl">Conectando…</div>';
+      return;
+    }
+    var panel = ultimo.panel;
+    var llaveHabilitada = panel.fase !== "bloqueado";
+    var operador = panel.operador || null;
+
+    var html = "";
+
+    // ---- status strip ----
+    html += '<div class="statustop">';
+    html += '<div class="netcluster">';
+    html += '<div class="netitem" style="color:#4ade80;">' + svgEth() + '<span class="lbl">ETHERNET</span></div>';
+    html += '<div class="netitem" style="color:' + (ultimo.esp32HeartbeatOk ? "#4ade80" : "#f87171") + ';">' + svgEsp(ultimo.esp32HeartbeatOk) + '<span class="lbl">' + (ultimo.esp32HeartbeatOk ? "ESP32 OK" : "ESP32 SIN RESPUESTA") + '</span></div>';
+    html += '</div>';
+    html += '<div class="rightcluster">';
+    html += '<div class="lbl" style="font-size:12px; color:#8b94a3;">' + new Date().toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" }) + '</div>';
+    if (operador) html += '<div class="opchip">' + svgUser() + '<span class="lbl">' + esc(operador.legajo || operador.operadorId) + '</span></div>';
+    html += '<div class="llavechip" style="color:' + (llaveHabilitada ? "#4ade80" : "#f87171") + ';">' + (llaveHabilitada ? svgUnlock() : svgLock()) + '<span class="lbl">' + (llaveHabilitada ? "HABILITADO" : "BLOQUEADO") + '</span></div>';
+    html += '</div></div>';
+
+    // ---- body ----
+    html += '<div class="body-wrap">';
+
+    if (panel.fase === "bloqueado") {
+      html += '<div style="flex:1;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:10px;color:#5b6472;">';
+      html += svgLock().replace('width="15" height="15"', 'width="30" height="30"');
+      html += '<div class="lbl" style="font-size:13px;">PANEL BLOQUEADO — GIRE LA LLAVE</div>';
+      html += '</div>';
+    } else if (panel.fase === "pidiendo_pin") {
+      var pinDots = [];
+      for (var i = 0; i < 4; i++) pinDots.push(i < pinBuffer.length ? "#38bdf8" : "transparent");
+      html += '<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;">';
+      html += '<div class="lbl" style="font-size:13px; color:#8b94a3;">IDENTIFIQUE OPERADOR — INGRESE PIN</div>';
+      if (pinError) html += '<div class="lbl" style="font-size:12px; color:#f87171;">' + pinError + '</div>';
+      html += '<div style="display:flex; gap:16px;">';
+      pinDots.forEach(function (c) { html += '<div class="pindot" style="background:' + c + ';"></div>'; });
+      html += '</div><div class="padgrid">';
+      for (var k = 1; k <= 9; k++) html += '<button class="padkey" data-dig="' + k + '">' + k + '</button>';
+      html += '<div></div><button class="padkey" data-dig="0">0</button>';
+      html += '</div></div>';
+    } else if (panel.fase === "pin_bloqueado") {
+      var restanteBloqueoMs = Math.max(0, (ultimo.bloqueoPinFinTs || 0) - Date.now());
+      html += '<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;color:#f87171;">';
+      html += svgLock().replace('width="15" height="15"', 'width="30" height="30"');
+      html += '<div class="lbl" style="font-size:13px;">DEMASIADOS INTENTOS INCORRECTOS</div>';
+      html += '<div style="font-size:40px; font-weight:600; font-family:\'IBM Plex Mono\',monospace;">' + Math.ceil(restanteBloqueoMs / 1000) + 's</div>';
+      html += '<div class="lbl" style="font-size:11px; color:#5b6472;">ESPERE PARA VOLVER A INTENTAR</div>';
+      html += '</div>';
+    } else if (panel.fase === "habilitado") {
+      html += '<div style="flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:22px;" data-act="menu">';
+      html += '<div class="lbl" style="font-size:14px; color:#f87171; border:1.5px solid #f87171; padding:8px 26px; border-radius:999px;">MODO&nbsp;&nbsp;' + esc(ultimo.modo) + '</div>';
+      html += '<div style="display:grid; grid-template-columns:repeat(3,1fr); gap:26px 46px;">';
+      html += tile("SIRENA LOCAL", ultimo.releActivo ? "sonando" : "standby", ultimo.releActivo ? "#f87171" : "#e7eaee");
+      html += tile("PADRON EN SITIO", ultimo.padronCount + " operador(es)", "#e7eaee");
+      html += tile("ULTIMO EVENTO", ultimo.eventoActivo ? ultimo.eventoActivo.tipo : "ninguno", "#e7eaee");
+      html += tile("OPERADOR", (operador.legajo || operador.operadorId) + " (" + operador.rol + ")", "#38bdf8");
+      var proximo = ultimo.simulacro ? (ultimo.simulacro.tipo + (ultimo.simulacro.fechaHora ? " · " + new Date(ultimo.simulacro.fechaHora).toLocaleString("es-AR") : "")) : "sin programar";
+      html += '<div style="text-align:center; grid-column:span 2;"><div class="lbl" style="font-size:11px; color:#5b6472;">PROXIMO SIMULACRO PROGRAMADO</div><div style="color:#60a5fa; font-size:14px; margin-top:4px;">' + esc(proximo) + '</div></div>';
+      html += '</div><div class="lbl" style="font-size:10px; color:#3b4250;">TOCAR PARA MENU</div></div>';
+    } else if (panel.fase === "confirmando" || panel.fase === "enviado") {
+      var boton = panel.boton;
+      var colores = EV_COLORES[boton] || EV_COLORES.OK;
+      html += '<div style="flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:18px; background:' + colores.bg + ';">';
+      html += '<div class="lbl" style="font-size:36px; font-weight:700; color:' + colores.text + '; letter-spacing:0.08em;">' + esc(boton) + '</div>';
+      if (panel.fase === "confirmando") {
+        var restanteMs = Math.max(0, (ultimo.cuentaRegresivaFinTs || 0) - Date.now());
+        html += '<div style="font-size:68px; font-weight:600; color:' + colores.text + '; font-family:\'IBM Plex Mono\',monospace;">' + Math.ceil(restanteMs / 1000) + '</div>';
+        html += '<button class="lbl" data-act="cancelar" style="all:unset; cursor:pointer; padding:14px 42px; background:#000; color:#fff; border:2px solid ' + colores.text + '; border-radius:999px;">CANCELAR</button>';
+        html += '<div style="max-width:540px; text-align:center; padding:12px 18px; background:rgba(0,0,0,0.28); border:1px solid ' + colores.text + '; border-radius:10px;">';
+        html += '<div class="lbl" style="font-size:9px; color:' + colores.text + '; opacity:0.75; margin-bottom:5px;">SE ENVIARA A TODO EL PERSONAL EN SITIO</div>';
+        html += '<div style="font-size:12px; color:' + colores.text + '; font-style:italic;">&ldquo;' + esc(EV_MENSAJES[boton] || "") + '&rdquo;</div></div>';
+      } else {
+        html += '<div style="display:flex; align-items:center; gap:8px; color:' + colores.text + ';">' + svgCheck() + '<span class="lbl">ENVIADO</span></div>';
+        if (ultimo.accountability) {
+          var a = ultimo.accountability;
+          html += '<div style="display:grid; grid-template-columns:repeat(3,1fr); gap:20px 44px; margin-top:6px;">';
+          html += kpi(a.ok, "ESTOY BIEN", colores.text);
+          html += kpi(a.ayuda, "NECESITAN AYUDA", colores.text);
+          html += kpi(a.pendiente, "SIN RESPONDER", colores.text);
+          html += '</div>';
+        }
+      }
+      html += '</div>';
+    }
+
+    // ---- menú de navegación (solo alcanzable tocando la pantalla principal habilitada) ----
+    if (pantallaMenu === "menu" && panel.fase === "habilitado") {
+      html += '<div style="position:absolute;inset:0;background:#04060a;display:flex;flex-direction:column;">';
+      html += '<div class="subnav"><button class="backb" data-act="reposo">' + svgBack() + '</button><div class="lbl" style="font-size:13px; color:#8b94a3;">MENU</div></div>';
+      html += '<div style="flex:1; display:flex; flex-direction:column; justify-content:center; gap:16px; padding:10px 60px 40px;">';
+      html += '<button class="navrow" data-act="historial"><span class="lbl">HISTORIAL</span>' + svgChevron() + '</button>';
+      html += '<button class="navrow" data-act="diagnostico"><span class="lbl">DIAGNOSTICO</span>' + svgChevron() + '</button>';
+      html += '<button class="navrow" data-act="config"><span class="lbl">CONFIGURACION</span>' + svgChevron() + '</button>';
+      html += '</div></div>';
+    }
+    if ((pantallaMenu === "historial" || pantallaMenu === "diagnostico" || pantallaMenu === "config") && panel.fase === "habilitado") {
+      var titulo = pantallaMenu === "historial" ? "HISTORIAL" : pantallaMenu === "diagnostico" ? "DIAGNOSTICO" : "CONFIGURACION PROG1–4";
+      html += '<div style="position:absolute;inset:0;background:#04060a;display:flex;flex-direction:column;">';
+      html += '<div class="subnav"><button class="backb" data-act="menu">' + svgBack() + '</button><div class="lbl" style="font-size:13px; color:#8b94a3;">' + titulo + '</div></div>';
+
+      if (pantallaMenu === "historial") {
+        html += renderHistorial(ultimo.historial || []);
+      } else if (pantallaMenu === "diagnostico") {
+        html += renderDiagnostico(ultimo);
+      } else {
+        html += renderConfig(ultimo.prog);
+      }
+
+      html += '</div>';
+    }
+
+    html += "</div>"; // body-wrap
+
+    // ---- aviso de evento en otra consola (informativo, nunca bloquea) ----
+    if (ultimo.eventoActivo && panel.fase !== "confirmando" && panel.fase !== "enviado") {
+      var av = ultimo.eventoActivo;
+      var cls = av.relacion === "mismo-sitio" ? "mismo" : "vecino";
+      var col = av.relacion === "mismo-sitio" ? "#f59e0b" : "#38bdf8";
+      var tag = av.relacion === "mismo-sitio" ? "MISMO SITIO" : "SITIO VECINO";
+      html += '<div class="avisobanner ' + cls + '">' + svgInfo(col) +
+        '<div><span class="lbl av-tag" style="color:' + col + ';">EVENTO EN CURSO · ' + tag + ' · ' + esc(av.modo) + '</span>' +
+        '<span class="lbl" style="font-size:12px; color:#fff;">' + esc(av.tipo) + ' — ' + esc(av.consolaOrigenNombre) + ', ' + esc(av.sitioNombre) + '</span></div></div>';
+    }
+
+    pantallaEl().innerHTML = html;
+    wireEvents();
+  }
+
+  function wireEvents() {
+    var root = pantallaEl();
+    root.querySelectorAll("[data-dig]").forEach(function (b) {
+      b.addEventListener("click", function () { presionarDigito(b.getAttribute("data-dig")); });
+    });
+    root.querySelectorAll("[data-act]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var act = b.getAttribute("data-act");
+        if (act === "cancelar") { void cancelarLocal(); return; }
+        if (act === "probar-sirena") { void probarSirena(); return; }
+        ir(act);
+      });
+    });
+  }
+
+  // ---- conexión con el servidor (SSE) ----
+  var es = new EventSource("/eventos");
+  es.onmessage = function (ev) {
+    ultimo = JSON.parse(ev.data);
+    render();
+  };
+  es.onerror = function () {
+    // el navegador reintenta solo — no hace falta lógica extra acá.
+  };
+
+  // reloj + cuenta regresiva: re-renderizar cada segundo aunque no llegue un SSE nuevo
+  setInterval(function () { if (ultimo) render(); }, 1000);
+
+  render();
+})();
+</script>
+</body>
+</html>

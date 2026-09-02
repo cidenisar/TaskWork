@@ -1,0 +1,111 @@
+/* Ver Cowork "Administración de Padrón de Personas", pestaña "Códigos
+   de acceso". Botones/drawer/toast/seg-toggle/chips/status-pill (base)
+   viven en styles/tokens.css. */
+
+main {
+  flex: 1;
+  padding: 1.4rem 1.5rem 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.2rem;
+  max-width: 1080px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.toolbar {
+  justify-content: space-between;
+}
+
+.hint-box {
+  font-size: 0.76rem;
+  color: var(--text-faint);
+  background: var(--surface-2);
+  border-radius: 8px;
+  padding: 0.6rem 0.8rem;
+}
+
+.code-row {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.85rem 1.1rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.code-row.dim {
+  opacity: 0.55;
+}
+.code-val {
+  font-family: "IBM Plex Mono", monospace;
+  font-weight: 700;
+  font-size: 0.95rem;
+  letter-spacing: 0.03em;
+  flex: 1 1 130px;
+}
+.code-meta {
+  flex: 1 1 200px;
+  font-size: 0.76rem;
+  color: var(--text-dim);
+}
+.code-meta b {
+  color: var(--text);
+}
+.code-use {
+  flex: none;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.78rem;
+  color: var(--text-dim);
+}
+.code-use b {
+  color: var(--text);
+}
+/* .tipo-pill base vive en styles/tokens.css (compartida con Padrón). */
+.tipo-pill.individual {
+  color: var(--info);
+  background: var(--info-bg);
+}
+.tipo-pill.lote {
+  color: var(--pending);
+  background: var(--pending-bg);
+}
+
+.status-pill.vigente {
+  color: var(--ok);
+  background: var(--ok-bg);
+}
+/* Ojo: `.status-pill.vencido` acá va SCOPEADO a `.code-row` a propósito
+   — sin el scope, esta regla (gris/apagado) chocaba globalmente con la
+   de Historial.css (rojo/alerta, cumplimiento de simulacros): mismo
+   nombre de clase, dos significados opuestos. Como el CSS es global (no
+   hay CSS Modules), y Codigos.css se importa después que Historial.css
+   en el bundle, la de acá terminaba ganando SIEMPRE — el "vencido" de
+   Historial se veía gris en vez de rojo. Hallazgo real, corregido acá
+   (ver Padrón de Personas, que reutiliza el `.vencido` de Historial
+   sin problema ahora que está desambiguado). */
+.code-row .status-pill.vencido,
+.status-pill.agotado,
+.status-pill.revocado {
+  color: var(--text-faint);
+  background: var(--surface-2);
+}
+
+.code-reveal {
+  background: var(--ok-bg);
+  border-radius: 10px;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  align-items: center;
+  text-align: center;
+}
+.code-reveal .cv {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 1.6rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: var(--ok);
+}

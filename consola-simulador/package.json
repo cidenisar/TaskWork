@@ -1,0 +1,13 @@
+{
+  "name": "consola-simulador-broker",
+  "private": true,
+  "type": "module",
+  "description": "Solo para correr broker-local.mjs (ver README) — un broker MQTT local sin autenticación, para desarrollo/demo. El resto de esta carpeta sigue siendo HTML/JS estático, sin build.",
+  "scripts": {
+    "broker": "node broker-local.mjs"
+  },
+  "dependencies": {
+    "aedes": "1.1.1",
+    "aedes-server-factory": "0.2.1"
+  }
+}

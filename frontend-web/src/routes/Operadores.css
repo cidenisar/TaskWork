@@ -1,0 +1,144 @@
+/* Ver Cowork "Administración de Operadores" — clases y layout copiados
+   de ahí (salvo el header, que reusa el <Topbar> compartido de la app
+   en vez de duplicar brand/scope-chip por pantalla, y los botones/
+   drawer/toast, que viven en styles/tokens.css como primitivas
+   compartidas entre pantallas de administración). */
+
+main {
+  flex: 1;
+  padding: 1.4rem 1.5rem 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.2rem;
+  max-width: 1080px;
+  width: 100%;
+  margin: 0 auto;
+}
+.toolbar {
+  justify-content: space-between;
+}
+.op-row {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.85rem 1.1rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.op-row.inactive {
+  opacity: 0.55;
+}
+.op-id {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  flex: 1 1 220px;
+  min-width: 0;
+}
+.op-av {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--info-bg);
+  color: var(--info);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.72rem;
+  flex: none;
+}
+.op-name {
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+.op-legajo {
+  font-size: 0.72rem;
+  color: var(--text-faint);
+}
+.role-pill {
+  flex: none;
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  padding: 0.22rem 0.55rem;
+  border-radius: 999px;
+}
+.role-pill.admin {
+  color: var(--accent);
+  background: rgba(255, 140, 43, 0.12);
+}
+.role-pill.operador {
+  color: var(--info);
+  background: var(--info-bg);
+}
+.scope-chips {
+  flex: 1 1 200px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+.scope-chip-sm {
+  font-size: 0.66rem;
+  color: var(--text-dim);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.18rem 0.55rem;
+}
+.scope-chip-sm.org {
+  color: var(--pending);
+  border-color: var(--pending-strong);
+  background: var(--pending-bg);
+}
+/* .status-pill base + .active/.inactive, .row-actions y .confirm-row (antes .op-actions acá) viven en styles/tokens.css. */
+
+.pin-reveal {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  background: var(--ok-bg);
+  border-radius: 8px;
+  padding: 0.5rem 0.8rem;
+  margin: -0.2rem 0;
+}
+.pin-reveal .pv-text {
+  font-size: 0.8rem;
+  color: var(--text);
+}
+.pin-reveal .pv-pin {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 1.1rem;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  color: var(--ok);
+}
+.pin-reveal.warn {
+  background: var(--pending-bg);
+}
+.pin-reveal .pv-warn {
+  font-size: 0.74rem;
+  color: var(--pending);
+}
+
+/* .seg-toggle (antes .role-toggle/.scope-toggle acá) vive en styles/tokens.css — reusado por Códigos de acceso. */
+.site-checks {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.7rem 0.8rem;
+}
+.site-check {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.82rem;
+}

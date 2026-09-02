@@ -39,6 +39,10 @@ export function publicarSimulacro(client: MqttClient, consolaId: string, payload
   client.publish(`consolas/${consolaId}/simulacro`, JSON.stringify(payload), { qos: 1, retain: true });
 }
 
+export function publicarProg(client: MqttClient, consolaId: string, payload: unknown): void {
+  client.publish(`consolas/${consolaId}/prog`, JSON.stringify(payload), { qos: 1, retain: true });
+}
+
 export function publicarAccountability(client: MqttClient, consolaId: string, eventoId: string, payload: unknown): void {
   client.publish(`consolas/${consolaId}/accountability/${eventoId}`, JSON.stringify(payload), { qos: 0 });
 }

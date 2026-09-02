@@ -1,0 +1,111 @@
+/* Ver Cowork "Login y Selector de Sitio" — clases y layout copiados de
+   ahí. Único cambio real respecto del wireframe: el campo "Usuario" del
+   mock pasa a ser "Email" acá, porque el login real es
+   supabase.auth.signInWithPassword — no hay ningún "usuario" separado
+   del email en este sistema. */
+
+.login-wrap {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1rem;
+}
+.login-card {
+  width: 100%;
+  max-width: 380px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 2rem 2rem 1.7rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.4rem;
+  box-shadow: var(--shadow);
+}
+.login-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.7rem;
+  text-align: center;
+}
+.login-brand .lb-mark {
+  width: 52px;
+  height: 52px;
+  border-radius: 13px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: "Big Shoulders Display", sans-serif;
+  font-weight: 800;
+  font-size: 1.7rem;
+}
+.login-brand .lb-org {
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+.login-brand .lb-sub {
+  font-size: 0.7rem;
+  color: var(--text-faint);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.field label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--text-dim);
+}
+.field input {
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  padding: 0.6rem 0.7rem;
+  color: var(--text);
+  font-size: 0.88rem;
+  font-family: inherit;
+}
+.field input::placeholder {
+  color: var(--text-faint);
+}
+.login-submit {
+  background: var(--accent);
+  color: var(--accent-ink);
+  border: none;
+  border-radius: 8px;
+  padding: 0.7rem;
+  font-size: 0.88rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+.login-submit:hover:not(:disabled) {
+  background: var(--accent-dim);
+}
+.login-submit:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.login-err {
+  font-size: 0.74rem;
+  color: var(--help);
+  text-align: center;
+  min-height: 1em;
+}
+.login-foot {
+  font-size: 0.68rem;
+  color: var(--text-faint);
+  text-align: center;
+  line-height: 1.5;
+}

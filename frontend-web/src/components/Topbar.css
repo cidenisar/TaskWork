@@ -1,0 +1,111 @@
+.topbar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 0;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  padding: 0 1.25rem;
+  min-height: 62px;
+  flex-wrap: wrap;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.6rem 1.1rem 0.6rem 0;
+  border-right: 1px solid var(--border);
+  margin-right: 1.1rem;
+}
+.brand-mark {
+  width: 30px;
+  height: 30px;
+  border-radius: 7px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: "Big Shoulders Display", sans-serif;
+  font-weight: 800;
+  font-size: 1.1rem;
+  flex: none;
+}
+.brand-text .p1 {
+  font-size: 0.65rem;
+  color: var(--text-faint);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.brand-text .p2 {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+.topbar h1 {
+  font-size: 1.3rem;
+  margin-right: 1.4rem;
+}
+.topbar-nav {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-right: auto;
+  font-size: 0.8rem;
+  color: var(--text-dim);
+}
+.topbar-nav a {
+  text-decoration: none;
+  color: inherit;
+  padding: 0.3rem 0;
+  border-bottom: 2px solid transparent;
+}
+.topbar-nav a:hover {
+  color: var(--text);
+}
+.topbar-nav a.on {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+  font-weight: 600;
+}
+.scope-chip {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  padding: 0.35rem 0.8rem 0.35rem 0.5rem;
+  font-size: 0.75rem;
+}
+.scope-chip .av {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--info-bg);
+  color: var(--info);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.68rem;
+  flex: none;
+}
+.scope-chip b {
+  font-weight: 600;
+}
+.scope-chip .role {
+  color: var(--text-faint);
+}
+.logout-link {
+  font-size: 0.72rem;
+  color: var(--text-faint);
+  margin-left: 0.9rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  padding: 0.35rem 0.75rem;
+  background: none;
+}
+.logout-link:hover {
+  color: var(--text);
+  border-color: var(--accent);
+}

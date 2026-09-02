@@ -1,0 +1,874 @@
+/* Sistema de diseño — copiado tal cual de los wireframes de Cowork
+   ("Login y Selector de Sitio", "Emergencias Refinería — Wireframe
+   unificado"): control-room oscuro por default, acento naranja,
+   Big Shoulders Display para títulos, IBM Plex Sans para el cuerpo,
+   IBM Plex Mono para números/datos. Cualquier pantalla nueva de
+   Frontend Web debería reusar estas variables en vez de inventar
+   colores — así se mantienen todas visualmente como un solo sistema. */
+
+:root {
+  color-scheme: dark;
+  --bg: #0a0e13;
+  --surface: #121820;
+  --surface-2: #1a2129;
+  --surface-3: #212a33;
+  --border: #2b3540;
+  --border-strong: #3d4a56;
+  --text: #eef2f5;
+  --text-dim: #9fadb8;
+  --text-faint: #6b7885;
+  --accent: #ff8c2b;
+  --accent-dim: #c9711f;
+  --accent-ink: #23140a;
+  --ok: #35c47a;
+  --ok-bg: rgba(53, 196, 122, 0.14);
+  --ok-strong: rgba(53, 196, 122, 0.5);
+  --help: #ef4a52;
+  --help-bg: rgba(239, 74, 82, 0.16);
+  --help-strong: rgba(239, 74, 82, 0.55);
+  --pending: #f2b544;
+  --pending-bg: rgba(242, 181, 68, 0.15);
+  --pending-strong: rgba(242, 181, 68, 0.5);
+  --info: #4f9fe0;
+  --info-bg: rgba(79, 159, 224, 0.14);
+  --shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  --radius: 12px;
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    color-scheme: light;
+    --bg: #eef1f4;
+    --surface: #ffffff;
+    --surface-2: #f5f7f9;
+    --surface-3: #e9edf1;
+    --border: #d7dee4;
+    --border-strong: #bcc7cf;
+    --text: #141b22;
+    --text-dim: #4d5964;
+    --text-faint: #7c8891;
+    --accent: #d9660a;
+    --accent-dim: #b8560a;
+    --accent-ink: #ffffff;
+    --ok: #1f9d58;
+    --ok-bg: rgba(31, 157, 88, 0.1);
+    --ok-strong: rgba(31, 157, 88, 0.4);
+    --help: #d5323a;
+    --help-bg: rgba(213, 50, 58, 0.09);
+    --help-strong: rgba(213, 50, 58, 0.35);
+    --pending: #a86a08;
+    --pending-bg: rgba(168, 106, 8, 0.1);
+    --pending-strong: rgba(168, 106, 8, 0.4);
+    --info: #2b74c4;
+    --info-bg: rgba(43, 116, 196, 0.1);
+    --shadow: 0 8px 24px rgba(20, 27, 34, 0.1);
+  }
+}
+
+/* Toggle explícito de tema (cuando se agregue un selector de tema en la UI) */
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #eef1f4;
+  --surface: #ffffff;
+  --surface-2: #f5f7f9;
+  --surface-3: #e9edf1;
+  --border: #d7dee4;
+  --border-strong: #bcc7cf;
+  --text: #141b22;
+  --text-dim: #4d5964;
+  --text-faint: #7c8891;
+  --accent: #d9660a;
+  --accent-dim: #b8560a;
+  --accent-ink: #ffffff;
+  --ok: #1f9d58;
+  --ok-bg: rgba(31, 157, 88, 0.1);
+  --ok-strong: rgba(31, 157, 88, 0.4);
+  --help: #d5323a;
+  --help-bg: rgba(213, 50, 58, 0.09);
+  --help-strong: rgba(213, 50, 58, 0.35);
+  --pending: #a86a08;
+  --pending-bg: rgba(168, 106, 8, 0.1);
+  --pending-strong: rgba(168, 106, 8, 0.4);
+  --info: #2b74c4;
+  --info-bg: rgba(43, 116, 196, 0.1);
+  --shadow: 0 8px 24px rgba(20, 27, 34, 0.1);
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0a0e13;
+  --surface: #121820;
+  --surface-2: #1a2129;
+  --surface-3: #212a33;
+  --border: #2b3540;
+  --border-strong: #3d4a56;
+  --text: #eef2f5;
+  --text-dim: #9fadb8;
+  --text-faint: #6b7885;
+  --accent: #ff8c2b;
+  --accent-dim: #c9711f;
+  --accent-ink: #23140a;
+  --ok: #35c47a;
+  --ok-bg: rgba(53, 196, 122, 0.14);
+  --ok-strong: rgba(53, 196, 122, 0.5);
+  --help: #ef4a52;
+  --help-bg: rgba(239, 74, 82, 0.16);
+  --help-strong: rgba(239, 74, 82, 0.55);
+  --pending: #f2b544;
+  --pending-bg: rgba(242, 181, 68, 0.15);
+  --pending-strong: rgba(242, 181, 68, 0.5);
+  --info: #4f9fe0;
+  --info-bg: rgba(79, 159, 224, 0.14);
+  --shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+* {
+  box-sizing: border-box;
+}
+html,
+body,
+#root {
+  height: 100%;
+}
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "IBM Plex Sans", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+.num {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+}
+h1,
+h2,
+h3 {
+  font-family: "Big Shoulders Display", "Arial Narrow", sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.01em;
+  text-wrap: balance;
+  margin: 0;
+}
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
+a {
+  color: inherit;
+}
+button:focus-visible,
+a:focus-visible,
+input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+.app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---------- primitivas compartidas por las pantallas de administración
+   (Operadores, y las que sigan — Personal/Padrón, Sitios, Consolas,
+   Simulacros van a necesitar el mismo botón/drawer/toast) ---------- */
+
+.btn-primary {
+  background: var(--accent);
+  color: var(--accent-ink);
+  border: none;
+  border-radius: 8px;
+  padding: 0.55rem 1rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.btn-primary:hover:not(:disabled) {
+  background: var(--accent-dim);
+}
+.btn-primary:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.btn-primary svg {
+  width: 14px;
+  height: 14px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2.4;
+}
+.btn-ghost {
+  background: none;
+  border: 1px solid var(--border-strong);
+  color: var(--text-dim);
+  border-radius: 7px;
+  padding: 0.4rem 0.75rem;
+  font-size: 0.76rem;
+  font-weight: 600;
+}
+.btn-ghost:hover:not(:disabled) {
+  color: var(--text);
+  border-color: var(--text-dim);
+}
+.btn-danger {
+  background: var(--help);
+  color: #2a0608;
+  border: none;
+  border-radius: 7px;
+  padding: 0.4rem 0.75rem;
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+.btn-danger:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+.btn-ok {
+  background: var(--ok);
+  color: #06210f;
+  border: none;
+  border-radius: 7px;
+  padding: 0.4rem 0.75rem;
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+.btn-ok:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+.btn-secondary {
+  background: var(--surface-2);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  padding: 0.55rem 1rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  white-space: nowrap;
+}
+.btn-secondary:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.btn-secondary svg {
+  width: 14px;
+  height: 14px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2.4;
+}
+
+/* toggle segmentado de 2 opciones — Operadores (rol/alcance), Códigos de acceso (tipo) */
+.seg-toggle {
+  display: flex;
+  gap: 0.5rem;
+}
+.seg-toggle button {
+  flex: 1;
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  color: var(--text-dim);
+  border-radius: 8px;
+  padding: 0.5rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+.seg-toggle button.on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+
+/* botones de acción al final de una fila de lista — Operadores, Pendientes, Códigos de acceso */
+.row-actions {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+/* confirmación inline dentro de una fila (reemplaza la fila mientras se confirma) — Operadores (dar de baja), Códigos de acceso (revocar) */
+.confirm-row {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.confirm-row .cr-text {
+  font-size: 0.82rem;
+  color: var(--text);
+}
+.confirm-row .cr-text b {
+  color: var(--help);
+}
+.confirm-row .cr-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex: none;
+}
+.icon-btn {
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  color: var(--text-dim);
+  border-radius: 7px;
+  padding: 0.4rem 0.6rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  white-space: nowrap;
+}
+.icon-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--text);
+}
+.icon-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.icon-btn svg {
+  width: 13px;
+  height: 13px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2.2;
+}
+.icon-btn.good:hover:not(:disabled) {
+  border-color: var(--ok);
+}
+.icon-btn.bad:hover:not(:disabled) {
+  border-color: var(--help);
+}
+
+/* barra de herramientas (contador + acciones/filtros) y lista vertical —
+   Operadores, Pendientes, Códigos de acceso, Historial, Puntos de encuentro */
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.toolbar .tb-count {
+  font-size: 0.8rem;
+  color: var(--text-dim);
+}
+.toolbar .tb-count b {
+  color: var(--text);
+}
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+.toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+.search {
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  padding: 0.45rem 0.7rem;
+  font-size: 0.8rem;
+  color: var(--text);
+  font-family: inherit;
+  width: 220px;
+}
+.fselect {
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  padding: 0.4rem 0.6rem;
+  font-size: 0.8rem;
+  color: var(--text);
+  font-family: inherit;
+}
+
+/* ---------- intro + empty-state, repetidos en toda pantalla de administración ---------- */
+.intro {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.intro .eyebrow {
+  font-size: 0.7rem;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  font-weight: 600;
+}
+.intro p {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 0.86rem;
+  max-width: 72ch;
+  line-height: 1.55;
+}
+.intro p b {
+  color: var(--text);
+}
+.intro p a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.intro p a:hover {
+  color: var(--accent-dim);
+}
+.empty {
+  text-align: center;
+  padding: 2.5rem 1rem;
+  color: var(--text-faint);
+  font-size: 0.85rem;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius);
+}
+
+/* ---------- grilla de tarjetas de sitio — Selector de Sitio, Panorama de Sitios ---------- */
+.sites-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+}
+.site-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.05rem 1.15rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 0.12s,
+    transform 0.12s;
+}
+.site-card:hover {
+  border-color: var(--accent);
+  transform: translateY(-1px);
+}
+.site-card.active-event {
+  border-color: var(--help-strong);
+  background: linear-gradient(180deg, var(--help-bg), var(--surface) 55%);
+}
+.site-card .sc-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.site-card .sc-name {
+  font-size: 1.02rem;
+  font-weight: 700;
+  line-height: 1.25;
+}
+.sc-foot {
+  display: flex;
+  align-items: center;
+  padding-top: 0.65rem;
+  border-top: 1px solid var(--border);
+  margin-top: auto;
+}
+.sc-cta {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+.sc-cta svg {
+  width: 12px;
+  height: 12px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2.2;
+}
+@media (max-width: 900px) {
+  .sites-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* status-pill base — cada pantalla define sus propias variantes de color (.live/.quiet, .active/.inactive, .ok/.ayuda/.pendiente, ...) */
+.status-pill {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  padding: 0.25rem 0.55rem;
+  border-radius: 999px;
+}
+.status-pill::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+/* variantes activo/inactivo genéricas — Operadores, Padrón de Personas.
+   Cuidado si se agrega un `.status-pill.vencido` nuevo: ya hay uno en
+   Historial.css (rojo/alerta, cumplimiento de simulacros) — no
+   redeclarar sin querer con otro significado, como pasó con el de
+   Códigos de acceso (ver nota ahí). */
+.status-pill.active {
+  color: var(--ok);
+  background: var(--ok-bg);
+}
+.status-pill.inactive {
+  color: var(--text-faint);
+  background: var(--surface-2);
+}
+
+/* avatar circular con iniciales + nombre/subtítulo — Pendientes, Padrón
+   de Personas. Sin color propio a propósito: cada pantalla define el
+   suyo (Pendientes lo pone en pending vía estilo inline, igual que
+   hacía el wireframe) para poder compartir el layout sin heredar sin
+   querer el color de la otra pantalla. */
+.p-id {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  flex: 1 1 220px;
+  min-width: 0;
+}
+.p-av {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.72rem;
+  flex: none;
+  background: var(--info-bg);
+  color: var(--info);
+}
+.p-name {
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+.p-sub {
+  font-size: 0.72rem;
+  color: var(--text-faint);
+}
+.site-chip-sm {
+  flex: 1 1 170px;
+  font-size: 0.72rem;
+  color: var(--text-dim);
+}
+
+/* pill de tipo — Códigos de acceso (.individual/.lote), Padrón de
+   Personas (.fijo/.eventual) — mismo tamaño, cada pantalla define sus
+   propios colores de variante con nombres que no chocan entre sí. */
+.tipo-pill {
+  flex: none;
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  padding: 0.22rem 0.55rem;
+  border-radius: 999px;
+}
+
+/* tira de pestañas — las 4 pantallas de "Administración de Padrón de
+   Personas" (Padrón, Pendientes, Importar, Códigos de acceso) */
+.tabs {
+  display: flex;
+  gap: 0.35rem;
+  border-bottom: 1px solid var(--border);
+}
+.tab-btn {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-faint);
+  font-size: 0.84rem;
+  font-weight: 600;
+  padding: 0.7rem 0.9rem;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+.tab-btn:hover {
+  color: var(--text);
+}
+.tab-btn.on {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+.tab-count {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.68rem;
+  background: var(--surface-3);
+  color: var(--text-dim);
+  border-radius: 999px;
+  padding: 0.05rem 0.4rem;
+}
+.tab-btn.on .tab-count {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+@keyframes pulse-op {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+/* chips de filtro — Accountability en vivo, Historial de cumplimiento */
+.chip-group {
+  display: flex;
+  gap: 0.35rem;
+}
+.chip {
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2);
+  color: var(--text-dim);
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.32rem 0.65rem;
+  border-radius: 999px;
+}
+.chip.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+
+/* selector de sitio inyectado en el <Topbar> vía `extra` — Puntos de
+   encuentro, Programador de Simulacros */
+.site-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  margin-right: 0.9rem;
+}
+.site-picker label {
+  font-size: 0.62rem;
+  color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+}
+.site-picker select {
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  color: var(--text);
+  border-radius: 7px;
+  padding: 0.35rem 0.6rem;
+  font-size: 0.8rem;
+  font-family: inherit;
+  min-width: 220px;
+}
+
+/* callout informativo con ícono — distinto de `.note-box` (que ya usa
+   Accountability.css con paleta de ayuda/rojo para una advertencia; acá
+   es paleta info/azul para una aclaración, nombre distinto a propósito
+   para no chocar — ver Puntos de encuentro) */
+.info-box {
+  background: var(--info-bg);
+  border: 1px solid var(--info);
+  border-radius: var(--radius);
+  padding: 0.85rem 1rem;
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  line-height: 1.5;
+  display: flex;
+  gap: 0.6rem;
+}
+.info-box svg {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  stroke: var(--info);
+  fill: none;
+  stroke-width: 2.2;
+  margin-top: 1px;
+}
+.info-box b {
+  color: var(--text);
+}
+
+.scrim {
+  position: fixed;
+  inset: 0;
+  background: rgba(4, 6, 9, 0.55);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s;
+  z-index: 30;
+}
+.scrim.show {
+  opacity: 1;
+  pointer-events: auto;
+}
+.drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  height: 100%;
+  width: 400px;
+  max-width: 92vw;
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  transform: translateX(100%);
+  transition: transform 0.2s;
+  z-index: 31;
+  display: flex;
+  flex-direction: column;
+}
+.drawer.show {
+  transform: translateX(0);
+}
+.drawer-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.1rem 1.2rem;
+  border-bottom: 1px solid var(--border);
+  flex: none;
+}
+.drawer-head h2 {
+  font-size: 1.05rem;
+}
+.drawer-close {
+  background: none;
+  border: none;
+  color: var(--text-faint);
+  font-size: 1.2rem;
+  line-height: 1;
+  padding: 0.2rem;
+}
+.drawer-close:hover {
+  color: var(--text);
+}
+.drawer-body {
+  flex: 1;
+  padding: 1.2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+  overflow-y: auto;
+}
+.drawer-foot {
+  padding: 1rem 1.2rem;
+  border-top: 1px solid var(--border);
+  display: flex;
+  gap: 0.6rem;
+  flex: none;
+}
+.drawer-foot .btn-ghost {
+  flex: none;
+}
+.drawer-foot .btn-primary {
+  flex: 1;
+  justify-content: center;
+}
+
+.dfield {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.dfield label {
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--text-dim);
+}
+.dfield input,
+.dfield select,
+.dfield textarea {
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  padding: 0.6rem 0.7rem;
+  color: var(--text);
+  font-size: 0.86rem;
+  font-family: inherit;
+}
+.dfield textarea {
+  resize: vertical;
+}
+.dfield .hint {
+  font-size: 0.68rem;
+  color: var(--text-faint);
+}
+.dfield .err {
+  font-size: 0.72rem;
+  color: var(--help);
+}
+
+/* aclaración chica de fondo apagado, dentro de un drawer o una lista —
+   Padrón de Personas, Importar */
+.import-note {
+  font-size: 0.76rem;
+  color: var(--text-faint);
+  background: var(--surface-2);
+  border-radius: 8px;
+  padding: 0.6rem 0.8rem;
+}
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 1.4rem;
+  transform: translate(-50%, 12px);
+  background: var(--surface-3);
+  border: 1px solid var(--border-strong);
+  color: var(--text);
+  padding: 0.65rem 1rem;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  box-shadow: var(--shadow);
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 0.15s,
+    transform 0.15s;
+  z-index: 40;
+  max-width: 90vw;
+  text-align: center;
+}
+.toast.show {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+footer.wf-footer {
+  flex: none;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+  padding: 0.55rem 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  font-size: 0.7rem;
+  color: var(--text-faint);
+  flex-wrap: wrap;
+}

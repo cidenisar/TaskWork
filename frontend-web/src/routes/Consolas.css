@@ -1,0 +1,58 @@
+/* Administración de Consolas. Botones/drawer/toast/toolbar/list/
+   info-box/site-picker/status-pill (base)/point-row (de Puntos de
+   encuentro, reusado tal cual) viven en styles/tokens.css o
+   Puntos.css — acá solo lo que es propio de esta pantalla: el
+   indicador de conectividad y la fila de cada botón PROG. */
+
+.conn-dot {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.68rem;
+  color: var(--text-faint);
+}
+.conn-dot::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.conn-dot.online {
+  color: var(--ok);
+}
+
+.prog-summary {
+  font-size: 0.72rem;
+  color: var(--text-faint);
+  font-family: "IBM Plex Mono", monospace;
+}
+
+.prog-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: 0.4rem;
+}
+.prog-row:first-of-type {
+  margin-top: 0.5rem;
+}
+.prog-label {
+  flex: none;
+  width: 52px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--text-dim);
+  font-family: "IBM Plex Mono", monospace;
+}
+.prog-row select {
+  flex: 1;
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  padding: 0.5rem 0.6rem;
+  color: var(--text);
+  font-size: 0.84rem;
+  font-family: inherit;
+}

@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.env
+*.log
+padron.db
+padron.db-shm
+padron.db-wal
