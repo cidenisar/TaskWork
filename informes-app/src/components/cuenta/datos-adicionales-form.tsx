@@ -71,14 +71,19 @@ export function DatosAdicionalesForm({ initial }: { initial: DatosAdicionales })
       </p>
 
       <div className="tech-form-grid">
-        <input type="text" placeholder="DNI" value={datos.dni ?? ""} onChange={(e) => set("dni", e.target.value)} disabled={busy} />
-        <input
-          type="date"
-          placeholder="Vencimiento DNI"
-          value={datos.dniVencimiento ?? ""}
-          onChange={(e) => set("dniVencimiento", e.target.value)}
-          disabled={busy}
-        />
+        <div className="field" style={{ marginBottom: 0 }}>
+          <label style={{ fontSize: 12 }}>DNI</label>
+          <input type="text" value={datos.dni ?? ""} onChange={(e) => set("dni", e.target.value)} disabled={busy} />
+        </div>
+        <div className="field" style={{ marginBottom: 0 }}>
+          <label style={{ fontSize: 12 }}>Vencimiento DNI</label>
+          <input
+            type="date"
+            value={datos.dniVencimiento ?? ""}
+            onChange={(e) => set("dniVencimiento", e.target.value)}
+            disabled={busy}
+          />
+        </div>
       </div>
       {datos.dniVencimiento && (
         <div style={{ marginTop: 6 }}>
@@ -87,38 +92,47 @@ export function DatosAdicionalesForm({ initial }: { initial: DatosAdicionales })
       )}
 
       <div className="tech-form-grid" style={{ marginTop: 10 }}>
-        <input
-          type="date"
-          placeholder="Fecha de nacimiento"
-          value={datos.fechaNacimiento ?? ""}
-          onChange={(e) => set("fechaNacimiento", e.target.value)}
-          disabled={busy}
-        />
-        <select value={datos.factorSanguineo ?? ""} onChange={(e) => set("factorSanguineo", e.target.value)} disabled={busy}>
-          <option value="">Grupo y factor sanguíneo</option>
-          {FACTORES_SANGUINEOS.map((f) => (
-            <option key={f} value={f}>
-              {f}
-            </option>
-          ))}
-        </select>
+        <div className="field" style={{ marginBottom: 0 }}>
+          <label style={{ fontSize: 12 }}>Fecha de nacimiento</label>
+          <input
+            type="date"
+            value={datos.fechaNacimiento ?? ""}
+            onChange={(e) => set("fechaNacimiento", e.target.value)}
+            disabled={busy}
+          />
+        </div>
+        <div className="field" style={{ marginBottom: 0 }}>
+          <label style={{ fontSize: 12 }}>Grupo y factor sanguíneo</label>
+          <select value={datos.factorSanguineo ?? ""} onChange={(e) => set("factorSanguineo", e.target.value)} disabled={busy}>
+            <option value="">Sin cargar</option>
+            {FACTORES_SANGUINEOS.map((f) => (
+              <option key={f} value={f}>
+                {f}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       <div className="tech-form-grid" style={{ marginTop: 10 }}>
-        <input
-          type="date"
-          placeholder="Vencimiento licencia de conducir"
-          value={datos.licenciaConducirVencimiento ?? ""}
-          onChange={(e) => set("licenciaConducirVencimiento", e.target.value)}
-          disabled={busy}
-        />
-        <input
-          type="email"
-          placeholder="Email alternativo"
-          value={datos.emailAlternativo ?? ""}
-          onChange={(e) => set("emailAlternativo", e.target.value)}
-          disabled={busy}
-        />
+        <div className="field" style={{ marginBottom: 0 }}>
+          <label style={{ fontSize: 12 }}>Vencimiento licencia de conducir</label>
+          <input
+            type="date"
+            value={datos.licenciaConducirVencimiento ?? ""}
+            onChange={(e) => set("licenciaConducirVencimiento", e.target.value)}
+            disabled={busy}
+          />
+        </div>
+        <div className="field" style={{ marginBottom: 0 }}>
+          <label style={{ fontSize: 12 }}>Email alternativo</label>
+          <input
+            type="email"
+            value={datos.emailAlternativo ?? ""}
+            onChange={(e) => set("emailAlternativo", e.target.value)}
+            disabled={busy}
+          />
+        </div>
       </div>
       {datos.licenciaConducirVencimiento && (
         <div style={{ marginTop: 6 }}>
