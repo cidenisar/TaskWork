@@ -71,15 +71,19 @@ export function AppShell({ profile, children }: { profile: Profile; children: Re
       <div className="sessionbar">
         <div className="who">
           {profile.fotoPerfilUrl ? (
+            // Cuadrado + object-fit:contain, igual criterio que en Mi cuenta —
+            // se ve la foto entera, nunca recortada.
             // eslint-disable-next-line @next/next/no-img-element -- avatar chico, no vale la pena next/image acá
             <img
               src={profile.fotoPerfilUrl}
               alt=""
               className="avatar"
-              style={{ objectFit: "cover" }}
+              style={{ borderRadius: 8, objectFit: "contain", background: "var(--panel-2)" }}
             />
           ) : (
-            <div className="avatar">{(profile.nombreCompleto[0] || "?").toUpperCase()}</div>
+            <div className="avatar" style={{ borderRadius: 8 }}>
+              {(profile.nombreCompleto[0] || "?").toUpperCase()}
+            </div>
           )}
           <span>{profile.nombreCompleto}</span>
           <span className="role-pill">{ROL_LABEL[profile.rol]}</span>
