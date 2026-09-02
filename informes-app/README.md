@@ -23,12 +23,25 @@ directamente del prototipo HTML aprobado por el cliente.
   GPS), "Mejorar con IA" (Claude API) y dictado por voz (Web Speech API),
   generación de PDF **server-side** replicando el diseño aprobado
   (`Informe Tecnico - Diseño PDF.pdf`), historial con búsqueda en lenguaje
-  natural y descarga múltiple en `.zip`.
-- Módulo **Rendición de Gastos** completo: wizard de 3 pasos (los técnicos se
-  cargan por gasto, no por rendición — spec 7.1), categorías con alta al
-  vuelo, comprobante por foto, caja de saldo verde/rojo, PDF server-side
-  replicando `Rendicion de Gastos - Diseño PDF.pdf`, exportación a Excel
-  (`exceljs`) y historial con búsqueda en lenguaje natural.
+  natural, descarga múltiple en `.zip`, y **edición post-generación**
+  (`/informe-tecnico/editar/[id]`) — se puede reabrir un informe propio para
+  corregir datos/técnicos/vehículos y regenerar el PDF; las fotos ya
+  cargadas no se tocan ahí (si hay que cambiar una foto, se rehace el
+  informe).
+- Módulo **Rendición de Gastos** completo, con flujo **abierta → cerrada**
+  real (spec: `estado` de la rendición): "Nueva Rendición" solo carga el
+  viático y los datos generales y la deja creada como **abierta**;
+  desde `/rendicion-gastos/[id]` se van agregando gastos de a uno — cada uno
+  se guarda al toque (comprobante incluido), así se puede volver en
+  cualquier momento (otro día, otro dispositivo) a seguir cargando — hasta
+  tocar **"🔒 Cerrar rendición y generar PDF"**, que recién ahí arma el PDF
+  final y pasa la rendición a **cerrada** (ya no admite más gastos). Los
+  técnicos se cargan por gasto, no por rendición (spec 7.1). Categorías con
+  alta al vuelo, comprobante por foto, caja de saldo verde/rojo, PDF
+  server-side replicando `Rendicion de Gastos - Diseño PDF.pdf`,
+  exportación a Excel (`exceljs`, funciona también sobre una rendición
+  todavía abierta) e historial con búsqueda en lenguaje natural que
+  distingue abiertas ("▶ Seguir cargando") de cerradas.
 - Módulo **Configuración** completo (solo Administrador, accesible desde la
   pantalla de inicio — no desde adentro de Informe Técnico/Rendición de
   Gastos, ver nota abajo): logo de la empresa,

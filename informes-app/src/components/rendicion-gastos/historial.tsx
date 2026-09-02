@@ -1,6 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
+import type { EstadoRendicion } from "@/lib/database.types";
 import { filtrarRendicionesPorConsulta, type HistorialRendicionBuscable } from "@/lib/rendicion-gastos/nl-search";
 import { obtenerUrlPdfRendicionAction } from "@/app/(app)/rendicion-gastos/historial/actions";
 
@@ -9,6 +11,7 @@ export interface HistorialRendicionRow extends HistorialRendicionBuscable {
   moneda: "ARS" | "USD";
   viaticoRecibido: number;
   totalGastado: number;
+  estado: EstadoRendicion;
   pdfDisponible: boolean;
 }
 
@@ -55,8 +58,10 @@ export function HistorialRendiciones({ rendiciones }: { rendiciones: HistorialRe
       </div>
 
       <div className="banner">
-        🔔 El <b>registro</b> (motivo, fecha, técnicos, N° de generación, total y saldo) se guarda para siempre. El{" "}
-        <b>PDF</b> se conserva solo hasta que lo descargues o hasta el umbral configurado en Configuración — el
+        🔔 Una rendición <b>abierta</b> (▶) todavía admite agregar o quitar gastos — segui cargándolos cuando
+        quieras hasta hacer el cierre. Una vez <b>cerrada</b> ya no se puede modificar: el{" "}
+        <b>registro</b> (motivo, fecha, técnicos, N° de generación, total y saldo) se guarda para siempre, el{" "}
+        <b>PDF</b> se conserva solo hasta que lo descargues o hasta el umbral configurado en Configuración, y el
         Excel siempre se puede volver a generar mientras el registro exista.
       </div>
 
@@ -80,15 +85,15 @@ export function HistorialRendiciones({ rendiciones }: { rendiciones: HistorialRe
           <div>
             {filtered.map((r) => {
               const saldo = r.viaticoRecibido - r.totalGastado;
+              const abierta = r.estado === "abierta";
+              const estadoLabel = abierta ? "Abierta" : r.pdfDisponible ? "Cerrada" : "Solo registro";
               return (
-                <div className={`hist-item${r.pdfDisponible ? "" : " archived"}`} key={r.id}>
+                <div className={`hist-item${r.pdfDisponible || abierta ? "" : " archived"}`} key={r.id}>
                   <div className="info">
                     <div className="hist-main">
                       <div className="hist-title">
                         {r.motivo}
-                        <span className={`hist-status ${r.pdfDisponible ? "ok" : "gone"}`}>
-                          {r.pdfDisponible ? "PDF disponible" : "Solo registro"}
-                        </span>
+                        <span className={`hist-status ${abierta ? "warn" : r.pdfDisponible ? "ok" : "gone"}`}>{estadoLabel}</span>
                       </div>
                       <div className="hist-meta">
                         {r.numeroGeneracion} · {fmtFecha(r.fecha)} · Total {fmtMonto(r.totalGastado, r.moneda)} · Saldo{" "}
@@ -101,15 +106,21 @@ export function HistorialRendiciones({ rendiciones }: { rendiciones: HistorialRe
                     </div>
                   </div>
                   <div className="hist-actions">
-                    <button
-                      type="button"
-                      className="icon-btn"
-                      title={r.pdfDisponible ? "Ver PDF" : "Sin PDF disponible"}
-                      disabled={!r.pdfDisponible || busyId === r.id}
-                      onClick={() => verPdf(r.id, r.numeroGeneracion)}
-                    >
-                      {busyId === r.id ? "…" : "📄"}
-                    </button>
+                    {abierta ? (
+                      <Link href={`/rendicion-gastos/${r.id}`} className="icon-btn" title="Seguir cargando gastos">
+                        ▶
+                      </Link>
+                    ) : (
+                      <button
+                        type="button"
+                        className="icon-btn"
+                        title={r.pdfDisponible ? "Ver PDF" : "Sin PDF disponible"}
+                        disabled={!r.pdfDisponible || busyId === r.id}
+                        onClick={() => verPdf(r.id, r.numeroGeneracion)}
+                      >
+                        {busyId === r.id ? "…" : "📄"}
+                      </button>
+                    )}
                     <a
                       className="icon-btn"
                       title="Descargar Excel"

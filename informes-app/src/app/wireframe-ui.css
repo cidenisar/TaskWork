@@ -769,6 +769,10 @@ textarea {
   background: rgba(255, 255, 255, 0.08);
   color: var(--text-faint);
 }
+.hist-status.warn {
+  background: rgba(224, 178, 61, 0.15);
+  color: var(--warn);
+}
 .hist-actions {
   display: flex;
   gap: 6px;

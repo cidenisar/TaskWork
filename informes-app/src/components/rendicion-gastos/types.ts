@@ -23,17 +23,6 @@ export interface GastoTecnicoChip {
   torre: string;
 }
 
-export interface GastoItem {
-  clientId: string;
-  fecha: string;
-  categoria: string;
-  monto: number;
-  descripcion: string;
-  tecnicos: GastoTecnicoChip[];
-  comprobanteBlob: Blob | null;
-  comprobantePreviewUrl: string | null;
-}
-
 export interface CatalogosRendicion {
   provincias: string[];
   categoriasGasto: string[];

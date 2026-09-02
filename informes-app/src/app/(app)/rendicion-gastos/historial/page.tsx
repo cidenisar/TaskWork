@@ -46,6 +46,7 @@ export default async function HistorialRendicionesPage() {
     viaticoRecibido: Number(r.viatico_recibido),
     totalGastado: totalPorRendicion.get(r.id) ?? 0,
     tecnicos: Array.from(tecnicosPorRendicion.get(r.id) ?? []),
+    estado: r.estado,
     pdfDisponible: r.estado === "cerrada" && !!r.pdf_url,
   }));
 
