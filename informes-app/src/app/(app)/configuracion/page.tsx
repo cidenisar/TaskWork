@@ -22,7 +22,6 @@ export default async function ConfiguracionPage() {
     configRes,
     usuariosRes,
     emailsRes,
-    tecnicosRes,
     torresRes,
     provinciasRes,
     tiposRes,
@@ -36,9 +35,8 @@ export default async function ConfiguracionPage() {
       .select("logo_empresa_url, auto_enviar_email, umbral_aviso_historial, recordatorio_semanal_archivo, resumen_semanal_ia")
       .eq("id", 1)
       .single(),
-    supabase.from("profiles").select("id, email, nombre_completo, rol").order("nombre_completo"),
+    supabase.from("profiles").select("id, email, nombre_completo, rol, torre").order("nombre_completo"),
     supabase.from("config_emails_envio").select("id, email, activo").order("email"),
-    supabase.from("catalogo_tecnicos").select("id, nombre_completo, torre").order("nombre_completo"),
     supabase.from("catalogo_torres").select("id, nombre").order("nombre"),
     supabase.from("catalogo_provincias").select("id, nombre").order("nombre"),
     supabase.from("catalogo_tipos_informe").select("id, nombre").order("nombre"),
@@ -63,11 +61,11 @@ export default async function ConfiguracionPage() {
           email: u.email,
           nombreCompleto: u.nombre_completo,
           rol: u.rol,
+          torre: u.torre,
         })),
         currentUserId: profile.id,
         emails: (emailsRes.data ?? []).map((e) => ({ id: e.id, email: e.email, activo: e.activo })),
         catalogos: {
-          tecnicos: (tecnicosRes.data ?? []).map((t) => ({ id: t.id, nombreCompleto: t.nombre_completo, torre: t.torre })),
           torres: torresRes.data ?? [],
           provincias: provinciasRes.data ?? [],
           tiposInforme: tiposRes.data ?? [],

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { crearUsuarioAction, cambiarRolAction } from "@/app/(app)/configuracion/actions/usuarios";
+import { crearUsuarioAction, cambiarRolAction, cambiarTorreAction } from "@/app/(app)/configuracion/actions/usuarios";
 import { ROL_LABEL, type Rol } from "@/lib/types";
 
 export interface UsuarioRow {
@@ -9,19 +9,30 @@ export interface UsuarioRow {
   email: string;
   nombreCompleto: string;
   rol: Rol;
+  torre: string | null;
 }
 
 const ROLES: Rol[] = ["tecnico", "supervisor", "admin"];
 
-export function UsuariosCard({ usuarios: initial, currentUserId }: { usuarios: UsuarioRow[]; currentUserId: string }) {
+export function UsuariosCard({
+  usuarios: initial,
+  currentUserId,
+  torres,
+}: {
+  usuarios: UsuarioRow[];
+  currentUserId: string;
+  torres: string[];
+}) {
   const [usuarios, setUsuarios] = useState(initial);
   const [email, setEmail] = useState("");
   const [nombre, setNombre] = useState("");
   const [rol, setRol] = useState<Rol>("tecnico");
+  const [torre, setTorre] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [creado, setCreado] = useState<{ email: string; password: string } | null>(null);
   const [rolBusyId, setRolBusyId] = useState<string | null>(null);
+  const [torreBusyId, setTorreBusyId] = useState<string | null>(null);
 
   async function crear() {
     if (!email.trim() || !nombre.trim()) {
@@ -31,7 +42,7 @@ export function UsuariosCard({ usuarios: initial, currentUserId }: { usuarios: U
     setBusy(true);
     setError(null);
     setCreado(null);
-    const res = await crearUsuarioAction(email, nombre, rol);
+    const res = await crearUsuarioAction(email, nombre, rol, torre);
     setBusy(false);
     if (!res.success || !res.credenciales) {
       setError(res.error || "No se pudo crear el usuario.");
@@ -39,12 +50,19 @@ export function UsuariosCard({ usuarios: initial, currentUserId }: { usuarios: U
     }
     setUsuarios((prev) => [
       ...prev,
-      { id: crypto.randomUUID(), email: res.credenciales!.email, nombreCompleto: nombre.trim(), rol },
+      {
+        id: crypto.randomUUID(),
+        email: res.credenciales!.email,
+        nombreCompleto: nombre.trim(),
+        rol,
+        torre: torre.trim() || null,
+      },
     ]);
     setCreado(res.credenciales);
     setEmail("");
     setNombre("");
     setRol("tecnico");
+    setTorre("");
   }
 
   async function cambiarRol(u: UsuarioRow, nuevoRol: Rol) {
@@ -60,12 +78,27 @@ export function UsuariosCard({ usuarios: initial, currentUserId }: { usuarios: U
     }
   }
 
+  async function cambiarTorre(u: UsuarioRow, nuevaTorre: string) {
+    const valor = nuevaTorre.trim() || null;
+    if (valor === u.torre) return;
+    const anterior = u.torre;
+    setTorreBusyId(u.id);
+    setUsuarios((prev) => prev.map((x) => (x.id === u.id ? { ...x, torre: valor } : x)));
+    const res = await cambiarTorreAction(u.id, u.nombreCompleto, nuevaTorre);
+    setTorreBusyId(null);
+    if (!res.success) {
+      setUsuarios((prev) => prev.map((x) => (x.id === u.id ? { ...x, torre: anterior } : x)));
+      setError(res.error || "No se pudo cambiar la torre.");
+    }
+  }
+
   return (
     <div className="card">
       <div className="section-label">Usuarios y roles</div>
       <p className="empty-note" style={{ marginBottom: 12 }}>
         Los técnicos no se registran solos — un Administrador crea la cuenta acá y le pasa la
-        contraseña temporal. El rol se puede subir o bajar en cualquier momento.
+        contraseña temporal. Esta lista es también el catálogo de técnicos que aparece sugerido en
+        Informe Técnico y Rendición de Gastos — no hay una carga aparte.
       </p>
 
       <div className="tech-form-grid">
@@ -84,13 +117,28 @@ export function UsuariosCard({ usuarios: initial, currentUserId }: { usuarios: U
           disabled={busy}
         />
       </div>
-      <select value={rol} onChange={(e) => setRol(e.target.value as Rol)} disabled={busy} style={{ marginTop: 10 }}>
-        {ROLES.map((r) => (
-          <option key={r} value={r}>
-            {ROL_LABEL[r]}
-          </option>
+      <div className="tech-form-grid" style={{ marginTop: 10 }}>
+        <select value={rol} onChange={(e) => setRol(e.target.value as Rol)} disabled={busy}>
+          {ROLES.map((r) => (
+            <option key={r} value={r}>
+              {ROL_LABEL[r]}
+            </option>
+          ))}
+        </select>
+        <input
+          type="text"
+          list="usuarios-torre-list"
+          placeholder="Torre (opcional)"
+          value={torre}
+          onChange={(e) => setTorre(e.target.value)}
+          disabled={busy}
+        />
+      </div>
+      <datalist id="usuarios-torre-list">
+        {torres.map((t) => (
+          <option key={t} value={t} />
         ))}
-      </select>
+      </datalist>
       <button type="button" className="btn btn-primary" onClick={crear} disabled={busy} style={{ marginTop: 10 }}>
         + Crear usuario
       </button>
@@ -124,18 +172,29 @@ export function UsuariosCard({ usuarios: initial, currentUserId }: { usuarios: U
                 <div className="item-sub">{u.email}</div>
               </div>
             </div>
-            <select
-              value={u.rol}
-              disabled={rolBusyId === u.id || u.id === currentUserId}
-              onChange={(e) => cambiarRol(u, e.target.value as Rol)}
-              title={u.id === currentUserId ? "No podés cambiar tu propio rol" : undefined}
-            >
-              {ROLES.map((r) => (
-                <option key={r} value={r}>
-                  {ROL_LABEL[r]}
-                </option>
-              ))}
-            </select>
+            <div style={{ display: "flex", gap: 6 }}>
+              <input
+                type="text"
+                list="usuarios-torre-list"
+                defaultValue={u.torre ?? ""}
+                placeholder="Torre"
+                disabled={torreBusyId === u.id}
+                onBlur={(e) => cambiarTorre(u, e.target.value)}
+                style={{ width: 110 }}
+              />
+              <select
+                value={u.rol}
+                disabled={rolBusyId === u.id || u.id === currentUserId}
+                onChange={(e) => cambiarRol(u, e.target.value as Rol)}
+                title={u.id === currentUserId ? "No podés cambiar tu propio rol" : undefined}
+              >
+                {ROLES.map((r) => (
+                  <option key={r} value={r}>
+                    {ROL_LABEL[r]}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
         ))}
       </div>

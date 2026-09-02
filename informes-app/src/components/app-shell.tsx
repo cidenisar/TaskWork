@@ -23,7 +23,6 @@ const NAV_CONFIG: Record<string, ModuleConfig> = {
     tabs: [
       { href: "/informe-tecnico/nuevo", label: "Nuevo Informe" },
       { href: "/informe-tecnico/historial", label: "Historial" },
-      { href: "/configuracion", label: "Configuración", gated: true },
     ],
   },
   "rendicion-gastos": {
@@ -31,7 +30,6 @@ const NAV_CONFIG: Record<string, ModuleConfig> = {
     tabs: [
       { href: "/rendicion-gastos/nueva", label: "Nueva Rendición" },
       { href: "/rendicion-gastos/historial", label: "Historial" },
-      { href: "/configuracion", label: "Configuración", gated: true },
     ],
   },
   estadisticas: {

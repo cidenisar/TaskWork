@@ -29,11 +29,16 @@ directamente del prototipo HTML aprobado por el cliente.
   vuelo, comprobante por foto, caja de saldo verde/rojo, PDF server-side
   replicando `Rendicion de Gastos - Diseño PDF.pdf`, exportación a Excel
   (`exceljs`) y historial con búsqueda en lenguaje natural.
-- Módulo **Configuración** completo (solo Administrador): logo de la empresa,
+- Módulo **Configuración** completo (solo Administrador, accesible desde la
+  pantalla de inicio — no desde adentro de Informe Técnico/Rendición de
+  Gastos, ver nota abajo): logo de la empresa,
   **alta de usuarios y asignación de roles** (el Administrador crea la cuenta
-  desde la propia app — email + contraseña temporal generada al vuelo — y
-  puede subir/bajar el rol de cualquiera después, sin pasar por el dashboard
-  de Supabase), envío automático por email, catálogos con alta/baja (técnicos, torres,
+  desde la propia app — email + contraseña temporal generada al vuelo,
+  torre opcional — y puede subir/bajar el rol o cambiar la torre de
+  cualquiera después, sin pasar por el dashboard de Supabase). **Esta lista
+  de usuarios ES el catálogo de técnicos** que aparece sugerido al cargar un
+  Informe Técnico o una Rendición de Gastos — ya no hay una carga manual
+  aparte en Catálogos. Además: envío automático por email, catálogos con alta/baja (torres,
   provincias, tipos de informe, categorías de gasto), ficha completa de
   vehículos con badges 🟢🟡🔴 de vencimiento, registro de service, alertas
   de flota "Vencimientos 🤖" recalculadas en vivo (documentación + intervalo
@@ -132,6 +137,12 @@ npm run dev
 ```
 
 ## Notas de implementación
+
+- **Navegación de Configuración**: solo tiene entrada desde la pantalla de
+  inicio (`/`), como card junto a Informe Técnico/Rendición de
+  Gastos/Estadísticas — no está en la barra de pestañas de esos dos primeros
+  módulos (si el usuario no es Administrador, la card lleva igual pero
+  `/configuracion` muestra `LockedPanel`).
 
 - **PDF server-side**: `@react-pdf/renderer`, sin navegador — mismo layout
   en cualquier dispositivo (spec sección 11). Ver `src/lib/pdf/`.

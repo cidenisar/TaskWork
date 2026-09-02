@@ -2,15 +2,13 @@
 
 import { useState } from "react";
 import { SimpleCatalogTab, type SimpleCatalogItem } from "./catalogos/simple-catalog-tab";
-import { TecnicosTab, type TecnicoItem } from "./catalogos/tecnicos-tab";
 import { VehiculosTab, type VehiculoItem } from "./catalogos/vehiculos-tab";
 import { ServiceTab, type ServiceItem } from "./catalogos/service-tab";
 import { VencimientosTab } from "./catalogos/vencimientos-tab";
 
-type TabId = "tecnicos" | "torres" | "vehiculos" | "vehservice" | "vehalertas" | "provincias" | "tipos" | "gastocat";
+type TabId = "torres" | "vehiculos" | "vehservice" | "vehalertas" | "provincias" | "tipos" | "gastocat";
 
 const TABS: { id: TabId; label: string }[] = [
-  { id: "tecnicos", label: "Técnicos" },
   { id: "torres", label: "Torres" },
   { id: "vehiculos", label: "Vehículos" },
   { id: "vehservice", label: "Service" },
@@ -21,7 +19,6 @@ const TABS: { id: TabId; label: string }[] = [
 ];
 
 export interface CatalogosData {
-  tecnicos: TecnicoItem[];
   torres: SimpleCatalogItem[];
   provincias: SimpleCatalogItem[];
   tiposInforme: SimpleCatalogItem[];
@@ -31,7 +28,7 @@ export interface CatalogosData {
 }
 
 export function CatalogosCard({ data }: { data: CatalogosData }) {
-  const [tab, setTab] = useState<TabId>("tecnicos");
+  const [tab, setTab] = useState<TabId>("torres");
   const [vehiculos, setVehiculos] = useState(data.vehiculos);
   const [services, setServices] = useState(data.services);
 
@@ -46,7 +43,6 @@ export function CatalogosCard({ data }: { data: CatalogosData }) {
         ))}
       </div>
 
-      {tab === "tecnicos" && <TecnicosTab tecnicos={data.tecnicos} torres={data.torres.map((t) => t.nombre)} />}
       {tab === "torres" && (
         <SimpleCatalogTab
           tabla="catalogo_torres"

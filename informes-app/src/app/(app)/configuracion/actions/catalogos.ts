@@ -56,30 +56,3 @@ export async function removeSimpleCatalogItemAction(
   revalidateAll();
   return { success: true };
 }
-
-export async function addTecnicoAction(nombre: string, torre: string): Promise<ConfigActionResult> {
-  const profile = await requireAdmin();
-  const value = nombre.trim();
-  if (!value) return { success: false, error: "El nombre no puede estar vacío." };
-
-  const supabase = await createClient();
-  const { error } = await supabase
-    .from("catalogo_tecnicos")
-    .insert({ nombre_completo: value, torre: torre.trim() || null, created_by: profile.id });
-  if (error) {
-    return { success: false, error: error.code === "23505" ? "Ya existe un técnico con ese nombre." : error.message };
-  }
-  await logAudit(supabase, profile, `Agregó "${value}" al catálogo de Técnicos`);
-  revalidateAll();
-  return { success: true };
-}
-
-export async function removeTecnicoAction(id: string, nombre: string): Promise<ConfigActionResult> {
-  const profile = await requireAdmin();
-  const supabase = await createClient();
-  const { error } = await supabase.from("catalogo_tecnicos").delete().eq("id", id);
-  if (error) return { success: false, error: error.message };
-  await logAudit(supabase, profile, `Quitó "${nombre}" del catálogo de Técnicos`);
-  revalidateAll();
-  return { success: true };
-}

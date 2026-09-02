@@ -23,6 +23,7 @@ export type ProfileRow = {
   email: string;
   nombre_completo: string;
   rol: Rol;
+  torre: string | null;
   created_at: string;
 }
 

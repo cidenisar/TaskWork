@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { requireProfile } from "@/lib/auth";
-import { puedeVerEstadisticas } from "@/lib/types";
+import { puedeVerEstadisticas, puedeVerConfiguracion } from "@/lib/types";
 
 export default async function HomePage() {
   const profile = await requireProfile();
   const statsLocked = !puedeVerEstadisticas(profile.rol);
+  const configLocked = !puedeVerConfiguracion(profile.rol);
 
   return (
     <div>
@@ -31,6 +32,13 @@ export default async function HomePage() {
             Estadísticas {statsLocked && <span className="lock">🔒</span>}
           </div>
           <div className="module-sub">Vista general de informes, gastos y actividad del equipo</div>
+        </Link>
+        <Link href="/configuracion" className="module-card">
+          <div className="module-ico">⚙️</div>
+          <div className="module-title">
+            Configuración {configLocked && <span className="lock">🔒</span>}
+          </div>
+          <div className="module-sub">Usuarios, catálogos, vehículos y almacenamiento — solo Administrador</div>
         </Link>
       </div>
     </div>

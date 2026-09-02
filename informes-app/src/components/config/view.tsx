@@ -29,7 +29,7 @@ export function ConfiguracionView({ data }: { data: ConfiguracionViewData }) {
       </div>
 
       <EmpresaCard logoUrl={data.logoUrl} />
-      <UsuariosCard usuarios={data.usuarios} currentUserId={data.currentUserId} />
+      <UsuariosCard usuarios={data.usuarios} currentUserId={data.currentUserId} torres={data.catalogos.torres.map((t) => t.nombre)} />
       <EmailsCard autoEnviar={data.autoEnviarEmail} emails={data.emails} />
       <CatalogosCard data={data.catalogos} />
       <HistorialAlmacenamientoCard umbral={data.umbralAviso} recordatorio={data.recordatorioSemanal} />

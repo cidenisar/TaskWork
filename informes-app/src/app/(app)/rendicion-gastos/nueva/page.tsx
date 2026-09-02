@@ -9,7 +9,9 @@ export default async function NuevaRendicionPage() {
   const [provinciasRes, categoriasRes, tecnicosRes, torresRes] = await Promise.all([
     supabase.from("catalogo_provincias").select("nombre").order("nombre"),
     supabase.from("catalogo_categorias_gasto").select("nombre").order("nombre"),
-    supabase.from("catalogo_tecnicos").select("nombre_completo, torre").order("nombre_completo"),
+    // El catálogo de técnicos ya no es una carga manual aparte: se arma con
+    // los usuarios registrados (Configuración → Usuarios y roles).
+    supabase.from("profiles").select("nombre_completo, torre").order("nombre_completo"),
     supabase.from("catalogo_torres").select("nombre").order("nombre"),
   ]);
 

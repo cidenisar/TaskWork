@@ -111,20 +111,15 @@ export async function crearInformeTecnicoAction(formData: FormData): Promise<Cre
       .upsert({ nombre: tipoInformeFinal }, { onConflict: "nombre", ignoreDuplicates: true });
   }
 
-  // Técnicos y torres al catálogo compartido (alta al vuelo).
+  // Torres al catálogo compartido (alta al vuelo). El técnico en sí ya no se
+  // da de alta acá — el catálogo de técnicos es la lista de usuarios
+  // registrados (Configuración → Usuarios y roles); acá solo se guarda la
+  // torre asignada para ESTE informe puntual, que puede diferir de la torre
+  // "de base" del técnico en su perfil.
   for (const t of payload.tecnicos) {
     const torre = t.torre?.trim();
     if (torre) {
       await supabase.from("catalogo_torres").upsert({ nombre: torre }, { onConflict: "nombre", ignoreDuplicates: true });
-    }
-    const nombre = t.nombre?.trim();
-    if (nombre) {
-      await supabase
-        .from("catalogo_tecnicos")
-        .upsert(
-          { nombre_completo: nombre, torre: torre || null, created_by: profile.id },
-          { onConflict: "nombre_completo", ignoreDuplicates: true },
-        );
     }
   }
 

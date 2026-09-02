@@ -56,7 +56,8 @@ export async function crearRendicionGastosAction(formData: FormData): Promise<Cr
 
   const supabase = await createClient();
 
-  // Categorías y técnicos/torres al catálogo compartido (alta al vuelo).
+  // Categorías y torres al catálogo compartido (alta al vuelo). El técnico en
+  // sí ya no se da de alta acá — ver el mismo comentario en Informe Técnico.
   const categoriasVistas = new Set<string>();
   for (const g of payload.gastos) {
     const cat = g.categoria.trim();
@@ -68,15 +69,6 @@ export async function crearRendicionGastosAction(formData: FormData): Promise<Cr
       const torre = t.torre?.trim();
       if (torre) {
         await supabase.from("catalogo_torres").upsert({ nombre: torre }, { onConflict: "nombre", ignoreDuplicates: true });
-      }
-      const nombre = t.nombre?.trim();
-      if (nombre) {
-        await supabase
-          .from("catalogo_tecnicos")
-          .upsert(
-            { nombre_completo: nombre, torre: torre || null, created_by: profile.id },
-            { onConflict: "nombre_completo", ignoreDuplicates: true },
-          );
       }
     }
   }
