@@ -24,10 +24,14 @@ directamente del prototipo HTML aprobado por el cliente.
   generación de PDF **server-side** replicando el diseño aprobado
   (`Informe Tecnico - Diseño PDF.pdf`), historial con búsqueda en lenguaje
   natural y descarga múltiple en `.zip`.
+- Módulo **Rendición de Gastos** completo: wizard de 3 pasos (los técnicos se
+  cargan por gasto, no por rendición — spec 7.1), categorías con alta al
+  vuelo, comprobante por foto, caja de saldo verde/rojo, PDF server-side
+  replicando `Rendicion de Gastos - Diseño PDF.pdf`, exportación a Excel
+  (`exceljs`) y historial con búsqueda en lenguaje natural.
 
 ⏳ Pendiente (base de datos y permisos ya listos, falta la UI):
 
-- Módulo Rendición de Gastos (wizard, PDF, Excel).
 - Configuración (catálogos, vehículos/flota, emails, retención, auditoría).
 - Estadísticas (KPIs, insights IA, asistente conversacional, mapa de calor).
 
