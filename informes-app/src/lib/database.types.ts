@@ -26,6 +26,20 @@ export type ProfileRow = {
   torre: string | null;
   telefono: string | null;
   foto_perfil_url: string | null;
+  dni: string | null;
+  dni_vencimiento: string | null;
+  fecha_nacimiento: string | null;
+  factor_sanguineo: string | null;
+  licencia_conducir_vencimiento: string | null;
+  email_alternativo: string | null;
+  contacto_emergencia_nombre: string | null;
+  contacto_emergencia_telefono: string | null;
+  talla_camisa: string | null;
+  talla_pantalon: string | null;
+  talla_remera: string | null;
+  talla_campera: string | null;
+  talla_mameluco: string | null;
+  talla_botines: string | null;
   created_at: string;
 }
 

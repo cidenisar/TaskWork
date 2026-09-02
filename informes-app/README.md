@@ -133,12 +133,15 @@ cuanto alguien se registra vía Supabase Auth.)
 Cualquier usuario (técnico incluido) puede, desde **Mi cuenta** (link junto
 a "Cerrar sesión" en la barra superior): cambiar su propia contraseña
 temporal (pide la actual para confirmar antes de cambiarla), y cargar sus
-propios datos personales — nombre, teléfono y foto de perfil, que se
-muestra "en chiquito" (avatar) en toda la app apenas está logueado. `rol` y
-`torre` siguen siendo exclusivos de un Administrador — un trigger en
-`profiles` bloquea que alguien se los cambie a sí mismo aunque intente
-pegarle directo a la API (`protect_profile_privileged_fields_trigger`,
-migración `20260902000008`).
+propios datos — nombre, teléfono y foto de perfil (se muestra "en chiquito"
+como avatar en toda la app apenas está logueado), más documentación
+personal para uso futuro (DNI + vencimiento, fecha de nacimiento, factor
+sanguíneo, vencimiento de licencia de conducir con el mismo badge
+🟢🟡🔴 que ya usa Vehículos, email alternativo, contacto de emergencia y
+talla de indumentaria). `rol` y `torre` siguen siendo exclusivos de un
+Administrador — un trigger en `profiles` bloquea que alguien se los cambie
+a sí mismo aunque intente pegarle directo a la API
+(`protect_profile_privileged_fields_trigger`, migración `20260902000008`).
 
 ### 4. Correr en desarrollo
 

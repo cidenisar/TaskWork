@@ -47,3 +47,47 @@ export async function actualizarDatosPersonalesAction(formData: FormData): Promi
   revalidatePath("/", "layout");
   return { success: true, fotoPerfilUrl };
 }
+
+export interface ActualizarDatosAdicionalesResult {
+  success: boolean;
+  error?: string;
+}
+
+function campoTexto(formData: FormData, campo: string): string | null {
+  const value = String(formData.get(campo) ?? "").trim();
+  return value || null;
+}
+
+/**
+ * Documentación personal, contacto de emergencia y talla de indumentaria
+ * (spec futura — ver README). Todo opcional, todo autoeditable: ninguno de
+ * estos campos está protegido por protect_profile_privileged_fields_trigger.
+ */
+export async function actualizarDatosAdicionalesAction(formData: FormData): Promise<ActualizarDatosAdicionalesResult> {
+  const profile = await requireProfile();
+  const supabase = await createClient();
+
+  const { error } = await supabase
+    .from("profiles")
+    .update({
+      dni: campoTexto(formData, "dni"),
+      dni_vencimiento: campoTexto(formData, "dniVencimiento"),
+      fecha_nacimiento: campoTexto(formData, "fechaNacimiento"),
+      factor_sanguineo: campoTexto(formData, "factorSanguineo"),
+      licencia_conducir_vencimiento: campoTexto(formData, "licenciaConducirVencimiento"),
+      email_alternativo: campoTexto(formData, "emailAlternativo"),
+      contacto_emergencia_nombre: campoTexto(formData, "contactoEmergenciaNombre"),
+      contacto_emergencia_telefono: campoTexto(formData, "contactoEmergenciaTelefono"),
+      talla_camisa: campoTexto(formData, "tallaCamisa"),
+      talla_pantalon: campoTexto(formData, "tallaPantalon"),
+      talla_remera: campoTexto(formData, "tallaRemera"),
+      talla_campera: campoTexto(formData, "tallaCampera"),
+      talla_mameluco: campoTexto(formData, "tallaMameluco"),
+      talla_botines: campoTexto(formData, "tallaBotines"),
+    })
+    .eq("id", profile.id);
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath("/cuenta");
+  return { success: true };
+}

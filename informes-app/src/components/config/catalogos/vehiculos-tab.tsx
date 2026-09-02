@@ -2,7 +2,7 @@
 
 import { useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { addVehiculoAction, removeVehiculoAction, actualizarKilometrajeAction } from "@/app/(app)/configuracion/actions/vehiculos";
-import { estadoVencimiento } from "@/lib/config/fleet-alerts";
+import { VencBadge } from "@/components/venc-badge";
 
 export interface VehiculoItem {
   id: string;
@@ -11,19 +11,6 @@ export interface VehiculoItem {
   vencimientoTarjetaVerde: string | null;
   vencimientoRto: string | null;
   kilometrajeActual: number | null;
-}
-
-const BADGE_LABEL: Record<"ok" | "warn" | "danger", string> = { ok: "Al día", warn: "Próximo a vencer", danger: "Vencido" };
-const BADGE_ICON: Record<"ok" | "warn" | "danger", string> = { ok: "🟢", warn: "🟡", danger: "🔴" };
-
-function VencBadge({ label, fecha }: { label: string; fecha: string | null }) {
-  const estado = estadoVencimiento(fecha);
-  if (!estado) return <span className="venc-badge">{label}: sin cargar</span>;
-  return (
-    <span className={`venc-badge ${estado}`}>
-      {BADGE_ICON[estado]} {label}: {BADGE_LABEL[estado]}
-    </span>
-  );
 }
 
 export function VehiculosTab({
