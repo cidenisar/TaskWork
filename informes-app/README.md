@@ -29,11 +29,27 @@ directamente del prototipo HTML aprobado por el cliente.
   vuelo, comprobante por foto, caja de saldo verde/rojo, PDF server-side
   replicando `Rendicion de Gastos - Diseño PDF.pdf`, exportación a Excel
   (`exceljs`) y historial con búsqueda en lenguaje natural.
+- Módulo **Configuración** completo (solo Administrador): logo de la empresa
+  + envío automático por email, catálogos con alta/baja (técnicos, torres,
+  provincias, tipos de informe, categorías de gasto), ficha completa de
+  vehículos con badges 🟢🟡🔴 de vencimiento, registro de service, alertas
+  de flota "Vencimientos 🤖" recalculadas en vivo (documentación + intervalo
+  de 10.000 km), umbral de aviso de historial, resumen semanal por IA
+  (config + ejemplo) y Registro de Cambios (auditoría — cada alta/baja queda
+  en `audit_log` con quién, qué y cuándo).
 
-⏳ Pendiente (base de datos y permisos ya listos, falta la UI):
+⏳ Pendiente:
 
-- Configuración (catálogos, vehículos/flota, emails, retención, auditoría).
-- Estadísticas (KPIs, insights IA, asistente conversacional, mapa de calor).
+- Estadísticas (KPIs, insights IA, asistente conversacional, mapa de calor,
+  comparación entre técnicos, verificación de fotos, mantenimiento
+  predictivo) — el único módulo que falta. Base de datos y permisos ya
+  listos, falta la UI.
+- El job que efectivamente libera del storage el PDF/fotos pasado el umbral
+  configurado (el umbral ya se guarda y se muestra en el historial, pero
+  nada lo aplica todavía).
+- Resumen semanal por IA y recordatorio de archivo: el switch y el ejemplo
+  ya están en Configuración, pero el envío real (cron + email) no está
+  implementado.
 
 ## Setup
 
