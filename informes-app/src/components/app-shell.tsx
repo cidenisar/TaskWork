@@ -73,11 +73,16 @@ export function AppShell({ profile, children }: { profile: Profile; children: Re
           <span>{profile.nombreCompleto}</span>
           <span className="role-pill">{ROL_LABEL[profile.rol]}</span>
         </div>
-        <form action={signOutAction}>
-          <button type="submit" className="signout">
-            Cerrar sesión
-          </button>
-        </form>
+        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          <Link href="/cuenta" className="signout" style={{ textDecoration: "none" }}>
+            Mi cuenta
+          </Link>
+          <form action={signOutAction}>
+            <button type="submit" className="signout">
+              Cerrar sesión
+            </button>
+          </form>
+        </div>
       </div>
 
       {moduleConfig && (

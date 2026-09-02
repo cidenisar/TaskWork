@@ -129,6 +129,10 @@ update public.profiles set rol = 'admin' where email = 'otro-admin@empresa.com';
 (El trigger `handle_new_user` crea el `profile` en `rol = 'tecnico'` en
 cuanto alguien se registra vía Supabase Auth.)
 
+Cualquier usuario (técnico incluido) puede cambiar su propia contraseña
+temporal desde **Mi cuenta** (link junto a "Cerrar sesión" en la barra
+superior) — pide la contraseña actual para confirmar antes de cambiarla.
+
 ### 4. Correr en desarrollo
 
 ```bash
