@@ -23,6 +23,11 @@ export function Step2Equipo({
   const [patente, setPatente] = useState("");
   const [modelo, setModelo] = useState("");
 
+  function onNombreChange(value: string) {
+    setNombre(value);
+    const match = catalogos.tecnicos.find((t) => t.nombre.toLowerCase() === value.trim().toLowerCase());
+    if (match?.torre) setTorre(match.torre);
+  }
   function addTech() {
     if (!nombre.trim()) return;
     setTecnicos([...tecnicos, { nombre: nombre.trim(), torre: torre.trim(), esSeguridad: seguridad }]);
@@ -39,6 +44,11 @@ export function Step2Equipo({
     setPatente("");
     setModelo("");
   }
+  function onPatenteChange(value: string) {
+    setPatente(value);
+    const match = catalogos.vehiculos.find((v) => v.patente.toLowerCase() === value.trim().toLowerCase());
+    if (match?.marcaModelo) setModelo(match.marcaModelo);
+  }
   function removeVehicle(i: number) {
     setVehiculos(vehiculos.filter((_, idx) => idx !== i));
   }
@@ -53,7 +63,7 @@ export function Step2Equipo({
             list="tech-catalog-list"
             placeholder="Nombre completo (autocompleta desde tu catálogo)"
             value={nombre}
-            onChange={(e) => setNombre(e.target.value)}
+            onChange={(e) => onNombreChange(e.target.value)}
           />
           <input
             type="text"
@@ -115,9 +125,9 @@ export function Step2Equipo({
           <input
             type="text"
             list="veh-catalog-list"
-            placeholder="Patente / Identificación"
+            placeholder="Patente / Identificación (autocompleta desde tu catálogo)"
             value={patente}
-            onChange={(e) => setPatente(e.target.value)}
+            onChange={(e) => onPatenteChange(e.target.value)}
           />
           <input
             type="text"
@@ -126,6 +136,11 @@ export function Step2Equipo({
             onChange={(e) => setModelo(e.target.value)}
           />
         </div>
+        <datalist id="veh-catalog-list">
+          {catalogos.vehiculos.map((v) => (
+            <option key={v.patente} value={v.patente} />
+          ))}
+        </datalist>
         <button type="button" className="btn btn-primary" onClick={addVehicle}>
           + Agregar Vehículo
         </button>

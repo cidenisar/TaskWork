@@ -1,4 +1,5 @@
 import { EmpresaCard } from "./empresa";
+import { UsuariosCard, type UsuarioRow } from "./usuarios";
 import { EmailsCard, type EmailRow } from "./emails";
 import { CatalogosCard, type CatalogosData } from "./catalogos-card";
 import { HistorialAlmacenamientoCard } from "./historial-almacenamiento";
@@ -9,6 +10,8 @@ import type { UmbralAviso } from "@/lib/database.types";
 export interface ConfiguracionViewData {
   logoUrl: string | null;
   autoEnviarEmail: boolean;
+  usuarios: UsuarioRow[];
+  currentUserId: string;
   emails: EmailRow[];
   catalogos: CatalogosData;
   umbralAviso: UmbralAviso;
@@ -22,10 +25,11 @@ export function ConfiguracionView({ data }: { data: ConfiguracionViewData }) {
     <div>
       <div className="page-heading">
         <h1>Configuración</h1>
-        <p>Envío por email, catálogos reutilizables y almacenamiento</p>
+        <p>Usuarios, envío por email, catálogos reutilizables y almacenamiento</p>
       </div>
 
       <EmpresaCard logoUrl={data.logoUrl} />
+      <UsuariosCard usuarios={data.usuarios} currentUserId={data.currentUserId} />
       <EmailsCard autoEnviar={data.autoEnviarEmail} emails={data.emails} />
       <CatalogosCard data={data.catalogos} />
       <HistorialAlmacenamientoCard umbral={data.umbralAviso} recordatorio={data.recordatorioSemanal} />

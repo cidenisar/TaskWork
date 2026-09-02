@@ -20,6 +20,7 @@ export default async function ConfiguracionPage() {
 
   const [
     configRes,
+    usuariosRes,
     emailsRes,
     tecnicosRes,
     torresRes,
@@ -35,6 +36,7 @@ export default async function ConfiguracionPage() {
       .select("logo_empresa_url, auto_enviar_email, umbral_aviso_historial, recordatorio_semanal_archivo, resumen_semanal_ia")
       .eq("id", 1)
       .single(),
+    supabase.from("profiles").select("id, email, nombre_completo, rol").order("nombre_completo"),
     supabase.from("config_emails_envio").select("id, email, activo").order("email"),
     supabase.from("catalogo_tecnicos").select("id, nombre_completo, torre").order("nombre_completo"),
     supabase.from("catalogo_torres").select("id, nombre").order("nombre"),
@@ -56,6 +58,13 @@ export default async function ConfiguracionPage() {
       data={{
         logoUrl: configRes.data?.logo_empresa_url ?? null,
         autoEnviarEmail: configRes.data?.auto_enviar_email ?? true,
+        usuarios: (usuariosRes.data ?? []).map((u) => ({
+          id: u.id,
+          email: u.email,
+          nombreCompleto: u.nombre_completo,
+          rol: u.rol,
+        })),
+        currentUserId: profile.id,
         emails: (emailsRes.data ?? []).map((e) => ({ id: e.id, email: e.email, activo: e.activo })),
         catalogos: {
           tecnicos: (tecnicosRes.data ?? []).map((t) => ({ id: t.id, nombreCompleto: t.nombre_completo, torre: t.torre })),

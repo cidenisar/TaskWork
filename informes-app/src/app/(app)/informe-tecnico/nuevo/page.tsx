@@ -6,11 +6,12 @@ export default async function NuevoInformePage() {
   await requireProfile();
   const supabase = await createClient();
 
-  const [tiposRes, provinciasRes, tecnicosRes, torresRes, configRes, emailsRes] = await Promise.all([
+  const [tiposRes, provinciasRes, tecnicosRes, torresRes, vehiculosRes, configRes, emailsRes] = await Promise.all([
     supabase.from("catalogo_tipos_informe").select("nombre").order("nombre"),
     supabase.from("catalogo_provincias").select("nombre").order("nombre"),
     supabase.from("catalogo_tecnicos").select("nombre_completo, torre").order("nombre_completo"),
     supabase.from("catalogo_torres").select("nombre").order("nombre"),
+    supabase.from("catalogo_vehiculos").select("patente, marca_modelo").order("patente"),
     supabase.from("config_general").select("logo_empresa_url").eq("id", 1).single(),
     supabase.from("config_emails_envio").select("email, activo").eq("activo", true).order("email"),
   ]);
@@ -23,6 +24,7 @@ export default async function NuevoInformePage() {
           provincias: (provinciasRes.data ?? []).map((p) => p.nombre),
           tecnicos: (tecnicosRes.data ?? []).map((t) => ({ nombre: t.nombre_completo, torre: t.torre })),
           torres: (torresRes.data ?? []).map((t) => t.nombre),
+          vehiculos: (vehiculosRes.data ?? []).map((v) => ({ patente: v.patente, marcaModelo: v.marca_modelo })),
         }}
         logoUrl={configRes.data?.logo_empresa_url ?? null}
         emails={emailsRes.data ?? []}

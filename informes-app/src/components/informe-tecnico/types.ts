@@ -35,6 +35,7 @@ export interface CatalogosInforme {
   provincias: string[];
   tecnicos: { nombre: string; torre: string | null }[];
   torres: string[];
+  vehiculos: { patente: string; marcaModelo: string | null }[];
 }
 
 export interface EmailDestinatario {

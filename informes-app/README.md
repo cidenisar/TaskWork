@@ -29,8 +29,11 @@ directamente del prototipo HTML aprobado por el cliente.
   vuelo, comprobante por foto, caja de saldo verde/rojo, PDF server-side
   replicando `Rendicion de Gastos - Diseño PDF.pdf`, exportación a Excel
   (`exceljs`) y historial con búsqueda en lenguaje natural.
-- Módulo **Configuración** completo (solo Administrador): logo de la empresa
-  + envío automático por email, catálogos con alta/baja (técnicos, torres,
+- Módulo **Configuración** completo (solo Administrador): logo de la empresa,
+  **alta de usuarios y asignación de roles** (el Administrador crea la cuenta
+  desde la propia app — email + contraseña temporal generada al vuelo — y
+  puede subir/bajar el rol de cualquiera después, sin pasar por el dashboard
+  de Supabase), envío automático por email, catálogos con alta/baja (técnicos, torres,
   provincias, tipos de informe, categorías de gasto), ficha completa de
   vehículos con badges 🟢🟡🔴 de vencimiento, registro de service, alertas
   de flota "Vencimientos 🤖" recalculadas en vivo (documentación + intervalo
@@ -90,19 +93,29 @@ cp .env.example .env.local
 
 - `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY`: Project
   Settings → API en el dashboard de Supabase.
-- `ANTHROPIC_API_KEY`: opcional — sin ella, "Mejorar con IA" avisa que no
-  está disponible en vez de fallar en silencio.
+- `SUPABASE_SERVICE_ROLE_KEY`: misma pantalla, clave `service_role` (secreta,
+  nunca en el cliente) — la usa Configuración → Usuarios para crear cuentas.
+- `ANTHROPIC_API_KEY`: opcional — sin ella, "Mejorar con IA" y el resto de
+  las funciones 🤖 avisan que no están disponibles en vez de fallar en silencio.
 - `RESEND_API_KEY` / `RESEND_FROM_EMAIL`: opcional — sin ellas, el informe se
   genera igual pero no se manda el email automático.
 
 ### 3. Primer usuario Administrador
 
-El rol lo asigna un Administrador desde Configuración (spec sección 4). Ya
-existe un primer Administrador (cidenisar@gmail.com — credencial enviada
+Ya existe un primer Administrador (cidenisar@gmail.com — credencial enviada
 por chat, no vive en el repo). La app todavía no tiene una pantalla de
-registro propia (solo login, a propósito — ver spec sección 4); para dar de
-alta otra cuenta desde cero hay que crearla en Authentication → Add User en
-el dashboard de Supabase y después promoverla una vez desde el SQL editor:
+**auto**-registro (solo login, a propósito — ver spec sección 4): las cuentas
+nuevas las da de alta un Administrador desde **Configuración → Usuarios y
+roles**, que crea el usuario y le asigna el rol ahí mismo (usa
+`supabase.auth.admin.createUser` con la Service Role Key server-side, nunca
+expuesta al cliente — ver `src/app/(app)/configuracion/actions/usuarios.ts`).
+Necesita la variable `SUPABASE_SERVICE_ROLE_KEY` cargada (Project Settings →
+API → service_role) — sin ella, esa sección de Configuración falla al crear
+usuarios (el resto de la app sigue funcionando igual).
+
+Si en algún momento hace falta promover a alguien directamente por SQL (por
+ejemplo, para dar de alta el primerísimo Administrador antes de tener otro
+que lo haga desde la UI):
 
 ```sql
 update public.profiles set rol = 'admin' where email = 'otro-admin@empresa.com';
