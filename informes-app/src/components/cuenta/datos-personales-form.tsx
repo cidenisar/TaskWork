@@ -56,14 +56,21 @@ export function DatosPersonalesForm({
 
       <div style={{ display: "flex", gap: 16, alignItems: "center", marginBottom: 14 }}>
         {preview ? (
-          // eslint-disable-next-line @next/next/no-img-element -- preview local + avatar chico, no vale la pena next/image
+          // eslint-disable-next-line @next/next/no-img-element -- preview local, no vale la pena next/image
           <img
             src={preview}
             alt=""
-            style={{ width: 64, height: 64, borderRadius: "50%", objectFit: "cover" }}
+            style={{
+              width: 112,
+              height: 112,
+              borderRadius: "50%",
+              objectFit: "cover",
+              objectPosition: "center 30%",
+              border: "2px solid var(--border)",
+            }}
           />
         ) : (
-          <div className="avatar" style={{ width: 64, height: 64, fontSize: 24 }}>
+          <div className="avatar" style={{ width: 112, height: 112, fontSize: 40 }}>
             {(nombreCompleto[0] || "?").toUpperCase()}
           </div>
         )}
