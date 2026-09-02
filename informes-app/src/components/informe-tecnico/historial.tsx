@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import JSZip from "jszip";
 import { filtrarInformesPorConsulta, type HistorialInformeBuscable } from "@/lib/informe-tecnico/nl-search";
 import { obtenerUrlPdfInformeAction } from "@/app/(app)/informe-tecnico/historial/actions";
@@ -164,6 +165,11 @@ export function HistorialInformes({ informes }: { informes: HistorialInformeRow[
                   </div>
                 </div>
                 <div className="hist-actions">
+                  {i.pdfDisponible && (
+                    <Link href={`/informe-tecnico/editar/${i.id}`} className="icon-btn" title="Editar informe">
+                      ✏️
+                    </Link>
+                  )}
                   <button
                     type="button"
                     className="icon-btn"
