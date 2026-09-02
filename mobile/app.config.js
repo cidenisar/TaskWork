@@ -32,12 +32,6 @@ module.exports = {
       },
       predictiveBackGestureEnabled: false,
       googleServicesFile: process.env.GOOGLE_SERVICES_JSON ?? "./google-services.json",
-      // Android 9+ bloquea HTTP sin cifrar por defecto — EXPO_PUBLIC_BACKEND_URL
-      // hoy es http://<ip>:8090 (todavía no hay dominio/certificado para la VM,
-      // ver DESPLIEGUE-REAL.md), así que sin esto cualquier fetch al backend
-      // falla en el momento, sin ni siquiera llegar a intentar la conexión.
-      // Sacar esto en cuanto backend-server tenga TLS de verdad.
-      usesCleartextTraffic: true,
     },
     web: {
       favicon: "./assets/favicon.png",
@@ -47,6 +41,25 @@ module.exports = {
         "expo-notifications",
         {
           color: "#ff8c2b",
+        },
+      ],
+      [
+        // `android.usesCleartextTraffic` suelto (sin este plugin) no hace
+        // nada — Expo lo ignora en silencio, no es una de las claves que
+        // reconoce dentro de `android` (confirmado: build salió sin el
+        // permiso, la app siguió rechazando HTTP igual). expo-build-properties
+        // es el mecanismo real para tocar el AndroidManifest.xml generado.
+        //
+        // Android 9+ bloquea HTTP sin cifrar por defecto — EXPO_PUBLIC_BACKEND_URL
+        // hoy es http://<ip>:8090 (todavía no hay dominio/certificado para la
+        // VM, ver DESPLIEGUE-REAL.md), así que sin esto cualquier fetch al
+        // backend falla antes de intentar conectar. Sacar en cuanto
+        // backend-server tenga TLS de verdad.
+        "expo-build-properties",
+        {
+          android: {
+            usesCleartextTraffic: true,
+          },
         },
       ],
     ],
