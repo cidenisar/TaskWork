@@ -7,6 +7,8 @@ export interface Profile {
   email: string;
   nombreCompleto: string;
   rol: Rol;
+  telefono: string | null;
+  fotoPerfilUrl: string | null;
 }
 
 export const ROL_LABEL: Record<Rol, string> = {

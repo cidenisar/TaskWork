@@ -70,6 +70,17 @@ export function AppShell({ profile, children }: { profile: Profile; children: Re
 
       <div className="sessionbar">
         <div className="who">
+          {profile.fotoPerfilUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element -- avatar chico, no vale la pena next/image acá
+            <img
+              src={profile.fotoPerfilUrl}
+              alt=""
+              className="avatar"
+              style={{ objectFit: "cover" }}
+            />
+          ) : (
+            <div className="avatar">{(profile.nombreCompleto[0] || "?").toUpperCase()}</div>
+          )}
           <span>{profile.nombreCompleto}</span>
           <span className="role-pill">{ROL_LABEL[profile.rol]}</span>
         </div>

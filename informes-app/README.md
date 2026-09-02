@@ -88,7 +88,8 @@ npx supabase db push          # aplica supabase/migrations/*.sql
 ```
 
 Eso crea las tablas, RLS y los buckets de Storage (`informe-fotos`,
-`comprobantes`, `informes-pdf`, `vehiculo-docs`, `logo-empresa`).
+`comprobantes`, `informes-pdf`, `vehiculo-docs`, `logo-empresa`,
+`fotos-perfil`).
 
 ### 2. Variables de entorno
 
@@ -129,9 +130,15 @@ update public.profiles set rol = 'admin' where email = 'otro-admin@empresa.com';
 (El trigger `handle_new_user` crea el `profile` en `rol = 'tecnico'` en
 cuanto alguien se registra vía Supabase Auth.)
 
-Cualquier usuario (técnico incluido) puede cambiar su propia contraseña
-temporal desde **Mi cuenta** (link junto a "Cerrar sesión" en la barra
-superior) — pide la contraseña actual para confirmar antes de cambiarla.
+Cualquier usuario (técnico incluido) puede, desde **Mi cuenta** (link junto
+a "Cerrar sesión" en la barra superior): cambiar su propia contraseña
+temporal (pide la actual para confirmar antes de cambiarla), y cargar sus
+propios datos personales — nombre, teléfono y foto de perfil, que se
+muestra "en chiquito" (avatar) en toda la app apenas está logueado. `rol` y
+`torre` siguen siendo exclusivos de un Administrador — un trigger en
+`profiles` bloquea que alguien se los cambie a sí mismo aunque intente
+pegarle directo a la API (`protect_profile_privileged_fields_trigger`,
+migración `20260902000008`).
 
 ### 4. Correr en desarrollo
 
