@@ -37,19 +37,32 @@ directamente del prototipo HTML aprobado por el cliente.
   de 10.000 km), umbral de aviso de historial, resumen semanal por IA
   (config + ejemplo) y Registro de Cambios (auditoría — cada alta/baja queda
   en `audit_log` con quién, qué y cuándo).
+- Módulo **Estadísticas** completo (Admin/Supervisor): KPIs del mes, gastos
+  por categoría e informes por técnico (datos reales), **insights
+  automáticos 🤖** (Claude redacta observaciones sobre números ya calculados
+  server-side, nunca inventa cifras), **asistente en lenguaje natural 💬**
+  con tool-use real de Claude contra 4 consultas agregadas de solo lectura
+  (nunca acceso de escritura ni filas crudas), **mapa de calor 🗺** real
+  (Leaflet + OpenStreetMap, sin necesitar API key, a diferencia del mock del
+  wireframe), **comparación entre técnicos ⚖️** y **mantenimiento
+  predictivo 🔧** (cálculo determinístico por torre/ubicación) y
+  **verificación de fotos vs. tarea 🔍** con Claude vision, on-demand por
+  informe para no disparar un análisis automático (y su costo) en cada
+  carga de la página.
 
-⏳ Pendiente:
+Con esto están completos los 4 módulos de la spec (Informe Técnico,
+Rendición de Gastos, Configuración, Estadísticas).
 
-- Estadísticas (KPIs, insights IA, asistente conversacional, mapa de calor,
-  comparación entre técnicos, verificación de fotos, mantenimiento
-  predictivo) — el único módulo que falta. Base de datos y permisos ya
-  listos, falta la UI.
+⏳ Explícitamente pendiente (jobs de background, no UI):
+
 - El job que efectivamente libera del storage el PDF/fotos pasado el umbral
   configurado (el umbral ya se guarda y se muestra en el historial, pero
   nada lo aplica todavía).
 - Resumen semanal por IA y recordatorio de archivo: el switch y el ejemplo
   ya están en Configuración, pero el envío real (cron + email) no está
   implementado.
+- Vista de mapa de todas las ubicaciones históricas fuera de Estadísticas —
+  explícitamente fuera de alcance en spec sección 6.6/13.
 
 ## Setup
 
