@@ -56,6 +56,9 @@ export function DatosPersonalesForm({
 
       <div style={{ display: "flex", gap: 16, alignItems: "center", marginBottom: 14 }}>
         {preview ? (
+          // Cuadrado + object-fit: contain en vez de círculo + cover — así se ve
+          // la foto ENTERA, sin adivinar qué parte recortar (con cover siempre
+          // terminaba cortando cabeza o mentón según el encuadre original).
           // eslint-disable-next-line @next/next/no-img-element -- preview local, no vale la pena next/image
           <img
             src={preview}
@@ -63,14 +66,14 @@ export function DatosPersonalesForm({
             style={{
               width: 112,
               height: 112,
-              borderRadius: "50%",
-              objectFit: "cover",
-              objectPosition: "center 30%",
+              borderRadius: 12,
+              objectFit: "contain",
+              background: "var(--panel-2)",
               border: "2px solid var(--border)",
             }}
           />
         ) : (
-          <div className="avatar" style={{ width: 112, height: 112, fontSize: 40 }}>
+          <div className="avatar" style={{ width: 112, height: 112, borderRadius: 12, fontSize: 40 }}>
             {(nombreCompleto[0] || "?").toUpperCase()}
           </div>
         )}
