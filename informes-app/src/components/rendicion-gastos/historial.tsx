@@ -27,7 +27,7 @@ export function HistorialRendiciones({ rendiciones }: { rendiciones: HistorialRe
 
   const filtered = useMemo(() => filtrarRendicionesPorConsulta(rendiciones, query), [rendiciones, query]);
 
-  async function verPdf(id: string) {
+  async function verPdf(id: string, numeroGeneracion: string) {
     setBusyId(id);
     setNotice(null);
     const res = await obtenerUrlPdfRendicionAction(id);
@@ -36,7 +36,15 @@ export function HistorialRendiciones({ rendiciones }: { rendiciones: HistorialRe
       setNotice(res.error || "No se pudo abrir el PDF.");
       return;
     }
-    window.open(res.url, "_blank", "noopener,noreferrer");
+    const blob = await fetch(res.url).then((r) => r.blob());
+    const blobUrl = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = blobUrl;
+    a.download = res.filename || `${numeroGeneracion}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(blobUrl);
   }
 
   return (
@@ -98,7 +106,7 @@ export function HistorialRendiciones({ rendiciones }: { rendiciones: HistorialRe
                       className="icon-btn"
                       title={r.pdfDisponible ? "Ver PDF" : "Sin PDF disponible"}
                       disabled={!r.pdfDisponible || busyId === r.id}
-                      onClick={() => verPdf(r.id)}
+                      onClick={() => verPdf(r.id, r.numeroGeneracion)}
                     >
                       {busyId === r.id ? "…" : "📄"}
                     </button>

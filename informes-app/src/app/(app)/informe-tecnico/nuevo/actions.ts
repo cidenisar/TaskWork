@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireProfile } from "@/lib/auth";
 import { nuevoNumeroGeneracionInforme } from "@/lib/informe-tecnico/numero-generacion";
 import { renderInformeTecnicoPdf } from "@/lib/pdf/render";
+import { buildInformeTecnicoFilename } from "@/lib/pdf/filename";
 
 interface PayloadTecnico {
   nombre: string;
@@ -58,6 +59,7 @@ async function enviarEmailInforme(opts: {
   numeroGeneracion: string;
   titulo: string;
   pdfBuffer: Buffer;
+  filename: string;
 }): Promise<boolean> {
   try {
     const res = await fetch("https://api.resend.com/emails", {
@@ -71,7 +73,7 @@ async function enviarEmailInforme(opts: {
         to: opts.to,
         subject: `Informe Técnico ${opts.numeroGeneracion} — ${opts.titulo}`,
         text: `Se generó el informe técnico ${opts.numeroGeneracion} (${opts.titulo}). Se adjunta el PDF.`,
-        attachments: [{ filename: `${opts.numeroGeneracion}.pdf`, content: opts.pdfBuffer.toString("base64") }],
+        attachments: [{ filename: opts.filename, content: opts.pdfBuffer.toString("base64") }],
       }),
     });
     return res.ok;
@@ -259,9 +261,18 @@ export async function crearInformeTecnicoAction(formData: FormData): Promise<Cre
     imagenes: imagenesPdf,
     logoBuffer,
     appName: "Informe Técnico App",
+    realizoNombre: profile.nombreCompleto,
   });
 
-  const pdfPath = `${profile.id}/${informeId}.pdf`;
+  // Nombre de archivo legible (N° de generación, fecha/hora, tarea, provincia,
+  // ubicación) en vez del id interno — así se identifica solo al descargarlo.
+  const pdfFilename = buildInformeTecnicoFilename({
+    numeroGeneracion,
+    titulo: payload.titulo.trim(),
+    provincia: payload.provincia || null,
+    ubicacion: payload.ubicacion.trim() || null,
+  });
+  const pdfPath = `${profile.id}/${informeId}/${pdfFilename}`;
   const { error: pdfUpErr } = await supabase.storage
     .from("informes-pdf")
     .upload(pdfPath, pdfBuffer, { contentType: "application/pdf", upsert: true });
@@ -283,6 +294,7 @@ export async function crearInformeTecnicoAction(formData: FormData): Promise<Cre
       numeroGeneracion,
       titulo: payload.titulo.trim(),
       pdfBuffer,
+      filename: pdfFilename,
     });
   }
 

@@ -1,5 +1,5 @@
 import { Document, Page, Text, View, Image, StyleSheet } from "@react-pdf/renderer";
-import { commonStyles, KeyValueRow, PdfHeader, PdfFooter, realizoDesdeNombres } from "./common";
+import { commonStyles, KeyValueRow, PdfHeader, PdfFooter } from "./common";
 
 /**
  * Replica el layout de "Informe Tecnico - Diseño PDF.pdf" (ver spec sección 11):
@@ -50,6 +50,7 @@ export interface InformePdfProps {
   imagenes: InformePdfImagen[];
   logoBuffer: Buffer | null;
   appName: string;
+  realizoNombre: string;
 }
 
 export function InformeTecnicoPdf(props: InformePdfProps) {
@@ -71,9 +72,13 @@ export function InformeTecnicoPdf(props: InformePdfProps) {
     imagenes,
     logoBuffer,
     appName,
+    realizoNombre,
   } = props;
 
-  const realizo = realizoDesdeNombres(tecnicos.map((t) => t.nombre));
+  // "Realizó" identifica a quien está logueado generando el informe (spec
+  // sección 11), no a la lista de técnicos asignados en el Paso 2 — esa ya
+  // figura completa en la tabla de datos clave de arriba.
+  const realizo = realizoNombre.toUpperCase();
   const documentoLinea = `Documento: ${cliente || "—"}-Público · Generado por ${appName}`;
   const vehText = vehiculos.length
     ? vehiculos.map((v) => (v.marcaModelo ? `${v.patente} (${v.marcaModelo})` : v.patente)).join(", ")

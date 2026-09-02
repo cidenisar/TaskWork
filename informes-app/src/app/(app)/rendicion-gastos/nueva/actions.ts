@@ -5,6 +5,7 @@ import { requireProfile } from "@/lib/auth";
 import { nuevoNumeroGeneracionRendicion } from "@/lib/rendicion-gastos/numero-generacion";
 import { renderRendicionGastosPdf } from "@/lib/pdf/render";
 import { formatFechaArg } from "@/lib/pdf/common";
+import { buildRendicionGastosFilename } from "@/lib/pdf/filename";
 
 interface PayloadGastoTecnico {
   nombre: string;
@@ -195,7 +196,12 @@ export async function crearRendicionGastosAction(formData: FormData): Promise<Cr
     realizoNombre: profile.nombreCompleto,
   });
 
-  const pdfPath = `${profile.id}/rendicion-${rendicionId}.pdf`;
+  const pdfFilename = buildRendicionGastosFilename({
+    numeroGeneracion,
+    motivo: payload.motivo.trim(),
+    provincia: payload.provincia || null,
+  });
+  const pdfPath = `${profile.id}/${rendicionId}/${pdfFilename}`;
   const { error: pdfUpErr } = await supabase.storage
     .from("informes-pdf")
     .upload(pdfPath, pdfBuffer, { contentType: "application/pdf", upsert: true });

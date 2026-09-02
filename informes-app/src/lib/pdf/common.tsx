@@ -121,7 +121,3 @@ export function formatFechaArg(fecha: string): string {
   const [y, m, d] = fecha.split("-");
   return d && m && y ? `${d}/${m}/${y}` : fecha;
 }
-
-export function realizoDesdeNombres(nombres: string[]): string {
-  return nombres.length ? nombres.map((n) => (n.split(" ")[0] || n).toUpperCase()).join(", ") : "—";
-}

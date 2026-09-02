@@ -2,9 +2,11 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { requireProfile } from "@/lib/auth";
+import { filenameDesdeStoragePath } from "@/lib/pdf/filename";
 
 export interface UrlPdfResult {
   url: string | null;
+  filename?: string;
   error?: string;
 }
 
@@ -34,5 +36,5 @@ export async function obtenerUrlPdfInformeAction(informeId: string): Promise<Url
   if (signErr || !signed) {
     return { url: null, error: "No se pudo generar el link de descarga." };
   }
-  return { url: signed.signedUrl };
+  return { url: signed.signedUrl, filename: filenameDesdeStoragePath(informe.pdf_url) };
 }

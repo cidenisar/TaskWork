@@ -38,7 +38,7 @@ export function HistorialInformes({ informes }: { informes: HistorialInformeRow[
     });
   }
 
-  async function verDescargar(id: string) {
+  async function verDescargar(id: string, numeroGeneracion: string) {
     setBusyId(id);
     setNotice(null);
     const res = await obtenerUrlPdfInformeAction(id);
@@ -47,7 +47,15 @@ export function HistorialInformes({ informes }: { informes: HistorialInformeRow[
       setNotice(res.error || "No se pudo abrir el PDF.");
       return;
     }
-    window.open(res.url, "_blank", "noopener,noreferrer");
+    const blob = await fetch(res.url).then((r) => r.blob());
+    const blobUrl = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = blobUrl;
+    a.download = res.filename || `${numeroGeneracion}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(blobUrl);
   }
 
   async function descargarSeleccionados() {
@@ -63,7 +71,7 @@ export function HistorialInformes({ informes }: { informes: HistorialInformeRow[
         const res = await obtenerUrlPdfInformeAction(id);
         if (!res.url) continue;
         const blob = await fetch(res.url).then((r) => r.blob());
-        zip.file(`${informe.numeroGeneracion}.pdf`, blob);
+        zip.file(res.filename || `${informe.numeroGeneracion}.pdf`, blob);
         count++;
       }
       if (count === 0) {
@@ -161,7 +169,7 @@ export function HistorialInformes({ informes }: { informes: HistorialInformeRow[
                     className="icon-btn"
                     title={i.pdfDisponible ? "Ver / descargar PDF" : "Sin PDF disponible"}
                     disabled={!i.pdfDisponible || busyId === i.id}
-                    onClick={() => verDescargar(i.id)}
+                    onClick={() => verDescargar(i.id, i.numeroGeneracion)}
                   >
                     {busyId === i.id ? "…" : "⬇"}
                   </button>
