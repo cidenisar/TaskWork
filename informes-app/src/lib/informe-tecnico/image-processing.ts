@@ -3,6 +3,10 @@
  * (stampImage / getPosition) a TypeScript, devolviendo un Blob listo para subir
  * además del dataURL para la miniatura.
  *
+ * La marca de agua diagonal muestra el nombre del cliente (si ya se cargó
+ * en el paso 1 del wizard); si todavía no hay cliente cargado, cae a
+ * "INFORME TÉCNICO" como texto genérico.
+ *
  * Nunca falla la carga de la foto por falta de GPS: si no hay posición,
  * la franja dice explícitamente "Ubicación no disponible" (spec sección 6.3).
  */
@@ -54,7 +58,7 @@ function loadImageEl(file: File | Blob): Promise<HTMLImageElement> {
   });
 }
 
-export async function stampImage(file: File): Promise<StampedImage> {
+export async function stampImage(file: File, cliente?: string): Promise<StampedImage> {
   const imgEl = await loadImageEl(file);
   const maxW = 1280;
   const scale = Math.min(1, maxW / imgEl.width);
@@ -71,10 +75,11 @@ export async function stampImage(file: File): Promise<StampedImage> {
   ctx.save();
   ctx.translate(w / 2, h / 2);
   ctx.rotate(-Math.PI / 10);
+  const marcaTexto = (cliente || "").trim().toUpperCase() || "INFORME TÉCNICO";
   ctx.font = `bold ${Math.round(w * 0.07)}px Inter, sans-serif`;
   ctx.fillStyle = "rgba(255,255,255,0.22)";
   ctx.textAlign = "center";
-  ctx.fillText("INFORME TÉCNICO", 0, 0);
+  ctx.fillText(marcaTexto, 0, 0);
   ctx.restore();
 
   // Franja inferior con fecha/hora + coordenadas.

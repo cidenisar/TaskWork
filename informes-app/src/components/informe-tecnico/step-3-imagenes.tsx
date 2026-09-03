@@ -8,9 +8,11 @@ import { Icon } from "@/components/icon";
 export function Step3Imagenes({
   imagenes,
   setImagenes,
+  cliente,
 }: {
   imagenes: ImagenInforme[];
   setImagenes: (imgs: ImagenInforme[]) => void;
+  cliente?: string;
 }) {
   const [status, setStatus] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -23,7 +25,7 @@ export function Step3Imagenes({
     const nuevas: ImagenInforme[] = [];
     for (const file of Array.from(files)) {
       try {
-        const stamped = await stampImage(file);
+        const stamped = await stampImage(file, cliente);
         if (!stamped.tieneGeo) anyMissingGeo = true;
         nuevas.push({
           clientId: `${Date.now()}-${Math.random().toString(36).slice(2)}`,

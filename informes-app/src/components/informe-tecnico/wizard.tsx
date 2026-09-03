@@ -129,7 +129,7 @@ export function InformeTecnicoWizard({
           catalogos={catalogos}
         />
       )}
-      {step === 3 && <Step3Imagenes imagenes={imagenes} setImagenes={setImagenes} />}
+      {step === 3 && <Step3Imagenes imagenes={imagenes} setImagenes={setImagenes} cliente={form.cliente} />}
       {step === 4 && (
         <Step4Revision
           numeroGeneracion={numeroGeneracion}
