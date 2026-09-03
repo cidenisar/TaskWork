@@ -25,7 +25,7 @@ export default async function EditarInformePage({ params }: { params: Promise<{ 
       supabase.from("informe_imagenes").select("id", { count: "exact", head: true }).eq("informe_id", id),
       supabase.from("catalogo_tipos_informe").select("nombre").order("nombre"),
       supabase.from("catalogo_provincias").select("nombre").order("nombre"),
-      supabase.from("profiles").select("nombre_completo, torre").order("nombre_completo"),
+      supabase.from("profiles").select("nombre_completo, torre").eq("activo", true).order("nombre_completo"),
       supabase.from("catalogo_torres").select("nombre").order("nombre"),
       supabase.from("catalogo_vehiculos").select("patente, marca_modelo").order("patente"),
       supabase.from("config_general").select("logo_empresa_url").eq("id", 1).single(),

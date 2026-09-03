@@ -24,6 +24,7 @@ export type ProfileRow = {
   nombre_completo: string;
   rol: Rol;
   torre: string | null;
+  activo: boolean;
   telefono: string | null;
   foto_perfil_url: string | null;
   dni: string | null;

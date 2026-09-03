@@ -35,7 +35,7 @@ export default async function ConfiguracionPage() {
       .select("logo_empresa_url, auto_enviar_email, umbral_aviso_historial, recordatorio_semanal_archivo, resumen_semanal_ia")
       .eq("id", 1)
       .single(),
-    supabase.from("profiles").select("id, email, nombre_completo, rol, torre").order("nombre_completo"),
+    supabase.from("profiles").select("id, email, nombre_completo, rol, torre, activo").order("nombre_completo"),
     supabase.from("config_emails_envio").select("id, email, activo").order("email"),
     supabase.from("catalogo_torres").select("id, nombre").order("nombre"),
     supabase.from("catalogo_provincias").select("id, nombre").order("nombre"),
@@ -62,6 +62,7 @@ export default async function ConfiguracionPage() {
           nombreCompleto: u.nombre_completo,
           rol: u.rol,
           torre: u.torre,
+          activo: u.activo,
         })),
         currentUserId: profile.id,
         emails: (emailsRes.data ?? []).map((e) => ({ id: e.id, email: e.email, activo: e.activo })),

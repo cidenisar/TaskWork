@@ -16,7 +16,7 @@ export async function getCurrentProfile(): Promise<Profile | null> {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("id, email, nombre_completo, rol, telefono, foto_perfil_url")
+    .select("id, email, nombre_completo, rol, telefono, foto_perfil_url, activo")
     .eq("id", user.id)
     .single();
 
@@ -29,13 +29,27 @@ export async function getCurrentProfile(): Promise<Profile | null> {
     rol: profile.rol,
     telefono: profile.telefono,
     fotoPerfilUrl: profile.foto_perfil_url,
+    activo: profile.activo,
   };
 }
 
-/** Como getCurrentProfile, pero redirige a /login si no hay sesión. */
+/**
+ * Como getCurrentProfile, pero redirige a /login si no hay sesión.
+ *
+ * También corta acá la sesión de una cuenta desactivada por un Administrador
+ * mientras el usuario la seguía teniendo abierta en el navegador (el bloqueo
+ * "normal" pasa antes, en loginAction, pero un JWT ya emitido sigue siendo
+ * válido hasta que expira — sin este chequeo, alguien desactivado podría
+ * seguir usando la app hasta que el token venza solo).
+ */
 export async function requireProfile(): Promise<Profile> {
   const profile = await getCurrentProfile();
   if (!profile) redirect("/login");
+  if (!profile.activo) {
+    const supabase = await createClient();
+    await supabase.auth.signOut();
+    redirect("/login?desactivado=1");
+  }
   return profile;
 }
 

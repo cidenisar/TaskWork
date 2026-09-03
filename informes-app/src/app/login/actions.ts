@@ -17,10 +17,19 @@ export async function loginAction(_prev: LoginState, formData: FormData): Promis
   }
 
   const supabase = await createClient();
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
   if (error) {
     return { error: "Email o contraseña incorrectos." };
+  }
+
+  // Cuenta desactivada por un Administrador: la contraseña es correcta, pero
+  // no la dejamos entrar — se corta la sesión que signInWithPassword recién
+  // abrió y se avisa por qué (ver "Configuración → Usuarios y roles").
+  const { data: profile } = await supabase.from("profiles").select("activo").eq("id", data.user.id).single();
+  if (profile && !profile.activo) {
+    await supabase.auth.signOut();
+    return { error: "Esta cuenta fue desactivada. Contactá a un Administrador." };
   }
 
   redirect(next.startsWith("/") ? next : "/");

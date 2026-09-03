@@ -9,6 +9,7 @@ export interface Profile {
   rol: Rol;
   telefono: string | null;
   fotoPerfilUrl: string | null;
+  activo: boolean;
 }
 
 export const ROL_LABEL: Record<Rol, string> = {

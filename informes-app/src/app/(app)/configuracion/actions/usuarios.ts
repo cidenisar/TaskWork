@@ -115,3 +115,96 @@ export async function cambiarTorreAction(userId: string, nombre: string, torre: 
   revalidatePath("/rendicion-gastos/nueva");
   return { success: true };
 }
+
+/**
+ * Cambia nombre y/o email de otro usuario. El email hay que cambiarlo en dos
+ * lugares: en auth.users (con la Service Role Key, es el email con el que
+ * inicia sesión) y en profiles.email (no hay trigger que los mantenga
+ * sincronizados fuera del alta inicial) — si el email no cambió, se omite ese
+ * paso.
+ */
+export async function editarUsuarioAction(
+  userId: string,
+  nombreCompleto: string,
+  email: string,
+): Promise<ConfigActionResult> {
+  const profile = await requireAdmin();
+  const nombre = nombreCompleto.trim();
+  const correo = email.trim().toLowerCase();
+  if (!nombre || !correo) return { success: false, error: "Completá el nombre y el email." };
+
+  const supabase = await createClient();
+  const { data: actual } = await supabase.from("profiles").select("email").eq("id", userId).single();
+  if (!actual) return { success: false, error: "No se encontró el usuario." };
+
+  if (correo !== actual.email) {
+    const admin = createServiceRoleClient();
+    const { error: authError } = await admin.auth.admin.updateUserById(userId, { email: correo, email_confirm: true });
+    if (authError) {
+      const mensaje = authError.message ?? "No se pudo actualizar el email de acceso.";
+      return {
+        success: false,
+        error: mensaje.toLowerCase().includes("already been registered") ? "Ya existe otra cuenta con ese email." : mensaje,
+      };
+    }
+  }
+
+  const { error } = await supabase.from("profiles").update({ nombre_completo: nombre, email: correo }).eq("id", userId);
+  if (error) return { success: false, error: error.message };
+
+  await logAudit(supabase, profile, `Editó los datos de "${nombre}" (${correo})`);
+  revalidatePath("/configuracion");
+  revalidatePath("/informe-tecnico/nuevo");
+  revalidatePath("/rendicion-gastos/nueva");
+  return { success: true };
+}
+
+export interface BlanquearPasswordResult extends ConfigActionResult {
+  password?: string;
+}
+
+/** Genera una contraseña temporal nueva y la fuerza en auth.users — el usuario la usa para volver a entrar. */
+export async function blanquearPasswordAction(userId: string, nombre: string): Promise<BlanquearPasswordResult> {
+  const profile = await requireAdmin();
+  const password = generarPassword();
+
+  const admin = createServiceRoleClient();
+  const { error } = await admin.auth.admin.updateUserById(userId, { password });
+  if (error) return { success: false, error: error.message ?? "No se pudo blanquear la contraseña." };
+
+  const supabase = await createClient();
+  await logAudit(supabase, profile, `Blanqueó la contraseña de "${nombre}"`);
+  return { success: true, password };
+}
+
+/** Bloquea el login de un usuario sin borrar nada — su historial de informes/rendiciones queda intacto (ver migración profiles_activo). */
+export async function desactivarUsuarioAction(userId: string, nombre: string): Promise<ConfigActionResult> {
+  const profile = await requireAdmin();
+  if (userId === profile.id) {
+    return { success: false, error: "No podés desactivar tu propia cuenta." };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("profiles").update({ activo: false }).eq("id", userId);
+  if (error) return { success: false, error: error.message };
+
+  await logAudit(supabase, profile, `Desactivó al usuario "${nombre}"`);
+  revalidatePath("/configuracion");
+  revalidatePath("/informe-tecnico/nuevo");
+  revalidatePath("/rendicion-gastos/nueva");
+  return { success: true };
+}
+
+export async function reactivarUsuarioAction(userId: string, nombre: string): Promise<ConfigActionResult> {
+  const profile = await requireAdmin();
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("profiles").update({ activo: true }).eq("id", userId);
+  if (error) return { success: false, error: error.message };
+
+  await logAudit(supabase, profile, `Reactivó al usuario "${nombre}"`);
+  revalidatePath("/configuracion");
+  revalidatePath("/informe-tecnico/nuevo");
+  revalidatePath("/rendicion-gastos/nueva");
+  return { success: true };
+}

@@ -55,7 +55,7 @@ export default async function RendicionAbiertaPage({ params }: { params: Promise
 
   const [categoriasRes, tecnicosRes, torresRes] = await Promise.all([
     supabase.from("catalogo_categorias_gasto").select("nombre").order("nombre"),
-    supabase.from("profiles").select("nombre_completo, torre").order("nombre_completo"),
+    supabase.from("profiles").select("nombre_completo, torre").eq("activo", true).order("nombre_completo"),
     supabase.from("catalogo_torres").select("nombre").order("nombre"),
   ]);
 

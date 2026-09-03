@@ -132,6 +132,17 @@ Necesita la variable `SUPABASE_SERVICE_ROLE_KEY` cargada (Project Settings →
 API → service_role) — sin ella, esa sección de Configuración falla al crear
 usuarios (el resto de la app sigue funcionando igual).
 
+Desde la misma sección, un Administrador también puede **editar** el nombre/
+email de otro usuario, **blanquearle la contraseña** (genera una temporal
+nueva, se muestra una sola vez) y **desactivar/reactivar** su cuenta. No hay
+un "borrar" real: la fila de `profiles` queda enlazada por FK a los informes
+y rendiciones que esa persona generó (a propósito, para que el historial sea
+permanente — ver sección 6.5 más abajo), así que un borrado de verdad falla
+en cuanto el usuario ya generó algo. "Desactivar" en cambio solo pone
+`profiles.activo = false`: bloquea el login (`src/app/login/actions.ts` +
+`src/lib/auth.ts`) y saca a la persona del catálogo de técnicos sugerido para
+trabajo nuevo, sin tocar ni un dato de lo que ya generó.
+
 Si en algún momento hace falta promover a alguien directamente por SQL (por
 ejemplo, para dar de alta el primerísimo Administrador antes de tener otro
 que lo haga desde la UI):

@@ -11,7 +11,7 @@ export default async function NuevoInformePage() {
     supabase.from("catalogo_provincias").select("nombre").order("nombre"),
     // El catálogo de técnicos ya no es una carga manual aparte: se arma con
     // los usuarios registrados (Configuración → Usuarios y roles).
-    supabase.from("profiles").select("nombre_completo, torre").order("nombre_completo"),
+    supabase.from("profiles").select("nombre_completo, torre").eq("activo", true).order("nombre_completo"),
     supabase.from("catalogo_torres").select("nombre").order("nombre"),
     supabase.from("catalogo_vehiculos").select("patente, marca_modelo").order("patente"),
     supabase.from("config_general").select("logo_empresa_url").eq("id", 1).single(),

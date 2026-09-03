@@ -5,13 +5,14 @@ export default async function LoginPage({
 }: PageProps<"/login">) {
   const params = await searchParams;
   const next = typeof params.next === "string" ? params.next : "/";
+  const desactivado = params.desactivado === "1";
 
   return (
     <div className="app">
       <div className="login-wrap">
         <span className="brand">Informes</span>
         <div className="login-sub">Ingresá para cargar o revisar informes y rendiciones</div>
-        <LoginForm next={next} />
+        <LoginForm next={next} desactivado={desactivado} />
       </div>
     </div>
   );
