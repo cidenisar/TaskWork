@@ -33,7 +33,7 @@ export function Step4Revision({
   onToggleEmail: (email: string) => void;
   submitting: boolean;
   error: string | null;
-  success: { numeroGeneracion: string; pdfUrl: string | null } | null;
+  success: { numeroGeneracion: string; pdfUrl: string | null; emailEnviado?: boolean } | null;
 }) {
   const tipoLabel = form.tipoInforme === "__new" ? form.tipoInformeNuevo || "Nuevo tipo sin nombrar" : form.tipoInforme || "—";
   const tareas = form.tareasPendientes
@@ -230,6 +230,13 @@ export function Step4Revision({
               </a>
             )}
           </SuccessNote>
+        )}
+        {success && chosen.length > 0 && (
+          <div className="hint" style={{ marginTop: 6, color: success.emailEnviado ? "var(--ok)" : "var(--warn)" }}>
+            {success.emailEnviado
+              ? `Se envió por email a ${chosen.length} destinatario${chosen.length === 1 ? "" : "s"}.`
+              : "No se pudo enviar el email automáticamente — revisá en Configuración que el envío automático esté activado y el servicio de email configurado. El PDF se generó igual, lo podés descargar arriba."}
+          </div>
         )}
       </div>
     </>

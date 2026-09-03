@@ -40,7 +40,9 @@ export function InformeTecnicoWizard({
   );
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<{ numeroGeneracion: string; pdfUrl: string | null } | null>(null);
+  const [success, setSuccess] = useState<{ numeroGeneracion: string; pdfUrl: string | null; emailEnviado?: boolean } | null>(
+    null,
+  );
   const [stepError, setStepError] = useState<string | null>(null);
 
   const numeroGeneracion = useMemo(() => nuevoNumeroGeneracionInforme(), []);
@@ -106,7 +108,7 @@ export function InformeTecnicoWizard({
         setError(result.error || "No se pudo generar el informe.");
         return;
       }
-      setSuccess({ numeroGeneracion: result.numeroGeneracion!, pdfUrl: result.pdfUrl ?? null });
+      setSuccess({ numeroGeneracion: result.numeroGeneracion!, pdfUrl: result.pdfUrl ?? null, emailEnviado: result.emailEnviado });
       router.refresh();
     } catch {
       setError("Ocurrió un error inesperado generando el informe.");
