@@ -1155,6 +1155,14 @@ textarea {
   margin-top: 3px;
 }
 
+/* Lista larga con scroll propio en vez de estirar toda la página — Registro
+   de Cambios y cualquier otra lista que pueda crecer sin límite. */
+.scroll-list {
+  max-height: 420px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
 .quick-asks {
   display: flex;
   gap: 8px;
