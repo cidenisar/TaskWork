@@ -38,7 +38,11 @@ export const commonStyles = StyleSheet.create({
 
   photoGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 4, marginBottom: 6 },
   photoCell: { width: "47%" },
-  photo: { width: "100%", height: 150, objectFit: "cover", border: `1pt solid ${BORDER}` },
+  // objectFit "contain" (no "cover"): las fotos de celular suelen ser
+  // verticales y una caja más ancha que alta las recortaba arriba/abajo con
+  // "cover" — con "contain" se ve la foto completa, con una franja de fondo
+  // a los costados si hace falta, en vez de perder contenido.
+  photo: { width: "100%", height: 190, objectFit: "contain", backgroundColor: "#EEF0F3", border: `1pt solid ${BORDER}` },
   photoCaption: { fontSize: 7.5, color: "#666", marginTop: 2 },
 
   footer: { position: "absolute", bottom: 24, left: 32, right: 32 },
