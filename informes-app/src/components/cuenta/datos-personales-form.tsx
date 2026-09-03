@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { actualizarDatosPersonalesAction } from "@/app/(app)/cuenta/actions";
+import { SuccessNote } from "@/components/notes";
 
 export function DatosPersonalesForm({
   nombreCompleto: initialNombre,
@@ -117,11 +118,7 @@ export function DatosPersonalesForm({
           {error}
         </div>
       )}
-      {ok && (
-        <div className="success-note" style={{ marginTop: 10 }}>
-          ✓ Datos actualizados.
-        </div>
-      )}
+      {ok && <SuccessNote style={{ marginTop: 10 }}>Datos actualizados.</SuccessNote>}
     </div>
   );
 }

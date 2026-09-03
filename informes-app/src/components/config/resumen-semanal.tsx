@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { setResumenSemanalIaAction } from "@/app/(app)/configuracion/actions/historial";
+import { Icon } from "@/components/icon";
 
 const EJEMPLO = `Resumen semanal — 25 al 29 de agosto
 
@@ -39,7 +40,7 @@ export function ResumenSemanalCard({ activo: initialActivo }: { activo: boolean 
         </label>
       </div>
       <button type="button" className="btn btn-secondary btn-sm" onClick={() => setShowPreview((v) => !v)}>
-        👁 Ver un ejemplo
+<Icon name="eye" size={13} /> Ver un ejemplo
       </button>
       {showPreview && (
         <div style={{ marginTop: 14 }}>

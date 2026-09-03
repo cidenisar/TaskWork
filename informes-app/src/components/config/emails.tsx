@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { setAutoEnviarEmailAction, addEmailAction, removeEmailAction } from "@/app/(app)/configuracion/actions/emails";
+import { Icon } from "@/components/icon";
 
 export interface EmailRow {
   id: string;
@@ -77,11 +78,13 @@ export function EmailsCard({ autoEnviar: initialAuto, emails: initialEmails }: {
           emails.map((e) => (
             <div className="list-item" key={e.id}>
               <div className="info">
-                <div className="avatar">✉</div>
+                <div className="avatar">
+                  <Icon name="mail" size={14} />
+                </div>
                 <div className="item-name">{e.email}</div>
               </div>
               <button type="button" className="remove-btn" onClick={() => removeEmail(e)} disabled={busy}>
-                ✕
+                <Icon name="x" size={12} />
               </button>
             </div>
           ))

@@ -2,6 +2,7 @@
 
 import { useActionState } from "react";
 import { loginAction, type LoginState } from "./actions";
+import { ErrorNote } from "@/components/notes";
 
 const initialState: LoginState = { error: null };
 
@@ -33,7 +34,7 @@ export function LoginForm({ next }: { next: string }) {
           required
         />
       </div>
-      {state.error && <div className="error-note">⚠️ {state.error}</div>}
+      {state.error && <ErrorNote>{state.error}</ErrorNote>}
       <button
         type="submit"
         className="btn btn-primary"

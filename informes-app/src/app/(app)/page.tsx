@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireProfile } from "@/lib/auth";
 import { puedeVerEstadisticas, puedeVerConfiguracion } from "@/lib/types";
 import { ModuleIcon } from "@/components/module-icon";
+import { Icon } from "@/components/icon";
 
 export default async function HomePage() {
   const profile = await requireProfile();
@@ -36,7 +37,7 @@ export default async function HomePage() {
             <ModuleIcon name="estadisticas" />
           </div>
           <div className="module-title">
-            Estadísticas {statsLocked && <span className="lock">🔒</span>}
+            Estadísticas {statsLocked && <span className="lock"><Icon name="lock" size={12} /></span>}
           </div>
           <div className="module-sub">Vista general de informes, gastos y actividad del equipo</div>
         </Link>
@@ -45,7 +46,7 @@ export default async function HomePage() {
             <ModuleIcon name="configuracion" />
           </div>
           <div className="module-title">
-            Configuración {configLocked && <span className="lock">🔒</span>}
+            Configuración {configLocked && <span className="lock"><Icon name="lock" size={12} /></span>}
           </div>
           <div className="module-sub">Usuarios, catálogos, vehículos y almacenamiento — solo Administrador</div>
         </Link>

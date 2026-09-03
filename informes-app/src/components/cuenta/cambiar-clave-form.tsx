@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { SuccessNote } from "@/components/notes";
 
 export function CambiarClaveForm() {
   const [actual, setActual] = useState("");
@@ -101,11 +102,7 @@ export function CambiarClaveForm() {
           {error}
         </div>
       )}
-      {ok && (
-        <div className="success-note" style={{ marginTop: 10 }}>
-          ✓ Contraseña actualizada.
-        </div>
-      )}
+      {ok && <SuccessNote style={{ marginTop: 10 }}>Contraseña actualizada.</SuccessNote>}
     </div>
   );
 }

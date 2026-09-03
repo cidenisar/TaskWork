@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { verificarFotosInformeAction, type VerificacionResult } from "@/app/(app)/estadisticas/actions";
+import { Icon } from "@/components/icon";
 
 export interface InformeCandidato {
   id: string;
@@ -22,7 +23,9 @@ export function VerificacionFotosCard({ candidatos }: { candidatos: InformeCandi
 
   return (
     <div className="card">
-      <div className="section-label">🔍 Verificación de fotos vs. tarea declarada</div>
+      <div className="section-label">
+        <Icon name="search" size={15} /> Verificación de fotos vs. tarea declarada
+      </div>
       <div className="hint" style={{ margin: "-4px 0 12px" }}>
         Compara lo que muestran las fotos contra la descripción del trabajo, como control de calidad antes de
         enviar. Se analiza informe por informe (no corre automático) para no gastar de más.
@@ -46,10 +49,12 @@ export function VerificacionFotosCard({ candidatos }: { candidatos: InformeCandi
                 <div className="insight-item">
                   {r.success ? (
                     <>
-                      {r.coincide ? "✅" : "⚠️"} <b>{c.numeroGeneracion}:</b> {r.comentario}
+                      <Icon name={r.coincide ? "check-circle" : "warning"} size={14} /> <b>{c.numeroGeneracion}:</b> {r.comentario}
                     </>
                   ) : (
-                    <span style={{ color: "var(--warn)" }}>⚠️ {r.error}</span>
+                    <span style={{ color: "var(--warn)" }}>
+                      <Icon name="warning" size={14} /> {r.error}
+                    </span>
                   )}
                 </div>
               )}

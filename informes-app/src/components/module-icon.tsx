@@ -29,21 +29,36 @@ const ICON_PATHS: Record<string, React.ReactNode> = {
       <circle cx="7" cy="17" r="2" />
     </>
   ),
+  lock: (
+    <>
+      <rect x="5" y="11" width="14" height="9" rx="2" />
+      <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+    </>
+  ),
 };
 
 /**
  * Íconos de línea simples (nunca emoji) para las cards de módulo de la
  * pantalla de inicio y otros puntos de entrada — mismo gradiente naranja/rojo
- * del acento en vez de dibujitos de colores desparejos.
+ * del acento en vez de dibujitos de colores desparejos. `tone="muted"` usa el
+ * panel oscuro en vez del gradiente, para estados neutros (ej. "sin acceso").
  */
-export function ModuleIcon({ name, size = 44 }: { name: keyof typeof ICON_PATHS; size?: number }) {
+export function ModuleIcon({
+  name,
+  size = 44,
+  tone = "accent",
+}: {
+  name: keyof typeof ICON_PATHS;
+  size?: number;
+  tone?: "accent" | "muted";
+}) {
   return (
     <div
       style={{
         width: size,
         height: size,
         borderRadius: 12,
-        background: "var(--accent-grad)",
+        background: tone === "accent" ? "var(--accent-grad)" : "var(--panel-2)",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -55,7 +70,7 @@ export function ModuleIcon({ name, size = 44 }: { name: keyof typeof ICON_PATHS;
         height={size * 0.5}
         viewBox="0 0 24 24"
         fill="none"
-        stroke="#fff"
+        stroke={tone === "accent" ? "#fff" : "var(--text-dim)"}
         strokeWidth={1.8}
         strokeLinecap="round"
         strokeLinejoin="round"

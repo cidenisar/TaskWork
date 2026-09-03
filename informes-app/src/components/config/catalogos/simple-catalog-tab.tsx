@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { addSimpleCatalogItemAction, removeSimpleCatalogItemAction } from "@/app/(app)/configuracion/actions/catalogos";
+import { Icon } from "@/components/icon";
 
 export interface SimpleCatalogItem {
   id: string;
@@ -69,7 +70,7 @@ export function SimpleCatalogTab({
             <div className="list-item" key={i.id}>
               <div className="item-name">{i.nombre}</div>
               <button type="button" className="remove-btn" onClick={() => remove(i)} disabled={busy}>
-                ✕
+                <Icon name="x" size={12} />
               </button>
             </div>
           ))

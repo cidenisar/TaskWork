@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Icon } from "@/components/icon";
 
 const QUICK_ASKS = [
   "¿Cuánto gastamos en combustible este mes?",
@@ -40,7 +41,9 @@ export function AsistenteCard() {
 
   return (
     <div className="card">
-      <div className="section-label">💬 Preguntale a tus datos</div>
+      <div className="section-label">
+        <Icon name="chat" size={15} /> Preguntale a tus datos
+      </div>
       <div className="hint" style={{ margin: "-4px 0 12px" }}>
         Buscá en lenguaje natural sobre todo el histórico de informes y gastos.
       </div>
@@ -75,7 +78,9 @@ export function AsistenteCard() {
       {error && <div className="error-text" style={{ marginTop: 10 }}>{error}</div>}
       {respuesta && (
         <div className="stats-answer">
-          <span>💬</span>
+          <span>
+            <Icon name="chat" size={15} />
+          </span>
           <span>{respuesta}</span>
         </div>
       )}

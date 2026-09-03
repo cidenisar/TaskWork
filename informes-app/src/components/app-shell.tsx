@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import type { Profile } from "@/lib/types";
 import { ROL_LABEL, puedeVerConfiguracion } from "@/lib/types";
 import { signOutAction } from "@/app/login/actions";
+import { Icon } from "@/components/icon";
 
 interface NavTab {
   href: string;
@@ -60,7 +61,7 @@ export function AppShell({ profile, children }: { profile: Profile; children: Re
       <div className="topbar">
         {!isHome ? (
           <Link href="/" className="back">
-            ← Volver al inicio
+            <Icon name="arrow-left" size={13} /> Volver al inicio
           </Link>
         ) : (
           <span />
@@ -112,7 +113,11 @@ export function AppShell({ profile, children }: { profile: Profile; children: Re
                 className={`navtab${active ? " active" : ""}${locked ? " locked" : ""}`}
               >
                 {tab.label}
-                {locked && <span className="lock">🔒</span>}
+                {locked && (
+                  <span className="lock">
+                    <Icon name="lock" size={11} />
+                  </span>
+                )}
               </Link>
             );
           })}

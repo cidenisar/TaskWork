@@ -8,6 +8,7 @@ import { actualizarInformeTecnicoAction } from "@/app/(app)/informe-tecnico/edit
 import { Step1General } from "./step-1-general";
 import { Step2Equipo } from "./step-2-equipo";
 import type { CatalogosInforme, InformeFormState } from "./types";
+import { ErrorNote, SuccessNote } from "@/components/notes";
 
 const STEPS: WizardStep[] = [
   { title: "Información General", sub: "Datos básicos del informe" },
@@ -174,21 +175,21 @@ export function EditarInformeTecnicoWizard({
             </tbody>
           </table>
 
-          {error && <div className="error-note">⚠️ {error}</div>}
+          {error && <ErrorNote>{error}</ErrorNote>}
           {success && (
-            <div className="success-note">
-              ✓ Informe actualizado y PDF regenerado.{" "}
+            <SuccessNote>
+              Informe actualizado y PDF regenerado.{" "}
               {success.pdfUrl && (
                 <a href={success.pdfUrl} target="_blank" rel="noreferrer" style={{ color: "inherit", textDecoration: "underline" }}>
                   ver PDF
                 </a>
               )}
-            </div>
+            </SuccessNote>
           )}
         </div>
       )}
 
-      {stepError && <div className="error-note">⚠️ {stepError}</div>}
+      {stepError && <ErrorNote>{stepError}</ErrorNote>}
 
       <div className="footer-nav">
         <button

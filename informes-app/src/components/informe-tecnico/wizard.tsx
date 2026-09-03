@@ -11,6 +11,7 @@ import { Step2Equipo } from "./step-2-equipo";
 import { Step3Imagenes } from "./step-3-imagenes";
 import { Step4Revision } from "./step-4-revision";
 import { EMPTY_FORM, type CatalogosInforme, type EmailDestinatario, type InformeFormState } from "./types";
+import { ErrorNote } from "@/components/notes";
 
 const STEPS: WizardStep[] = [
   { title: "Información General", sub: "Datos básicos del informe" },
@@ -145,7 +146,7 @@ export function InformeTecnicoWizard({
         />
       )}
 
-      {stepError && <div className="error-note">⚠️ {stepError}</div>}
+      {stepError && <ErrorNote>{stepError}</ErrorNote>}
 
       <div className="footer-nav">
         <button

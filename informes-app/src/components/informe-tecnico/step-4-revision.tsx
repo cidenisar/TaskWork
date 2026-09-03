@@ -2,6 +2,7 @@
 
 import type { ImagenInforme, Tecnico, Vehiculo } from "@/lib/types";
 import type { EmailDestinatario, InformeFormState } from "./types";
+import { ErrorNote, SuccessNote } from "@/components/notes";
 
 function fmtFecha(fecha: string) {
   if (!fecha) return "—";
@@ -219,16 +220,16 @@ export function Step4Revision({
           {chosen.length ? `Se va a enviar a ${chosen.length} destinatario${chosen.length === 1 ? "" : "s"}.` : "No se va a enviar por email."}
         </div>
 
-        {error && <div className="error-note">⚠️ {error}</div>}
+        {error && <ErrorNote>{error}</ErrorNote>}
         {success && (
-          <div className="success-note">
-            ✓ PDF generado ({success.numeroGeneracion}){success.pdfUrl ? " — " : ""}
+          <SuccessNote>
+            PDF generado ({success.numeroGeneracion}){success.pdfUrl ? " — " : ""}
             {success.pdfUrl && (
               <a href={success.pdfUrl} target="_blank" rel="noreferrer" style={{ color: "inherit", textDecoration: "underline" }}>
                 ver PDF
               </a>
             )}
-          </div>
+          </SuccessNote>
         )}
       </div>
     </>

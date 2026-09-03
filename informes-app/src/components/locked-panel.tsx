@@ -1,3 +1,5 @@
+import { ModuleIcon } from "@/components/module-icon";
+
 export function LockedPanel({
   title,
   description,
@@ -7,7 +9,9 @@ export function LockedPanel({
 }) {
   return (
     <div className="locked-panel">
-      <div className="ico">🔒</div>
+      <div className="ico" style={{ display: "flex", justifyContent: "center" }}>
+        <ModuleIcon name="lock" size={56} tone="muted" />
+      </div>
       <h2>{title}</h2>
       <p>{description}</p>
     </div>

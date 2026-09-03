@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { crearUsuarioAction, cambiarRolAction, cambiarTorreAction } from "@/app/(app)/configuracion/actions/usuarios";
 import { ROL_LABEL, type Rol } from "@/lib/types";
+import { Icon } from "@/components/icon";
 
 export interface UsuarioRow {
   id: string;
@@ -150,7 +151,9 @@ export function UsuariosCard({
       )}
       {creado && (
         <div className="card" style={{ marginTop: 10, background: "var(--bg-input, #1a1a1a)" }}>
-          <b>Usuario creado ✓</b>
+          <b>
+            Usuario creado <Icon name="check" size={13} />
+          </b>
           <div className="item-sub">
             Pasale estas credenciales — no se van a volver a mostrar:
           </div>

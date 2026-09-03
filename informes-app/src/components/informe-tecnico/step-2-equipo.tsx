@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { Tecnico, Vehiculo } from "@/lib/types";
 import type { CatalogosInforme } from "./types";
+import { Icon } from "@/components/icon";
 
 export function Step2Equipo({
   tecnicos,
@@ -111,7 +112,7 @@ export function Step2Equipo({
                   </div>
                 </div>
                 <button type="button" className="remove-btn" onClick={() => removeTech(i)}>
-                  ✕
+                  <Icon name="x" size={12} />
                 </button>
               </div>
             ))
@@ -152,14 +153,16 @@ export function Step2Equipo({
             vehiculos.map((v, i) => (
               <div className="list-item" key={`${v.patente}-${i}`}>
                 <div className="info">
-                  <div className="avatar">🚐</div>
+                  <div className="avatar">
+                    <Icon name="truck" size={16} />
+                  </div>
                   <div>
                     <div className="item-name">{v.patente}</div>
                     <div className="item-sub">{v.marcaModelo || "Sin marca/modelo"}</div>
                   </div>
                 </div>
                 <button type="button" className="remove-btn" onClick={() => removeVehicle(i)}>
-                  ✕
+                  <Icon name="x" size={12} />
                 </button>
               </div>
             ))

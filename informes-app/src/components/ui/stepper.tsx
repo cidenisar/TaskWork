@@ -1,4 +1,5 @@
 import { Fragment } from "react";
+import { Icon } from "@/components/icon";
 
 export interface WizardStep {
   title: string;
@@ -14,7 +15,7 @@ export function Stepper({ steps, current }: { steps: WizardStep[]; current: numb
           return (
             <Fragment key={n}>
               <div className={`step-node${n < current ? " done" : n === current ? " active" : ""}`}>
-                {n < current ? "✓" : n}
+                {n < current ? <Icon name="check" size={13} /> : n}
               </div>
               {n < steps.length && <div className={`step-line${n < current ? " filled" : ""}`} />}
             </Fragment>

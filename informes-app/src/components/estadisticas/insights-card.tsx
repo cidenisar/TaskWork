@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Icon } from "@/components/icon";
 
 export function InsightsCard() {
   const [insights, setInsights] = useState<string[] | null>(null);
@@ -28,7 +29,9 @@ export function InsightsCard() {
 
   return (
     <div className="card">
-      <div className="section-label">🤖 Insights automáticos</div>
+      <div className="section-label">
+        <Icon name="ai" size={15} /> Insights automáticos
+      </div>
       <div className="hint" style={{ margin: "-4px 0 12px" }}>
         Observaciones generadas por IA a partir de los datos reales del mes.
       </div>

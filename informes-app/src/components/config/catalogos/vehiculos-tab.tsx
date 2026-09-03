@@ -3,6 +3,7 @@
 import { useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { addVehiculoAction, removeVehiculoAction, actualizarKilometrajeAction } from "@/app/(app)/configuracion/actions/vehiculos";
 import { VencBadge } from "@/components/venc-badge";
+import { Icon } from "@/components/icon";
 
 export interface VehiculoItem {
   id: string;
@@ -118,10 +119,10 @@ export function VehiculosTab({
           </label>
           <div style={{ display: "flex", gap: 8 }}>
             <button type="button" className="btn btn-secondary btn-sm" onClick={() => tarjetaInputRef.current?.click()} disabled={busy}>
-              📄 T. Verde{tarjetaFoto ? " ✓" : ""}
+              <Icon name="document" size={13} /> T. Verde{tarjetaFoto ? <Icon name="check" size={12} style={{ marginLeft: 4 }} /> : ""}
             </button>
             <button type="button" className="btn btn-secondary btn-sm" onClick={() => rtoInputRef.current?.click()} disabled={busy}>
-              📄 RTO{rtoFoto ? " ✓" : ""}
+              <Icon name="document" size={13} /> RTO{rtoFoto ? <Icon name="check" size={12} style={{ marginLeft: 4 }} /> : ""}
             </button>
           </div>
           <input ref={tarjetaInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={(e) => setTarjetaFoto(e.target.files?.[0] ?? null)} />
@@ -141,14 +142,16 @@ export function VehiculosTab({
             <div className="list-item" key={v.id} style={{ flexDirection: "column", alignItems: "stretch", gap: 8 }}>
               <div style={{ display: "flex", justifyContent: "space-between", width: "100%" }}>
                 <div className="info">
-                  <div className="avatar">🚐</div>
+                  <div className="avatar">
+                    <Icon name="truck" size={16} />
+                  </div>
                   <div>
                     <div className="item-name">{v.patente}</div>
                     <div className="item-sub">{v.marcaModelo || "Sin marca/modelo"}</div>
                   </div>
                 </div>
                 <button type="button" className="remove-btn" onClick={() => remove(v)} disabled={busy}>
-                  ✕
+                  <Icon name="x" size={12} />
                 </button>
               </div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>

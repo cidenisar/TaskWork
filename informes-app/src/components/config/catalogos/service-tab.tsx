@@ -2,6 +2,7 @@
 
 import { useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { addServiceAction } from "@/app/(app)/configuracion/actions/vehiculos";
+import { Icon } from "@/components/icon";
 
 export interface ServiceItem {
   id: string;
@@ -78,7 +79,7 @@ export function ServiceTab({
         <input type="text" inputMode="numeric" placeholder="Kilometraje del service" value={km} onChange={(e) => setKm(e.target.value)} disabled={busy} />
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <button type="button" className="btn btn-secondary btn-sm" onClick={() => fotoInputRef.current?.click()} disabled={busy}>
-            📷 Foto{foto ? " ✓" : ""}
+            <Icon name="camera" size={13} /> Foto{foto ? <Icon name="check" size={12} style={{ marginLeft: 4 }} /> : ""}
           </button>
           <input ref={fotoInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={(e) => setFoto(e.target.files?.[0] ?? null)} />
         </div>
@@ -101,7 +102,9 @@ export function ServiceTab({
           services.map((s) => (
             <div className="list-item" key={s.id}>
               <div className="info">
-                <div className="avatar">🔧</div>
+                <div className="avatar">
+                  <Icon name="wrench" size={15} />
+                </div>
                 <div>
                   <div className="item-name">{s.patente}</div>
                   <div className="item-sub">

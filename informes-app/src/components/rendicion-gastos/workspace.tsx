@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import type { EstadoRendicion, Moneda } from "@/lib/database.types";
 import { agregarGastoAction, cerrarRendicionAction, eliminarGastoAction } from "@/app/(app)/rendicion-gastos/[id]/actions";
 import type { CatalogosRendicion, GastoTecnicoChip } from "./types";
+import { ErrorNote } from "@/components/notes";
+import { Icon } from "@/components/icon";
 
 function fmtFecha(fecha: string) {
   const [y, m, d] = fecha.split("-");
@@ -90,7 +92,7 @@ export function RendicionWorkspace({
         <p>
           {numeroGeneracion} · {fmtFecha(fecha)}
           {proyectoCliente ? ` · ${proyectoCliente}` : ""} ·{" "}
-          <span className={`hist-status ${abierta ? "" : "ok"}`}>{abierta ? "Abierta" : "Cerrada"}</span>
+          <span className={`hist-status ${abierta ? "warn" : "ok"}`}>{abierta ? "Abierta" : "Cerrada"}</span>
         </p>
       </div>
 
@@ -126,7 +128,13 @@ export function RendicionWorkspace({
           <>
             <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
               <button type="button" className="btn btn-primary" style={{ flex: 1, justifyContent: "center" }} onClick={cerrar} disabled={cerrando}>
-                {cerrando ? "Cerrando..." : "🔒 Cerrar rendición y generar PDF"}
+                {cerrando ? (
+                  "Cerrando..."
+                ) : (
+                  <>
+                    <Icon name="lock" size={14} /> Cerrar rendición y generar PDF
+                  </>
+                )}
               </button>
               <a
                 className="btn btn-secondary"
@@ -135,16 +143,16 @@ export function RendicionWorkspace({
                 target="_blank"
                 rel="noreferrer"
               >
-                📊 Exportar Excel (parcial)
+                <Icon name="chart" size={14} /> Exportar Excel (parcial)
               </a>
             </div>
-            {cerrarError && <div className="error-note">⚠️ {cerrarError}</div>}
+            {cerrarError && <ErrorNote>{cerrarError}</ErrorNote>}
           </>
         ) : (
           <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
             {cerrarOk && (
               <a className="btn btn-primary" style={{ flex: 1, justifyContent: "center" }} href={cerrarOk} target="_blank" rel="noreferrer">
-                📄 Ver PDF
+                <Icon name="document" size={14} /> Ver PDF
               </a>
             )}
             <a
@@ -154,7 +162,7 @@ export function RendicionWorkspace({
               target="_blank"
               rel="noreferrer"
             >
-              📊 Exportar Excel
+              <Icon name="chart" size={14} /> Exportar Excel
             </a>
           </div>
         )}
@@ -189,7 +197,7 @@ export function RendicionWorkspace({
                 </div>
                 {abierta && (
                   <button type="button" className="remove-btn" disabled={busyGastoId === g.id} onClick={() => quitarGasto(g.id)}>
-                    ✕
+                    <Icon name="x" size={13} />
                   </button>
                 )}
               </div>
@@ -317,10 +325,10 @@ function AgregarGastoForm({
           </label>
           <div style={{ display: "flex", gap: 8 }}>
             <button type="button" className="btn btn-secondary btn-sm" onClick={() => fileInputRef.current?.click()} disabled={busy}>
-              ↑ Subir
+              <Icon name="upload" size={13} /> Subir
             </button>
             <button type="button" className="btn btn-secondary btn-sm" onClick={() => cameraInputRef.current?.click()} disabled={busy}>
-              📷 Cámara
+              <Icon name="camera" size={13} /> Cámara
             </button>
           </div>
           <input ref={fileInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={(e) => setComprobanteFile(e.target.files)} />
@@ -332,7 +340,11 @@ function AgregarGastoForm({
             style={{ display: "none" }}
             onChange={(e) => setComprobanteFile(e.target.files)}
           />
-          {comprobantePreview && <div className="hint">Comprobante adjuntado ✓</div>}
+          {comprobantePreview && (
+            <div className="hint">
+              Comprobante adjuntado <Icon name="check" size={12} />
+            </div>
+          )}
         </div>
       </div>
       <div className="field">
@@ -383,7 +395,7 @@ function AgregarGastoForm({
               {c.nombre}
               {c.torre ? ` — ${c.torre}` : ""}
               <button type="button" onClick={() => removeChip(i)} disabled={busy}>
-                ✕
+                <Icon name="x" size={11} />
               </button>
             </span>
           ))}
@@ -393,7 +405,7 @@ function AgregarGastoForm({
       <button type="button" className="btn btn-primary" style={{ marginTop: 14 }} onClick={agregar} disabled={busy}>
         {busy ? "Guardando..." : "+ Agregar Gasto"}
       </button>
-      {error && <div className="error-note">⚠️ {error}</div>}
+      {error && <ErrorNote>{error}</ErrorNote>}
     </div>
   );
 }

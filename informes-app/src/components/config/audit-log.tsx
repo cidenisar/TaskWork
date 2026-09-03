@@ -1,3 +1,5 @@
+import { Icon } from "@/components/icon";
+
 export interface AuditLogRow {
   id: string;
   actorNombre: string;
@@ -14,7 +16,9 @@ function fmtFechaHora(iso: string) {
 export function AuditLogCard({ rows }: { rows: AuditLogRow[] }) {
   return (
     <div className="card">
-      <div className="section-label">📝 Registro de Cambios</div>
+      <div className="section-label">
+        <Icon name="note" size={13} /> Registro de Cambios
+      </div>
       <div className="hint" style={{ margin: "-4px 0 12px" }}>
         Quién modificó qué en Configuración — útil cuando hay más de un Administrador.
       </div>

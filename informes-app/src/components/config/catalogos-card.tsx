@@ -5,14 +5,22 @@ import { SimpleCatalogTab, type SimpleCatalogItem } from "./catalogos/simple-cat
 import { VehiculosTab, type VehiculoItem } from "./catalogos/vehiculos-tab";
 import { ServiceTab, type ServiceItem } from "./catalogos/service-tab";
 import { VencimientosTab } from "./catalogos/vencimientos-tab";
+import { Icon } from "@/components/icon";
 
 type TabId = "torres" | "vehiculos" | "vehservice" | "vehalertas" | "provincias" | "tipos" | "gastocat";
 
-const TABS: { id: TabId; label: string }[] = [
+const TABS: { id: TabId; label: React.ReactNode }[] = [
   { id: "torres", label: "Torres" },
   { id: "vehiculos", label: "Vehículos" },
   { id: "vehservice", label: "Service" },
-  { id: "vehalertas", label: "Vencimientos 🤖" },
+  {
+    id: "vehalertas",
+    label: (
+      <>
+        Vencimientos <Icon name="ai" size={13} />
+      </>
+    ),
+  },
   { id: "provincias", label: "Provincias" },
   { id: "tipos", label: "Tipos de Informe" },
   { id: "gastocat", label: "Categorías de Gasto" },

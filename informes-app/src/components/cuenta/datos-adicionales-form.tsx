@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { actualizarDatosAdicionalesAction } from "@/app/(app)/cuenta/actions";
 import { VencBadge } from "@/components/venc-badge";
+import { SuccessNote } from "@/components/notes";
 
 const FACTORES_SANGUINEOS = ["O+", "O-", "A+", "A-", "B+", "B-", "AB+", "AB-"];
 
@@ -185,11 +186,7 @@ export function DatosAdicionalesForm({ initial }: { initial: DatosAdicionales })
           {error}
         </div>
       )}
-      {ok && (
-        <div className="success-note" style={{ marginTop: 10 }}>
-          ✓ Datos actualizados.
-        </div>
-      )}
+      {ok && <SuccessNote style={{ marginTop: 10 }}>Datos actualizados.</SuccessNote>}
     </div>
   );
 }

@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { subirLogoAction, quitarLogoAction } from "@/app/(app)/configuracion/actions/empresa";
+import { Icon } from "@/components/icon";
 
 export function EmpresaCard({ logoUrl: initialLogoUrl }: { logoUrl: string | null }) {
   const [logoUrl, setLogoUrl] = useState(initialLogoUrl);
@@ -48,7 +49,7 @@ export function EmpresaCard({ logoUrl: initialLogoUrl }: { logoUrl: string | nul
               // eslint-disable-next-line @next/next/no-img-element -- preview del logo recién subido (blob: URL) o público de Storage
               <img src={logoUrl} alt="Logo de la empresa" />
             ) : (
-              "🏢"
+              <Icon name="building" size={22} />
             )}
           </div>
           <div style={{ flex: 1 }}>

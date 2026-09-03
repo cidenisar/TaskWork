@@ -1,9 +1,12 @@
 import type { ComparacionTorre } from "@/lib/estadisticas/aggregates";
+import { Icon } from "@/components/icon";
 
 export function ComparacionCard({ grupos }: { grupos: ComparacionTorre[] }) {
   return (
     <div className="card">
-      <div className="section-label">⚖️ Comparación entre técnicos similares</div>
+      <div className="section-label">
+        <Icon name="scale" size={15} /> Comparación entre técnicos similares
+      </div>
       <div className="hint" style={{ margin: "-4px 0 12px" }}>
         Agrupa por torre y compara contra el promedio del grupo este mes — para entender carga de trabajo, no para
         sancionar.
@@ -28,7 +31,11 @@ export function ComparacionCard({ grupos }: { grupos: ComparacionTorre[] }) {
                   <div className="bar-val">{t.informes} inf.</div>
                 </div>
               ))}
-              {g.outlier && <div className="insight-item" style={{ marginTop: 8 }}>📊 {g.outlier.mensaje}</div>}
+              {g.outlier && (
+                <div className="insight-item" style={{ marginTop: 8 }}>
+                  <Icon name="chart" size={13} /> {g.outlier.mensaje}
+                </div>
+              )}
             </div>
           );
         })

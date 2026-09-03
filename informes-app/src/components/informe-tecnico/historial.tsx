@@ -5,6 +5,7 @@ import Link from "next/link";
 import JSZip from "jszip";
 import { filtrarInformesPorConsulta, type HistorialInformeBuscable } from "@/lib/informe-tecnico/nl-search";
 import { obtenerUrlPdfInformeAction } from "@/app/(app)/informe-tecnico/historial/actions";
+import { Icon } from "@/components/icon";
 
 export interface HistorialInformeRow extends HistorialInformeBuscable {
   id: string;
@@ -101,7 +102,7 @@ export function HistorialInformes({ informes }: { informes: HistorialInformeRow[
       </div>
 
       <div className="banner">
-        🔔 El <b>registro</b> (título, cliente, fecha, técnicos, N° de generación) se guarda para siempre y no ocupa
+        <Icon name="bell" size={14} /> El <b>registro</b> (título, cliente, fecha, técnicos, N° de generación) se guarda para siempre y no ocupa
         casi lugar — es lo que te permite buscar cualquier informe viejo. El <b>PDF y las fotos</b> sí pesan, y se
         conservan solo hasta que los descargues o hasta el umbral configurado en Configuración — después se liberan
         del servidor. Un informe &quot;solo registro&quot; sigue apareciendo acá, solo que ya no tiene el archivo
@@ -110,7 +111,7 @@ export function HistorialInformes({ informes }: { informes: HistorialInformeRow[
 
       <div className="card">
         <div className="hint" style={{ margin: "0 0 8px" }}>
-          🔍 Búsqueda en lenguaje natural — ej. &quot;el informe de aire acondicionado en YPF de agosto&quot;
+          <Icon name="search" size={13} /> Búsqueda en lenguaje natural — ej. &quot;el informe de aire acondicionado en YPF de agosto&quot;
         </div>
         <input
           type="text"
@@ -133,7 +134,13 @@ export function HistorialInformes({ informes }: { informes: HistorialInformeRow[
                 disabled={selected.size === 0 || bulkBusy}
                 onClick={descargarSeleccionados}
               >
-                {bulkBusy ? "Preparando..." : `⬇ Descargar seleccionados (${selected.size})`}
+                {bulkBusy ? (
+                  "Preparando..."
+                ) : (
+                  <>
+                    <Icon name="download" size={13} /> Descargar seleccionados ({selected.size})
+                  </>
+                )}
               </button>
             </div>
           </div>
@@ -167,7 +174,7 @@ export function HistorialInformes({ informes }: { informes: HistorialInformeRow[
                 <div className="hist-actions">
                   {i.pdfDisponible && (
                     <Link href={`/informe-tecnico/editar/${i.id}`} className="icon-btn" title="Editar informe">
-                      ✏️
+                      <Icon name="edit" size={15} />
                     </Link>
                   )}
                   <button
@@ -177,7 +184,7 @@ export function HistorialInformes({ informes }: { informes: HistorialInformeRow[
                     disabled={!i.pdfDisponible || busyId === i.id}
                     onClick={() => verDescargar(i.id, i.numeroGeneracion)}
                   >
-                    {busyId === i.id ? "…" : "⬇"}
+                    {busyId === i.id ? "…" : <Icon name="download" size={15} />}
                   </button>
                 </div>
               </div>

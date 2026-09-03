@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import type { CatalogosInforme, InformeFormState } from "./types";
+import { Icon, StatusDot } from "@/components/icon";
 
 interface SpeechRecognitionResultLike {
   0: { transcript: string };
@@ -33,7 +34,7 @@ export function Step1General({
   logoUrl: string | null;
 }) {
   const [aiBusy, setAiBusy] = useState(false);
-  const [aiNote, setAiNote] = useState<string | null>(null);
+  const [aiNote, setAiNote] = useState<React.ReactNode>(null);
   const [dictating, setDictating] = useState(false);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
 
@@ -50,13 +51,25 @@ export function Step1General({
       });
       const data = await res.json();
       if (!res.ok) {
-        setAiNote(`⚠️ ${data.error || "No se pudo mejorar el texto."}`);
+        setAiNote(
+          <>
+            <Icon name="warning" size={13} /> {data.error || "No se pudo mejorar el texto."}
+          </>,
+        );
       } else {
         onChange({ descripcionTrabajo: data.mejorado });
-        setAiNote("💡 Texto corregido con IA. Revisalo antes de continuar.");
+        setAiNote(
+          <>
+            <Icon name="lightbulb" size={13} /> Texto corregido con IA. Revisalo antes de continuar.
+          </>,
+        );
       }
     } catch {
-      setAiNote("⚠️ No se pudo contactar al servicio de IA.");
+      setAiNote(
+        <>
+          <Icon name="warning" size={13} /> No se pudo contactar al servicio de IA.
+        </>,
+      );
     } finally {
       setAiBusy(false);
     }
@@ -75,7 +88,10 @@ export function Step1General({
     const SpeechRec = w.SpeechRecognition || w.webkitSpeechRecognition;
     if (!SpeechRec) {
       setAiNote(
-        "⚠️ Este navegador/dispositivo no soporta dictado por voz, o no se otorgó permiso de micrófono. Podés escribir la descripción directamente.",
+        <>
+          <Icon name="warning" size={13} /> Este navegador/dispositivo no soporta dictado por voz, o no se otorgó
+          permiso de micrófono. Podés escribir la descripción directamente.
+        </>,
       );
       return;
     }
@@ -99,7 +115,11 @@ export function Step1General({
       recognitionRef.current = recognition;
       setDictating(true);
     } catch {
-      setAiNote("⚠️ No se pudo iniciar el dictado por voz en este navegador.");
+      setAiNote(
+        <>
+          <Icon name="warning" size={13} /> No se pudo iniciar el dictado por voz en este navegador.
+        </>,
+      );
     }
   }
 
@@ -226,10 +246,18 @@ export function Step1General({
           <label>Descripción del Trabajo</label>
           <div style={{ display: "flex", gap: 8 }}>
             <button type="button" className="ai-btn" onClick={toggleDictation}>
-              {dictating ? "⏺ Escuchando..." : "🎤 Dictar"}
+              {dictating ? (
+                <>
+                  <StatusDot tone="danger" /> Escuchando...
+                </>
+              ) : (
+                <>
+                  <Icon name="mic" size={13} /> Dictar
+                </>
+              )}
             </button>
             <button type="button" className="ai-btn" disabled={aiBusy} onClick={mejorarConIA}>
-              {aiBusy ? "✨ Mejorando..." : "✨ Mejorar con IA"}
+              <Icon name="sparkles" size={13} /> {aiBusy ? "Mejorando..." : "Mejorar con IA"}
             </button>
           </div>
         </div>
@@ -263,7 +291,7 @@ export function Step1General({
               // eslint-disable-next-line @next/next/no-img-element
               <img src={logoUrl} alt="Logo de la empresa" />
             ) : (
-              "🏢"
+              <Icon name="building" size={22} />
             )}
           </div>
           <span className="hint" style={{ marginTop: 0 }}>

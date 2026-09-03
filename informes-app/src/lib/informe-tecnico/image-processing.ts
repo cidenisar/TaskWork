@@ -92,15 +92,34 @@ export async function stampImage(file: File): Promise<StampedImage> {
     " " +
     now.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
   const geoStr = pos
-    ? `📍 ${pos.coords.latitude.toFixed(5)}, ${pos.coords.longitude.toFixed(5)} (±${Math.round(pos.coords.accuracy)}m)`
-    : "📍 Ubicación no disponible";
+    ? `${pos.coords.latitude.toFixed(5)}, ${pos.coords.longitude.toFixed(5)} (±${Math.round(pos.coords.accuracy)}m)`
+    : "Ubicación no disponible";
 
   ctx.textAlign = "left";
   ctx.fillStyle = "#ffffff";
   ctx.font = `600 ${Math.max(11, Math.round(w * 0.028))}px Inter, sans-serif`;
   ctx.fillText(dateStr, 10, h - barH * 0.5);
-  ctx.font = `500 ${Math.max(10, Math.round(w * 0.024))}px Inter, sans-serif`;
-  ctx.fillText(geoStr, 10, h - barH * 0.15);
+
+  // Marcador de ubicación dibujado (en vez del emoji 📍 quemado como texto —
+  // el render de emoji en <canvas> es inconsistente entre navegadores/SO).
+  const geoFontSize = Math.max(10, Math.round(w * 0.024));
+  const dotR = geoFontSize * 0.3;
+  const dotX = 10 + dotR;
+  const dotY = h - barH * 0.15 - geoFontSize * 0.32;
+  ctx.save();
+  ctx.strokeStyle = "#ffffff";
+  ctx.fillStyle = "#ffffff";
+  ctx.lineWidth = Math.max(1, dotR * 0.4);
+  ctx.beginPath();
+  ctx.arc(dotX, dotY, dotR, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(dotX, dotY, dotR * 0.4, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  ctx.font = `500 ${geoFontSize}px Inter, sans-serif`;
+  ctx.fillText(geoStr, dotX + dotR * 2.4, h - barH * 0.15);
 
   const blob: Blob = await new Promise((resolve, reject) =>
     canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("No se pudo procesar la imagen"))), "image/jpeg", 0.85),

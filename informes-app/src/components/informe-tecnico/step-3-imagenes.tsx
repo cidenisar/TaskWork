@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import type { ImagenInforme } from "@/lib/types";
 import { stampImage } from "@/lib/informe-tecnico/image-processing";
+import { Icon } from "@/components/icon";
 
 export function Step3Imagenes({
   imagenes,
@@ -17,7 +18,7 @@ export function Step3Imagenes({
 
   async function addImages(files: FileList | null) {
     if (!files || files.length === 0) return;
-    setStatus("📍 Obteniendo ubicación y marcando fotos...");
+    setStatus("Obteniendo ubicación y marcando fotos...");
     let anyMissingGeo = false;
     const nuevas: ImagenInforme[] = [];
     for (const file of Array.from(files)) {
@@ -41,8 +42,8 @@ export function Step3Imagenes({
     setImagenes([...imagenes, ...nuevas]);
     setStatus(
       anyMissingGeo
-        ? "📍 Algunas fotos no pudieron marcarse con ubicación — revisá el permiso de GPS del navegador."
-        : "📍 Fotos marcadas con fecha, hora y ubicación.",
+        ? "Algunas fotos no pudieron marcarse con ubicación — revisá el permiso de GPS del navegador."
+        : "Fotos marcadas con fecha, hora y ubicación.",
     );
   }
 
@@ -90,7 +91,7 @@ export function Step3Imagenes({
       />
 
       <div className="hint" style={{ marginTop: 14 }}>
-        📍 Cada foto se marca automáticamente con fecha, hora y ubicación GPS al agregarla.
+        <Icon name="map" size={13} /> Cada foto se marca automáticamente con fecha, hora y ubicación GPS al agregarla.
       </div>
       {status && <div className="hint">{status}</div>}
 
@@ -100,7 +101,7 @@ export function Step3Imagenes({
             {/* eslint-disable-next-line @next/next/no-img-element -- miniaturas desde blob: URLs generadas en el cliente */}
             <img src={img.dataUrl} alt="" />
             <button type="button" className="del" onClick={() => removeImage(img.clientId)}>
-              ✕
+              <Icon name="x" size={12} />
             </button>
           </div>
         ))}

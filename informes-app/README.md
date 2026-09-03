@@ -184,3 +184,13 @@ npm run dev
   pasado el umbral configurado todavía no está implementado (vive en el
   módulo Configuración, pendiente); la UI del historial ya distingue
   "PDF disponible" de "Solo registro".
+- **Sistema de íconos** (`src/components/icon.tsx`): reemplaza los emoji
+  sueltos que había por toda la app por un set propio de íconos de línea
+  SVG (`<Icon name="..."/>`, `<StatusDot tone="ok|warn|danger"/>`) — un
+  solo trazo, `currentColor`, hereda el color de donde se use en vez de
+  traer el suyo propio como hacía cada emoji. `<ModuleIcon>` es la variante
+  grande tipo badge para tiles del inicio y paneles bloqueados. Quedan
+  afuera a propósito: las flechas de texto (← →, monocromáticas, no son
+  "dibujos") y los emoji dentro del prompt de IA en
+  `src/app/api/estadisticas/insights/route.ts` (son contenido generado por
+  la IA, no chrome de la UI).

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { crearRendicionAction } from "@/app/(app)/rendicion-gastos/nueva/actions";
 import { Step1Datos } from "./step-1-datos";
 import { EMPTY_RENDICION_FORM, type RendicionFormState } from "./types";
+import { ErrorNote } from "@/components/notes";
 
 export function NuevaRendicionForm({ provincias }: { provincias: string[] }) {
   const router = useRouter();
@@ -42,7 +43,7 @@ export function NuevaRendicionForm({ provincias }: { provincias: string[] }) {
         </p>
       </div>
       <Step1Datos form={form} onChange={patchForm} catalogos={{ provincias, categoriasGasto: [], tecnicos: [], torres: [] }} />
-      {error && <div className="error-note">⚠️ {error}</div>}
+      {error && <ErrorNote>{error}</ErrorNote>}
       <div className="footer-nav">
         <span />
         <button type="button" className="btn btn-primary" onClick={crear} disabled={submitting}>

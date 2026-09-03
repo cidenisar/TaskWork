@@ -5,6 +5,7 @@ import Link from "next/link";
 import type { EstadoRendicion } from "@/lib/database.types";
 import { filtrarRendicionesPorConsulta, type HistorialRendicionBuscable } from "@/lib/rendicion-gastos/nl-search";
 import { obtenerUrlPdfRendicionAction } from "@/app/(app)/rendicion-gastos/historial/actions";
+import { Icon } from "@/components/icon";
 
 export interface HistorialRendicionRow extends HistorialRendicionBuscable {
   id: string;
@@ -58,7 +59,7 @@ export function HistorialRendiciones({ rendiciones }: { rendiciones: HistorialRe
       </div>
 
       <div className="banner">
-        🔔 Una rendición <b>abierta</b> (▶) todavía admite agregar o quitar gastos — segui cargándolos cuando
+        <Icon name="bell" size={14} /> Una rendición <b>abierta</b> (▶) todavía admite agregar o quitar gastos — segui cargándolos cuando
         quieras hasta hacer el cierre. Una vez <b>cerrada</b> ya no se puede modificar: el{" "}
         <b>registro</b> (motivo, fecha, técnicos, N° de generación, total y saldo) se guarda para siempre, el{" "}
         <b>PDF</b> se conserva solo hasta que lo descargues o hasta el umbral configurado en Configuración, y el
@@ -67,7 +68,7 @@ export function HistorialRendiciones({ rendiciones }: { rendiciones: HistorialRe
 
       <div className="card">
         <div className="hint" style={{ margin: "0 0 8px" }}>
-          🔍 Búsqueda en lenguaje natural — ej. &quot;el viaje a YPF de agosto&quot;
+          <Icon name="search" size={13} /> Búsqueda en lenguaje natural — ej. &quot;el viaje a YPF de agosto&quot;
         </div>
         <input
           type="text"
@@ -118,7 +119,7 @@ export function HistorialRendiciones({ rendiciones }: { rendiciones: HistorialRe
                         disabled={!r.pdfDisponible || busyId === r.id}
                         onClick={() => verPdf(r.id, r.numeroGeneracion)}
                       >
-                        {busyId === r.id ? "…" : "📄"}
+                        {busyId === r.id ? "…" : <Icon name="document" size={15} />}
                       </button>
                     )}
                     <a
@@ -128,7 +129,7 @@ export function HistorialRendiciones({ rendiciones }: { rendiciones: HistorialRe
                       target="_blank"
                       rel="noreferrer"
                     >
-                      📊
+                      <Icon name="chart" size={15} />
                     </a>
                   </div>
                 </div>
