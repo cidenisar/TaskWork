@@ -116,7 +116,14 @@ export function InformeTecnicoPdf(props: InformePdfProps) {
           <KeyValueRow k="Cantidad de Técnicos:" v={String(tecnicos.length)} last />
         </View>
 
-        {descripcionTrabajo ? <Text style={commonStyles.paragraph}>{descripcionTrabajo}</Text> : null}
+        {descripcionTrabajo && (
+          <>
+            <Text style={commonStyles.sectionTitle}>Descripción del Trabajo</Text>
+            <View style={commonStyles.textBox}>
+              <Text style={[commonStyles.paragraph, { marginBottom: 0 }]}>{descripcionTrabajo}</Text>
+            </View>
+          </>
+        )}
 
         {imagenes.length > 0 && (
           <View style={commonStyles.photoGrid}>

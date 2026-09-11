@@ -35,6 +35,10 @@ export const commonStyles = StyleSheet.create({
 
   sectionTitle: { fontSize: 9.5, fontFamily: "Helvetica-Bold", color: ORANGE, textTransform: "uppercase", marginTop: 10, marginBottom: 6 },
   paragraph: { fontSize: 9, lineHeight: 1.5, marginBottom: 6 },
+  // Recuadro para texto libre (descripción del trabajo) — mismo borde que
+  // kvTable, para que quede encuadrado como el resto de los datos en vez de
+  // flotar como texto suelto.
+  textBox: { border: `1pt solid ${BORDER}`, borderRadius: 2, padding: 8, marginBottom: 10 },
 
   photoGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 4, marginBottom: 6 },
   photoCell: { width: "47%" },
