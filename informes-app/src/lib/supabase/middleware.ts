@@ -1,7 +1,15 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-const PUBLIC_PATHS = ["/login", "/manifest.webmanifest"];
+const PUBLIC_PATHS = [
+  "/login",
+  "/manifest.webmanifest",
+  // Reporte de errores del cliente: tiene que poder mandarse incluso sin
+  // sesión (ej. un error en la propia pantalla de login) — la tabla ya
+  // acepta insert anónimo (RLS "client_errores_insert_any"), pero el
+  // middleware lo estaba cortando antes de llegar a la ruta.
+  "/api/errores/reportar",
+];
 
 /**
  * Refresca la sesión de Supabase en cada request y redirige a /login
