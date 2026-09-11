@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { Tecnico, Vehiculo } from "@/lib/types";
 import type { CatalogosInforme } from "./types";
 import { Icon } from "@/components/icon";
+import { AutocompleteInput } from "@/components/ui/autocomplete-input";
 
 export function Step2Equipo({
   tecnicos,
@@ -59,31 +60,14 @@ export function Step2Equipo({
       <div className="card">
         <div className="section-label">Agregar Técnico</div>
         <div className="tech-form-grid">
-          <input
-            type="text"
-            list="tech-catalog-list"
-            placeholder="Nombre completo (autocompleta desde tu catálogo)"
+          <AutocompleteInput
             value={nombre}
-            onChange={(e) => onNombreChange(e.target.value)}
+            onChange={onNombreChange}
+            suggestions={catalogos.tecnicos.map((t) => t.nombre)}
+            placeholder="Nombre completo (autocompleta desde tu catálogo)"
           />
-          <input
-            type="text"
-            list="torre-catalog-list"
-            placeholder="Torre"
-            value={torre}
-            onChange={(e) => setTorre(e.target.value)}
-          />
+          <AutocompleteInput value={torre} onChange={setTorre} suggestions={catalogos.torres} placeholder="Torre" />
         </div>
-        <datalist id="tech-catalog-list">
-          {catalogos.tecnicos.map((t) => (
-            <option key={t.nombre} value={t.nombre} />
-          ))}
-        </datalist>
-        <datalist id="torre-catalog-list">
-          {catalogos.torres.map((t) => (
-            <option key={t} value={t} />
-          ))}
-        </datalist>
         <label className="checkbox-row">
           <input type="checkbox" checked={seguridad} onChange={(e) => setSeguridad(e.target.checked)} />
           <span className="txt">
@@ -123,12 +107,11 @@ export function Step2Equipo({
       <div className="card">
         <div className="section-label">Agregar Vehículo</div>
         <div className="tech-form-grid">
-          <input
-            type="text"
-            list="veh-catalog-list"
-            placeholder="Patente / Identificación (autocompleta desde tu catálogo)"
+          <AutocompleteInput
             value={patente}
-            onChange={(e) => onPatenteChange(e.target.value)}
+            onChange={onPatenteChange}
+            suggestions={catalogos.vehiculos.map((v) => v.patente)}
+            placeholder="Patente / Identificación (autocompleta desde tu catálogo)"
           />
           <input
             type="text"
@@ -137,11 +120,6 @@ export function Step2Equipo({
             onChange={(e) => setModelo(e.target.value)}
           />
         </div>
-        <datalist id="veh-catalog-list">
-          {catalogos.vehiculos.map((v) => (
-            <option key={v.patente} value={v.patente} />
-          ))}
-        </datalist>
         <button type="button" className="btn btn-primary" onClick={addVehicle}>
           + Agregar Vehículo
         </button>

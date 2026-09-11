@@ -314,6 +314,47 @@ textarea {
   min-height: 90px;
 }
 
+/* AutocompleteInput (src/components/ui/autocomplete-input.tsx) — reemplaza
+   <input list="..."> + <datalist>, cuyo soporte nativo es demasiado
+   disparejo entre navegadores/celulares para confiarle un campo importante. */
+.autocomplete-wrap {
+  position: relative;
+}
+.autocomplete-panel {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 20;
+  background: var(--panel-2);
+  border: 1.5px solid var(--field-border);
+  border-radius: var(--radius);
+  max-height: 220px;
+  overflow-y: auto;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+}
+.autocomplete-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--border-soft);
+  padding: 10px 13px;
+  font-size: 14px;
+  font-family: var(--font);
+  color: var(--text);
+  cursor: pointer;
+}
+.autocomplete-item:last-child {
+  border-bottom: none;
+}
+.autocomplete-item:hover,
+.autocomplete-item:focus-visible {
+  background: var(--panel);
+  color: var(--accent);
+}
+
 .section-label {
   font-size: 12px;
   font-weight: 700;

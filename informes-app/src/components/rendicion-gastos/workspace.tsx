@@ -7,6 +7,7 @@ import { agregarGastoAction, cerrarRendicionAction, eliminarGastoAction } from "
 import type { CatalogosRendicion, GastoTecnicoChip } from "./types";
 import { ErrorNote } from "@/components/notes";
 import { reportarErrorCliente } from "@/lib/client-error-report";
+import { AutocompleteInput } from "@/components/ui/autocomplete-input";
 import { Icon } from "@/components/icon";
 
 function fmtFecha(fecha: string) {
@@ -371,33 +372,15 @@ function AgregarGastoForm({
           Técnicos de este gasto <span className="opt">(uno o varios)</span>
         </label>
         <div className="tech-form-grid" style={{ marginBottom: 10 }}>
-          <input
-            type="text"
-            list="rg-tech-catalog-list"
-            placeholder="Nombre completo"
+          <AutocompleteInput
             value={tecNombre}
-            onChange={(e) => setTecNombre(e.target.value)}
+            onChange={setTecNombre}
+            suggestions={catalogos.tecnicos.map((t) => t.nombre)}
+            placeholder="Nombre completo"
             disabled={busy}
           />
-          <input
-            type="text"
-            list="rg-torre-catalog-list"
-            placeholder="Torre"
-            value={tecTorre}
-            onChange={(e) => setTecTorre(e.target.value)}
-            disabled={busy}
-          />
+          <AutocompleteInput value={tecTorre} onChange={setTecTorre} suggestions={catalogos.torres} placeholder="Torre" disabled={busy} />
         </div>
-        <datalist id="rg-tech-catalog-list">
-          {catalogos.tecnicos.map((t) => (
-            <option key={t.nombre} value={t.nombre} />
-          ))}
-        </datalist>
-        <datalist id="rg-torre-catalog-list">
-          {catalogos.torres.map((t) => (
-            <option key={t} value={t} />
-          ))}
-        </datalist>
         <button type="button" className="btn btn-secondary btn-sm" onClick={addChip} disabled={busy}>
           + Agregar técnico a este gasto
         </button>

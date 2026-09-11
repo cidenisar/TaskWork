@@ -12,6 +12,7 @@ import {
 } from "@/app/(app)/configuracion/actions/usuarios";
 import { ROL_LABEL, type Rol } from "@/lib/types";
 import { Icon } from "@/components/icon";
+import { AutocompleteInput } from "@/components/ui/autocomplete-input";
 
 export interface UsuarioRow {
   id: string;
@@ -43,6 +44,9 @@ export function UsuariosCard({
   const [creado, setCreado] = useState<{ email: string; password: string } | null>(null);
   const [rolBusyId, setRolBusyId] = useState<string | null>(null);
   const [torreBusyId, setTorreBusyId] = useState<string | null>(null);
+  // Valor en edición de la torre por fila mientras se escribe — AutocompleteInput
+  // es controlado, a diferencia del <input defaultValue> que había antes.
+  const [torreEdit, setTorreEdit] = useState<Record<string, string>>({});
 
   // Estado por fila: edición de nombre/email, contraseña blanqueada (se
   // muestra una sola vez), y qué acción está en curso.
@@ -100,6 +104,11 @@ export function UsuariosCard({
 
   async function cambiarTorre(u: UsuarioRow, nuevaTorre: string) {
     const valor = nuevaTorre.trim() || null;
+    setTorreEdit((prev) => {
+      const next = { ...prev };
+      delete next[u.id];
+      return next;
+    });
     if (valor === u.torre) return;
     const anterior = u.torre;
     setTorreBusyId(u.id);
@@ -195,20 +204,8 @@ export function UsuariosCard({
             </option>
           ))}
         </select>
-        <input
-          type="text"
-          list="usuarios-torre-list"
-          placeholder="Torre (opcional)"
-          value={torre}
-          onChange={(e) => setTorre(e.target.value)}
-          disabled={busy}
-        />
+        <AutocompleteInput value={torre} onChange={setTorre} suggestions={torres} placeholder="Torre (opcional)" disabled={busy} />
       </div>
-      <datalist id="usuarios-torre-list">
-        {torres.map((t) => (
-          <option key={t} value={t} />
-        ))}
-      </datalist>
       <button type="button" className="btn btn-primary" onClick={crear} disabled={busy} style={{ marginTop: 10 }}>
         + Crear usuario
       </button>
@@ -256,13 +253,13 @@ export function UsuariosCard({
                   </div>
                 </div>
                 <div style={{ display: "flex", gap: 6 }}>
-                  <input
-                    type="text"
-                    list="usuarios-torre-list"
-                    defaultValue={u.torre ?? ""}
+                  <AutocompleteInput
+                    value={torreEdit[u.id] ?? u.torre ?? ""}
+                    onChange={(v) => setTorreEdit((prev) => ({ ...prev, [u.id]: v }))}
+                    onCommit={(v) => cambiarTorre(u, v)}
+                    suggestions={torres}
                     placeholder="Torre"
                     disabled={torreBusyId === u.id}
-                    onBlur={(e) => cambiarTorre(u, e.target.value)}
                     style={{ width: 110 }}
                   />
                   <select
