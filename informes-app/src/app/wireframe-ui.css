@@ -9,6 +9,11 @@
   --panel-2: #1e1e22;
   --border: #2a2a2f;
   --border-soft: #232327;
+  /* Borde de los campos de carga (input/textarea/select) — bien más claro que
+     --border a propósito: ese es casi del mismo tono que el fondo de la
+     tarjeta, y en el celular (sobre todo con luz de sol) el campo se pierde
+     por completo. Este sí tiene que notarse. */
+  --field-border: #55555f;
   --text: #f2f2f3;
   --text-dim: #9a9aa2;
   --text-faint: #6a6a72;
@@ -30,6 +35,7 @@
   --panel-2: #f7f7f8;
   --border: #e2e2e5;
   --border-soft: #ececee;
+  --field-border: #b3b3ba;
   --text: #17171a;
   --text-dim: #5c5c64;
   --text-faint: #8a8a92;
@@ -277,7 +283,7 @@ textarea,
 select {
   width: 100%;
   background: var(--panel-2);
-  border: 1px solid var(--border);
+  border: 1.5px solid var(--field-border);
   border-radius: var(--radius);
   padding: 11px 13px;
   font-size: 14px;
