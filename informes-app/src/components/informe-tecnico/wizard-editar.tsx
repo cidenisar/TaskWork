@@ -9,6 +9,7 @@ import { Step1General } from "./step-1-general";
 import { Step2Equipo } from "./step-2-equipo";
 import type { CatalogosInforme, InformeFormState } from "./types";
 import { ErrorNote, SuccessNote } from "@/components/notes";
+import { reportarErrorCliente } from "@/lib/client-error-report";
 
 const STEPS: WizardStep[] = [
   { title: "Información General", sub: "Datos básicos del informe" },
@@ -89,13 +90,17 @@ export function EditarInformeTecnicoWizard({
       fd.append("payload", JSON.stringify({ ...form, tecnicos, vehiculos }));
       const result = await actualizarInformeTecnicoAction(informeId, fd);
       if (!result.success) {
-        setError(result.error || "No se pudo guardar el informe.");
+        const mensaje = result.error || "No se pudo guardar el informe.";
+        setError(mensaje);
+        reportarErrorCliente(mensaje, "editar-informe-tecnico");
         return;
       }
       setSuccess({ pdfUrl: result.pdfUrl ?? null });
       router.refresh();
-    } catch {
-      setError("Ocurrió un error inesperado guardando los cambios.");
+    } catch (err) {
+      const mensaje = err instanceof Error ? err.message : "Ocurrió un error inesperado guardando los cambios.";
+      setError(mensaje);
+      reportarErrorCliente(mensaje, "editar-informe-tecnico", err instanceof Error ? err.stack : undefined);
     } finally {
       setSubmitting(false);
     }

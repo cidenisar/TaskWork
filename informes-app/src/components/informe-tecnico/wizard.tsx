@@ -12,6 +12,7 @@ import { Step3Imagenes } from "./step-3-imagenes";
 import { Step4Revision } from "./step-4-revision";
 import { EMPTY_FORM, type CatalogosInforme, type EmailDestinatario, type InformeFormState } from "./types";
 import { ErrorNote } from "@/components/notes";
+import { reportarErrorCliente } from "@/lib/client-error-report";
 
 const STEPS: WizardStep[] = [
   { title: "Información General", sub: "Datos básicos del informe" },
@@ -105,13 +106,20 @@ export function InformeTecnicoWizard({
 
       const result = await crearInformeTecnicoAction(fd);
       if (!result.success) {
-        setError(result.error || "No se pudo generar el informe.");
+        const mensaje = result.error || "No se pudo generar el informe.";
+        setError(mensaje);
+        reportarErrorCliente(mensaje, "generar-informe-tecnico");
         return;
       }
       setSuccess({ numeroGeneracion: result.numeroGeneracion!, pdfUrl: result.pdfUrl ?? null, emailEnviado: result.emailEnviado });
       router.refresh();
-    } catch {
-      setError("Ocurrió un error inesperado generando el informe.");
+    } catch (err) {
+      // Mostramos el mensaje real (aunque sea técnico) en vez de uno genérico:
+      // es justo lo que necesitamos para diagnosticar un fallo en un equipo
+      // que no podemos probar nosotros — y además queda reportado.
+      const mensaje = err instanceof Error ? err.message : "Ocurrió un error inesperado generando el informe.";
+      setError(mensaje);
+      reportarErrorCliente(mensaje, "generar-informe-tecnico", err instanceof Error ? err.stack : undefined);
     } finally {
       setSubmitting(false);
     }

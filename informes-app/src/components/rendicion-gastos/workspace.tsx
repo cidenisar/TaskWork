@@ -6,6 +6,7 @@ import type { EstadoRendicion, Moneda } from "@/lib/database.types";
 import { agregarGastoAction, cerrarRendicionAction, eliminarGastoAction } from "@/app/(app)/rendicion-gastos/[id]/actions";
 import type { CatalogosRendicion, GastoTecnicoChip } from "./types";
 import { ErrorNote } from "@/components/notes";
+import { reportarErrorCliente } from "@/lib/client-error-report";
 import { Icon } from "@/components/icon";
 
 function fmtFecha(fecha: string) {
@@ -68,14 +69,25 @@ export function RendicionWorkspace({
     if (!window.confirm("¿Cerrar esta rendición y generar el PDF? Después no vas a poder agregar más gastos.")) return;
     setCerrando(true);
     setCerrarError(null);
-    const res = await cerrarRendicionAction(rendicionId);
-    setCerrando(false);
-    if (!res.success) {
-      setCerrarError(res.error || "No se pudo cerrar la rendición.");
-      return;
+    try {
+      const res = await cerrarRendicionAction(rendicionId);
+      if (!res.success) {
+        const mensaje = res.error || "No se pudo cerrar la rendición.";
+        setCerrarError(mensaje);
+        reportarErrorCliente(mensaje, "cerrar-rendicion");
+        return;
+      }
+      setCerrarOk(res.pdfUrl ?? null);
+      router.refresh();
+    } catch (err) {
+      // Antes esto no tenía try/catch: si fallaba acá el botón quedaba
+      // trabado en "Cerrando..." para siempre, sin avisar nada.
+      const mensaje = err instanceof Error ? err.message : "Ocurrió un error inesperado cerrando la rendición.";
+      setCerrarError(mensaje);
+      reportarErrorCliente(mensaje, "cerrar-rendicion", err instanceof Error ? err.stack : undefined);
+    } finally {
+      setCerrando(false);
     }
-    setCerrarOk(res.pdfUrl ?? null);
-    router.refresh();
   }
 
   async function quitarGasto(gastoId: string) {

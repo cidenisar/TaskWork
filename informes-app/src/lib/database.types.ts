@@ -203,6 +203,19 @@ export type AuditLogRow = {
   created_at: string;
 }
 
+export type ClientErrorRow = {
+  id: string;
+  user_id: string | null;
+  usuario_nombre: string | null;
+  usuario_email: string | null;
+  contexto: string | null;
+  mensaje: string;
+  stack: string | null;
+  url: string | null;
+  user_agent: string | null;
+  created_at: string;
+}
+
 export interface Database {
   public: {
     Tables: {
@@ -294,6 +307,7 @@ export interface Database {
         Partial<AuditLogRow> & Pick<AuditLogRow, "actor_nombre" | "actor_rol" | "accion">,
         Partial<AuditLogRow>
       >;
+      client_errores: Tbl<ClientErrorRow, Partial<ClientErrorRow> & Pick<ClientErrorRow, "mensaje">, Partial<ClientErrorRow>>;
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;

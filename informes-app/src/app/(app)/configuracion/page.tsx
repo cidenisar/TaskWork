@@ -29,6 +29,7 @@ export default async function ConfiguracionPage() {
     vehiculosRes,
     servicesRes,
     auditRes,
+    erroresRes,
   ] = await Promise.all([
     supabase
       .from("config_general")
@@ -47,6 +48,11 @@ export default async function ConfiguracionPage() {
       .order("patente"),
     supabase.from("vehiculo_services").select("id, vehiculo_id, fecha, kilometraje, descripcion").order("fecha", { ascending: false }),
     supabase.from("audit_log").select("id, actor_nombre, actor_rol, accion, created_at").order("created_at", { ascending: false }).limit(100),
+    supabase
+      .from("client_errores")
+      .select("id, mensaje, contexto, usuario_nombre, usuario_email, url, user_agent, stack, created_at")
+      .order("created_at", { ascending: false })
+      .limit(200),
   ]);
 
   const patentePorVehiculo = new Map((vehiculosRes.data ?? []).map((v) => [v.id, v.patente]));
@@ -97,6 +103,17 @@ export default async function ConfiguracionPage() {
           actorRol: a.actor_rol,
           accion: a.accion,
           createdAt: a.created_at,
+        })),
+        erroresCliente: (erroresRes.data ?? []).map((e) => ({
+          id: e.id,
+          mensaje: e.mensaje,
+          contexto: e.contexto,
+          usuarioNombre: e.usuario_nombre,
+          usuarioEmail: e.usuario_email,
+          url: e.url,
+          userAgent: e.user_agent,
+          stack: e.stack,
+          createdAt: e.created_at,
         })),
       }}
     />

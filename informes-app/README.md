@@ -190,6 +190,13 @@ npm run dev
 - **Fotos**: la marca de agua + franja de fecha/hora/GPS se "queman" en el
   JPG en el navegador (canvas) antes de subir; lat/lon/accuracy también se
   guardan estructurados en `informe_imagenes` para el futuro mapa de calor.
+- **Errores del dispositivo** (`src/components/client-error-reporter.tsx` +
+  `src/app/api/errores/reportar/`): cualquier error de JS no manejado en el
+  navegador del usuario (y los fallos explícitos al generar/editar un
+  informe o cerrar una rendición) se reportan a la tabla `client_errores` y
+  se ven en Configuración → Errores del dispositivo (solo Administrador) —
+  pensado para diagnosticar fallos en equipos que no probamos nosotros
+  directamente, sin depender de que alguien nos cuente el error de memoria.
 - **Modelo dato-vs-archivo del historial** (spec 6.5): el registro es
   permanente, el PDF/fotos son temporales. El job que libera el storage
   pasado el umbral configurado todavía no está implementado (vive en el

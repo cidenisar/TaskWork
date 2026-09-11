@@ -5,6 +5,7 @@ import { CatalogosCard, type CatalogosData } from "./catalogos-card";
 import { HistorialAlmacenamientoCard } from "./historial-almacenamiento";
 import { ResumenSemanalCard } from "./resumen-semanal";
 import { AuditLogCard, type AuditLogRow } from "./audit-log";
+import { ErroresClienteCard, type ErrorClienteRow } from "./errores-cliente";
 import type { UmbralAviso } from "@/lib/database.types";
 
 export interface ConfiguracionViewData {
@@ -18,6 +19,7 @@ export interface ConfiguracionViewData {
   recordatorioSemanal: boolean;
   resumenSemanalIa: boolean;
   auditLog: AuditLogRow[];
+  erroresCliente: ErrorClienteRow[];
 }
 
 export function ConfiguracionView({ data }: { data: ConfiguracionViewData }) {
@@ -35,6 +37,7 @@ export function ConfiguracionView({ data }: { data: ConfiguracionViewData }) {
       <HistorialAlmacenamientoCard umbral={data.umbralAviso} recordatorio={data.recordatorioSemanal} />
       <ResumenSemanalCard activo={data.resumenSemanalIa} />
       <AuditLogCard rows={data.auditLog} />
+      <ErroresClienteCard rows={data.erroresCliente} />
     </div>
   );
 }
