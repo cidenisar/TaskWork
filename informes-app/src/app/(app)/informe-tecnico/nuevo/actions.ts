@@ -111,6 +111,15 @@ export async function crearInformeTecnicoAction(formData: FormData): Promise<Cre
       .upsert({ nombre: tipoInformeFinal }, { onConflict: "nombre", ignoreDuplicates: true });
   }
 
+  // Cliente al catálogo compartido (alta al vuelo) — mismo criterio que
+  // Tipo de Informe/Torre: si ya existe no pasa nada (ignoreDuplicates), y
+  // así queda sugerido la próxima vez sin que un Admin lo tenga que cargar
+  // a mano en Configuración primero.
+  const clienteValue = payload.cliente.trim();
+  if (clienteValue) {
+    await supabase.from("catalogo_clientes").upsert({ nombre: clienteValue }, { onConflict: "nombre", ignoreDuplicates: true });
+  }
+
   // Torres al catálogo compartido (alta al vuelo). El técnico en sí ya no se
   // da de alta acá — el catálogo de técnicos es la lista de usuarios
   // registrados (Configuración → Usuarios y roles); acá solo se guarda la

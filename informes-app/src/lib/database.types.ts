@@ -58,6 +58,12 @@ export type CatalogoTorreRow = {
   created_at: string;
 }
 
+export type CatalogoClienteRow = {
+  id: string;
+  nombre: string;
+  created_at: string;
+}
+
 export type CatalogoProvinciaRow = {
   id: string;
   nombre: string;
@@ -233,6 +239,11 @@ export interface Database {
         CatalogoTorreRow,
         Partial<CatalogoTorreRow> & Pick<CatalogoTorreRow, "nombre">,
         Partial<CatalogoTorreRow>
+      >;
+      catalogo_clientes: Tbl<
+        CatalogoClienteRow,
+        Partial<CatalogoClienteRow> & Pick<CatalogoClienteRow, "nombre">,
+        Partial<CatalogoClienteRow>
       >;
       catalogo_provincias: Tbl<
         CatalogoProvinciaRow,

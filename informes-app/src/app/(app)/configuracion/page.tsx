@@ -23,6 +23,7 @@ export default async function ConfiguracionPage() {
     usuariosRes,
     emailsRes,
     torresRes,
+    clientesRes,
     provinciasRes,
     tiposRes,
     categoriasRes,
@@ -39,6 +40,7 @@ export default async function ConfiguracionPage() {
     supabase.from("profiles").select("id, email, nombre_completo, rol, torre, activo").order("nombre_completo"),
     supabase.from("config_emails_envio").select("id, email, activo").order("email"),
     supabase.from("catalogo_torres").select("id, nombre").order("nombre"),
+    supabase.from("catalogo_clientes").select("id, nombre").order("nombre"),
     supabase.from("catalogo_provincias").select("id, nombre").order("nombre"),
     supabase.from("catalogo_tipos_informe").select("id, nombre").order("nombre"),
     supabase.from("catalogo_categorias_gasto").select("id, nombre").order("nombre"),
@@ -74,6 +76,7 @@ export default async function ConfiguracionPage() {
         emails: (emailsRes.data ?? []).map((e) => ({ id: e.id, email: e.email, activo: e.activo })),
         catalogos: {
           torres: torresRes.data ?? [],
+          clientes: clientesRes.data ?? [],
           provincias: provinciasRes.data ?? [],
           tiposInforme: tiposRes.data ?? [],
           categoriasGasto: categoriasRes.data ?? [],

@@ -18,6 +18,7 @@ export function AutocompleteInput({
   disabled,
   style,
   onCommit,
+  required,
 }: {
   value: string;
   onChange: (value: string) => void;
@@ -27,6 +28,7 @@ export function AutocompleteInput({
   style?: React.CSSProperties;
   /** Valor "definitivo" — al elegir una sugerencia, o al salir del campo escribiendo libre. Para casos como guardar recién ahí en vez de en cada tecla. */
   onCommit?: (value: string) => void;
+  required?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -53,6 +55,7 @@ export function AutocompleteInput({
         placeholder={placeholder}
         value={value}
         disabled={disabled}
+        required={required}
         onChange={(e) => {
           onChange(e.target.value);
           setOpen(true);

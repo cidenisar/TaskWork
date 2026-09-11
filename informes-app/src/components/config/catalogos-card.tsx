@@ -7,10 +7,11 @@ import { ServiceTab, type ServiceItem } from "./catalogos/service-tab";
 import { VencimientosTab } from "./catalogos/vencimientos-tab";
 import { Icon } from "@/components/icon";
 
-type TabId = "torres" | "vehiculos" | "vehservice" | "vehalertas" | "provincias" | "tipos" | "gastocat";
+type TabId = "torres" | "clientes" | "vehiculos" | "vehservice" | "vehalertas" | "provincias" | "tipos" | "gastocat";
 
 const TABS: { id: TabId; label: React.ReactNode }[] = [
   { id: "torres", label: "Torres" },
+  { id: "clientes", label: "Clientes" },
   { id: "vehiculos", label: "Vehículos" },
   { id: "vehservice", label: "Service" },
   {
@@ -28,6 +29,7 @@ const TABS: { id: TabId; label: React.ReactNode }[] = [
 
 export interface CatalogosData {
   torres: SimpleCatalogItem[];
+  clientes: SimpleCatalogItem[];
   provincias: SimpleCatalogItem[];
   tiposInforme: SimpleCatalogItem[];
   categoriasGasto: SimpleCatalogItem[];
@@ -57,6 +59,14 @@ export function CatalogosCard({ data }: { data: CatalogosData }) {
           items={data.torres}
           placeholder="Ej: Torre Norte"
           hint="Estas torres son las que aparecen sugeridas en el campo 'Torre' al cargar un técnico."
+        />
+      )}
+      {tab === "clientes" && (
+        <SimpleCatalogTab
+          tabla="catalogo_clientes"
+          items={data.clientes}
+          placeholder="Ej: YPF"
+          hint="Estos clientes son los que aparecen sugeridos en el campo 'Cliente' de Informe Técnico."
         />
       )}
       {tab === "vehiculos" && <VehiculosTab vehiculos={vehiculos} setVehiculos={setVehiculos} />}

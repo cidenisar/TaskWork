@@ -14,12 +14,14 @@ function revalidateAll() {
 
 type SimpleCatalogTable =
   | "catalogo_torres"
+  | "catalogo_clientes"
   | "catalogo_provincias"
   | "catalogo_tipos_informe"
   | "catalogo_categorias_gasto";
 
 const ETIQUETAS: Record<SimpleCatalogTable, string> = {
   catalogo_torres: "Torres",
+  catalogo_clientes: "Clientes",
   catalogo_provincias: "Provincias",
   catalogo_tipos_informe: "Tipos de Informe",
   catalogo_categorias_gasto: "Categorías de Gasto",

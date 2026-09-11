@@ -32,6 +32,7 @@ export const EMPTY_FORM: InformeFormState = {
 
 export interface CatalogosInforme {
   tiposInforme: string[];
+  clientes: string[];
   provincias: string[];
   tecnicos: { nombre: string; torre: string | null }[];
   torres: string[];

@@ -6,8 +6,9 @@ export default async function NuevoInformePage() {
   await requireProfile();
   const supabase = await createClient();
 
-  const [tiposRes, provinciasRes, tecnicosRes, torresRes, vehiculosRes, configRes, emailsRes] = await Promise.all([
+  const [tiposRes, clientesRes, provinciasRes, tecnicosRes, torresRes, vehiculosRes, configRes, emailsRes] = await Promise.all([
     supabase.from("catalogo_tipos_informe").select("nombre").order("nombre"),
+    supabase.from("catalogo_clientes").select("nombre").order("nombre"),
     supabase.from("catalogo_provincias").select("nombre").order("nombre"),
     // El catálogo de técnicos ya no es una carga manual aparte: se arma con
     // los usuarios registrados (Configuración → Usuarios y roles).
@@ -23,6 +24,7 @@ export default async function NuevoInformePage() {
       <InformeTecnicoWizard
         catalogos={{
           tiposInforme: (tiposRes.data ?? []).map((t) => t.nombre),
+          clientes: (clientesRes.data ?? []).map((c) => c.nombre),
           provincias: (provinciasRes.data ?? []).map((p) => p.nombre),
           tecnicos: (tecnicosRes.data ?? []).map((t) => ({ nombre: t.nombre_completo, torre: t.torre })),
           torres: (torresRes.data ?? []).map((t) => t.nombre),

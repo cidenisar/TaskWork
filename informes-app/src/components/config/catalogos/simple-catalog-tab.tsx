@@ -9,7 +9,12 @@ export interface SimpleCatalogItem {
   nombre: string;
 }
 
-type SimpleCatalogTable = "catalogo_torres" | "catalogo_provincias" | "catalogo_tipos_informe" | "catalogo_categorias_gasto";
+type SimpleCatalogTable =
+  | "catalogo_torres"
+  | "catalogo_clientes"
+  | "catalogo_provincias"
+  | "catalogo_tipos_informe"
+  | "catalogo_categorias_gasto";
 
 export function SimpleCatalogTab({
   tabla,

@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import type { CatalogosInforme, InformeFormState } from "./types";
 import { Icon, StatusDot } from "@/components/icon";
+import { AutocompleteInput } from "@/components/ui/autocomplete-input";
 
 interface SpeechRecognitionResultLike {
   0: { transcript: string };
@@ -150,11 +151,11 @@ export function Step1General({
           <label>
             Cliente <span className="req">*</span>
           </label>
-          <input
-            type="text"
-            placeholder="Nombre del cliente"
+          <AutocompleteInput
             value={form.cliente}
-            onChange={(e) => onChange({ cliente: e.target.value })}
+            onChange={(v) => onChange({ cliente: v })}
+            suggestions={catalogos.clientes}
+            placeholder="Nombre del cliente"
             required
           />
         </div>

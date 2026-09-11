@@ -92,6 +92,10 @@ export async function actualizarInformeTecnicoAction(
       await supabase.from("catalogo_torres").upsert({ nombre: torre }, { onConflict: "nombre", ignoreDuplicates: true });
     }
   }
+  const clienteValue = payload.cliente.trim();
+  if (clienteValue) {
+    await supabase.from("catalogo_clientes").upsert({ nombre: clienteValue }, { onConflict: "nombre", ignoreDuplicates: true });
+  }
 
   const { error: updErr } = await supabase
     .from("informes_tecnicos")
