@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { crearMedicionTableroAction } from "@/app/(app)/tableros/nuevo/actions";
 import { reportarErrorCliente } from "@/lib/client-error-report";
+import { resizeImageToJpeg } from "@/lib/image-resize";
 import { ErrorNote, SuccessNote } from "@/components/notes";
 import { Icon } from "@/components/icon";
 import type { TableroTipo } from "@/lib/database.types";
@@ -37,6 +38,9 @@ export function NuevaMedicionForm({ tableros }: { tableros: TableroConCircuitos[
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<{ numeroGeneracion: string; pdfUrl: string | null } | null>(null);
+  const [iaBusy, setIaBusy] = useState(false);
+  const [iaNote, setIaNote] = useState<string | null>(null);
+  const fotoInputRef = useRef<HTMLInputElement>(null);
 
   const energia = esTipoEnergia(tipo);
   const tablerosDelTipo = useMemo(() => tableros.filter((t) => t.tipo === tipo), [tableros, tipo]);
@@ -60,6 +64,40 @@ export function NuevaMedicionForm({ tableros }: { tableros: TableroConCircuitos[
     const t = tablerosDelTipo.find((x) => x.id === id);
     setCircuitos(t ? [...t.circuitos] : []);
     setLecturas({});
+  }
+
+  async function leerFotoConIa(file: File | undefined) {
+    if (!file) return;
+    setIaBusy(true);
+    setIaNote(null);
+    try {
+      const jpeg = await resizeImageToJpeg(file);
+      const fd = new FormData();
+      fd.append("foto", jpeg, "tablero.jpg");
+      fd.append("tipo", tipo);
+      const res = await fetch("/api/tableros/leer-foto", { method: "POST", body: fd });
+      const data = await res.json();
+      if (!res.ok) {
+        setIaNote(data.error || "No se pudo leer la foto.");
+        return;
+      }
+      const detectados: { numero: number; texto: string; ampNominal: string }[] = data.circuitos ?? [];
+      if (detectados.length === 0) {
+        setIaNote("No se detectó ningún circuito/elemento en la foto — probá con otra o cargalos a mano.");
+        return;
+      }
+      const siguienteBase = circuitos.length ? Math.max(...circuitos.map((c) => c.numero)) : 0;
+      setCircuitos((prev) => [
+        ...prev,
+        ...detectados.map((d, i) => ({ id: null, numero: siguienteBase + i + 1, texto: d.texto, ampNominal: d.ampNominal })),
+      ]);
+      setIaNote(`Se agregaron ${detectados.length} ${energia ? "circuitos" : "elementos"} desde la foto — revisalos antes de guardar.`);
+    } catch (err) {
+      setIaNote("No se pudo leer la foto.");
+      reportarErrorCliente(err instanceof Error ? err.message : "Error leyendo foto de tablero con IA", "leer-foto-tablero");
+    } finally {
+      setIaBusy(false);
+    }
   }
 
   function agregarCircuito() {
@@ -240,6 +278,35 @@ export function NuevaMedicionForm({ tableros }: { tableros: TableroConCircuitos[
       {tableroId && (
         <div className="card">
           <div className="section-label">{energia ? "Circuitos" : "Elementos"}</div>
+          <div className="hint" style={{ margin: "-4px 0 12px" }}>
+            <Icon name="ai" size={13} /> Sacale una foto al tablero y la IA te arma la lista de {energia ? "circuitos" : "elementos"}{" "}
+            automáticamente — revisala y corregí lo que haga falta antes de guardar.
+          </div>
+          <input
+            ref={fotoInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            style={{ display: "none" }}
+            onChange={(e) => {
+              void leerFotoConIa(e.target.files?.[0]);
+              e.target.value = "";
+            }}
+          />
+          <button
+            type="button"
+            className="ai-btn"
+            onClick={() => fotoInputRef.current?.click()}
+            disabled={submitting || iaBusy}
+            style={{ marginBottom: 12 }}
+          >
+            <Icon name="camera" size={13} /> {iaBusy ? "Leyendo foto..." : "Leer foto con IA"}
+          </button>
+          {iaNote && (
+            <div className="ai-note" style={{ marginBottom: 12 }}>
+              <span>{iaNote}</span>
+            </div>
+          )}
           {circuitos.length === 0 && <div className="empty-note">Todavía no hay {energia ? "circuitos" : "elementos"} cargados.</div>}
           <div className="item-list" style={{ marginTop: circuitos.length ? 0 : 12 }}>
             {circuitos.map((c, i) => {
