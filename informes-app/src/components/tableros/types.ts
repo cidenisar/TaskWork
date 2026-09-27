@@ -1,4 +1,4 @@
-import type { TableroTipo } from "@/lib/database.types";
+import type { TableroEventoTipo, TableroTipo } from "@/lib/database.types";
 
 export const TABLERO_TIPOS: TableroTipo[] = ["energia", "cctv", "control_acceso"];
 
@@ -7,6 +7,23 @@ export const TABLERO_TIPO_LABEL: Record<TableroTipo, string> = {
   cctv: "CCTV",
   control_acceso: "Control de Acceso",
 };
+
+export const TABLERO_EVENTO_TIPOS: TableroEventoTipo[] = ["medicion", "relevamiento"];
+
+export const TABLERO_EVENTO_LABEL: Record<TableroEventoTipo, string> = {
+  medicion: "Medición",
+  relevamiento: "Relevamiento",
+};
+
+/**
+ * Solo un tablero de energía en una visita de tipo "medición" pide corriente
+ * por fase — un relevamiento (cualquier tipo de tablero) es un chequeo más
+ * liviano, solo estado + comentario. CCTV/Control de Acceso nunca miden
+ * corriente, da igual el tipo de evento.
+ */
+export function pideCorrientePorFase(tipo: TableroTipo, tipoEvento: TableroEventoTipo): boolean {
+  return tipo === "energia" && tipoEvento === "medicion";
+}
 
 /** Solo energía mide corriente por fase — CCTV/Control de Acceso son relevamiento de estado. */
 export function esTipoEnergia(tipo: TableroTipo): boolean {
@@ -33,6 +50,18 @@ export interface TableroConCircuitos {
   denominacion: string;
   sitio: string;
   circuitos: CircuitoItem[];
+}
+
+export interface MantenimientoRow {
+  id: string;
+  tableroId: string;
+  tableroDenominacion: string;
+  tableroSitio: string;
+  circuitoTexto: string | null;
+  fecha: string;
+  descripcion: string;
+  fotoUrl: string | null;
+  proximoMantenimiento: string | null;
 }
 
 export interface LecturaForm {

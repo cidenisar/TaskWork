@@ -1,32 +1,42 @@
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { HistorialTableros, type HistorialMedicionRow } from "@/components/tableros/historial";
+import type { MantenimientoRow } from "@/components/tableros/types";
 
 export default async function HistorialTablerosPage() {
   await requireProfile();
   const supabase = await createClient();
 
-  // RLS (tablero_mediciones_select_own) ya limita esto a mediciones propias,
-  // o todas si sos Admin/Supervisor.
-  const { data: medicionesRes } = await supabase
-    .from("tablero_mediciones")
-    .select("id, numero_generacion, fecha, pdf_url, tablero_id")
-    .order("fecha", { ascending: false });
+  // RLS (tablero_mediciones_select_own / tablero_mantenimientos_select_own)
+  // ya limita esto a lo propio, o a todo si sos Admin/Supervisor.
+  const [medicionesRes, mantenimientosRes] = await Promise.all([
+    supabase.from("tablero_mediciones").select("id, numero_generacion, tipo_evento, fecha, pdf_url, tablero_id").order("fecha", { ascending: false }),
+    supabase
+      .from("tablero_mantenimientos")
+      .select("id, tablero_id, circuito_id, fecha, descripcion, foto_url, proximo_mantenimiento")
+      .order("fecha", { ascending: false }),
+  ]);
 
-  const tableroIds = [...new Set((medicionesRes ?? []).map((m) => m.tablero_id))];
-  const { data: tablerosRes } =
-    tableroIds.length > 0
-      ? await supabase.from("tableros").select("id, tipo, denominacion, sitio").in("id", tableroIds)
-      : { data: [] };
-  const tablerosPorId = new Map((tablerosRes ?? []).map((t) => [t.id, t]));
+  const tableroIds = [
+    ...new Set([...(medicionesRes.data ?? []).map((m) => m.tablero_id), ...(mantenimientosRes.data ?? []).map((m) => m.tablero_id)]),
+  ];
+  const circuitoIds = [...new Set((mantenimientosRes.data ?? []).map((m) => m.circuito_id).filter((id): id is string => !!id))];
 
-  const rows: HistorialMedicionRow[] = (medicionesRes ?? [])
+  const [tablerosRes, circuitosRes] = await Promise.all([
+    tableroIds.length > 0 ? supabase.from("tableros").select("id, tipo, denominacion, sitio").in("id", tableroIds) : { data: [] },
+    circuitoIds.length > 0 ? supabase.from("tablero_circuitos").select("id, texto").in("id", circuitoIds) : { data: [] },
+  ]);
+  const tablerosPorId = new Map((tablerosRes.data ?? []).map((t) => [t.id, t]));
+  const circuitosPorId = new Map((circuitosRes.data ?? []).map((c) => [c.id, c.texto]));
+
+  const mediciones: HistorialMedicionRow[] = (medicionesRes.data ?? [])
     .map((m) => {
       const t = tablerosPorId.get(m.tablero_id);
       if (!t) return null;
       return {
         id: m.id,
         numeroGeneracion: m.numero_generacion,
+        tipoEvento: m.tipo_evento,
         fecha: m.fecha,
         tipo: t.tipo,
         denominacion: t.denominacion,
@@ -36,5 +46,23 @@ export default async function HistorialTablerosPage() {
     })
     .filter((r): r is HistorialMedicionRow => r !== null);
 
-  return <HistorialTableros mediciones={rows} />;
+  const mantenimientos: MantenimientoRow[] = (mantenimientosRes.data ?? [])
+    .map((m) => {
+      const t = tablerosPorId.get(m.tablero_id);
+      if (!t) return null;
+      return {
+        id: m.id,
+        tableroId: m.tablero_id,
+        tableroDenominacion: t.denominacion,
+        tableroSitio: t.sitio,
+        circuitoTexto: m.circuito_id ? (circuitosPorId.get(m.circuito_id) ?? null) : null,
+        fecha: m.fecha,
+        descripcion: m.descripcion,
+        fotoUrl: m.foto_url,
+        proximoMantenimiento: m.proximo_mantenimiento,
+      };
+    })
+    .filter((r): r is MantenimientoRow => r !== null);
+
+  return <HistorialTableros mediciones={mediciones} mantenimientos={mantenimientos} />;
 }

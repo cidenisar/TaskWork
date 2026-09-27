@@ -6,12 +6,14 @@ import { reportarErrorCliente } from "@/lib/client-error-report";
 import { resizeImageToJpeg } from "@/lib/image-resize";
 import { ErrorNote, SuccessNote } from "@/components/notes";
 import { Icon } from "@/components/icon";
-import type { TableroTipo } from "@/lib/database.types";
+import type { TableroEventoTipo, TableroTipo } from "@/lib/database.types";
 import {
   TABLERO_TIPOS,
   TABLERO_TIPO_LABEL,
+  TABLERO_EVENTO_LABEL,
   ESTADO_OPCIONES,
   esTipoEnergia,
+  pideCorrientePorFase,
   type CircuitoItem,
   type TableroConCircuitos,
 } from "./types";
@@ -29,6 +31,7 @@ const LECTURA_VACIA: LecturaState = { estado: "", corrienteF: "", corrienteR: ""
 
 export function NuevaMedicionForm({ tableros }: { tableros: TableroConCircuitos[] }) {
   const [tipo, setTipo] = useState<TableroTipo>("energia");
+  const [tipoEventoElegido, setTipoEventoElegido] = useState<TableroEventoTipo>("medicion");
   const [tableroId, setTableroId] = useState<string>(""); // "" = sin elegir, "__new" = crear
   const [denominacionNueva, setDenominacionNueva] = useState("");
   const [sitioNueva, setSitioNueva] = useState("");
@@ -43,6 +46,10 @@ export function NuevaMedicionForm({ tableros }: { tableros: TableroConCircuitos[
   const fotoInputRef = useRef<HTMLInputElement>(null);
 
   const energia = esTipoEnergia(tipo);
+  // Solo un tablero de energía distingue medición de relevamiento — para
+  // CCTV/Control de Acceso siempre es relevamiento (nunca miden corriente).
+  const tipoEvento: TableroEventoTipo = energia ? tipoEventoElegido : "relevamiento";
+  const mideCorriente = pideCorrientePorFase(tipo, tipoEvento);
   const tablerosDelTipo = useMemo(() => tableros.filter((t) => t.tipo === tipo), [tableros, tipo]);
   const estadoOpciones = ESTADO_OPCIONES[tipo];
 
@@ -154,6 +161,7 @@ export function NuevaMedicionForm({ tableros }: { tableros: TableroConCircuitos[
     try {
       const res = await crearMedicionTableroAction({
         tipo,
+        tipoEvento,
         tableroId: tableroId === "__new" ? null : tableroId,
         denominacionNueva,
         sitioNuevo: sitioNueva,
@@ -202,7 +210,7 @@ export function NuevaMedicionForm({ tableros }: { tableros: TableroConCircuitos[
   return (
     <div>
       <div className="page-heading">
-        <h1>{energia ? "Nueva Medición" : "Nuevo Relevamiento"}</h1>
+        <h1>{tipoEvento === "medicion" ? "Nueva Medición" : "Nuevo Relevamiento"}</h1>
         <p>Elegí el tablero, cargá la fecha y las lecturas por {energia ? "circuito" : "elemento"} — se genera el PDF al guardar.</p>
       </div>
 
@@ -221,6 +229,29 @@ export function NuevaMedicionForm({ tableros }: { tableros: TableroConCircuitos[
             </button>
           ))}
         </div>
+        {energia && (
+          <>
+            <div className="section-label" style={{ marginTop: 16 }}>
+              Tipo de Visita
+            </div>
+            <div className="hint" style={{ margin: "-4px 0 12px" }}>
+              Medición mide corriente por fase; Relevamiento es un chequeo de estado más liviano, sin medir corriente.
+            </div>
+            <div className="tech-form-grid" style={{ gridTemplateColumns: "repeat(2, 1fr)" }}>
+              {(["medicion", "relevamiento"] as const).map((te) => (
+                <button
+                  key={te}
+                  type="button"
+                  className={`btn ${tipoEventoElegido === te ? "btn-primary" : "btn-secondary"}`}
+                  onClick={() => setTipoEventoElegido(te)}
+                  disabled={submitting}
+                >
+                  {TABLERO_EVENTO_LABEL[te]}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
       </div>
 
       <div className="card">
@@ -370,7 +401,7 @@ export function NuevaMedicionForm({ tableros }: { tableros: TableroConCircuitos[
                         ))}
                       </select>
                     </div>
-                    {energia && (
+                    {mideCorriente && (
                       <>
                         {(["F", "R", "S", "T"] as const).map((fase) => {
                           const key = (`corriente${fase}` as const);
@@ -414,7 +445,8 @@ export function NuevaMedicionForm({ tableros }: { tableros: TableroConCircuitos[
       {success && (
         <>
           <SuccessNote>
-            {energia ? "Medición" : "Relevamiento"} guardado ({success.numeroGeneracion}){success.pdfUrl ? " — " : ""}
+            {TABLERO_EVENTO_LABEL[tipoEvento]} guardado{tipoEvento === "medicion" ? "a" : ""} ({success.numeroGeneracion})
+            {success.pdfUrl ? " — " : ""}
             {success.pdfUrl && (
               <a href={success.pdfUrl} target="_blank" rel="noreferrer" style={{ color: "inherit", textDecoration: "underline" }}>
                 ver PDF

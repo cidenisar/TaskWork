@@ -37,6 +37,7 @@ const NAV_CONFIG: Record<string, ModuleConfig> = {
     brand: "Tableros",
     tabs: [
       { href: "/tableros/nuevo", label: "Nueva Medición" },
+      { href: "/tableros/mantenimiento", label: "Mantenimiento" },
       { href: "/tableros/historial", label: "Historial" },
     ],
   },

@@ -11,6 +11,7 @@ export type EstadoRendicion = "abierta" | "cerrada";
 export type Moneda = "ARS" | "USD";
 export type UmbralAviso = "20" | "50" | "100";
 export type TableroTipo = "energia" | "cctv" | "control_acceso";
+export type TableroEventoTipo = "medicion" | "relevamiento";
 
 /** Helper para darle a cada tabla la forma que espera postgrest-js (incluye Relationships). */
 type Tbl<
@@ -233,10 +234,23 @@ export type TableroMedicionRow = {
   id: string;
   tablero_id: string;
   numero_generacion: string;
+  tipo_evento: TableroEventoTipo;
   fecha: string;
   created_by: string;
   pdf_url: string | null;
   pdf_generado_at: string | null;
+  created_at: string;
+}
+
+export type TableroMantenimientoRow = {
+  id: string;
+  tablero_id: string;
+  circuito_id: string | null;
+  fecha: string;
+  descripcion: string;
+  foto_url: string | null;
+  proximo_mantenimiento: string | null;
+  created_by: string;
   created_at: string;
 }
 
@@ -382,6 +396,12 @@ export interface Database {
         TableroMedicionLecturaRow,
         Partial<TableroMedicionLecturaRow> & Pick<TableroMedicionLecturaRow, "medicion_id" | "circuito_id">,
         Partial<TableroMedicionLecturaRow>
+      >;
+      tablero_mantenimientos: Tbl<
+        TableroMantenimientoRow,
+        Partial<TableroMantenimientoRow> &
+          Pick<TableroMantenimientoRow, "tablero_id" | "fecha" | "descripcion" | "created_by">,
+        Partial<TableroMantenimientoRow>
       >;
     };
     Views: Record<string, never>;

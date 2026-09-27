@@ -5,7 +5,8 @@ import { requireProfile } from "@/lib/auth";
 import { nuevoNumeroGeneracionTablero } from "@/lib/tableros/numero-generacion";
 import { renderTableroPdf } from "@/lib/pdf/render";
 import { buildTableroFilename } from "@/lib/pdf/filename";
-import type { TableroTipo } from "@/lib/database.types";
+import { pideCorrientePorFase } from "@/components/tableros/types";
+import type { TableroEventoTipo, TableroTipo } from "@/lib/database.types";
 
 interface PayloadLectura {
   circuitoId: string | null;
@@ -22,6 +23,7 @@ interface PayloadLectura {
 
 export interface CrearMedicionPayload {
   tipo: TableroTipo;
+  tipoEvento: TableroEventoTipo;
   tableroId: string | null;
   denominacionNueva: string;
   sitioNuevo: string;
@@ -117,7 +119,13 @@ export async function crearMedicionTableroAction(payload: CrearMedicionPayload):
   for (let attempt = 0; attempt < 5 && !medicionId; attempt++) {
     const { data, error } = await supabase
       .from("tablero_mediciones")
-      .insert({ tablero_id: tableroId, numero_generacion: numeroGeneracion, fecha: payload.fecha, created_by: profile.id })
+      .insert({
+        tablero_id: tableroId,
+        numero_generacion: numeroGeneracion,
+        tipo_evento: payload.tipoEvento,
+        fecha: payload.fecha,
+        created_by: profile.id,
+      })
       .select("id")
       .single();
     if (error) {
@@ -133,15 +141,20 @@ export async function crearMedicionTableroAction(payload: CrearMedicionPayload):
     return { success: false, error: "No se pudo asignar un número de generación único. Probá de nuevo." };
   }
 
+  // Un relevamiento (o cualquier evento que no sea "medición" en un tablero
+  // de energía) nunca guarda corriente por fase, aunque el payload la trajera
+  // — se descarta acá server-side, no solo se oculta en el formulario.
+  const mideCorriente = pideCorrientePorFase(payload.tipo, payload.tipoEvento);
+
   const { error: lecturasErr } = await supabase.from("tablero_medicion_lecturas").insert(
     payload.lecturas.map((l, i) => ({
       medicion_id: medicionId!,
       circuito_id: circuitoIdPorIndice[i]!,
       estado: l.estado || null,
-      corriente_f: parseNum(l.corrienteF),
-      corriente_r: parseNum(l.corrienteR),
-      corriente_s: parseNum(l.corrienteS),
-      corriente_t: parseNum(l.corrienteT),
+      corriente_f: mideCorriente ? parseNum(l.corrienteF) : null,
+      corriente_r: mideCorriente ? parseNum(l.corrienteR) : null,
+      corriente_s: mideCorriente ? parseNum(l.corrienteS) : null,
+      corriente_t: mideCorriente ? parseNum(l.corrienteT) : null,
       comentario: l.comentario.trim() || null,
     })),
   );
@@ -164,6 +177,7 @@ export async function crearMedicionTableroAction(payload: CrearMedicionPayload):
   const pdfBuffer = await renderTableroPdf({
     numeroGeneracion,
     tipo: payload.tipo,
+    tipoEvento: payload.tipoEvento,
     denominacion: tableroRow.denominacion,
     sitio: tableroRow.sitio,
     fecha: payload.fecha,
@@ -172,10 +186,10 @@ export async function crearMedicionTableroAction(payload: CrearMedicionPayload):
       texto: l.texto,
       ampNominal: l.ampNominal || null,
       estado: l.estado || null,
-      corrienteF: parseNum(l.corrienteF),
-      corrienteR: parseNum(l.corrienteR),
-      corrienteS: parseNum(l.corrienteS),
-      corrienteT: parseNum(l.corrienteT),
+      corrienteF: mideCorriente ? parseNum(l.corrienteF) : null,
+      corrienteR: mideCorriente ? parseNum(l.corrienteR) : null,
+      corrienteS: mideCorriente ? parseNum(l.corrienteS) : null,
+      corrienteT: mideCorriente ? parseNum(l.corrienteT) : null,
       comentario: l.comentario || null,
     })),
     logoBuffer,

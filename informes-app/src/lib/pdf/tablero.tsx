@@ -1,7 +1,7 @@
 import { Document, Page, Text, View, StyleSheet } from "@react-pdf/renderer";
 import { BORDER, commonStyles, KeyValueRow, PdfHeader, PdfFooter, formatFechaArg } from "./common";
-import { TABLERO_TIPO_LABEL, esTipoEnergia } from "@/components/tableros/types";
-import type { TableroTipo } from "@/lib/database.types";
+import { TABLERO_TIPO_LABEL, TABLERO_EVENTO_LABEL, esTipoEnergia, pideCorrientePorFase } from "@/components/tableros/types";
+import type { TableroEventoTipo, TableroTipo } from "@/lib/database.types";
 
 /**
  * Reemplaza la planilla Excel manual de medición de consumo — misma cabecera
@@ -35,6 +35,7 @@ export interface TableroPdfLectura {
 export interface TableroPdfProps {
   numeroGeneracion: string;
   tipo: TableroTipo;
+  tipoEvento: TableroEventoTipo;
   denominacion: string;
   sitio: string;
   fecha: string;
@@ -58,11 +59,14 @@ const WIDTHS_ENERGIA: ColWidths = { n: "5%", circuito: "19%", estado: "12%", amp
 const WIDTHS_SIMPLE: ColWidths = { n: "7%", circuito: "27%", estado: "16%", amp: "0%", fase: "0%", comentario: "50%" };
 
 export function TableroPdf(props: TableroPdfProps) {
-  const { numeroGeneracion, tipo, denominacion, sitio, fecha, lecturas, logoBuffer, appName, realizoNombre } = props;
+  const { numeroGeneracion, tipo, tipoEvento, denominacion, sitio, fecha, lecturas, logoBuffer, appName, realizoNombre } = props;
   const energia = esTipoEnergia(tipo);
-  const w = energia ? WIDTHS_ENERGIA : WIDTHS_SIMPLE;
+  const mideCorriente = pideCorrientePorFase(tipo, tipoEvento);
+  const w = mideCorriente ? WIDTHS_ENERGIA : WIDTHS_SIMPLE;
   const fechaLabel = formatFechaArg(fecha);
-  const documentoLabel = energia ? "MEDICIÓN DE CONSUMO — TABLERO DE ENERGÍA" : `RELEVAMIENTO — TABLERO DE ${TABLERO_TIPO_LABEL[tipo].toUpperCase()}`;
+  const documentoLabel = mideCorriente
+    ? "MEDICIÓN DE CONSUMO — TABLERO DE ENERGÍA"
+    : `${TABLERO_EVENTO_LABEL[tipoEvento].toUpperCase()} — TABLERO DE ${TABLERO_TIPO_LABEL[tipo].toUpperCase()}`;
   const documentoLinea = `Documento: ${sitio || "—"}-Público · Generado por ${appName}`;
 
   return (
@@ -82,6 +86,7 @@ export function TableroPdf(props: TableroPdfProps) {
 
         <View style={commonStyles.kvTable}>
           <KeyValueRow k="N° de Generación:" v={numeroGeneracion} />
+          <KeyValueRow k="Tipo de Visita:" v={TABLERO_EVENTO_LABEL[tipoEvento]} />
           <KeyValueRow k="Tipo de Tablero:" v={TABLERO_TIPO_LABEL[tipo]} />
           <KeyValueRow k="Denominación:" v={denominacion} />
           <KeyValueRow k="Sitio:" v={sitio} />
@@ -94,7 +99,7 @@ export function TableroPdf(props: TableroPdfProps) {
             <Text style={[styles.th, { width: w.n }]}>N°</Text>
             <Text style={[styles.th, { width: w.circuito }]}>{energia ? "Circuito" : "Elemento"}</Text>
             <Text style={[styles.th, { width: w.estado }]}>Estado</Text>
-            {energia && (
+            {mideCorriente && (
               <>
                 <Text style={[styles.th, { width: w.amp, textAlign: "right" }]}>Amp</Text>
                 <Text style={[styles.th, { width: w.fase, textAlign: "right" }]}>F</Text>
@@ -110,7 +115,7 @@ export function TableroPdf(props: TableroPdfProps) {
               <Text style={[styles.td, { width: w.n }]}>{l.numero}</Text>
               <Text style={[styles.td, { width: w.circuito }]}>{l.texto}</Text>
               <Text style={[styles.td, { width: w.estado }]}>{l.estado || "—"}</Text>
-              {energia && (
+              {mideCorriente && (
                 <>
                   <Text style={[styles.td, { width: w.amp, textAlign: "right" }]}>{l.ampNominal || "—"}</Text>
                   <Text style={[styles.td, { width: w.fase, textAlign: "right" }]}>{l.corrienteF ?? "—"}</Text>

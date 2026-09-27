@@ -190,15 +190,25 @@ npm run dev
 - **Fotos**: la marca de agua + franja de fecha/hora/GPS se "queman" en el
   JPG en el navegador (canvas) antes de subir; lat/lon/accuracy también se
   guardan estructurados en `informe_imagenes` para el futuro mapa de calor.
-- **Tableros** (`src/app/(app)/tableros/`, migración `20260927000000_tableros.sql`):
-  módulo propio en la pantalla de inicio para relevar tableros físicos en la
-  ubicación del cliente — Energía (mide corriente por fase F/R/S/T en cada
-  circuito, reemplaza la planilla Excel manual), CCTV y Control de Acceso
-  (relevamiento de estado, sin medición de corriente). Un tablero y sus
+- **Tableros** (`src/app/(app)/tableros/`, migraciones `20260927000000_tableros.sql`
+  y `20260927010000_tableros_relevamiento_mantenimiento.sql`): módulo propio en
+  la pantalla de inicio para relevar tableros físicos en la ubicación del
+  cliente — Energía, CCTV y Control de Acceso. Un tablero y sus
   circuitos/elementos se dan de alta "al vuelo" la primera vez que un
   técnico los encuentra (mismo criterio que `catalogo_clientes`, no como
-  `catalogo_vehiculos` que es 100% admin) — cada visita después es una
-  "medición" nueva sobre los mismos circuitos ya cargados, con PDF.
+  `catalogo_vehiculos` que es 100% admin). Cada visita es de un tipo:
+  **Medición** (solo tableros de Energía — mide corriente por fase F/R/S/T
+  en cada circuito, reemplaza la planilla Excel manual, genera PDF) o
+  **Relevamiento** (chequeo más liviano de estado por circuito, sin
+  corriente, genera PDF igual — es el único tipo posible para CCTV/Control
+  de Acceso). Aparte, **Mantenimiento** (`/tableros/mantenimiento`) registra
+  el trabajo realizado sobre un tablero/circuito ya relevado — descripción,
+  foto del trabajo/repuesto y próximo mantenimiento programado — sin PDF,
+  solo queda como registro en el Historial. `pideCorrientePorFase(tipo,
+  tipoEvento)` en `src/components/tableros/types.ts` es la única fuente de
+  verdad de cuándo se piden/muestran los campos de corriente, tanto en el
+  formulario como en el PDF y en el server action (se anulan server-side
+  aunque alguien fuerce el form).
 - **Errores del dispositivo** (`src/components/client-error-reporter.tsx` +
   `src/app/api/errores/reportar/`): cualquier error de JS no manejado en el
   navegador del usuario (y los fallos explícitos al generar/editar un

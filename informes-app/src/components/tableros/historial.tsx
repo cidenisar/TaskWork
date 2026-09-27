@@ -1,14 +1,15 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { obtenerUrlPdfMedicionAction } from "@/app/(app)/tableros/historial/actions";
+import { obtenerUrlFotoMantenimientoAction, obtenerUrlPdfMedicionAction } from "@/app/(app)/tableros/historial/actions";
 import { Icon } from "@/components/icon";
-import { TABLERO_TIPO_LABEL } from "./types";
-import type { TableroTipo } from "@/lib/database.types";
+import { TABLERO_EVENTO_LABEL, TABLERO_TIPO_LABEL, type MantenimientoRow } from "./types";
+import type { TableroEventoTipo, TableroTipo } from "@/lib/database.types";
 
 export interface HistorialMedicionRow {
   id: string;
   numeroGeneracion: string;
+  tipoEvento: TableroEventoTipo;
   fecha: string;
   tipo: TableroTipo;
   denominacion: string;
@@ -21,20 +22,37 @@ function fmtFecha(fecha: string) {
   return d && m && y ? `${d}/${m}/${y}` : fecha;
 }
 
-export function HistorialTableros({ mediciones }: { mediciones: HistorialMedicionRow[] }) {
+export function HistorialTableros({
+  mediciones,
+  mantenimientos,
+}: {
+  mediciones: HistorialMedicionRow[];
+  mantenimientos: MantenimientoRow[];
+}) {
+  const [tab, setTab] = useState<"mediciones" | "mantenimientos">("mediciones");
   const [query, setQuery] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
-  const filtered = useMemo(() => {
+  const medicionesFiltradas = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return mediciones;
     return mediciones.filter((m) =>
-      `${m.numeroGeneracion} ${m.denominacion} ${m.sitio} ${TABLERO_TIPO_LABEL[m.tipo]}`.toLowerCase().includes(q),
+      `${m.numeroGeneracion} ${m.denominacion} ${m.sitio} ${TABLERO_TIPO_LABEL[m.tipo]} ${TABLERO_EVENTO_LABEL[m.tipoEvento]}`
+        .toLowerCase()
+        .includes(q),
     );
   }, [mediciones, query]);
 
-  async function verDescargar(id: string, numeroGeneracion: string) {
+  const mantenimientosFiltrados = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return mantenimientos;
+    return mantenimientos.filter((m) =>
+      `${m.tableroDenominacion} ${m.tableroSitio} ${m.circuitoTexto ?? ""} ${m.descripcion}`.toLowerCase().includes(q),
+    );
+  }, [mantenimientos, query]);
+
+  async function verDescargarPdf(id: string, numeroGeneracion: string) {
     setBusyId(id);
     setNotice(null);
     const res = await obtenerUrlPdfMedicionAction(id);
@@ -54,16 +72,45 @@ export function HistorialTableros({ mediciones }: { mediciones: HistorialMedicio
     URL.revokeObjectURL(blobUrl);
   }
 
+  async function verFoto(id: string) {
+    setBusyId(id);
+    setNotice(null);
+    const res = await obtenerUrlFotoMantenimientoAction(id);
+    setBusyId(null);
+    if (!res.url) {
+      setNotice(res.error || "No se pudo abrir la foto.");
+      return;
+    }
+    window.open(res.url, "_blank", "noopener,noreferrer");
+  }
+
   return (
     <div>
       <div className="page-heading">
         <h1>Historial de Tableros</h1>
-        <p>Mediciones y relevamientos cargados — Energía, CCTV y Control de Acceso</p>
+        <p>Mediciones, relevamientos y mantenimientos — Energía, CCTV y Control de Acceso</p>
+      </div>
+
+      <div className="navtabs" style={{ marginBottom: 12 }}>
+        <button
+          type="button"
+          className={`navtab${tab === "mediciones" ? " active" : ""}`}
+          onClick={() => setTab("mediciones")}
+        >
+          Mediciones / Relevamientos
+        </button>
+        <button
+          type="button"
+          className={`navtab${tab === "mantenimientos" ? " active" : ""}`}
+          onClick={() => setTab("mantenimientos")}
+        >
+          Mantenimientos
+        </button>
       </div>
 
       <div className="card">
         <div className="hint" style={{ margin: "0 0 8px" }}>
-          <Icon name="search" size={13} /> Buscá por tablero, sitio, tipo o N° de generación...
+          <Icon name="search" size={13} /> Buscá por tablero, sitio, tipo o descripción...
         </div>
         <input
           type="text"
@@ -75,22 +122,64 @@ export function HistorialTableros({ mediciones }: { mediciones: HistorialMedicio
 
         {notice && <div className="hint" style={{ color: "var(--warn)" }}>{notice}</div>}
 
-        {filtered.length === 0 ? (
-          <div className="empty-note">No se encontraron mediciones con esa búsqueda.</div>
+        {tab === "mediciones" ? (
+          medicionesFiltradas.length === 0 ? (
+            <div className="empty-note">No se encontraron mediciones ni relevamientos con esa búsqueda.</div>
+          ) : (
+            <div>
+              {medicionesFiltradas.map((m) => (
+                <div className={`hist-item${m.pdfDisponible ? "" : " archived"}`} key={m.id}>
+                  <div className="info">
+                    <div className="hist-main">
+                      <div className="hist-title">
+                        {m.denominacion}
+                        <span className={`hist-status ${m.pdfDisponible ? "ok" : "gone"}`}>
+                          {m.pdfDisponible ? "PDF disponible" : "Solo registro"}
+                        </span>
+                      </div>
+                      <div className="hist-meta">
+                        {m.numeroGeneracion} · {TABLERO_EVENTO_LABEL[m.tipoEvento]} · {TABLERO_TIPO_LABEL[m.tipo]} · {m.sitio} ·{" "}
+                        {fmtFecha(m.fecha)}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="hist-actions">
+                    <button
+                      type="button"
+                      className="icon-btn"
+                      title={m.pdfDisponible ? "Ver / descargar PDF" : "Sin PDF disponible"}
+                      disabled={!m.pdfDisponible || busyId === m.id}
+                      onClick={() => verDescargarPdf(m.id, m.numeroGeneracion)}
+                    >
+                      {busyId === m.id ? "…" : <Icon name="download" size={15} />}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )
+        ) : mantenimientosFiltrados.length === 0 ? (
+          <div className="empty-note">No se encontraron mantenimientos con esa búsqueda.</div>
         ) : (
           <div>
-            {filtered.map((m) => (
-              <div className={`hist-item${m.pdfDisponible ? "" : " archived"}`} key={m.id}>
+            {mantenimientosFiltrados.map((m) => (
+              <div className="hist-item" key={m.id}>
                 <div className="info">
                   <div className="hist-main">
                     <div className="hist-title">
-                      {m.denominacion}
-                      <span className={`hist-status ${m.pdfDisponible ? "ok" : "gone"}`}>
-                        {m.pdfDisponible ? "PDF disponible" : "Solo registro"}
-                      </span>
+                      {m.tableroDenominacion}
+                      {m.proximoMantenimiento && (
+                        <span className="hist-status" style={{ background: "var(--warn-bg, #3a2f1a)", color: "var(--warn)" }}>
+                          Próximo: {fmtFecha(m.proximoMantenimiento)}
+                        </span>
+                      )}
                     </div>
                     <div className="hist-meta">
-                      {m.numeroGeneracion} · {TABLERO_TIPO_LABEL[m.tipo]} · {m.sitio} · {fmtFecha(m.fecha)}
+                      {m.tableroSitio} · {fmtFecha(m.fecha)}
+                      {m.circuitoTexto ? ` · ${m.circuitoTexto}` : ""}
+                    </div>
+                    <div className="hist-meta" style={{ marginTop: 4 }}>
+                      {m.descripcion}
                     </div>
                   </div>
                 </div>
@@ -98,11 +187,11 @@ export function HistorialTableros({ mediciones }: { mediciones: HistorialMedicio
                   <button
                     type="button"
                     className="icon-btn"
-                    title={m.pdfDisponible ? "Ver / descargar PDF" : "Sin PDF disponible"}
-                    disabled={!m.pdfDisponible || busyId === m.id}
-                    onClick={() => verDescargar(m.id, m.numeroGeneracion)}
+                    title={m.fotoUrl ? "Ver foto" : "Sin foto"}
+                    disabled={!m.fotoUrl || busyId === m.id}
+                    onClick={() => verFoto(m.id)}
                   >
-                    {busyId === m.id ? "…" : <Icon name="download" size={15} />}
+                    {busyId === m.id ? "…" : <Icon name="camera" size={15} />}
                   </button>
                 </div>
               </div>

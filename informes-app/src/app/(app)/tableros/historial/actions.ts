@@ -26,3 +26,24 @@ export async function obtenerUrlPdfMedicionAction(medicionId: string): Promise<U
   }
   return { url: signed.signedUrl, filename: filenameDesdeStoragePath(medicion.pdf_url) };
 }
+
+/** RLS (tablero_mantenimientos_select_own) ya limita esto a mantenimientos propios, o todos si sos Admin/Supervisor. */
+export async function obtenerUrlFotoMantenimientoAction(mantenimientoId: string): Promise<UrlPdfResult> {
+  await requireProfile();
+  const supabase = await createClient();
+
+  const { data: mantenimiento, error } = await supabase
+    .from("tablero_mantenimientos")
+    .select("foto_url")
+    .eq("id", mantenimientoId)
+    .single();
+  if (error || !mantenimiento?.foto_url) {
+    return { url: null, error: "La foto ya no está disponible." };
+  }
+
+  const { data: signed, error: signErr } = await supabase.storage.from("informe-fotos").createSignedUrl(mantenimiento.foto_url, 60 * 15);
+  if (signErr || !signed) {
+    return { url: null, error: "No se pudo generar el link de la foto." };
+  }
+  return { url: signed.signedUrl };
+}
