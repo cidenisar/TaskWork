@@ -35,6 +35,13 @@ const ICON_PATHS: Record<string, React.ReactNode> = {
       <path d="M8 11V7a4 4 0 0 1 8 0v4" />
     </>
   ),
+  tableros: (
+    <>
+      <rect x="4" y="3.5" width="16" height="17" rx="1.5" />
+      <path d="M8 8v3.5M12 8v3.5M16 8v3.5" />
+      <path d="M7.5 15.5h9" />
+    </>
+  ),
 };
 
 /**

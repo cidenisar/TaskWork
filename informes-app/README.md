@@ -190,6 +190,15 @@ npm run dev
 - **Fotos**: la marca de agua + franja de fecha/hora/GPS se "queman" en el
   JPG en el navegador (canvas) antes de subir; lat/lon/accuracy también se
   guardan estructurados en `informe_imagenes` para el futuro mapa de calor.
+- **Tableros** (`src/app/(app)/tableros/`, migración `20260927000000_tableros.sql`):
+  módulo propio en la pantalla de inicio para relevar tableros físicos en la
+  ubicación del cliente — Energía (mide corriente por fase F/R/S/T en cada
+  circuito, reemplaza la planilla Excel manual), CCTV y Control de Acceso
+  (relevamiento de estado, sin medición de corriente). Un tablero y sus
+  circuitos/elementos se dan de alta "al vuelo" la primera vez que un
+  técnico los encuentra (mismo criterio que `catalogo_clientes`, no como
+  `catalogo_vehiculos` que es 100% admin) — cada visita después es una
+  "medición" nueva sobre los mismos circuitos ya cargados, con PDF.
 - **Errores del dispositivo** (`src/components/client-error-reporter.tsx` +
   `src/app/api/errores/reportar/`): cualquier error de JS no manejado en el
   navegador del usuario (y los fallos explícitos al generar/editar un

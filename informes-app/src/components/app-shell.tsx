@@ -33,6 +33,13 @@ const NAV_CONFIG: Record<string, ModuleConfig> = {
       { href: "/rendicion-gastos/historial", label: "Historial" },
     ],
   },
+  tableros: {
+    brand: "Tableros",
+    tabs: [
+      { href: "/tableros/nuevo", label: "Nueva Medición" },
+      { href: "/tableros/historial", label: "Historial" },
+    ],
+  },
   estadisticas: {
     brand: "Estadísticas",
     tabs: [

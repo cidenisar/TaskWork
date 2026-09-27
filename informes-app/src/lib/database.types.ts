@@ -10,6 +10,7 @@ export type EstadoInforme = "borrador" | "generado";
 export type EstadoRendicion = "abierta" | "cerrada";
 export type Moneda = "ARS" | "USD";
 export type UmbralAviso = "20" | "50" | "100";
+export type TableroTipo = "energia" | "cctv" | "control_acceso";
 
 /** Helper para darle a cada tabla la forma que espera postgrest-js (incluye Relationships). */
 type Tbl<
@@ -209,6 +210,48 @@ export type AuditLogRow = {
   created_at: string;
 }
 
+export type TableroRow = {
+  id: string;
+  tipo: TableroTipo;
+  denominacion: string;
+  sitio: string;
+  created_by: string | null;
+  created_at: string;
+}
+
+export type TableroCircuitoRow = {
+  id: string;
+  tablero_id: string;
+  numero: number;
+  texto: string;
+  amp_nominal: string | null;
+  orden: number;
+  created_at: string;
+}
+
+export type TableroMedicionRow = {
+  id: string;
+  tablero_id: string;
+  numero_generacion: string;
+  fecha: string;
+  created_by: string;
+  pdf_url: string | null;
+  pdf_generado_at: string | null;
+  created_at: string;
+}
+
+export type TableroMedicionLecturaRow = {
+  id: string;
+  medicion_id: string;
+  circuito_id: string;
+  estado: string | null;
+  corriente_f: number | null;
+  corriente_r: number | null;
+  corriente_s: number | null;
+  corriente_t: number | null;
+  comentario: string | null;
+}
+
 export type ClientErrorRow = {
   id: string;
   user_id: string | null;
@@ -319,6 +362,27 @@ export interface Database {
         Partial<AuditLogRow>
       >;
       client_errores: Tbl<ClientErrorRow, Partial<ClientErrorRow> & Pick<ClientErrorRow, "mensaje">, Partial<ClientErrorRow>>;
+      tableros: Tbl<
+        TableroRow,
+        Partial<TableroRow> & Pick<TableroRow, "tipo" | "denominacion" | "sitio">,
+        Partial<TableroRow>
+      >;
+      tablero_circuitos: Tbl<
+        TableroCircuitoRow,
+        Partial<TableroCircuitoRow> & Pick<TableroCircuitoRow, "tablero_id" | "numero" | "texto">,
+        Partial<TableroCircuitoRow>
+      >;
+      tablero_mediciones: Tbl<
+        TableroMedicionRow,
+        Partial<TableroMedicionRow> &
+          Pick<TableroMedicionRow, "tablero_id" | "numero_generacion" | "fecha" | "created_by">,
+        Partial<TableroMedicionRow>
+      >;
+      tablero_medicion_lecturas: Tbl<
+        TableroMedicionLecturaRow,
+        Partial<TableroMedicionLecturaRow> & Pick<TableroMedicionLecturaRow, "medicion_id" | "circuito_id">,
+        Partial<TableroMedicionLecturaRow>
+      >;
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;

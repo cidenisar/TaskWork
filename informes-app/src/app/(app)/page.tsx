@@ -32,6 +32,13 @@ export default async function HomePage() {
             Cargá el viático recibido, tus gastos con comprobante y cerrá la rendición
           </div>
         </Link>
+        <Link href="/tableros/nuevo" className="module-card">
+          <div className="module-ico">
+            <ModuleIcon name="tableros" />
+          </div>
+          <div className="module-title">Tableros</div>
+          <div className="module-sub">Medí consumo en tableros de energía o relevá CCTV y control de acceso</div>
+        </Link>
         <Link href="/estadisticas" className="module-card">
           <div className="module-ico">
             <ModuleIcon name="estadisticas" />
