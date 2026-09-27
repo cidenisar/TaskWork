@@ -88,7 +88,7 @@ export function NuevaMedicionForm({ tableros }: { tableros: TableroConCircuitos[
         setIaNote(data.error || "No se pudo leer la foto.");
         return;
       }
-      const detectados: { numero: number; texto: string; ampNominal: string }[] = data.circuitos ?? [];
+      const detectados: { numero: number; texto: string; ampNominal: string; identificado: boolean }[] = data.circuitos ?? [];
       if (detectados.length === 0) {
         setIaNote("No se detectó ningún circuito/elemento en la foto — probá con otra o cargalos a mano.");
         return;
@@ -96,9 +96,21 @@ export function NuevaMedicionForm({ tableros }: { tableros: TableroConCircuitos[
       const siguienteBase = circuitos.length ? Math.max(...circuitos.map((c) => c.numero)) : 0;
       setCircuitos((prev) => [
         ...prev,
-        ...detectados.map((d, i) => ({ id: null, numero: siguienteBase + i + 1, texto: d.texto, ampNominal: d.ampNominal })),
+        ...detectados.map((d, i) => ({
+          id: null,
+          numero: siguienteBase + i + 1,
+          texto: d.texto,
+          ampNominal: d.ampNominal,
+          revisar: d.identificado !== true,
+        })),
       ]);
-      setIaNote(`Se agregaron ${detectados.length} ${energia ? "circuitos" : "elementos"} desde la foto — revisalos antes de guardar.`);
+      const sinEtiqueta = detectados.filter((d) => d.identificado !== true).length;
+      setIaNote(
+        `Se agregaron ${detectados.length} ${energia ? "circuitos" : "elementos"} desde la foto` +
+          (sinEtiqueta > 0
+            ? ` — ${sinEtiqueta} sin etiqueta legible, marcados para revisar (la IA describió lo que vio, pero no adivina el nombre del circuito sin una etiqueta física).`
+            : " — revisalos antes de guardar."),
+      );
     } catch (err) {
       setIaNote("No se pudo leer la foto.");
       reportarErrorCliente(err instanceof Error ? err.message : "Error leyendo foto de tablero con IA", "leer-foto-tablero");
@@ -346,41 +358,49 @@ export function NuevaMedicionForm({ tableros }: { tableros: TableroConCircuitos[
               return (
                 <div className="list-item" key={i} style={{ flexDirection: "column", alignItems: "stretch", gap: 8 }}>
                   {esNuevo ? (
-                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-end" }}>
-                      <div className="field" style={{ marginBottom: 0, width: 70 }}>
-                        <label style={{ fontSize: 11 }}>N°</label>
-                        <input
-                          type="number"
-                          value={c.numero}
-                          onChange={(e) => actualizarCircuito(i, { numero: Number(e.target.value) || 0 })}
-                          disabled={submitting}
-                        />
-                      </div>
-                      <div className="field" style={{ marginBottom: 0, flex: 1, minWidth: 160 }}>
-                        <label style={{ fontSize: 11 }}>{energia ? "Circuito" : "Elemento"}</label>
-                        <input
-                          type="text"
-                          placeholder={energia ? "Ej: RACK 1" : "Ej: Cámara Hall"}
-                          value={c.texto}
-                          onChange={(e) => actualizarCircuito(i, { texto: e.target.value })}
-                          disabled={submitting}
-                        />
-                      </div>
-                      {energia && (
-                        <div className="field" style={{ marginBottom: 0, width: 100 }}>
-                          <label style={{ fontSize: 11 }}>Amp</label>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                      {c.revisar && (
+                        <div className="hint" style={{ color: "var(--warn)", margin: 0 }}>
+                          <Icon name="warning" size={12} /> Sin etiqueta legible en la foto — la IA describió lo que vio, corregí el
+                          nombre si lo identificás.
+                        </div>
+                      )}
+                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-end" }}>
+                        <div className="field" style={{ marginBottom: 0, width: 70 }}>
+                          <label style={{ fontSize: 11 }}>N°</label>
                           <input
-                            type="text"
-                            placeholder="Ej: 32A"
-                            value={c.ampNominal}
-                            onChange={(e) => actualizarCircuito(i, { ampNominal: e.target.value })}
+                            type="number"
+                            value={c.numero}
+                            onChange={(e) => actualizarCircuito(i, { numero: Number(e.target.value) || 0 })}
                             disabled={submitting}
                           />
                         </div>
-                      )}
-                      <button type="button" className="remove-btn" onClick={() => quitarCircuito(i)} disabled={submitting}>
-                        <Icon name="x" size={12} />
-                      </button>
+                        <div className="field" style={{ marginBottom: 0, flex: 1, minWidth: 160 }}>
+                          <label style={{ fontSize: 11 }}>{energia ? "Circuito" : "Elemento"}</label>
+                          <input
+                            type="text"
+                            placeholder={energia ? "Ej: RACK 1" : "Ej: Cámara Hall"}
+                            value={c.texto}
+                            onChange={(e) => actualizarCircuito(i, { texto: e.target.value, revisar: false })}
+                            disabled={submitting}
+                          />
+                        </div>
+                        {energia && (
+                          <div className="field" style={{ marginBottom: 0, width: 100 }}>
+                            <label style={{ fontSize: 11 }}>Amp</label>
+                            <input
+                              type="text"
+                              placeholder="Ej: 32A"
+                              value={c.ampNominal}
+                              onChange={(e) => actualizarCircuito(i, { ampNominal: e.target.value })}
+                              disabled={submitting}
+                            />
+                          </div>
+                        )}
+                        <button type="button" className="remove-btn" onClick={() => quitarCircuito(i)} disabled={submitting}>
+                          <Icon name="x" size={12} />
+                        </button>
+                      </div>
                     </div>
                   ) : (
                     <div className="item-name">

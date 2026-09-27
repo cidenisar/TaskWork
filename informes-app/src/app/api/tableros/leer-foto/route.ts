@@ -14,6 +14,7 @@ interface CircuitoDetectado {
   numero: number;
   texto: string;
   ampNominal: string;
+  identificado: boolean;
 }
 
 export async function POST(req: NextRequest) {
@@ -38,6 +39,11 @@ export async function POST(req: NextRequest) {
   const contexto = energia
     ? "un tablero eléctrico, con una fila de interruptores/térmicas, cada uno con una etiqueta (impresa, escrita a mano o en una cinta) al lado indicando qué circuito alimenta, y muchas veces el amperaje impreso en el propio interruptor (ej. \"32A\", \"C16\")"
     : `un tablero de ${tipo === "cctv" ? "CCTV" : "control de acceso"}, con elementos identificados por etiqueta (cámaras, lectoras, zonas, etc.)`;
+  const pistasVisuales = energia
+    ? "cantidad de polos (mono/bi/trifásico — un interruptor trifásico suele alimentar un motor, AC o carga trifásica, uno monofásico suele ser iluminación o tomas), " +
+      "grosor y color de los cables que salen, si hay un contactor/temporizador/fotocélula al lado (sugiere iluminación exterior o control automático), " +
+      "si hay una llave diferencial/disyuntor agrupando varios interruptores, y la posición relativa a otros circuitos ya identificados (los agrupados o contiguos suelen ser del mismo tablero/zona)"
+    : "tipo de elemento por su forma (cámara domo vs. bullet, lectora de proximidad, cerradura eléctrica, fuente/UPS, switch PoE), cantidad de conectores o cables que le llegan, y su posición dentro del gabinete";
 
   try {
     const client = new Anthropic();
@@ -48,12 +54,19 @@ export async function POST(req: NextRequest) {
       system:
         `Sos un asistente que ayuda a un técnico de campo a relevar ${contexto}. Te paso una foto y tenés que listar ` +
         "cada circuito/elemento identificable, en el orden en que aparecen físicamente (de arriba hacia abajo y de " +
-        "izquierda a derecha). Para cada uno: \"numero\" (posición secuencial empezando en 1), \"texto\" (la " +
-        "etiqueta tal cual la leés — si no se lee ninguna etiqueta para ese elemento, describí brevemente qué es, " +
-        "ej. \"Interruptor sin etiqueta\"), y \"ampNominal\" (el amperaje impreso en el interruptor si es legible, " +
-        `ej. "32A" — dejalo como cadena vacía "" si no se ve o no aplica${energia ? "" : " (para CCTV/control de acceso normalmente no aplica, dejalo vacío)"}). ` +
-        "No inventes elementos que no estén en la foto, y no adivines un amperaje que no puedas leer con claridad. " +
-        'Respondé ÚNICAMENTE con un JSON válido: un array de objetos {"numero": number, "texto": string, "ampNominal": string}, sin texto antes ni después.',
+        "izquierda a derecha). Para cada uno: \"numero\" (posición secuencial empezando en 1), \"texto\" y \"ampNominal\" " +
+        "(el amperaje impreso en el interruptor si es legible, ej. \"32A\"; dejalo como cadena vacía \"\" si no se ve o " +
+        `no aplica${energia ? "" : " — para CCTV/control de acceso normalmente no aplica, dejalo vacío"}). ` +
+        "Muchos tableros de campo NO tienen ninguna etiqueta en los circuitos — eso no es un motivo para omitirlos. " +
+        "Para cada elemento fijate primero si hay una etiqueta legible (impresa, escrita a mano o en cinta): si la hay, " +
+        "\"texto\" es esa etiqueta tal cual y \"identificado\" es true. Si NO hay ninguna etiqueta legible, igual " +
+        `describí el elemento usando lo que se ve físicamente (${pistasVisuales}) — ej. "Interruptor trifásico 3P — ` +
+        "posible motor/AC (sin etiqueta)\", o \"Cámara domo sin etiqueta\" — y poné \"identificado\" en false. " +
+        "Nunca inventes un nombre de circuito específico que no puedas justificar por lo que ves (no digas \"Cocina\" " +
+        "si no hay ninguna pista de que sea la cocina); en ese caso describí el elemento en términos físicos/técnicos, " +
+        "no adivines su función si no hay ninguna base visual, y no adivines un amperaje que no puedas leer con claridad. " +
+        'Respondé ÚNICAMENTE con un JSON válido: un array de objetos {"numero": number, "texto": string, ' +
+        '"ampNominal": string, "identificado": boolean}, sin texto antes ni después.',
       messages: [
         {
           role: "user",
@@ -88,6 +101,7 @@ export async function POST(req: NextRequest) {
           numero: Number.isFinite(c.numero) ? c.numero : i + 1,
           texto: String(c.texto).trim().slice(0, 120),
           ampNominal: typeof c.ampNominal === "string" ? c.ampNominal.trim().slice(0, 20) : "",
+          identificado: c.identificado === true,
         })),
     });
   } catch {

@@ -42,6 +42,13 @@ export interface CircuitoItem {
   numero: number;
   texto: string;
   ampNominal: string;
+  /**
+   * Solo transitorio en el form (no se persiste): true cuando lo cargó la
+   * lectura de foto con IA sin encontrar una etiqueta legible, así el
+   * técnico sabe que el texto es una descripción visual y conviene
+   * verificarlo/corregirlo antes de guardar.
+   */
+  revisar?: boolean;
 }
 
 export interface TableroConCircuitos {
