@@ -118,17 +118,34 @@ export function NuevaMedicionForm({ tableros }: { tableros: TableroConCircuitos[
     if (fotosIa.length === 0) return;
     setIaBusy(true);
     setIaNote(null);
+    // Una foto en un formato que el navegador no puede decodificar (ej.
+    // HEIC de iPhone) no debe tirar abajo el lote entero — se descarta esa
+    // sola y se sigue con las demás, avisando cuál falló y por qué.
+    const fallidas: File[] = [];
+    let primerError: string | null = null;
     try {
       const fd = new FormData();
       for (const f of fotosIa) {
-        const jpeg = await resizeImageToJpeg(f);
-        fd.append("fotos", jpeg, "tablero.jpg");
+        try {
+          const jpeg = await resizeImageToJpeg(f);
+          fd.append("fotos", jpeg, "tablero.jpg");
+        } catch (err) {
+          fallidas.push(f);
+          const msg = err instanceof Error ? err.message : `No se pudo leer "${f.name}".`;
+          if (!primerError) primerError = msg;
+        }
+      }
+      const exitosas = fotosIa.length - fallidas.length;
+      if (exitosas === 0) {
+        setIaNote(primerError || "No se pudo leer ninguna de las fotos.");
+        return;
       }
       fd.append("subsistemas", subsistemasActuales.join(","));
       const res = await fetch("/api/tableros/leer-foto", { method: "POST", body: fd });
       const data = await res.json();
       if (!res.ok) {
         setIaNote(data.error || "No se pudo leer las fotos.");
+        setFotosIa(fallidas);
         return;
       }
       const detectados: {
@@ -141,7 +158,11 @@ export function NuevaMedicionForm({ tableros }: { tableros: TableroConCircuitos[
         estadoDetectado: string | null;
       }[] = data.circuitos ?? [];
       if (detectados.length === 0) {
-        setIaNote("No se detectó ningún circuito/elemento en las fotos — probá con otras o cargalos a mano.");
+        setIaNote(
+          "No se detectó ningún circuito/elemento en las fotos — probá con otras o cargalos a mano." +
+            (fallidas.length > 0 ? ` (${fallidas.length} foto${fallidas.length === 1 ? "" : "s"} no se pudo leer: ${primerError})` : ""),
+        );
+        setFotosIa(fallidas);
         return;
       }
       const siguienteBase = circuitos.length ? Math.max(...circuitos.map((c) => c.numero)) : 0;
@@ -170,15 +191,16 @@ export function NuevaMedicionForm({ tableros }: { tableros: TableroConCircuitos[
       const sinEtiqueta = detectados.filter((d) => d.identificado !== true).length;
       const conEstado = detectados.filter((d) => d.estadoDetectado).length;
       setIaNote(
-        `Se agregaron ${detectados.length} elemento${detectados.length === 1 ? "" : "s"} desde ${fotosIa.length} foto${fotosIa.length === 1 ? "" : "s"}` +
+        `Se agregaron ${detectados.length} elemento${detectados.length === 1 ? "" : "s"} desde ${exitosas} foto${exitosas === 1 ? "" : "s"}` +
           (sinEtiqueta > 0
             ? ` — ${sinEtiqueta} sin etiqueta legible, marcados para revisar (la IA describió y clasificó lo que vio, pero no adivina el nombre del circuito sin una etiqueta física).`
             : " — revisá la categoría/tipo de circuito antes de guardar.") +
           (conEstado > 0
             ? ` El estado de ${conEstado} térmica${conEstado === 1 ? "" : "s"}/disyuntor${conEstado === 1 ? "" : "es"} se precargó según la posición de la palanca — confirmalo.`
-            : ""),
+            : "") +
+          (fallidas.length > 0 ? ` (${fallidas.length} foto${fallidas.length === 1 ? "" : "s"} no se pudo leer: ${primerError})` : ""),
       );
-      setFotosIa([]);
+      setFotosIa(fallidas);
     } catch (err) {
       setIaNote("No se pudo leer las fotos.");
       reportarErrorCliente(err instanceof Error ? err.message : "Error leyendo fotos de tablero con IA", "leer-foto-tablero");
