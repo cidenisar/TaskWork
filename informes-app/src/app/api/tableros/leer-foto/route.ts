@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { requireProfile } from "@/lib/auth";
+import { createClient } from "@/lib/supabase/server";
 import {
   CATEGORIA_EQUIPO_OPCIONES,
   CATEGORIA_EQUIPO_LABEL,
@@ -44,8 +45,33 @@ interface CircuitoDetectado {
 const CATEGORIAS_TEXTO = CATEGORIA_EQUIPO_OPCIONES.map((c) => `"${c}" (${CATEGORIA_EQUIPO_LABEL[c]})`).join(", ");
 const TIPOS_CIRCUITO_TEXTO = TIPO_CIRCUITO_OPCIONES.map((t) => `"${t}" (${TIPO_CIRCUITO_LABEL[t]})`).join(", ");
 
+/**
+ * Deja un registro en Configuración → Errores del dispositivo cuando la IA
+ * no devuelve algo utilizable (lista vacía, JSON no parseable, error de la
+ * API) — sin esto, un fallo acá era invisible para el equipo salvo que el
+ * técnico lo reportara a mano. Nunca debe cortar la respuesta al usuario.
+ */
+async function logDiagnostico(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+  mensaje: string,
+  extra?: string,
+) {
+  try {
+    await supabase.from("client_errores").insert({
+      user_id: userId,
+      contexto: "leer-foto-tablero-ia",
+      mensaje: mensaje.slice(0, 2000),
+      stack: extra ? extra.slice(0, 4000) : null,
+    });
+  } catch {
+    // el diagnóstico es best-effort, nunca debe romper la respuesta real
+  }
+}
+
 export async function POST(req: NextRequest) {
-  await requireProfile();
+  const profile = await requireProfile();
+  const supabase = await createClient();
 
   if (!process.env.ANTHROPIC_API_KEY) {
     return NextResponse.json({ error: "La lectura de fotos con IA no está configurada en este entorno (falta ANTHROPIC_API_KEY)." }, { status: 503 });
@@ -88,34 +114,37 @@ export async function POST(req: NextRequest) {
     const client = new Anthropic();
     const response = await client.messages.create({
       model: "claude-opus-5",
-      max_tokens: 3072,
-      output_config: { effort: "low" },
+      max_tokens: 4096,
+      output_config: { effort: "medium" },
       system:
         "Sos un asistente que ayuda a un técnico de campo a relevar un tablero eléctrico, que puede ser mixto: interruptores/térmicas " +
         "de energía, fuentes/UPS/baterías/conversores, y también elementos de CCTV o control de acceso (cámaras, lectoras, cerraduras) " +
-        `conviviendo en el mismo gabinete.${contextoSubsistemas}${contextoFotos} Tenés que listar cada circuito/elemento identificable, ` +
-        "en el orden en que aparecen físicamente (de arriba hacia abajo y de izquierda a derecha). Para cada uno: " +
-        '"numero" (posición secuencial empezando en 1); "texto" (la etiqueta tal cual la leés si hay una legible — impresa, escrita a ' +
-        "mano o en cinta —, y si NO hay ninguna etiqueta legible, describí el elemento por lo que ves físicamente: cantidad de polos, " +
-        "grosor/color de cable, contactor/temporizador/fotocélula al lado, tipo de cámara/lectora, cantidad de conectores, etc. — nunca " +
-        'inventes un nombre de circuito específico, tipo "Cocina", si no hay ninguna base visual para eso); "identificado" (true si "texto" ' +
-        'viene de una etiqueta legible, false si es una descripción visual tuya); "ampNominal" (el amperaje impreso en el interruptor si es ' +
-        'legible, ej. "32A" — cadena vacía "" si no se ve o no aplica); "categoriaEquipo" (una de estas, EXACTAMENTE como está escrita entre ' +
-        `comillas — elegí la que mejor describa el elemento por su forma/función: ${CATEGORIAS_TEXTO} — usá "otro" solo si de verdad no ` +
-        `encaja en ninguna); "tipoCircuito" (una de estas, EXACTAMENTE como está escrita entre comillas: ${TIPOS_CIRCUITO_TEXTO} — para ` +
-        "térmicas/disyuntores inferí mono/trifásico por la cantidad de polos y el grosor de cable si no hay etiqueta; para fuentes/UPS/" +
-        "baterías/conversores usá el voltaje de salida si es identificable (ej. un conversor a 12V es \"12vdc\"); para cámaras/lectoras/" +
-        'cerraduras/bornera/otros que no tengan una tensión relevante para medir, usá "na"); "estadoDetectado" (SOLO cuando ' +
-        '"categoriaEquipo" es "termica" o "disyuntor": mirá la posición física de la palanca/llave del interruptor — si está hacia ' +
-        'arriba/en la posición ON encendida, "Cerrado"; si está hacia abajo/en la posición OFF apagada, "Abierto"; si está en una ' +
-        "posición intermedia entre ON y OFF, o el interruptor tiene alguna marca/bandera/ventana de color (normalmente roja) que indique " +
-        'que saltó, "Disparado"; si la palanca no se ve con claridad (ángulo, obstruida, foto borrosa) o no estás seguro, null — nunca ' +
-        'inventes el estado. Para cualquier otra categoriaEquipo, "estadoDetectado" siempre null: el aspecto de una cámara/lectora/fuente/ ' +
-        "UPS/etc. no dice de forma confiable si está funcionando). No inventes elementos que no estén en la foto, y no adivines un " +
-        "amperaje, tensión o estado que no puedas justificar por lo que ves. " +
+        `conviviendo en el mismo gabinete.${contextoSubsistemas}${contextoFotos}\n\n` +
+        "Listá cada circuito/elemento identificable, en el orden en que aparecen físicamente (de arriba hacia abajo y de izquierda a " +
+        "derecha). Devolvé SIEMPRE al menos los elementos que puedas distinguir, aunque no tengan etiqueta — describilos por su aspecto " +
+        "en vez de omitirlos; solo dejá la lista vacía si la foto no muestra ningún tablero o elemento reconocible.\n\n" +
+        "Para cada elemento completá estos campos:\n" +
+        '- "numero": posición secuencial empezando en 1.\n' +
+        '- "texto": la etiqueta tal cual la leés si hay una legible (impresa, escrita a mano o en cinta). Si NO hay ninguna etiqueta ' +
+        "legible, este campo es OBLIGATORIO igual: describí el elemento por lo que ves físicamente (cantidad de polos, grosor/color de " +
+        "cable, contactor/temporizador/fotocélula al lado, tipo de cámara/lectora, cantidad de conectores, etc.). Nunca lo dejes vacío, y " +
+        'nunca inventes un nombre de circuito específico (tipo "Cocina") si no hay ninguna base visual para eso.\n' +
+        '- "identificado": true si "texto" viene de una etiqueta legible, false si es tu descripción visual.\n' +
+        '- "ampNominal": el amperaje impreso en el interruptor si es legible (ej. "32A"). Cadena vacía "" si no se ve o no aplica.\n' +
+        `- "categoriaEquipo": EXACTAMENTE una de estas cadenas, la que mejor describa el elemento por su forma/función: ${CATEGORIAS_TEXTO}. ` +
+        'Usá "otro" solo si de verdad no encaja en ninguna.\n' +
+        `- "tipoCircuito": EXACTAMENTE una de estas cadenas: ${TIPOS_CIRCUITO_TEXTO}. Para térmicas/disyuntores inferí mono/trifásico por ` +
+        "la cantidad de polos y el grosor de cable si no hay etiqueta. Para fuentes/UPS/baterías/conversores usá el voltaje de salida si " +
+        'es identificable (ej. un conversor a 12V es "12vdc"). Para cámaras/lectoras/cerraduras/bornera/otros sin tensión relevante, usá "na".\n' +
+        '- "estadoDetectado": SOLO tiene sentido cuando "categoriaEquipo" es "termica" o "disyuntor" — mirá la posición física de la ' +
+        'palanca/llave: arriba / posición ON = "Cerrado"; abajo / posición OFF = "Abierto"; posición intermedia, o con una marca/bandera/' +
+        'ventana de color (normalmente roja) que indique que saltó = "Disparado". Si la palanca no se ve con claridad o no estás seguro, ' +
+        'poné null (nunca inventes el estado). Para cualquier otra categoriaEquipo, siempre null.\n\n' +
+        "No inventes elementos que no estén en la foto, y no adivines un amperaje, tensión o estado que no puedas justificar por lo que " +
+        'ves — pero "texto" y "categoriaEquipo" son obligatorios en todos los casos, con tu mejor estimación visual si hace falta.\n\n' +
         'Respondé ÚNICAMENTE con un JSON válido: un array de objetos {"numero": number, "texto": string, "ampNominal": string, ' +
         '"categoriaEquipo": string, "tipoCircuito": string, "identificado": boolean, "estadoDetectado": string | null}, sin texto antes ' +
-        "ni después.",
+        "ni después, sin bloque de código markdown.",
       messages: [
         {
           role: "user",
@@ -138,6 +167,7 @@ export async function POST(req: NextRequest) {
 
     const textBlock = response.content.find((b) => b.type === "text");
     if (response.stop_reason === "refusal" || !textBlock) {
+      await logDiagnostico(supabase, profile.id, `leer-foto: stop_reason=${response.stop_reason}, sin bloque de texto utilizable`);
       return NextResponse.json({ error: "No se pudo leer la foto." }, { status: 502 });
     }
 
@@ -146,9 +176,11 @@ export async function POST(req: NextRequest) {
       const match = textBlock.text.match(/\[[\s\S]*\]/);
       circuitos = JSON.parse(match ? match[0] : textBlock.text);
     } catch {
+      await logDiagnostico(supabase, profile.id, "leer-foto: la respuesta no fue JSON parseable", textBlock.text);
       return NextResponse.json({ error: "La IA no devolvió una lista reconocible — probá con otra foto o cargá los circuitos a mano." }, { status: 502 });
     }
     if (!Array.isArray(circuitos) || circuitos.length === 0) {
+      await logDiagnostico(supabase, profile.id, "leer-foto: la IA devolvió una lista vacía", textBlock.text);
       return NextResponse.json({ error: "No se detectó ningún circuito/elemento en la foto." }, { status: 200 });
     }
 
@@ -176,7 +208,27 @@ export async function POST(req: NextRequest) {
           };
         }),
     });
-  } catch {
+  } catch (err) {
+    const detalle = err instanceof Error ? err.message : String(err);
+    await logDiagnostico(supabase, profile.id, `leer-foto: error contactando la API de Anthropic — ${detalle}`);
+    if (err instanceof Anthropic.AuthenticationError) {
+      return NextResponse.json({ error: "La clave de IA configurada no es válida — avisá a un Administrador." }, { status: 502 });
+    }
+    if (err instanceof Anthropic.PermissionDeniedError) {
+      return NextResponse.json(
+        { error: "La cuenta de IA no tiene permiso o crédito disponible para esta operación — avisá a un Administrador." },
+        { status: 502 },
+      );
+    }
+    if (err instanceof Anthropic.RateLimitError) {
+      return NextResponse.json({ error: "El servicio de IA está saturado en este momento — probá de nuevo en un minuto." }, { status: 502 });
+    }
+    if (err instanceof Anthropic.APIError && (err.status === 400 || err.status === 402) && /credit|billing|quota/i.test(detalle)) {
+      return NextResponse.json(
+        { error: "La cuenta de IA no tiene crédito disponible — avisá a un Administrador para recargarla." },
+        { status: 502 },
+      );
+    }
     return NextResponse.json({ error: "No se pudo contactar al servicio de IA." }, { status: 502 });
   }
 }
