@@ -92,6 +92,17 @@ export function itemMideCorriente(
   return tipoEvento === "medicion" && categoriaLlevaAmp(categoria) && (tipoCircuito === "220v_mono" || tipoCircuito === "380v_tri");
 }
 
+/**
+ * Qué cuadros de corriente mostrar/imprimir según el tipo de circuito — un
+ * monofásico (220V) es una sola lectura ("F"), un trifásico (380V,
+ * tetrapolar) son las tres fases ("R", "S", "T"), nunca los cuatro juntos.
+ */
+export function fasesMedicion(tipoCircuito: TableroTipoCircuito): readonly ("F" | "R" | "S" | "T")[] {
+  if (tipoCircuito === "220v_mono") return ["F"];
+  if (tipoCircuito === "380v_tri") return ["R", "S", "T"];
+  return [];
+}
+
 export const ESTADO_OPCIONES: Record<TableroCategoriaEquipo, string[]> = {
   termica: ["Cerrado", "Abierto", "Disparado"],
   disyuntor: ["Cerrado", "Abierto", "Disparado"],

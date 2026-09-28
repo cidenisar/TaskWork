@@ -19,6 +19,7 @@ import {
   ESTADO_OPCIONES,
   categoriaLlevaAmp,
   itemMideCorriente,
+  fasesMedicion,
   labelSubsistemas,
   calcularResumenEquipamiento,
   type CircuitoItem,
@@ -128,12 +129,14 @@ export function NuevaMedicionForm({ tableros }: { tableros: TableroConCircuitos[
         categoriaEquipo: TableroCategoriaEquipo;
         tipoCircuito: TableroTipoCircuito;
         identificado: boolean;
+        estadoDetectado: string | null;
       }[] = data.circuitos ?? [];
       if (detectados.length === 0) {
         setIaNote("No se detectó ningún circuito/elemento en las fotos — probá con otras o cargalos a mano.");
         return;
       }
       const siguienteBase = circuitos.length ? Math.max(...circuitos.map((c) => c.numero)) : 0;
+      const baseIndex = circuitos.length;
       setCircuitos((prev) => [
         ...prev,
         ...detectados.map((d, i) => ({
@@ -146,12 +149,25 @@ export function NuevaMedicionForm({ tableros }: { tableros: TableroConCircuitos[
           revisar: d.identificado !== true,
         })),
       ]);
+      setLecturas((prev) => {
+        const next = { ...prev };
+        detectados.forEach((d, i) => {
+          if (d.estadoDetectado) {
+            next[baseIndex + i] = { ...(next[baseIndex + i] ?? LECTURA_VACIA), estado: d.estadoDetectado };
+          }
+        });
+        return next;
+      });
       const sinEtiqueta = detectados.filter((d) => d.identificado !== true).length;
+      const conEstado = detectados.filter((d) => d.estadoDetectado).length;
       setIaNote(
         `Se agregaron ${detectados.length} elemento${detectados.length === 1 ? "" : "s"} desde ${fotosIa.length} foto${fotosIa.length === 1 ? "" : "s"}` +
           (sinEtiqueta > 0
             ? ` — ${sinEtiqueta} sin etiqueta legible, marcados para revisar (la IA describió y clasificó lo que vio, pero no adivina el nombre del circuito sin una etiqueta física).`
-            : " — revisá la categoría/tipo de circuito antes de guardar."),
+            : " — revisá la categoría/tipo de circuito antes de guardar.") +
+          (conEstado > 0
+            ? ` El estado de ${conEstado} térmica${conEstado === 1 ? "" : "s"}/disyuntor${conEstado === 1 ? "" : "es"} se precargó según la posición de la palanca — confirmalo.`
+            : ""),
       );
       setFotosIa([]);
     } catch (err) {
@@ -574,7 +590,7 @@ export function NuevaMedicionForm({ tableros }: { tableros: TableroConCircuitos[
                     </div>
                     {mideCorriente && (
                       <>
-                        {(["F", "R", "S", "T"] as const).map((fase) => {
+                        {fasesMedicion(c.tipoCircuito).map((fase) => {
                           const key = (`corriente${fase}` as const);
                           return (
                             <div className="field" style={{ marginBottom: 0, width: 70 }} key={fase}>

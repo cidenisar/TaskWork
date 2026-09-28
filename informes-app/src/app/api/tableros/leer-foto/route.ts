@@ -11,6 +11,10 @@ import {
 } from "@/components/tableros/types";
 import type { TableroCategoriaEquipo, TableroTipo, TableroTipoCircuito } from "@/lib/database.types";
 
+/** Solo térmicas/disyuntores tienen una palanca cuya posición física dice el estado. */
+const CATEGORIAS_CON_PALANCA: TableroCategoriaEquipo[] = ["termica", "disyuntor"];
+const ESTADOS_PALANCA = ["Cerrado", "Abierto", "Disparado"] as const;
+
 /**
  * Lee hasta TABLERO_FOTO_IA_MAX fotos del tablero con Claude Vision (en un
  * solo pedido, todas juntas) y devuelve una lista combinada de
@@ -34,6 +38,7 @@ interface CircuitoDetectado {
   categoriaEquipo: TableroCategoriaEquipo;
   tipoCircuito: TableroTipoCircuito;
   identificado: boolean;
+  estadoDetectado: string | null;
 }
 
 const CATEGORIAS_TEXTO = CATEGORIA_EQUIPO_OPCIONES.map((c) => `"${c}" (${CATEGORIA_EQUIPO_LABEL[c]})`).join(", ");
@@ -100,10 +105,17 @@ export async function POST(req: NextRequest) {
         `encaja en ninguna); "tipoCircuito" (una de estas, EXACTAMENTE como está escrita entre comillas: ${TIPOS_CIRCUITO_TEXTO} — para ` +
         "térmicas/disyuntores inferí mono/trifásico por la cantidad de polos y el grosor de cable si no hay etiqueta; para fuentes/UPS/" +
         "baterías/conversores usá el voltaje de salida si es identificable (ej. un conversor a 12V es \"12vdc\"); para cámaras/lectoras/" +
-        'cerraduras/bornera/otros que no tengan una tensión relevante para medir, usá "na"). No inventes elementos que no estén en la ' +
-        "foto, y no adivines un amperaje o tensión que no puedas justificar por lo que ves. " +
+        'cerraduras/bornera/otros que no tengan una tensión relevante para medir, usá "na"); "estadoDetectado" (SOLO cuando ' +
+        '"categoriaEquipo" es "termica" o "disyuntor": mirá la posición física de la palanca/llave del interruptor — si está hacia ' +
+        'arriba/en la posición ON encendida, "Cerrado"; si está hacia abajo/en la posición OFF apagada, "Abierto"; si está en una ' +
+        "posición intermedia entre ON y OFF, o el interruptor tiene alguna marca/bandera/ventana de color (normalmente roja) que indique " +
+        'que saltó, "Disparado"; si la palanca no se ve con claridad (ángulo, obstruida, foto borrosa) o no estás seguro, null — nunca ' +
+        'inventes el estado. Para cualquier otra categoriaEquipo, "estadoDetectado" siempre null: el aspecto de una cámara/lectora/fuente/ ' +
+        "UPS/etc. no dice de forma confiable si está funcionando). No inventes elementos que no estén en la foto, y no adivines un " +
+        "amperaje, tensión o estado que no puedas justificar por lo que ves. " +
         'Respondé ÚNICAMENTE con un JSON válido: un array de objetos {"numero": number, "texto": string, "ampNominal": string, ' +
-        '"categoriaEquipo": string, "tipoCircuito": string, "identificado": boolean}, sin texto antes ni después.',
+        '"categoriaEquipo": string, "tipoCircuito": string, "identificado": boolean, "estadoDetectado": string | null}, sin texto antes ' +
+        "ni después.",
       messages: [
         {
           role: "user",
@@ -142,18 +154,27 @@ export async function POST(req: NextRequest) {
 
     const categoriasValidas = new Set<string>(CATEGORIA_EQUIPO_OPCIONES);
     const tiposCircuitoValidos = new Set<string>(TIPO_CIRCUITO_OPCIONES);
+    const estadosPalancaValidos = new Set<string>(ESTADOS_PALANCA);
 
     return NextResponse.json({
       circuitos: circuitos
         .filter((c) => c && typeof c.texto === "string" && c.texto.trim())
-        .map((c, i) => ({
-          numero: Number.isFinite(c.numero) ? c.numero : i + 1,
-          texto: String(c.texto).trim().slice(0, 120),
-          ampNominal: typeof c.ampNominal === "string" ? c.ampNominal.trim().slice(0, 20) : "",
-          categoriaEquipo: (categoriasValidas.has(c.categoriaEquipo) ? c.categoriaEquipo : "otro") as TableroCategoriaEquipo,
-          tipoCircuito: (tiposCircuitoValidos.has(c.tipoCircuito) ? c.tipoCircuito : "na") as TableroTipoCircuito,
-          identificado: c.identificado === true,
-        })),
+        .map((c, i) => {
+          const categoriaEquipo = (categoriasValidas.has(c.categoriaEquipo) ? c.categoriaEquipo : "otro") as TableroCategoriaEquipo;
+          const estadoDetectado =
+            CATEGORIAS_CON_PALANCA.includes(categoriaEquipo) && typeof c.estadoDetectado === "string" && estadosPalancaValidos.has(c.estadoDetectado)
+              ? c.estadoDetectado
+              : null;
+          return {
+            numero: Number.isFinite(c.numero) ? c.numero : i + 1,
+            texto: String(c.texto).trim().slice(0, 120),
+            ampNominal: typeof c.ampNominal === "string" ? c.ampNominal.trim().slice(0, 20) : "",
+            categoriaEquipo,
+            tipoCircuito: (tiposCircuitoValidos.has(c.tipoCircuito) ? c.tipoCircuito : "na") as TableroTipoCircuito,
+            identificado: c.identificado === true,
+            estadoDetectado,
+          };
+        }),
     });
   } catch {
     return NextResponse.json({ error: "No se pudo contactar al servicio de IA." }, { status: 502 });
