@@ -190,25 +190,43 @@ npm run dev
 - **Fotos**: la marca de agua + franja de fecha/hora/GPS se "queman" en el
   JPG en el navegador (canvas) antes de subir; lat/lon/accuracy también se
   guardan estructurados en `informe_imagenes` para el futuro mapa de calor.
-- **Tableros** (`src/app/(app)/tableros/`, migraciones `20260927000000_tableros.sql`
-  y `20260927010000_tableros_relevamiento_mantenimiento.sql`): módulo propio en
-  la pantalla de inicio para relevar tableros físicos en la ubicación del
-  cliente — Energía, CCTV y Control de Acceso. Un tablero y sus
+- **Tableros** (`src/app/(app)/tableros/`, migraciones `20260927000000_tableros.sql`,
+  `20260927010000_tableros_relevamiento_mantenimiento.sql` y
+  `20260927020000_tableros_mixto_categoria_equipo.sql`): módulo propio en la
+  pantalla de inicio para relevar tableros físicos en la ubicación del
+  cliente. Un tablero es **mixto**: no tiene un único tipo, sino que declara
+  qué subsistemas tiene presentes (`tableros.subsistemas`, array — Energía,
+  CCTV, Control de Acceso, puede ser más de uno a la vez, ej. un tablero con
+  térmicas de energía y una lectora de control de acceso en el mismo
+  gabinete). Cada circuito/elemento tiene su propia **categoría de
+  equipamiento** (térmica, disyuntor, bornera, bornera con fusible, fuente
+  industrial, UPS industrial, batería, conversor DC, inyector PoE,
+  descargador gaseoso, cámara, lectora, cerradura, otro) y su **tipo de
+  circuito** (220V monofásico / 380V trifásico / 24V DC / 12V DC / no
+  aplica) — con eso se arma un **resumen de equipamiento** (cuántos
+  circuitos de cada tensión, cuánto de cada categoría) que se ve en pantalla
+  mientras se carga y se imprime en el PDF. Un tablero y sus
   circuitos/elementos se dan de alta "al vuelo" la primera vez que un
   técnico los encuentra (mismo criterio que `catalogo_clientes`, no como
   `catalogo_vehiculos` que es 100% admin). Cada visita es de un tipo:
-  **Medición** (solo tableros de Energía — mide corriente por fase F/R/S/T
-  en cada circuito, reemplaza la planilla Excel manual, genera PDF) o
-  **Relevamiento** (chequeo más liviano de estado por circuito, sin
-  corriente, genera PDF igual — es el único tipo posible para CCTV/Control
-  de Acceso). Aparte, **Mantenimiento** (`/tableros/mantenimiento`) registra
-  el trabajo realizado sobre un tablero/circuito ya relevado — descripción,
-  foto del trabajo/repuesto y próximo mantenimiento programado — sin PDF,
-  solo queda como registro en el Historial. `pideCorrientePorFase(tipo,
-  tipoEvento)` en `src/components/tableros/types.ts` es la única fuente de
-  verdad de cuándo se piden/muestran los campos de corriente, tanto en el
-  formulario como en el PDF y en el server action (se anulan server-side
-  aunque alguien fuerce el form).
+  **Medición** (solo si el tablero tiene Energía — mide corriente por fase
+  F/R/S/T en cada térmica/disyuntor, reemplaza la planilla Excel manual,
+  genera PDF) o **Relevamiento** (chequeo más liviano de estado por
+  elemento, sin corriente, genera PDF igual — es el único tipo posible si no
+  hay Energía). El gate de corriente es por elemento, no por tablero —
+  `itemMideCorriente(categoriaEquipo, tipoCircuito, tipoEvento)` en
+  `src/components/tableros/types.ts` es la única fuente de verdad, tanto en
+  el formulario como en el PDF y en el server action (se anula server-side
+  aunque alguien fuerce el form). La lectura de fotos con IA
+  (`/api/tableros/leer-foto`, Claude Vision) clasifica cada elemento
+  detectado en su categoría/tipo de circuito además de leer la etiqueta —
+  cuando no hay etiqueta legible describe el elemento por lo que ve
+  físicamente (polos, grosor de cable, contactor/fotocélula al lado, tipo de
+  cámara, etc.) en vez de inventar un nombre, y marca esos casos para que el
+  técnico los revise. Aparte, **Mantenimiento** (`/tableros/mantenimiento`)
+  registra el trabajo realizado sobre un tablero/circuito ya relevado —
+  descripción, foto del trabajo/repuesto y próximo mantenimiento programado
+  — sin PDF, solo queda como registro en el Historial.
 - **Errores del dispositivo** (`src/components/client-error-reporter.tsx` +
   `src/app/api/errores/reportar/`): cualquier error de JS no manejado en el
   navegador del usuario (y los fallos explícitos al generar/editar un

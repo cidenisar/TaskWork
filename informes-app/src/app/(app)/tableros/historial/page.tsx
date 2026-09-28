@@ -23,7 +23,7 @@ export default async function HistorialTablerosPage() {
   const circuitoIds = [...new Set((mantenimientosRes.data ?? []).map((m) => m.circuito_id).filter((id): id is string => !!id))];
 
   const [tablerosRes, circuitosRes] = await Promise.all([
-    tableroIds.length > 0 ? supabase.from("tableros").select("id, tipo, denominacion, sitio").in("id", tableroIds) : { data: [] },
+    tableroIds.length > 0 ? supabase.from("tableros").select("id, subsistemas, denominacion, sitio").in("id", tableroIds) : { data: [] },
     circuitoIds.length > 0 ? supabase.from("tablero_circuitos").select("id, texto").in("id", circuitoIds) : { data: [] },
   ]);
   const tablerosPorId = new Map((tablerosRes.data ?? []).map((t) => [t.id, t]));
@@ -38,7 +38,7 @@ export default async function HistorialTablerosPage() {
         numeroGeneracion: m.numero_generacion,
         tipoEvento: m.tipo_evento,
         fecha: m.fecha,
-        tipo: t.tipo,
+        subsistemas: t.subsistemas,
         denominacion: t.denominacion,
         sitio: t.sitio,
         pdfDisponible: !!m.pdf_url,

@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { obtenerUrlFotoMantenimientoAction, obtenerUrlPdfMedicionAction } from "@/app/(app)/tableros/historial/actions";
 import { Icon } from "@/components/icon";
-import { TABLERO_EVENTO_LABEL, TABLERO_TIPO_LABEL, type MantenimientoRow } from "./types";
+import { TABLERO_EVENTO_LABEL, labelSubsistemas, type MantenimientoRow } from "./types";
 import type { TableroEventoTipo, TableroTipo } from "@/lib/database.types";
 
 export interface HistorialMedicionRow {
@@ -11,7 +11,7 @@ export interface HistorialMedicionRow {
   numeroGeneracion: string;
   tipoEvento: TableroEventoTipo;
   fecha: string;
-  tipo: TableroTipo;
+  subsistemas: TableroTipo[];
   denominacion: string;
   sitio: string;
   pdfDisponible: boolean;
@@ -38,7 +38,7 @@ export function HistorialTableros({
     const q = query.trim().toLowerCase();
     if (!q) return mediciones;
     return mediciones.filter((m) =>
-      `${m.numeroGeneracion} ${m.denominacion} ${m.sitio} ${TABLERO_TIPO_LABEL[m.tipo]} ${TABLERO_EVENTO_LABEL[m.tipoEvento]}`
+      `${m.numeroGeneracion} ${m.denominacion} ${m.sitio} ${labelSubsistemas(m.subsistemas)} ${TABLERO_EVENTO_LABEL[m.tipoEvento]}`
         .toLowerCase()
         .includes(q),
     );
@@ -138,7 +138,7 @@ export function HistorialTableros({
                         </span>
                       </div>
                       <div className="hist-meta">
-                        {m.numeroGeneracion} · {TABLERO_EVENTO_LABEL[m.tipoEvento]} · {TABLERO_TIPO_LABEL[m.tipo]} · {m.sitio} ·{" "}
+                        {m.numeroGeneracion} · {TABLERO_EVENTO_LABEL[m.tipoEvento]} · {labelSubsistemas(m.subsistemas)} · {m.sitio} ·{" "}
                         {fmtFecha(m.fecha)}
                       </div>
                     </div>

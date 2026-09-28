@@ -6,14 +6,20 @@ import { reportarErrorCliente } from "@/lib/client-error-report";
 import { resizeImageToJpeg } from "@/lib/image-resize";
 import { ErrorNote, SuccessNote } from "@/components/notes";
 import { Icon } from "@/components/icon";
-import type { TableroEventoTipo, TableroTipo } from "@/lib/database.types";
+import type { TableroCategoriaEquipo, TableroEventoTipo, TableroTipo, TableroTipoCircuito } from "@/lib/database.types";
 import {
   TABLERO_TIPOS,
   TABLERO_TIPO_LABEL,
   TABLERO_EVENTO_LABEL,
+  CATEGORIA_EQUIPO_OPCIONES,
+  CATEGORIA_EQUIPO_LABEL,
+  TIPO_CIRCUITO_OPCIONES,
+  TIPO_CIRCUITO_LABEL,
   ESTADO_OPCIONES,
-  esTipoEnergia,
-  pideCorrientePorFase,
+  categoriaLlevaAmp,
+  itemMideCorriente,
+  labelSubsistemas,
+  calcularResumenEquipamiento,
   type CircuitoItem,
   type TableroConCircuitos,
 } from "./types";
@@ -28,13 +34,19 @@ interface LecturaState {
 }
 
 const LECTURA_VACIA: LecturaState = { estado: "", corrienteF: "", corrienteR: "", corrienteS: "", corrienteT: "", comentario: "" };
+const CIRCUITO_NUEVO_BASE = { categoriaEquipo: "otro" as TableroCategoriaEquipo, tipoCircuito: "na" as TableroTipoCircuito };
+
+function toggleEnArray<T>(arr: T[], v: T): T[] {
+  return arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v];
+}
 
 export function NuevaMedicionForm({ tableros }: { tableros: TableroConCircuitos[] }) {
-  const [tipo, setTipo] = useState<TableroTipo>("energia");
-  const [tipoEventoElegido, setTipoEventoElegido] = useState<TableroEventoTipo>("medicion");
+  const [filtroSubsistemas, setFiltroSubsistemas] = useState<TableroTipo[]>([]);
   const [tableroId, setTableroId] = useState<string>(""); // "" = sin elegir, "__new" = crear
+  const [subsistemasNuevo, setSubsistemasNuevo] = useState<TableroTipo[]>([]);
   const [denominacionNueva, setDenominacionNueva] = useState("");
   const [sitioNueva, setSitioNueva] = useState("");
+  const [tipoEventoElegido, setTipoEventoElegido] = useState<TableroEventoTipo>("medicion");
   const [fecha, setFecha] = useState(() => new Date().toISOString().slice(0, 10));
   const [circuitos, setCircuitos] = useState<CircuitoItem[]>([]);
   const [lecturas, setLecturas] = useState<Record<number, LecturaState>>({});
@@ -45,30 +57,37 @@ export function NuevaMedicionForm({ tableros }: { tableros: TableroConCircuitos[
   const [iaNote, setIaNote] = useState<string | null>(null);
   const fotoInputRef = useRef<HTMLInputElement>(null);
 
-  const energia = esTipoEnergia(tipo);
-  // Solo un tablero de energía distingue medición de relevamiento — para
-  // CCTV/Control de Acceso siempre es relevamiento (nunca miden corriente).
-  const tipoEvento: TableroEventoTipo = energia ? tipoEventoElegido : "relevamiento";
-  const mideCorriente = pideCorrientePorFase(tipo, tipoEvento);
-  const tablerosDelTipo = useMemo(() => tableros.filter((t) => t.tipo === tipo), [tableros, tipo]);
-  const estadoOpciones = ESTADO_OPCIONES[tipo];
-
-  function cambiarTipo(nuevoTipo: TableroTipo) {
-    setTipo(nuevoTipo);
-    setTableroId("");
-    setCircuitos([]);
-    setLecturas({});
-  }
+  const tablerosFiltrados = useMemo(
+    () =>
+      filtroSubsistemas.length === 0
+        ? tableros
+        : tableros.filter((t) => filtroSubsistemas.some((s) => t.subsistemas.includes(s))),
+    [tableros, filtroSubsistemas],
+  );
+  const tableroExistente = useMemo(() => tableros.find((t) => t.id === tableroId) ?? null, [tableros, tableroId]);
+  const subsistemasActuales = tableroId === "__new" ? subsistemasNuevo : (tableroExistente?.subsistemas ?? []);
+  const tieneEnergia = subsistemasActuales.includes("energia");
+  // Solo si el tablero tiene energía tiene sentido distinguir medición de
+  // relevamiento — CCTV/Control de Acceso puros siempre son relevamiento
+  // (nunca miden corriente).
+  const tipoEvento: TableroEventoTipo = tieneEnergia ? tipoEventoElegido : "relevamiento";
+  const resumen = useMemo(() => calcularResumenEquipamiento(circuitos), [circuitos]);
 
   function elegirTablero(id: string) {
     setTableroId(id);
     setSuccess(null);
-    if (id === "__new" || id === "") {
+    if (id === "__new") {
+      setSubsistemasNuevo([]);
       setCircuitos([]);
       setLecturas({});
       return;
     }
-    const t = tablerosDelTipo.find((x) => x.id === id);
+    if (id === "") {
+      setCircuitos([]);
+      setLecturas({});
+      return;
+    }
+    const t = tableros.find((x) => x.id === id);
     setCircuitos(t ? [...t.circuitos] : []);
     setLecturas({});
   }
@@ -81,14 +100,21 @@ export function NuevaMedicionForm({ tableros }: { tableros: TableroConCircuitos[
       const jpeg = await resizeImageToJpeg(file);
       const fd = new FormData();
       fd.append("foto", jpeg, "tablero.jpg");
-      fd.append("tipo", tipo);
+      fd.append("subsistemas", subsistemasActuales.join(","));
       const res = await fetch("/api/tableros/leer-foto", { method: "POST", body: fd });
       const data = await res.json();
       if (!res.ok) {
         setIaNote(data.error || "No se pudo leer la foto.");
         return;
       }
-      const detectados: { numero: number; texto: string; ampNominal: string; identificado: boolean }[] = data.circuitos ?? [];
+      const detectados: {
+        numero: number;
+        texto: string;
+        ampNominal: string;
+        categoriaEquipo: TableroCategoriaEquipo;
+        tipoCircuito: TableroTipoCircuito;
+        identificado: boolean;
+      }[] = data.circuitos ?? [];
       if (detectados.length === 0) {
         setIaNote("No se detectó ningún circuito/elemento en la foto — probá con otra o cargalos a mano.");
         return;
@@ -101,15 +127,17 @@ export function NuevaMedicionForm({ tableros }: { tableros: TableroConCircuitos[
           numero: siguienteBase + i + 1,
           texto: d.texto,
           ampNominal: d.ampNominal,
+          categoriaEquipo: d.categoriaEquipo,
+          tipoCircuito: d.tipoCircuito,
           revisar: d.identificado !== true,
         })),
       ]);
       const sinEtiqueta = detectados.filter((d) => d.identificado !== true).length;
       setIaNote(
-        `Se agregaron ${detectados.length} ${energia ? "circuitos" : "elementos"} desde la foto` +
+        `Se agregaron ${detectados.length} elemento${detectados.length === 1 ? "" : "s"} desde la foto` +
           (sinEtiqueta > 0
-            ? ` — ${sinEtiqueta} sin etiqueta legible, marcados para revisar (la IA describió lo que vio, pero no adivina el nombre del circuito sin una etiqueta física).`
-            : " — revisalos antes de guardar."),
+            ? ` — ${sinEtiqueta} sin etiqueta legible, marcados para revisar (la IA describió y clasificó lo que vio, pero no adivina el nombre del circuito sin una etiqueta física).`
+            : " — revisá la categoría/tipo de circuito antes de guardar."),
       );
     } catch (err) {
       setIaNote("No se pudo leer la foto.");
@@ -121,7 +149,7 @@ export function NuevaMedicionForm({ tableros }: { tableros: TableroConCircuitos[
 
   function agregarCircuito() {
     const siguienteNumero = circuitos.length ? Math.max(...circuitos.map((c) => c.numero)) + 1 : 1;
-    setCircuitos((prev) => [...prev, { id: null, numero: siguienteNumero, texto: "", ampNominal: "" }]);
+    setCircuitos((prev) => [...prev, { id: null, numero: siguienteNumero, texto: "", ampNominal: "", ...CIRCUITO_NUEVO_BASE }]);
   }
 
   function actualizarCircuito(i: number, patch: Partial<CircuitoItem>) {
@@ -155,24 +183,28 @@ export function NuevaMedicionForm({ tableros }: { tableros: TableroConCircuitos[
       setError("Completá la denominación y el sitio del tablero nuevo.");
       return;
     }
+    if (tableroId === "__new" && subsistemasNuevo.length === 0) {
+      setError("Elegí al menos un subsistema presente en el tablero nuevo.");
+      return;
+    }
     if (!fecha) {
       setError("Falta la fecha.");
       return;
     }
     if (circuitos.length === 0) {
-      setError(`Agregá al menos un ${energia ? "circuito" : "elemento"}.`);
+      setError("Agregá al menos un circuito/elemento.");
       return;
     }
     const circuitosSinTexto = circuitos.some((c) => !c.texto.trim());
     if (circuitosSinTexto) {
-      setError(`Completá el texto de todos los ${energia ? "circuitos" : "elementos"} cargados.`);
+      setError("Completá el texto de todos los circuitos/elementos cargados.");
       return;
     }
 
     setSubmitting(true);
     try {
       const res = await crearMedicionTableroAction({
-        tipo,
+        subsistemas: subsistemasActuales,
         tipoEvento,
         tableroId: tableroId === "__new" ? null : tableroId,
         denominacionNueva,
@@ -185,6 +217,8 @@ export function NuevaMedicionForm({ tableros }: { tableros: TableroConCircuitos[
             numero: c.numero,
             texto: c.texto.trim(),
             ampNominal: c.ampNominal.trim(),
+            categoriaEquipo: c.categoriaEquipo,
+            tipoCircuito: c.tipoCircuito,
             estado: l.estado,
             corrienteF: l.corrienteF,
             corrienteR: l.corrienteR,
@@ -213,6 +247,7 @@ export function NuevaMedicionForm({ tableros }: { tableros: TableroConCircuitos[
   function empezarOtra() {
     setSuccess(null);
     setTableroId("");
+    setSubsistemasNuevo([]);
     setDenominacionNueva("");
     setSitioNueva("");
     setCircuitos([]);
@@ -223,31 +258,101 @@ export function NuevaMedicionForm({ tableros }: { tableros: TableroConCircuitos[
     <div>
       <div className="page-heading">
         <h1>{tipoEvento === "medicion" ? "Nueva Medición" : "Nuevo Relevamiento"}</h1>
-        <p>Elegí el tablero, cargá la fecha y las lecturas por {energia ? "circuito" : "elemento"} — se genera el PDF al guardar.</p>
+        <p>Elegí el tablero, cargá la fecha y las lecturas por circuito/elemento — se genera el PDF al guardar.</p>
       </div>
 
       <div className="card">
-        <div className="section-label">Tipo de Tablero</div>
-        <div className="tech-form-grid" style={{ gridTemplateColumns: "repeat(3, 1fr)" }}>
-          {TABLERO_TIPOS.map((t) => (
-            <button
-              key={t}
-              type="button"
-              className={`btn ${tipo === t ? "btn-primary" : "btn-secondary"}`}
-              onClick={() => cambiarTipo(t)}
-              disabled={submitting}
-            >
-              {TABLERO_TIPO_LABEL[t]}
-            </button>
-          ))}
+        <div className="section-label">Tablero</div>
+        {tableros.length > 0 && (
+          <div className="field">
+            <label>Filtrar por subsistema (opcional)</label>
+            <div className="tech-form-grid" style={{ gridTemplateColumns: "repeat(3, 1fr)" }}>
+              {TABLERO_TIPOS.map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  className={`btn btn-sm ${filtroSubsistemas.includes(s) ? "btn-primary" : "btn-secondary"}`}
+                  onClick={() => setFiltroSubsistemas((prev) => toggleEnArray(prev, s))}
+                  disabled={submitting}
+                >
+                  {TABLERO_TIPO_LABEL[s]}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        <div className="field">
+          <label>
+            Elegí uno existente o creá uno nuevo <span className="req">*</span>
+          </label>
+          <select value={tableroId} onChange={(e) => elegirTablero(e.target.value)} disabled={submitting}>
+            <option value="">Seleccionar tablero...</option>
+            {tablerosFiltrados.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.denominacion} — {t.sitio} ({labelSubsistemas(t.subsistemas)})
+              </option>
+            ))}
+            <option value="__new">+ Crear tablero nuevo...</option>
+          </select>
         </div>
-        {energia && (
+        {tableroId === "__new" && (
+          <>
+            <div className="grid2">
+              <div className="field">
+                <label>
+                  Denominación <span className="req">*</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ej: TPBT ENERGIA B"
+                  value={denominacionNueva}
+                  onChange={(e) => setDenominacionNueva(e.target.value)}
+                  disabled={submitting}
+                />
+              </div>
+              <div className="field">
+                <label>
+                  Sitio <span className="req">*</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ej: Sala RTIC Edificio Principal"
+                  value={sitioNueva}
+                  onChange={(e) => setSitioNueva(e.target.value)}
+                  disabled={submitting}
+                />
+              </div>
+            </div>
+            <div className="field">
+              <label>
+                Subsistemas presentes en el tablero <span className="req">*</span>
+              </label>
+              <div className="hint" style={{ margin: "-2px 0 8px" }}>
+                Un tablero puede ser mixto — marcá todos los que correspondan.
+              </div>
+              <div className="tech-form-grid" style={{ gridTemplateColumns: "repeat(3, 1fr)" }}>
+                {TABLERO_TIPOS.map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    className={`btn ${subsistemasNuevo.includes(s) ? "btn-primary" : "btn-secondary"}`}
+                    onClick={() => setSubsistemasNuevo((prev) => toggleEnArray(prev, s))}
+                    disabled={submitting}
+                  >
+                    {TABLERO_TIPO_LABEL[s]}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </>
+        )}
+        {tieneEnergia && (
           <>
             <div className="section-label" style={{ marginTop: 16 }}>
               Tipo de Visita
             </div>
             <div className="hint" style={{ margin: "-4px 0 12px" }}>
-              Medición mide corriente por fase; Relevamiento es un chequeo de estado más liviano, sin medir corriente.
+              Medición mide corriente por fase en térmicas/disyuntores; Relevamiento es un chequeo de estado más liviano, sin medir corriente.
             </div>
             <div className="tech-form-grid" style={{ gridTemplateColumns: "repeat(2, 1fr)" }}>
               {(["medicion", "relevamiento"] as const).map((te) => (
@@ -264,53 +369,7 @@ export function NuevaMedicionForm({ tableros }: { tableros: TableroConCircuitos[
             </div>
           </>
         )}
-      </div>
-
-      <div className="card">
-        <div className="section-label">Tablero</div>
-        <div className="field">
-          <label>
-            Elegí uno existente o creá uno nuevo <span className="req">*</span>
-          </label>
-          <select value={tableroId} onChange={(e) => elegirTablero(e.target.value)} disabled={submitting}>
-            <option value="">Seleccionar tablero...</option>
-            {tablerosDelTipo.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.denominacion} — {t.sitio}
-              </option>
-            ))}
-            <option value="__new">+ Crear tablero nuevo...</option>
-          </select>
-        </div>
-        {tableroId === "__new" && (
-          <div className="grid2">
-            <div className="field">
-              <label>
-                Denominación <span className="req">*</span>
-              </label>
-              <input
-                type="text"
-                placeholder="Ej: TPBT ENERGIA B"
-                value={denominacionNueva}
-                onChange={(e) => setDenominacionNueva(e.target.value)}
-                disabled={submitting}
-              />
-            </div>
-            <div className="field">
-              <label>
-                Sitio <span className="req">*</span>
-              </label>
-              <input
-                type="text"
-                placeholder="Ej: Sala RTIC Edificio Principal"
-                value={sitioNueva}
-                onChange={(e) => setSitioNueva(e.target.value)}
-                disabled={submitting}
-              />
-            </div>
-          </div>
-        )}
-        <div className="field" style={{ marginBottom: 0 }}>
+        <div className="field" style={{ marginBottom: 0, marginTop: 16 }}>
           <label>
             Fecha <span className="req">*</span>
           </label>
@@ -320,10 +379,10 @@ export function NuevaMedicionForm({ tableros }: { tableros: TableroConCircuitos[
 
       {tableroId && (
         <div className="card">
-          <div className="section-label">{energia ? "Circuitos" : "Elementos"}</div>
+          <div className="section-label">Circuitos / Elementos</div>
           <div className="hint" style={{ margin: "-4px 0 12px" }}>
-            <Icon name="ai" size={13} /> Sacale una foto al tablero y la IA te arma la lista de {energia ? "circuitos" : "elementos"}{" "}
-            automáticamente — revisala y corregí lo que haga falta antes de guardar.
+            <Icon name="ai" size={13} /> Sacale una foto al tablero y la IA te arma la lista de elementos automáticamente — clasifica
+            categoría y tipo de circuito, pero siempre revisala y corregí lo que haga falta antes de guardar.
           </div>
           <input
             ref={fotoInputRef}
@@ -350,23 +409,51 @@ export function NuevaMedicionForm({ tableros }: { tableros: TableroConCircuitos[
               <span>{iaNote}</span>
             </div>
           )}
-          {circuitos.length === 0 && <div className="empty-note">Todavía no hay {energia ? "circuitos" : "elementos"} cargados.</div>}
+
+          {circuitos.length > 0 && (
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: 6,
+                alignItems: "center",
+                margin: "0 0 14px",
+                padding: "10px 12px",
+                border: "1.5px solid var(--field-border)",
+                borderRadius: 8,
+              }}
+            >
+              <span style={{ fontSize: 12, fontWeight: 600, marginRight: 4 }}>
+                Resumen: {resumen.total} equipamiento{resumen.total === 1 ? "" : "s"}
+              </span>
+              {resumen.circuitos220vMono > 0 && <span className="chip">{resumen.circuitos220vMono} · 220V mono</span>}
+              {resumen.circuitos380vTri > 0 && <span className="chip">{resumen.circuitos380vTri} · 380V tri</span>}
+              {resumen.porCategoria.map((c) => (
+                <span className="chip" key={c.categoria}>
+                  {c.cantidad} {CATEGORIA_EQUIPO_LABEL[c.categoria]}
+                </span>
+              ))}
+            </div>
+          )}
+
+          {circuitos.length === 0 && <div className="empty-note">Todavía no hay circuitos/elementos cargados.</div>}
           <div className="item-list" style={{ marginTop: circuitos.length ? 0 : 12 }}>
             {circuitos.map((c, i) => {
               const l = lecturas[i] ?? LECTURA_VACIA;
               const esNuevo = c.id === null;
+              const mideCorriente = itemMideCorriente(c.categoriaEquipo, c.tipoCircuito, tipoEvento);
               return (
                 <div className="list-item" key={i} style={{ flexDirection: "column", alignItems: "stretch", gap: 8 }}>
                   {esNuevo ? (
                     <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                       {c.revisar && (
                         <div className="hint" style={{ color: "var(--warn)", margin: 0 }}>
-                          <Icon name="warning" size={12} /> Sin etiqueta legible en la foto — la IA describió lo que vio, corregí el
-                          nombre si lo identificás.
+                          <Icon name="warning" size={12} /> Sin etiqueta legible en la foto — la IA describió/clasificó lo que vio,
+                          corregí lo que no coincida.
                         </div>
                       )}
                       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-end" }}>
-                        <div className="field" style={{ marginBottom: 0, width: 70 }}>
+                        <div className="field" style={{ marginBottom: 0, width: 60 }}>
                           <label style={{ fontSize: 11 }}>N°</label>
                           <input
                             type="number"
@@ -375,18 +462,46 @@ export function NuevaMedicionForm({ tableros }: { tableros: TableroConCircuitos[
                             disabled={submitting}
                           />
                         </div>
-                        <div className="field" style={{ marginBottom: 0, flex: 1, minWidth: 160 }}>
-                          <label style={{ fontSize: 11 }}>{energia ? "Circuito" : "Elemento"}</label>
+                        <div className="field" style={{ marginBottom: 0, flex: 1, minWidth: 150 }}>
+                          <label style={{ fontSize: 11 }}>Circuito/Elemento</label>
                           <input
                             type="text"
-                            placeholder={energia ? "Ej: RACK 1" : "Ej: Cámara Hall"}
+                            placeholder="Ej: RACK 1 / Cámara Hall"
                             value={c.texto}
                             onChange={(e) => actualizarCircuito(i, { texto: e.target.value, revisar: false })}
                             disabled={submitting}
                           />
                         </div>
-                        {energia && (
-                          <div className="field" style={{ marginBottom: 0, width: 100 }}>
+                        <div className="field" style={{ marginBottom: 0, width: 175 }}>
+                          <label style={{ fontSize: 11 }}>Categoría</label>
+                          <select
+                            value={c.categoriaEquipo}
+                            onChange={(e) => actualizarCircuito(i, { categoriaEquipo: e.target.value as TableroCategoriaEquipo })}
+                            disabled={submitting}
+                          >
+                            {CATEGORIA_EQUIPO_OPCIONES.map((cat) => (
+                              <option key={cat} value={cat}>
+                                {CATEGORIA_EQUIPO_LABEL[cat]}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="field" style={{ marginBottom: 0, width: 150 }}>
+                          <label style={{ fontSize: 11 }}>Tipo de circuito</label>
+                          <select
+                            value={c.tipoCircuito}
+                            onChange={(e) => actualizarCircuito(i, { tipoCircuito: e.target.value as TableroTipoCircuito })}
+                            disabled={submitting}
+                          >
+                            {TIPO_CIRCUITO_OPCIONES.map((tc) => (
+                              <option key={tc} value={tc}>
+                                {TIPO_CIRCUITO_LABEL[tc]}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        {categoriaLlevaAmp(c.categoriaEquipo) && (
+                          <div className="field" style={{ marginBottom: 0, width: 90 }}>
                             <label style={{ fontSize: 11 }}>Amp</label>
                             <input
                               type="text"
@@ -404,17 +519,18 @@ export function NuevaMedicionForm({ tableros }: { tableros: TableroConCircuitos[
                     </div>
                   ) : (
                     <div className="item-name">
-                      {c.numero} — {c.texto}
-                      {energia && c.ampNominal ? ` (${c.ampNominal})` : ""}
+                      {c.numero} — {c.texto} · {CATEGORIA_EQUIPO_LABEL[c.categoriaEquipo]}
+                      {c.tipoCircuito !== "na" ? ` · ${TIPO_CIRCUITO_LABEL[c.tipoCircuito]}` : ""}
+                      {categoriaLlevaAmp(c.categoriaEquipo) && c.ampNominal ? ` (${c.ampNominal})` : ""}
                     </div>
                   )}
 
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-end" }}>
-                    <div className="field" style={{ marginBottom: 0, width: 140 }}>
+                    <div className="field" style={{ marginBottom: 0, width: 150 }}>
                       <label style={{ fontSize: 11 }}>Estado</label>
                       <select value={l.estado} onChange={(e) => actualizarLectura(i, { estado: e.target.value })} disabled={submitting}>
                         <option value="">—</option>
-                        {estadoOpciones.map((o) => (
+                        {ESTADO_OPCIONES[c.categoriaEquipo].map((o) => (
                           <option key={o} value={o}>
                             {o}
                           </option>
@@ -456,7 +572,7 @@ export function NuevaMedicionForm({ tableros }: { tableros: TableroConCircuitos[
             })}
           </div>
           <button type="button" className="btn btn-secondary btn-sm" onClick={agregarCircuito} disabled={submitting} style={{ marginTop: 10 }}>
-            <Icon name="plus" size={13} /> Agregar {energia ? "circuito" : "elemento"}
+            <Icon name="plus" size={13} /> Agregar circuito/elemento
           </button>
         </div>
       )}

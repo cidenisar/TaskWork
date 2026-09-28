@@ -12,6 +12,22 @@ export type Moneda = "ARS" | "USD";
 export type UmbralAviso = "20" | "50" | "100";
 export type TableroTipo = "energia" | "cctv" | "control_acceso";
 export type TableroEventoTipo = "medicion" | "relevamiento";
+export type TableroCategoriaEquipo =
+  | "termica"
+  | "disyuntor"
+  | "bornera"
+  | "bornera_fusible"
+  | "fuente_industrial"
+  | "ups_industrial"
+  | "bateria"
+  | "conversor_dc"
+  | "inyector_poe"
+  | "descargador_gaseoso"
+  | "camara"
+  | "lectora"
+  | "cerradura"
+  | "otro";
+export type TableroTipoCircuito = "220v_mono" | "380v_tri" | "24vdc" | "12vdc" | "na";
 
 /** Helper para darle a cada tabla la forma que espera postgrest-js (incluye Relationships). */
 type Tbl<
@@ -213,7 +229,7 @@ export type AuditLogRow = {
 
 export type TableroRow = {
   id: string;
-  tipo: TableroTipo;
+  subsistemas: TableroTipo[];
   denominacion: string;
   sitio: string;
   created_by: string | null;
@@ -226,6 +242,8 @@ export type TableroCircuitoRow = {
   numero: number;
   texto: string;
   amp_nominal: string | null;
+  categoria_equipo: TableroCategoriaEquipo;
+  tipo_circuito: TableroTipoCircuito;
   orden: number;
   created_at: string;
 }
@@ -378,7 +396,7 @@ export interface Database {
       client_errores: Tbl<ClientErrorRow, Partial<ClientErrorRow> & Pick<ClientErrorRow, "mensaje">, Partial<ClientErrorRow>>;
       tableros: Tbl<
         TableroRow,
-        Partial<TableroRow> & Pick<TableroRow, "tipo" | "denominacion" | "sitio">,
+        Partial<TableroRow> & Pick<TableroRow, "subsistemas" | "denominacion" | "sitio">,
         Partial<TableroRow>
       >;
       tablero_circuitos: Tbl<

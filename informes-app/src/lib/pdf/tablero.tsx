@@ -1,14 +1,21 @@
 import { Document, Page, Text, View, StyleSheet } from "@react-pdf/renderer";
 import { BORDER, commonStyles, KeyValueRow, PdfHeader, PdfFooter, formatFechaArg } from "./common";
-import { TABLERO_TIPO_LABEL, TABLERO_EVENTO_LABEL, esTipoEnergia, pideCorrientePorFase } from "@/components/tableros/types";
-import type { TableroEventoTipo, TableroTipo } from "@/lib/database.types";
+import {
+  CATEGORIA_EQUIPO_LABEL,
+  TABLERO_EVENTO_LABEL,
+  itemMideCorriente,
+  labelSubsistemas,
+  type ResumenEquipamiento,
+} from "@/components/tableros/types";
+import type { TableroCategoriaEquipo, TableroEventoTipo, TableroTipo, TableroTipoCircuito } from "@/lib/database.types";
 
 /**
  * Reemplaza la planilla Excel manual de medición de consumo — misma cabecera
- * y pie que el resto de los PDF (spec sección 11), con una tabla de
- * circuitos/elementos. Para energía incluye las columnas de corriente por
- * fase F/R/S/T; para CCTV/Control de Acceso es solo estado + comentario
- * (no aplica la medición de corriente).
+ * y pie que el resto de los PDF (spec sección 11), con un resumen de
+ * equipamiento relevado y una tabla de circuitos/elementos. Un tablero puede
+ * ser mixto (energía + CCTV + control de acceso conviviendo en el mismo
+ * gabinete): la columna de corriente por fase F/R/S/T se muestra por fila
+ * (solo térmicas/disyuntores en un circuito AC la tienen), no por tablero.
  */
 
 const styles = StyleSheet.create({
@@ -23,6 +30,8 @@ const styles = StyleSheet.create({
 export interface TableroPdfLectura {
   numero: number;
   texto: string;
+  categoriaEquipo: TableroCategoriaEquipo;
+  tipoCircuito: TableroTipoCircuito;
   ampNominal: string | null;
   estado: string | null;
   corrienteF: number | null;
@@ -34,39 +43,36 @@ export interface TableroPdfLectura {
 
 export interface TableroPdfProps {
   numeroGeneracion: string;
-  tipo: TableroTipo;
+  subsistemas: TableroTipo[];
   tipoEvento: TableroEventoTipo;
   denominacion: string;
   sitio: string;
   fecha: string;
   lecturas: TableroPdfLectura[];
+  resumen: ResumenEquipamiento;
   logoBuffer: Buffer | null;
   appName: string;
   realizoNombre: string;
 }
 
-// Anchos por columna — más angostos para energía (9 columnas) que para
-// CCTV/Control de Acceso (4 columnas), para que entren en el ancho de A4.
 interface ColWidths {
   n: string;
   circuito: string;
+  categoria: string;
   estado: string;
   amp: string;
   fase: string;
   comentario: string;
 }
-const WIDTHS_ENERGIA: ColWidths = { n: "5%", circuito: "19%", estado: "12%", amp: "8%", fase: "7%", comentario: "23%" };
-const WIDTHS_SIMPLE: ColWidths = { n: "7%", circuito: "27%", estado: "16%", amp: "0%", fase: "0%", comentario: "50%" };
+const WIDTHS_CON_CORRIENTE: ColWidths = { n: "4%", circuito: "16%", categoria: "13%", estado: "10%", amp: "7%", fase: "6%", comentario: "18%" };
+const WIDTHS_SIN_CORRIENTE: ColWidths = { n: "5%", circuito: "22%", categoria: "16%", estado: "13%", amp: "0%", fase: "0%", comentario: "44%" };
 
 export function TableroPdf(props: TableroPdfProps) {
-  const { numeroGeneracion, tipo, tipoEvento, denominacion, sitio, fecha, lecturas, logoBuffer, appName, realizoNombre } = props;
-  const energia = esTipoEnergia(tipo);
-  const mideCorriente = pideCorrientePorFase(tipo, tipoEvento);
-  const w = mideCorriente ? WIDTHS_ENERGIA : WIDTHS_SIMPLE;
+  const { numeroGeneracion, subsistemas, tipoEvento, denominacion, sitio, fecha, lecturas, resumen, logoBuffer, appName, realizoNombre } = props;
+  const algunaFilaMideCorriente = lecturas.some((l) => itemMideCorriente(l.categoriaEquipo, l.tipoCircuito, tipoEvento));
+  const w = algunaFilaMideCorriente ? WIDTHS_CON_CORRIENTE : WIDTHS_SIN_CORRIENTE;
   const fechaLabel = formatFechaArg(fecha);
-  const documentoLabel = mideCorriente
-    ? "MEDICIÓN DE CONSUMO — TABLERO DE ENERGÍA"
-    : `${TABLERO_EVENTO_LABEL[tipoEvento].toUpperCase()} — TABLERO DE ${TABLERO_TIPO_LABEL[tipo].toUpperCase()}`;
+  const documentoLabel = `${TABLERO_EVENTO_LABEL[tipoEvento].toUpperCase()} — TABLERO ${labelSubsistemas(subsistemas).toUpperCase()}`;
   const documentoLinea = `Documento: ${sitio || "—"}-Público · Generado por ${appName}`;
 
   return (
@@ -87,19 +93,38 @@ export function TableroPdf(props: TableroPdfProps) {
         <View style={commonStyles.kvTable}>
           <KeyValueRow k="N° de Generación:" v={numeroGeneracion} />
           <KeyValueRow k="Tipo de Visita:" v={TABLERO_EVENTO_LABEL[tipoEvento]} />
-          <KeyValueRow k="Tipo de Tablero:" v={TABLERO_TIPO_LABEL[tipo]} />
+          <KeyValueRow k="Subsistemas del Tablero:" v={labelSubsistemas(subsistemas)} />
           <KeyValueRow k="Denominación:" v={denominacion} />
           <KeyValueRow k="Sitio:" v={sitio} />
           <KeyValueRow k="Fecha:" v={fechaLabel} last />
         </View>
 
-        <Text style={commonStyles.sectionTitle}>{energia ? "Circuitos" : "Elementos"}</Text>
+        <Text style={commonStyles.sectionTitle}>Resumen del Relevamiento</Text>
+        <View style={commonStyles.kvTable}>
+          <KeyValueRow k="Total de equipamientos:" v={String(resumen.total)} />
+          <KeyValueRow k="Circuitos 220V monofásico:" v={String(resumen.circuitos220vMono)} />
+          <KeyValueRow
+            k="Circuitos 380V trifásico:"
+            v={String(resumen.circuitos380vTri)}
+            last={resumen.porCategoria.length === 0}
+          />
+          {resumen.porCategoria.length > 0 && (
+            <KeyValueRow
+              k="Por categoría:"
+              v={resumen.porCategoria.map((c) => `${c.cantidad} ${CATEGORIA_EQUIPO_LABEL[c.categoria]}`).join(" · ")}
+              last
+            />
+          )}
+        </View>
+
+        <Text style={commonStyles.sectionTitle}>Circuitos / Elementos</Text>
         <View style={styles.table}>
           <View style={styles.headRow} fixed>
             <Text style={[styles.th, { width: w.n }]}>N°</Text>
-            <Text style={[styles.th, { width: w.circuito }]}>{energia ? "Circuito" : "Elemento"}</Text>
+            <Text style={[styles.th, { width: w.circuito }]}>Circuito/Elemento</Text>
+            <Text style={[styles.th, { width: w.categoria }]}>Categoría</Text>
             <Text style={[styles.th, { width: w.estado }]}>Estado</Text>
-            {mideCorriente && (
+            {algunaFilaMideCorriente && (
               <>
                 <Text style={[styles.th, { width: w.amp, textAlign: "right" }]}>Amp</Text>
                 <Text style={[styles.th, { width: w.fase, textAlign: "right" }]}>F</Text>
@@ -110,23 +135,27 @@ export function TableroPdf(props: TableroPdfProps) {
             )}
             <Text style={[styles.th, { width: w.comentario }]}>Comentario</Text>
           </View>
-          {lecturas.map((l, i) => (
-            <View style={i === lecturas.length - 1 ? styles.rowLast : styles.row} key={i} wrap={false}>
-              <Text style={[styles.td, { width: w.n }]}>{l.numero}</Text>
-              <Text style={[styles.td, { width: w.circuito }]}>{l.texto}</Text>
-              <Text style={[styles.td, { width: w.estado }]}>{l.estado || "—"}</Text>
-              {mideCorriente && (
-                <>
-                  <Text style={[styles.td, { width: w.amp, textAlign: "right" }]}>{l.ampNominal || "—"}</Text>
-                  <Text style={[styles.td, { width: w.fase, textAlign: "right" }]}>{l.corrienteF ?? "—"}</Text>
-                  <Text style={[styles.td, { width: w.fase, textAlign: "right" }]}>{l.corrienteR ?? "—"}</Text>
-                  <Text style={[styles.td, { width: w.fase, textAlign: "right" }]}>{l.corrienteS ?? "—"}</Text>
-                  <Text style={[styles.td, { width: w.fase, textAlign: "right" }]}>{l.corrienteT ?? "—"}</Text>
-                </>
-              )}
-              <Text style={[styles.td, { width: w.comentario }]}>{l.comentario || "—"}</Text>
-            </View>
-          ))}
+          {lecturas.map((l, i) => {
+            const mideCorriente = itemMideCorriente(l.categoriaEquipo, l.tipoCircuito, tipoEvento);
+            return (
+              <View style={i === lecturas.length - 1 ? styles.rowLast : styles.row} key={i} wrap={false}>
+                <Text style={[styles.td, { width: w.n }]}>{l.numero}</Text>
+                <Text style={[styles.td, { width: w.circuito }]}>{l.texto}</Text>
+                <Text style={[styles.td, { width: w.categoria }]}>{CATEGORIA_EQUIPO_LABEL[l.categoriaEquipo]}</Text>
+                <Text style={[styles.td, { width: w.estado }]}>{l.estado || "—"}</Text>
+                {algunaFilaMideCorriente && (
+                  <>
+                    <Text style={[styles.td, { width: w.amp, textAlign: "right" }]}>{l.ampNominal || "—"}</Text>
+                    <Text style={[styles.td, { width: w.fase, textAlign: "right" }]}>{mideCorriente ? (l.corrienteF ?? "—") : "—"}</Text>
+                    <Text style={[styles.td, { width: w.fase, textAlign: "right" }]}>{mideCorriente ? (l.corrienteR ?? "—") : "—"}</Text>
+                    <Text style={[styles.td, { width: w.fase, textAlign: "right" }]}>{mideCorriente ? (l.corrienteS ?? "—") : "—"}</Text>
+                    <Text style={[styles.td, { width: w.fase, textAlign: "right" }]}>{mideCorriente ? (l.corrienteT ?? "—") : "—"}</Text>
+                  </>
+                )}
+                <Text style={[styles.td, { width: w.comentario }]}>{l.comentario || "—"}</Text>
+              </View>
+            );
+          })}
         </View>
 
         <PdfFooter realizo={realizoNombre.toUpperCase()} documentoLinea={documentoLinea} />

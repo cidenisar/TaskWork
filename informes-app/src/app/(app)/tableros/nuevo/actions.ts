@@ -5,14 +5,16 @@ import { requireProfile } from "@/lib/auth";
 import { nuevoNumeroGeneracionTablero } from "@/lib/tableros/numero-generacion";
 import { renderTableroPdf } from "@/lib/pdf/render";
 import { buildTableroFilename } from "@/lib/pdf/filename";
-import { pideCorrientePorFase } from "@/components/tableros/types";
-import type { TableroEventoTipo, TableroTipo } from "@/lib/database.types";
+import { calcularResumenEquipamiento, itemMideCorriente } from "@/components/tableros/types";
+import type { TableroCategoriaEquipo, TableroEventoTipo, TableroTipo, TableroTipoCircuito } from "@/lib/database.types";
 
 interface PayloadLectura {
   circuitoId: string | null;
   numero: number;
   texto: string;
   ampNominal: string;
+  categoriaEquipo: TableroCategoriaEquipo;
+  tipoCircuito: TableroTipoCircuito;
   estado: string;
   corrienteF: string;
   corrienteR: string;
@@ -22,7 +24,7 @@ interface PayloadLectura {
 }
 
 export interface CrearMedicionPayload {
-  tipo: TableroTipo;
+  subsistemas: TableroTipo[];
   tipoEvento: TableroEventoTipo;
   tableroId: string | null;
   denominacionNueva: string;
@@ -52,6 +54,9 @@ export async function crearMedicionTableroAction(payload: CrearMedicionPayload):
   if (!payload.tableroId && (!payload.denominacionNueva.trim() || !payload.sitioNuevo.trim())) {
     return { success: false, error: "Completá la denominación y el sitio del tablero nuevo." };
   }
+  if (!payload.tableroId && payload.subsistemas.length === 0) {
+    return { success: false, error: "Elegí al menos un subsistema para el tablero nuevo." };
+  }
   if (!payload.fecha) {
     return { success: false, error: "Falta la fecha." };
   }
@@ -66,12 +71,12 @@ export async function crearMedicionTableroAction(payload: CrearMedicionPayload):
     const { data: nuevoTablero, error: tableroErr } = await supabase
       .from("tableros")
       .insert({
-        tipo: payload.tipo,
+        subsistemas: payload.subsistemas,
         denominacion: payload.denominacionNueva.trim(),
         sitio: payload.sitioNuevo.trim(),
         created_by: profile.id,
       })
-      .select("id, denominacion, sitio")
+      .select("id, denominacion, sitio, subsistemas")
       .single();
     if (tableroErr || !nuevoTablero) {
       return { success: false, error: `No se pudo crear el tablero: ${tableroErr?.message ?? "error desconocido"}` };
@@ -81,7 +86,7 @@ export async function crearMedicionTableroAction(payload: CrearMedicionPayload):
 
   const { data: tableroRow, error: tableroReadErr } = await supabase
     .from("tableros")
-    .select("denominacion, sitio")
+    .select("denominacion, sitio, subsistemas")
     .eq("id", tableroId)
     .single();
   if (tableroReadErr || !tableroRow) {
@@ -104,6 +109,8 @@ export async function crearMedicionTableroAction(payload: CrearMedicionPayload):
         numero: l.numero,
         texto: l.texto.trim(),
         amp_nominal: l.ampNominal.trim() || null,
+        categoria_equipo: l.categoriaEquipo,
+        tipo_circuito: l.tipoCircuito,
       })
       .select("id")
       .single();
@@ -141,22 +148,23 @@ export async function crearMedicionTableroAction(payload: CrearMedicionPayload):
     return { success: false, error: "No se pudo asignar un número de generación único. Probá de nuevo." };
   }
 
-  // Un relevamiento (o cualquier evento que no sea "medición" en un tablero
-  // de energía) nunca guarda corriente por fase, aunque el payload la trajera
-  // — se descarta acá server-side, no solo se oculta en el formulario.
-  const mideCorriente = pideCorrientePorFase(payload.tipo, payload.tipoEvento);
-
+  // Cada elemento decide server-side (no solo en el formulario) si guarda
+  // corriente por fase — en un tablero mixto, solo térmicas/disyuntores en
+  // un circuito AC la llevan, y solo si la visita es de tipo Medición.
   const { error: lecturasErr } = await supabase.from("tablero_medicion_lecturas").insert(
-    payload.lecturas.map((l, i) => ({
-      medicion_id: medicionId!,
-      circuito_id: circuitoIdPorIndice[i]!,
-      estado: l.estado || null,
-      corriente_f: mideCorriente ? parseNum(l.corrienteF) : null,
-      corriente_r: mideCorriente ? parseNum(l.corrienteR) : null,
-      corriente_s: mideCorriente ? parseNum(l.corrienteS) : null,
-      corriente_t: mideCorriente ? parseNum(l.corrienteT) : null,
-      comentario: l.comentario.trim() || null,
-    })),
+    payload.lecturas.map((l, i) => {
+      const mideCorriente = itemMideCorriente(l.categoriaEquipo, l.tipoCircuito, payload.tipoEvento);
+      return {
+        medicion_id: medicionId!,
+        circuito_id: circuitoIdPorIndice[i]!,
+        estado: l.estado || null,
+        corriente_f: mideCorriente ? parseNum(l.corrienteF) : null,
+        corriente_r: mideCorriente ? parseNum(l.corrienteR) : null,
+        corriente_s: mideCorriente ? parseNum(l.corrienteS) : null,
+        corriente_t: mideCorriente ? parseNum(l.corrienteT) : null,
+        comentario: l.comentario.trim() || null,
+      };
+    }),
   );
   if (lecturasErr) {
     return { success: false, error: `No se pudieron guardar las lecturas: ${lecturasErr.message}` };
@@ -174,24 +182,32 @@ export async function crearMedicionTableroAction(payload: CrearMedicionPayload):
     }
   }
 
+  const resumen = calcularResumenEquipamiento(payload.lecturas);
+
   const pdfBuffer = await renderTableroPdf({
     numeroGeneracion,
-    tipo: payload.tipo,
+    subsistemas: tableroRow.subsistemas,
     tipoEvento: payload.tipoEvento,
     denominacion: tableroRow.denominacion,
     sitio: tableroRow.sitio,
     fecha: payload.fecha,
-    lecturas: payload.lecturas.map((l) => ({
-      numero: l.numero,
-      texto: l.texto,
-      ampNominal: l.ampNominal || null,
-      estado: l.estado || null,
-      corrienteF: mideCorriente ? parseNum(l.corrienteF) : null,
-      corrienteR: mideCorriente ? parseNum(l.corrienteR) : null,
-      corrienteS: mideCorriente ? parseNum(l.corrienteS) : null,
-      corrienteT: mideCorriente ? parseNum(l.corrienteT) : null,
-      comentario: l.comentario || null,
-    })),
+    resumen,
+    lecturas: payload.lecturas.map((l) => {
+      const mideCorriente = itemMideCorriente(l.categoriaEquipo, l.tipoCircuito, payload.tipoEvento);
+      return {
+        numero: l.numero,
+        texto: l.texto,
+        categoriaEquipo: l.categoriaEquipo,
+        tipoCircuito: l.tipoCircuito,
+        ampNominal: l.ampNominal || null,
+        estado: l.estado || null,
+        corrienteF: mideCorriente ? parseNum(l.corrienteF) : null,
+        corrienteR: mideCorriente ? parseNum(l.corrienteR) : null,
+        corrienteS: mideCorriente ? parseNum(l.corrienteS) : null,
+        corrienteT: mideCorriente ? parseNum(l.corrienteT) : null,
+        comentario: l.comentario || null,
+      };
+    }),
     logoBuffer,
     appName: "Informe Técnico App",
     realizoNombre: profile.nombreCompleto,

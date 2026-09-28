@@ -5,7 +5,7 @@ import { crearMantenimientoAction } from "@/app/(app)/tableros/mantenimiento/act
 import { reportarErrorCliente } from "@/lib/client-error-report";
 import { ErrorNote, SuccessNote } from "@/components/notes";
 import { Icon } from "@/components/icon";
-import { TABLERO_TIPO_LABEL, type TableroConCircuitos } from "./types";
+import { labelSubsistemas, type TableroConCircuitos } from "./types";
 
 export function NuevoMantenimientoForm({ tableros }: { tableros: TableroConCircuitos[] }) {
   const [tableroId, setTableroId] = useState("");
@@ -93,7 +93,7 @@ export function NuevoMantenimientoForm({ tableros }: { tableros: TableroConCircu
             <option value="">Seleccionar tablero...</option>
             {tableros.map((t) => (
               <option key={t.id} value={t.id}>
-                {t.denominacion} — {t.sitio} ({TABLERO_TIPO_LABEL[t.tipo]})
+                {t.denominacion} — {t.sitio} ({labelSubsistemas(t.subsistemas)})
               </option>
             ))}
           </select>
