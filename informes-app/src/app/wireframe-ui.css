@@ -14,6 +14,11 @@
      tarjeta, y en el celular (sobre todo con luz de sol) el campo se pierde
      por completo. Este sí tiene que notarse. */
   --field-border: #55555f;
+  /* Fondo de los campos de carga — antes usaban --panel-2, casi el mismo
+     tono que la tarjeta (--panel), así que a simple vista solo se notaba el
+     borde y no el campo en sí. Este salto de luminosidad tiene que
+     notarse igual sin depender del borde. */
+  --field-bg: #26262d;
   --text: #f2f2f3;
   --text-dim: #9a9aa2;
   --text-faint: #6a6a72;
@@ -36,6 +41,7 @@
   --border: #e2e2e5;
   --border-soft: #ececee;
   --field-border: #b3b3ba;
+  --field-bg: #eceef2;
   --text: #17171a;
   --text-dim: #5c5c64;
   --text-faint: #8a8a92;
@@ -282,7 +288,7 @@ input[type='password'],
 textarea,
 select {
   width: 100%;
-  background: var(--panel-2);
+  background: var(--field-bg);
   border: 1.5px solid var(--field-border);
   border-radius: var(--radius);
   padding: 11px 13px;
@@ -290,7 +296,7 @@ select {
   color: var(--text);
   font-family: var(--font);
   outline: none;
-  transition: border-color 0.15s;
+  transition: border-color 0.15s, box-shadow 0.15s;
 }
 select {
   appearance: none;
@@ -308,6 +314,7 @@ input:focus,
 textarea:focus,
 select:focus {
   border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
 }
 textarea {
   resize: vertical;
@@ -326,7 +333,7 @@ textarea {
   left: 0;
   right: 0;
   z-index: 20;
-  background: var(--panel-2);
+  background: var(--field-bg);
   border: 1.5px solid var(--field-border);
   border-radius: var(--radius);
   max-height: 220px;

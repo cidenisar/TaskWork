@@ -58,7 +58,8 @@ export function NuevaMedicionForm({ tableros }: { tableros: TableroConCircuitos[
   const [fotosIa, setFotosIa] = useState<File[]>([]);
   const [iaBusy, setIaBusy] = useState(false);
   const [iaNote, setIaNote] = useState<string | null>(null);
-  const fotoInputRef = useRef<HTMLInputElement>(null);
+  const fotoCameraInputRef = useRef<HTMLInputElement>(null);
+  const fotoGaleriaInputRef = useRef<HTMLInputElement>(null);
 
   const tablerosFiltrados = useMemo(
     () =>
@@ -95,10 +96,14 @@ export function NuevaMedicionForm({ tableros }: { tableros: TableroConCircuitos[
     setLecturas({});
   }
 
-  function agregarFotoIa(file: File | undefined) {
-    if (!file) return;
+  function agregarFotosIa(fileList: FileList | null) {
+    if (!fileList || fileList.length === 0) return;
     setIaNote(null);
-    setFotosIa((prev) => (prev.length >= TABLERO_FOTO_IA_MAX ? prev : [...prev, file]));
+    setFotosIa((prev) => {
+      const disponibles = TABLERO_FOTO_IA_MAX - prev.length;
+      if (disponibles <= 0) return prev;
+      return [...prev, ...Array.from(fileList).slice(0, disponibles)];
+    });
   }
 
   function quitarFotoIa(i: number) {
@@ -417,13 +422,24 @@ export function NuevaMedicionForm({ tableros }: { tableros: TableroConCircuitos[
             corregí lo que haga falta antes de guardar.
           </div>
           <input
-            ref={fotoInputRef}
+            ref={fotoCameraInputRef}
             type="file"
             accept="image/*"
             capture="environment"
             style={{ display: "none" }}
             onChange={(e) => {
-              agregarFotoIa(e.target.files?.[0]);
+              agregarFotosIa(e.target.files);
+              e.target.value = "";
+            }}
+          />
+          <input
+            ref={fotoGaleriaInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            style={{ display: "none" }}
+            onChange={(e) => {
+              agregarFotosIa(e.target.files);
               e.target.value = "";
             }}
           />
@@ -431,15 +447,23 @@ export function NuevaMedicionForm({ tableros }: { tableros: TableroConCircuitos[
             <button
               type="button"
               className="ai-btn"
-              onClick={() => fotoInputRef.current?.click()}
+              onClick={() => fotoCameraInputRef.current?.click()}
               disabled={submitting || iaBusy || fotosIa.length >= TABLERO_FOTO_IA_MAX}
             >
-              <Icon name="camera" size={13} /> Agregar foto ({fotosIa.length}/{TABLERO_FOTO_IA_MAX})
+              <Icon name="camera" size={13} /> Sacar foto ({fotosIa.length}/{TABLERO_FOTO_IA_MAX})
+            </button>
+            <button
+              type="button"
+              className="ai-btn"
+              onClick={() => fotoGaleriaInputRef.current?.click()}
+              disabled={submitting || iaBusy || fotosIa.length >= TABLERO_FOTO_IA_MAX}
+            >
+              <Icon name="upload" size={13} /> Subir foto
             </button>
             {fotosIa.length > 0 && (
               <button type="button" className="ai-btn" onClick={() => void leerFotosConIa()} disabled={submitting || iaBusy}>
                 <Icon name="ai" size={13} />{" "}
-                {iaBusy ? "Leyendo fotos..." : `Leer ${fotosIa.length} foto${fotosIa.length === 1 ? "" : "s"} con IA`}
+                {iaBusy ? "Procesando..." : `Procesar ${fotosIa.length} foto${fotosIa.length === 1 ? "" : "s"} con IA`}
               </button>
             )}
           </div>
