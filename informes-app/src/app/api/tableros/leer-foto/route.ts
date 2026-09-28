@@ -7,17 +7,24 @@ import {
   TIPO_CIRCUITO_OPCIONES,
   TIPO_CIRCUITO_LABEL,
   TABLERO_TIPO_LABEL,
+  TABLERO_FOTO_IA_MAX,
 } from "@/components/tableros/types";
 import type { TableroCategoriaEquipo, TableroTipo, TableroTipoCircuito } from "@/lib/database.types";
 
 /**
- * Lee una foto del tablero con Claude Vision y devuelve una lista de
+ * Lee hasta TABLERO_FOTO_IA_MAX fotos del tablero con Claude Vision (en un
+ * solo pedido, todas juntas) y devuelve una lista combinada de
  * circuitos/elementos (número, texto, amperaje si es legible, categoría de
  * equipamiento y tipo de circuito) para precargar el formulario — el
  * técnico revisa y corrige antes de guardar, la IA nunca escribe directo a
- * la base. Un tablero puede ser mixto (energía + CCTV + control de acceso
- * en el mismo gabinete), así que la clasificación es universal: cualquier
- * elemento puede aparecer en cualquier foto, no se restringe por tipo.
+ * la base. Varias fotos del mismo tablero (ángulos distintos, o secciones
+ * de un tablero grande, o un close-up de una etiqueta ilegible en la foto
+ * general) ayudan a identificar mejor el equipamiento — se le pide al
+ * modelo que las combine en una sola lista sin duplicar un elemento que
+ * aparezca en más de una foto. Un tablero puede ser mixto (energía + CCTV +
+ * control de acceso en el mismo gabinete), así que la clasificación es
+ * universal: cualquier elemento puede aparecer en cualquier foto, no se
+ * restringe por tipo.
  */
 
 interface CircuitoDetectado {
@@ -40,35 +47,48 @@ export async function POST(req: NextRequest) {
   }
 
   const formData = await req.formData();
-  const file = formData.get("foto");
+  const files = formData.getAll("fotos").filter((f): f is File => f instanceof File);
   const subsistemasParam = (formData.get("subsistemas") as string | null) ?? "";
   const subsistemas = subsistemasParam
     .split(",")
     .map((s) => s.trim())
     .filter((s): s is TableroTipo => s === "energia" || s === "cctv" || s === "control_acceso");
-  if (!(file instanceof File)) {
-    return NextResponse.json({ error: "Falta la foto." }, { status: 400 });
+  if (files.length === 0) {
+    return NextResponse.json({ error: "Falta al menos una foto." }, { status: 400 });
+  }
+  if (files.length > TABLERO_FOTO_IA_MAX) {
+    return NextResponse.json({ error: `Máximo ${TABLERO_FOTO_IA_MAX} fotos por lectura.` }, { status: 400 });
   }
 
-  const buffer = Buffer.from(await file.arrayBuffer());
-  const base64 = buffer.toString("base64");
-  const mediaType = file.type === "image/png" ? "image/png" : "image/jpeg";
+  const imagenes = await Promise.all(
+    files.map(async (file) => ({
+      base64: Buffer.from(await file.arrayBuffer()).toString("base64"),
+      mediaType: (file.type === "image/png" ? "image/png" : "image/jpeg") as "image/png" | "image/jpeg",
+    })),
+  );
 
   const contextoSubsistemas =
     subsistemas.length > 0
       ? ` Este tablero en particular tiene relevado: ${subsistemas.map((s) => TABLERO_TIPO_LABEL[s]).join(", ")} — pero puede ser mixto, así que igual clasificá cada elemento por lo que ves, no asumas que todo pertenece a esos subsistemas.`
+      : "";
+  const contextoFotos =
+    imagenes.length > 1
+      ? ` Te paso ${imagenes.length} fotos del MISMO tablero (pueden ser ángulos distintos, secciones distintas de un tablero grande, o un ` +
+        "close-up de una etiqueta que en otra foto se ve borrosa) — combinalas en una sola lista de circuitos/elementos: si el mismo " +
+        "elemento físico aparece en más de una foto, contalo una sola vez (usá la foto donde se vea más claro para completar texto/" +
+        "amperaje/categoría), y numerá de forma correlativa el conjunto combinado, no cada foto por separado."
       : "";
 
   try {
     const client = new Anthropic();
     const response = await client.messages.create({
       model: "claude-opus-5",
-      max_tokens: 2048,
+      max_tokens: 3072,
       output_config: { effort: "low" },
       system:
         "Sos un asistente que ayuda a un técnico de campo a relevar un tablero eléctrico, que puede ser mixto: interruptores/térmicas " +
         "de energía, fuentes/UPS/baterías/conversores, y también elementos de CCTV o control de acceso (cámaras, lectoras, cerraduras) " +
-        `conviviendo en el mismo gabinete.${contextoSubsistemas} Te paso una foto y tenés que listar cada circuito/elemento identificable, ` +
+        `conviviendo en el mismo gabinete.${contextoSubsistemas}${contextoFotos} Tenés que listar cada circuito/elemento identificable, ` +
         "en el orden en que aparecen físicamente (de arriba hacia abajo y de izquierda a derecha). Para cada uno: " +
         '"numero" (posición secuencial empezando en 1); "texto" (la etiqueta tal cual la leés si hay una legible — impresa, escrita a ' +
         "mano o en cinta —, y si NO hay ninguna etiqueta legible, describí el elemento por lo que ves físicamente: cantidad de polos, " +
@@ -88,8 +108,17 @@ export async function POST(req: NextRequest) {
         {
           role: "user",
           content: [
-            { type: "image", source: { type: "base64", media_type: mediaType, data: base64 } },
-            { type: "text", text: "Listame los circuitos/elementos de esta foto." },
+            ...imagenes.map((img) => ({
+              type: "image" as const,
+              source: { type: "base64" as const, media_type: img.mediaType, data: img.base64 },
+            })),
+            {
+              type: "text",
+              text:
+                imagenes.length > 1
+                  ? `Listame los circuitos/elementos combinando estas ${imagenes.length} fotos del mismo tablero.`
+                  : "Listame los circuitos/elementos de esta foto.",
+            },
           ],
         },
       ],

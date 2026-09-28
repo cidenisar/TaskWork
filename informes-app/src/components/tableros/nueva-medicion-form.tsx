@@ -11,6 +11,7 @@ import {
   TABLERO_TIPOS,
   TABLERO_TIPO_LABEL,
   TABLERO_EVENTO_LABEL,
+  TABLERO_FOTO_IA_MAX,
   CATEGORIA_EQUIPO_OPCIONES,
   CATEGORIA_EQUIPO_LABEL,
   TIPO_CIRCUITO_OPCIONES,
@@ -53,6 +54,7 @@ export function NuevaMedicionForm({ tableros }: { tableros: TableroConCircuitos[
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<{ numeroGeneracion: string; pdfUrl: string | null } | null>(null);
+  const [fotosIa, setFotosIa] = useState<File[]>([]);
   const [iaBusy, setIaBusy] = useState(false);
   const [iaNote, setIaNote] = useState<string | null>(null);
   const fotoInputRef = useRef<HTMLInputElement>(null);
@@ -92,19 +94,31 @@ export function NuevaMedicionForm({ tableros }: { tableros: TableroConCircuitos[
     setLecturas({});
   }
 
-  async function leerFotoConIa(file: File | undefined) {
+  function agregarFotoIa(file: File | undefined) {
     if (!file) return;
+    setIaNote(null);
+    setFotosIa((prev) => (prev.length >= TABLERO_FOTO_IA_MAX ? prev : [...prev, file]));
+  }
+
+  function quitarFotoIa(i: number) {
+    setFotosIa((prev) => prev.filter((_, idx) => idx !== i));
+  }
+
+  async function leerFotosConIa() {
+    if (fotosIa.length === 0) return;
     setIaBusy(true);
     setIaNote(null);
     try {
-      const jpeg = await resizeImageToJpeg(file);
       const fd = new FormData();
-      fd.append("foto", jpeg, "tablero.jpg");
+      for (const f of fotosIa) {
+        const jpeg = await resizeImageToJpeg(f);
+        fd.append("fotos", jpeg, "tablero.jpg");
+      }
       fd.append("subsistemas", subsistemasActuales.join(","));
       const res = await fetch("/api/tableros/leer-foto", { method: "POST", body: fd });
       const data = await res.json();
       if (!res.ok) {
-        setIaNote(data.error || "No se pudo leer la foto.");
+        setIaNote(data.error || "No se pudo leer las fotos.");
         return;
       }
       const detectados: {
@@ -116,7 +130,7 @@ export function NuevaMedicionForm({ tableros }: { tableros: TableroConCircuitos[
         identificado: boolean;
       }[] = data.circuitos ?? [];
       if (detectados.length === 0) {
-        setIaNote("No se detectó ningún circuito/elemento en la foto — probá con otra o cargalos a mano.");
+        setIaNote("No se detectó ningún circuito/elemento en las fotos — probá con otras o cargalos a mano.");
         return;
       }
       const siguienteBase = circuitos.length ? Math.max(...circuitos.map((c) => c.numero)) : 0;
@@ -134,14 +148,15 @@ export function NuevaMedicionForm({ tableros }: { tableros: TableroConCircuitos[
       ]);
       const sinEtiqueta = detectados.filter((d) => d.identificado !== true).length;
       setIaNote(
-        `Se agregaron ${detectados.length} elemento${detectados.length === 1 ? "" : "s"} desde la foto` +
+        `Se agregaron ${detectados.length} elemento${detectados.length === 1 ? "" : "s"} desde ${fotosIa.length} foto${fotosIa.length === 1 ? "" : "s"}` +
           (sinEtiqueta > 0
             ? ` — ${sinEtiqueta} sin etiqueta legible, marcados para revisar (la IA describió y clasificó lo que vio, pero no adivina el nombre del circuito sin una etiqueta física).`
             : " — revisá la categoría/tipo de circuito antes de guardar."),
       );
+      setFotosIa([]);
     } catch (err) {
-      setIaNote("No se pudo leer la foto.");
-      reportarErrorCliente(err instanceof Error ? err.message : "Error leyendo foto de tablero con IA", "leer-foto-tablero");
+      setIaNote("No se pudo leer las fotos.");
+      reportarErrorCliente(err instanceof Error ? err.message : "Error leyendo fotos de tablero con IA", "leer-foto-tablero");
     } finally {
       setIaBusy(false);
     }
@@ -381,8 +396,9 @@ export function NuevaMedicionForm({ tableros }: { tableros: TableroConCircuitos[
         <div className="card">
           <div className="section-label">Circuitos / Elementos</div>
           <div className="hint" style={{ margin: "-4px 0 12px" }}>
-            <Icon name="ai" size={13} /> Sacale una foto al tablero y la IA te arma la lista de elementos automáticamente — clasifica
-            categoría y tipo de circuito, pero siempre revisala y corregí lo que haga falta antes de guardar.
+            <Icon name="ai" size={13} /> Sacale hasta {TABLERO_FOTO_IA_MAX} fotos al tablero (distintos ángulos o secciones) y la IA
+            combina todas para armar la lista de elementos sin repetir — clasifica categoría y tipo de circuito, pero siempre revisala y
+            corregí lo que haga falta antes de guardar.
           </div>
           <input
             ref={fotoInputRef}
@@ -391,19 +407,38 @@ export function NuevaMedicionForm({ tableros }: { tableros: TableroConCircuitos[
             capture="environment"
             style={{ display: "none" }}
             onChange={(e) => {
-              void leerFotoConIa(e.target.files?.[0]);
+              agregarFotoIa(e.target.files?.[0]);
               e.target.value = "";
             }}
           />
-          <button
-            type="button"
-            className="ai-btn"
-            onClick={() => fotoInputRef.current?.click()}
-            disabled={submitting || iaBusy}
-            style={{ marginBottom: 12 }}
-          >
-            <Icon name="camera" size={13} /> {iaBusy ? "Leyendo foto..." : "Leer foto con IA"}
-          </button>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: fotosIa.length ? 8 : 12 }}>
+            <button
+              type="button"
+              className="ai-btn"
+              onClick={() => fotoInputRef.current?.click()}
+              disabled={submitting || iaBusy || fotosIa.length >= TABLERO_FOTO_IA_MAX}
+            >
+              <Icon name="camera" size={13} /> Agregar foto ({fotosIa.length}/{TABLERO_FOTO_IA_MAX})
+            </button>
+            {fotosIa.length > 0 && (
+              <button type="button" className="ai-btn" onClick={() => void leerFotosConIa()} disabled={submitting || iaBusy}>
+                <Icon name="ai" size={13} />{" "}
+                {iaBusy ? "Leyendo fotos..." : `Leer ${fotosIa.length} foto${fotosIa.length === 1 ? "" : "s"} con IA`}
+              </button>
+            )}
+          </div>
+          {fotosIa.length > 0 && (
+            <div className="chip-row" style={{ marginTop: 0, marginBottom: 12 }}>
+              {fotosIa.map((f, i) => (
+                <span className="chip" key={i}>
+                  Foto {i + 1}
+                  <button type="button" onClick={() => quitarFotoIa(i)} disabled={iaBusy} aria-label={`Quitar foto ${i + 1}`}>
+                    <Icon name="x" size={11} />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
           {iaNote && (
             <div className="ai-note" style={{ marginBottom: 12 }}>
               <span>{iaNote}</span>

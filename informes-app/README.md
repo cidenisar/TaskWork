@@ -218,12 +218,17 @@ npm run dev
   `src/components/tableros/types.ts` es la única fuente de verdad, tanto en
   el formulario como en el PDF y en el server action (se anula server-side
   aunque alguien fuerce el form). La lectura de fotos con IA
-  (`/api/tableros/leer-foto`, Claude Vision) clasifica cada elemento
-  detectado en su categoría/tipo de circuito además de leer la etiqueta —
-  cuando no hay etiqueta legible describe el elemento por lo que ve
-  físicamente (polos, grosor de cable, contactor/fotocélula al lado, tipo de
-  cámara, etc.) en vez de inventar un nombre, y marca esos casos para que el
-  técnico los revise. Aparte, **Mantenimiento** (`/tableros/mantenimiento`)
+  (`/api/tableros/leer-foto`, Claude Vision) acepta hasta
+  `TABLERO_FOTO_IA_MAX` (3) fotos por lectura en un solo pedido — útil para
+  distintos ángulos, secciones de un tablero grande, o un close-up de una
+  etiqueta que en la foto general se ve borrosa —, y le pide al modelo que
+  las combine en una sola lista sin duplicar un elemento que aparezca en
+  más de una foto. Clasifica cada elemento detectado en su categoría/tipo
+  de circuito además de leer la etiqueta — cuando no hay etiqueta legible
+  describe el elemento por lo que ve físicamente (polos, grosor de cable,
+  contactor/fotocélula al lado, tipo de cámara, etc.) en vez de inventar un
+  nombre, y marca esos casos para que el técnico los revise. Aparte,
+  **Mantenimiento** (`/tableros/mantenimiento`)
   registra el trabajo realizado sobre un tablero/circuito ya relevado —
   descripción, foto del trabajo/repuesto y próximo mantenimiento programado
   — sin PDF, solo queda como registro en el Historial.
