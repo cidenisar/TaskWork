@@ -96,13 +96,17 @@ export function NuevaMedicionForm({ tableros }: { tableros: TableroConCircuitos[
     setLecturas({});
   }
 
-  function agregarFotosIa(fileList: FileList | null) {
-    if (!fileList || fileList.length === 0) return;
+  // Recibe un array ya extraído (nunca el FileList "vivo" del input): si el
+  // caller resetea el input (e.target.value = "") antes de que React llegue
+  // a ejecutar el updater de setFotosIa, un FileList vivo queda vacío para
+  // ese momento y la foto se pierde en silencio, sin ningún error visible.
+  function agregarFotosIa(files: File[]) {
+    if (files.length === 0) return;
     setIaNote(null);
     setFotosIa((prev) => {
       const disponibles = TABLERO_FOTO_IA_MAX - prev.length;
       if (disponibles <= 0) return prev;
-      return [...prev, ...Array.from(fileList).slice(0, disponibles)];
+      return [...prev, ...files.slice(0, disponibles)];
     });
   }
 
@@ -428,8 +432,9 @@ export function NuevaMedicionForm({ tableros }: { tableros: TableroConCircuitos[
             capture="environment"
             style={{ display: "none" }}
             onChange={(e) => {
-              agregarFotosIa(e.target.files);
+              const files = Array.from(e.target.files ?? []);
               e.target.value = "";
+              agregarFotosIa(files);
             }}
           />
           <input
@@ -439,8 +444,9 @@ export function NuevaMedicionForm({ tableros }: { tableros: TableroConCircuitos[
             multiple
             style={{ display: "none" }}
             onChange={(e) => {
-              agregarFotosIa(e.target.files);
+              const files = Array.from(e.target.files ?? []);
               e.target.value = "";
+              agregarFotosIa(files);
             }}
           />
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: fotosIa.length ? 8 : 12 }}>

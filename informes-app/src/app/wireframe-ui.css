@@ -18,7 +18,7 @@
      tono que la tarjeta (--panel), así que a simple vista solo se notaba el
      borde y no el campo en sí. Este salto de luminosidad tiene que
      notarse igual sin depender del borde. */
-  --field-bg: #26262d;
+  --field-bg: #2f2f38;
   --text: #f2f2f3;
   --text-dim: #9a9aa2;
   --text-faint: #6a6a72;
@@ -41,7 +41,7 @@
   --border: #e2e2e5;
   --border-soft: #ececee;
   --field-border: #b3b3ba;
-  --field-bg: #eceef2;
+  --field-bg: #f2f3f6;
   --text: #17171a;
   --text-dim: #5c5c64;
   --text-faint: #8a8a92;
