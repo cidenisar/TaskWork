@@ -42,6 +42,17 @@ const ICON_PATHS: Record<string, React.ReactNode> = {
       <path d="M7.5 15.5h9" />
     </>
   ),
+  racks: (
+    <>
+      <rect x="4.5" y="3" width="15" height="18" rx="1.5" />
+      <rect x="6.5" y="5.5" width="11" height="3" rx="0.6" />
+      <rect x="6.5" y="10.5" width="11" height="3" rx="0.6" />
+      <rect x="6.5" y="15.5" width="11" height="3" rx="0.6" />
+      <circle cx="15" cy="7" r="0.6" fill="currentColor" stroke="none" />
+      <circle cx="15" cy="12" r="0.6" fill="currentColor" stroke="none" />
+      <circle cx="15" cy="17" r="0.6" fill="currentColor" stroke="none" />
+    </>
+  ),
 };
 
 /**

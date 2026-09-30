@@ -41,6 +41,13 @@ const NAV_CONFIG: Record<string, ModuleConfig> = {
       { href: "/tableros/historial", label: "Historial" },
     ],
   },
+  racks: {
+    brand: "Relevamiento de Equipamiento",
+    tabs: [
+      { href: "/racks/nuevo", label: "Nuevo Relevamiento" },
+      { href: "/racks/historial", label: "Historial" },
+    ],
+  },
   estadisticas: {
     brand: "Estadísticas",
     tabs: [

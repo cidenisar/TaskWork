@@ -237,6 +237,23 @@ npm run dev
   registra el trabajo realizado sobre un tablero/circuito ya relevado —
   descripción, foto del trabajo/repuesto y próximo mantenimiento programado
   — sin PDF, solo queda como registro en el Historial.
+- **Relevamiento de Equipamiento** (`src/app/(app)/racks/`, migración
+  `20260930010000_racks_relevamiento_equipamiento.sql`): mismo patrón que
+  Tableros pero para inventariar equipamiento de sala técnica en vez de
+  circuitos eléctricos — un **Rack** (denominación + sitio/sala/shelter,
+  alta al vuelo) tiene una lista de equipamiento (router, switch, servidor,
+  rectificador, banco de baterías, UPS, ODF, patch panel, radio/enlace,
+  convertidor de medios, firewall, multiplexor, PDU/regleta, otro) con
+  categoría, marca/modelo, posición en el rack (U) y cantidad (para ítems
+  idénticos cargados en una sola fila). Más simple que Tableros: no hay
+  subsistemas ni distinción medición/relevamiento, un solo tipo de visita.
+  La lectura de fotos con IA (`/api/racks/leer-foto`, hasta
+  `RACK_FOTO_IA_MAX` = 7 fotos combinadas) clasifica cada equipo detectado
+  igual criterio que Tableros — describe por aspecto físico cuando no hay
+  etiqueta legible, nunca adivina marca/modelo/posición sin base visual, y
+  marca esos casos para revisar. El resumen (total + por categoría) se ve
+  en pantalla mientras se carga y se imprime en el PDF, junto con una foto
+  general opcional del rack.
 - **Errores del dispositivo** (`src/components/client-error-reporter.tsx` +
   `src/app/api/errores/reportar/`): cualquier error de JS no manejado en el
   navegador del usuario (y los fallos explícitos al generar/editar un

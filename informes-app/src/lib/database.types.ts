@@ -28,6 +28,21 @@ export type TableroCategoriaEquipo =
   | "cerradura"
   | "otro";
 export type TableroTipoCircuito = "220v_mono" | "380v_tri" | "24vdc" | "12vdc" | "na";
+export type RackCategoriaEquipo =
+  | "router"
+  | "switch"
+  | "servidor"
+  | "rectificador"
+  | "banco_baterias"
+  | "ups"
+  | "odf"
+  | "patch_panel"
+  | "radio_enlace"
+  | "convertidor_medios"
+  | "firewall"
+  | "multiplexor"
+  | "pdu_regleta"
+  | "otro";
 
 /** Helper para darle a cada tabla la forma que espera postgrest-js (incluye Relationships). */
 type Tbl<
@@ -285,6 +300,46 @@ export type TableroMedicionLecturaRow = {
   comentario: string | null;
 }
 
+export type RackRow = {
+  id: string;
+  denominacion: string;
+  sitio: string;
+  created_by: string | null;
+  created_at: string;
+}
+
+export type RackEquipamientoRow = {
+  id: string;
+  rack_id: string;
+  numero: number;
+  categoria_equipo: RackCategoriaEquipo;
+  texto: string;
+  marca_modelo: string | null;
+  posicion_u: string | null;
+  cantidad: number;
+  created_at: string;
+}
+
+export type RackRelevamientoRow = {
+  id: string;
+  rack_id: string;
+  numero_generacion: string;
+  fecha: string;
+  created_by: string;
+  pdf_url: string | null;
+  pdf_generado_at: string | null;
+  foto_general_url: string | null;
+  created_at: string;
+}
+
+export type RackRelevamientoLecturaRow = {
+  id: string;
+  relevamiento_id: string;
+  equipamiento_id: string;
+  estado: string | null;
+  comentario: string | null;
+}
+
 export type ClientErrorRow = {
   id: string;
   user_id: string | null;
@@ -421,6 +476,22 @@ export interface Database {
         Partial<TableroMantenimientoRow> &
           Pick<TableroMantenimientoRow, "tablero_id" | "fecha" | "descripcion" | "created_by">,
         Partial<TableroMantenimientoRow>
+      >;
+      racks: Tbl<RackRow, Partial<RackRow> & Pick<RackRow, "denominacion" | "sitio">, Partial<RackRow>>;
+      rack_equipamientos: Tbl<
+        RackEquipamientoRow,
+        Partial<RackEquipamientoRow> & Pick<RackEquipamientoRow, "rack_id" | "numero" | "categoria_equipo" | "texto">,
+        Partial<RackEquipamientoRow>
+      >;
+      rack_relevamientos: Tbl<
+        RackRelevamientoRow,
+        Partial<RackRelevamientoRow> & Pick<RackRelevamientoRow, "rack_id" | "numero_generacion" | "fecha" | "created_by">,
+        Partial<RackRelevamientoRow>
+      >;
+      rack_relevamiento_lecturas: Tbl<
+        RackRelevamientoLecturaRow,
+        Partial<RackRelevamientoLecturaRow> & Pick<RackRelevamientoLecturaRow, "relevamiento_id" | "equipamiento_id">,
+        Partial<RackRelevamientoLecturaRow>
       >;
     };
     Views: Record<string, never>;

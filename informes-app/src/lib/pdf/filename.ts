@@ -74,6 +74,18 @@ export function buildTableroFilename(opts: {
   return `${partes.join("_")}.pdf`;
 }
 
+export function buildRackFilename(opts: {
+  numeroGeneracion: string;
+  denominacion: string;
+  sitio: string;
+  generadoEn?: Date;
+}): string {
+  const partes = [opts.numeroGeneracion, timestampCompacto(opts.generadoEn ?? new Date()), slug(opts.denominacion), slug(opts.sitio)].filter(
+    (p): p is string => Boolean(p),
+  );
+  return `${partes.join("_")}.pdf`;
+}
+
 /** El nombre para "Guardar como" es el último segmento del path en Storage. */
 export function filenameDesdeStoragePath(path: string): string {
   return path.split("/").pop() || path;

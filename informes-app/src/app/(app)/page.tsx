@@ -39,6 +39,13 @@ export default async function HomePage() {
           <div className="module-title">Tableros</div>
           <div className="module-sub">Medí consumo en tableros de energía o relevá CCTV y control de acceso</div>
         </Link>
+        <Link href="/racks/nuevo" className="module-card">
+          <div className="module-ico">
+            <ModuleIcon name="racks" />
+          </div>
+          <div className="module-title">Relevamiento de Equipamiento</div>
+          <div className="module-sub">Sacá fotos de un rack y la IA te dice qué equipamiento tenés en un sitio/sala</div>
+        </Link>
         <Link href="/estadisticas" className="module-card">
           <div className="module-ico">
             <ModuleIcon name="estadisticas" />
