@@ -46,6 +46,15 @@ export default async function HomePage() {
           <div className="module-title">Relevamiento de Equipamiento</div>
           <div className="module-sub">Sacá fotos de un rack y la IA te dice qué equipamiento tenés en un sitio/sala</div>
         </Link>
+        <Link href="/ubicaciones" className="module-card">
+          <div className="module-ico">
+            <ModuleIcon name="ubicaciones" />
+          </div>
+          <div className="module-title">Ubicaciones</div>
+          <div className="module-sub">
+            Resumen por provincia, sector/oficina y sala — todo el equipamiento de tableros y racks de un mismo lugar
+          </div>
+        </Link>
         <Link href="/estadisticas" className="module-card">
           <div className="module-ico">
             <ModuleIcon name="estadisticas" />

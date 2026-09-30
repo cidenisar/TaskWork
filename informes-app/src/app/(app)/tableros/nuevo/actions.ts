@@ -23,12 +23,19 @@ interface PayloadLectura {
   comentario: string;
 }
 
+interface PayloadUbicacionNueva {
+  provincia: string;
+  sectorOficina: string;
+  sala: string;
+}
+
 export interface CrearMedicionPayload {
   subsistemas: TableroTipo[];
   tipoEvento: TableroEventoTipo;
+  ubicacionId: string | null;
+  ubicacionNueva: PayloadUbicacionNueva | null;
   tableroId: string | null;
   denominacionNueva: string;
-  sitioNuevo: string;
   fecha: string;
   lecturas: PayloadLectura[];
 }
@@ -43,6 +50,41 @@ export interface CrearMedicionResult {
 function parseNum(v: string): number | null {
   const n = Number(v.replace(",", "."));
   return v.trim() !== "" && Number.isFinite(n) ? n : null;
+}
+
+/**
+ * Resuelve el id de la Ubicación a usar para un tablero nuevo: la existente
+ * elegida, o da de alta una nueva (alta al vuelo). Si ya existe una
+ * Ubicación idéntica (misma provincia+sector/oficina+sala) la reusa en vez
+ * de duplicarla — mismo criterio que catalogo_clientes/catalogo_torres.
+ */
+async function resolverUbicacionId(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  payload: Pick<CrearMedicionPayload, "ubicacionId" | "ubicacionNueva">,
+  userId: string,
+): Promise<{ id: string } | { error: string }> {
+  if (payload.ubicacionId) return { id: payload.ubicacionId };
+  if (!payload.ubicacionNueva) return { error: "Elegí o creá una ubicación para el tablero." };
+
+  const provincia = payload.ubicacionNueva.provincia.trim();
+  const sectorOficina = payload.ubicacionNueva.sectorOficina.trim();
+  const sala = payload.ubicacionNueva.sala.trim();
+  if (!provincia || !sala) return { error: "Completá la provincia y la sala de la ubicación nueva." };
+
+  const { data: nueva, error } = await supabase
+    .from("ubicaciones")
+    .insert({ provincia, sector_oficina: sectorOficina || null, sala, created_by: userId })
+    .select("id")
+    .single();
+  if (!error && nueva) return { id: nueva.id };
+
+  if (error?.code === "23505") {
+    let query = supabase.from("ubicaciones").select("id").eq("provincia", provincia).eq("sala", sala);
+    query = sectorOficina ? query.eq("sector_oficina", sectorOficina) : query.is("sector_oficina", null);
+    const { data: existente } = await query.single();
+    if (existente) return { id: existente.id };
+  }
+  return { error: `No se pudo crear la ubicación: ${error?.message ?? "error desconocido"}` };
 }
 
 export async function crearMedicionTableroAction(formData: FormData): Promise<CrearMedicionResult> {
@@ -63,8 +105,8 @@ export async function crearMedicionTableroAction(formData: FormData): Promise<Cr
   if (!payload.lecturas.length) {
     return { success: false, error: "El tablero no tiene circuitos/elementos cargados." };
   }
-  if (!payload.tableroId && (!payload.denominacionNueva.trim() || !payload.sitioNuevo.trim())) {
-    return { success: false, error: "Completá la denominación y el sitio del tablero nuevo." };
+  if (!payload.tableroId && !payload.denominacionNueva.trim()) {
+    return { success: false, error: "Completá la denominación del tablero nuevo." };
   }
   if (!payload.tableroId && payload.subsistemas.length === 0) {
     return { success: false, error: "Elegí al menos un subsistema para el tablero nuevo." };
@@ -80,15 +122,18 @@ export async function crearMedicionTableroAction(formData: FormData): Promise<Cr
   // vez que lo encuentra en el sitio).
   let tableroId = payload.tableroId;
   if (!tableroId) {
+    const ubicacion = await resolverUbicacionId(supabase, payload, profile.id);
+    if ("error" in ubicacion) return { success: false, error: ubicacion.error };
+
     const { data: nuevoTablero, error: tableroErr } = await supabase
       .from("tableros")
       .insert({
         subsistemas: payload.subsistemas,
         denominacion: payload.denominacionNueva.trim(),
-        sitio: payload.sitioNuevo.trim(),
+        ubicacion_id: ubicacion.id,
         created_by: profile.id,
       })
-      .select("id, denominacion, sitio, subsistemas")
+      .select("id")
       .single();
     if (tableroErr || !nuevoTablero) {
       return { success: false, error: `No se pudo crear el tablero: ${tableroErr?.message ?? "error desconocido"}` };
@@ -98,11 +143,19 @@ export async function crearMedicionTableroAction(formData: FormData): Promise<Cr
 
   const { data: tableroRow, error: tableroReadErr } = await supabase
     .from("tableros")
-    .select("denominacion, sitio, subsistemas")
+    .select("denominacion, subsistemas, ubicacion_id")
     .eq("id", tableroId)
     .single();
   if (tableroReadErr || !tableroRow) {
     return { success: false, error: "No se encontró el tablero." };
+  }
+  const { data: ubicacionTablero, error: ubicacionReadErr } = await supabase
+    .from("ubicaciones")
+    .select("provincia, sector_oficina, sala")
+    .eq("id", tableroRow.ubicacion_id)
+    .single();
+  if (ubicacionReadErr || !ubicacionTablero) {
+    return { success: false, error: "No se encontró la ubicación del tablero." };
   }
 
   // Circuitos nuevos (circuitoId null) se dan de alta ahora — igual criterio
@@ -216,7 +269,9 @@ export async function crearMedicionTableroAction(formData: FormData): Promise<Cr
     subsistemas: tableroRow.subsistemas,
     tipoEvento: payload.tipoEvento,
     denominacion: tableroRow.denominacion,
-    sitio: tableroRow.sitio,
+    provincia: ubicacionTablero.provincia,
+    sectorOficina: ubicacionTablero.sector_oficina,
+    sala: ubicacionTablero.sala,
     fecha: payload.fecha,
     resumen,
     fotoGeneralBuffer,
@@ -241,7 +296,11 @@ export async function crearMedicionTableroAction(formData: FormData): Promise<Cr
     realizoNombre: profile.nombreCompleto,
   });
 
-  const pdfFilename = buildTableroFilename({ numeroGeneracion, denominacion: tableroRow.denominacion, sitio: tableroRow.sitio });
+  const pdfFilename = buildTableroFilename({
+    numeroGeneracion,
+    denominacion: tableroRow.denominacion,
+    sitio: ubicacionTablero.sala,
+  });
   const pdfPath = `${profile.id}/tableros/${medicionId}/${pdfFilename}`;
   const { error: pdfUpErr } = await supabase.storage
     .from("informes-pdf")

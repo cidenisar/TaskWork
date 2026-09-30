@@ -9,7 +9,7 @@ export interface HistorialRelevamientoRow {
   numeroGeneracion: string;
   fecha: string;
   denominacion: string;
-  sitio: string;
+  ubicacionLabel: string;
   pdfDisponible: boolean;
   fotoDisponible: boolean;
 }
@@ -27,7 +27,7 @@ export function HistorialRacks({ relevamientos }: { relevamientos: HistorialRele
   const filtrados = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return relevamientos;
-    return relevamientos.filter((r) => `${r.numeroGeneracion} ${r.denominacion} ${r.sitio}`.toLowerCase().includes(q));
+    return relevamientos.filter((r) => `${r.numeroGeneracion} ${r.denominacion} ${r.ubicacionLabel}`.toLowerCase().includes(q));
   }, [relevamientos, query]);
 
   async function verDescargarPdf(id: string, numeroGeneracion: string) {
@@ -98,7 +98,7 @@ export function HistorialRacks({ relevamientos }: { relevamientos: HistorialRele
                       </span>
                     </div>
                     <div className="hist-meta">
-                      {r.numeroGeneracion} · {r.sitio} · {fmtFecha(r.fecha)}
+                      {r.numeroGeneracion} · {r.ubicacionLabel} · {fmtFecha(r.fecha)}
                     </div>
                   </div>
                 </div>

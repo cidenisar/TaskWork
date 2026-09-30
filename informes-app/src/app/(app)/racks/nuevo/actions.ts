@@ -20,10 +20,17 @@ interface PayloadLectura {
   comentario: string;
 }
 
+interface PayloadUbicacionNueva {
+  provincia: string;
+  sectorOficina: string;
+  sala: string;
+}
+
 export interface CrearRelevamientoPayload {
   rackId: string | null;
+  ubicacionId: string | null;
+  ubicacionNueva: PayloadUbicacionNueva | null;
   denominacionNueva: string;
-  sitioNuevo: string;
   fecha: string;
   lecturas: PayloadLectura[];
 }
@@ -33,6 +40,41 @@ export interface CrearRelevamientoResult {
   error?: string;
   numeroGeneracion?: string;
   pdfUrl?: string | null;
+}
+
+/**
+ * Resuelve el id de la Ubicación a usar para un rack nuevo: la existente
+ * elegida, o da de alta una nueva (alta al vuelo). Si ya existe una
+ * Ubicación idéntica (misma provincia+sector/oficina+sala) la reusa en vez
+ * de duplicarla — mismo criterio que Tableros/catalogo_clientes.
+ */
+async function resolverUbicacionId(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  payload: Pick<CrearRelevamientoPayload, "ubicacionId" | "ubicacionNueva">,
+  userId: string,
+): Promise<{ id: string } | { error: string }> {
+  if (payload.ubicacionId) return { id: payload.ubicacionId };
+  if (!payload.ubicacionNueva) return { error: "Elegí o creá una ubicación para el rack." };
+
+  const provincia = payload.ubicacionNueva.provincia.trim();
+  const sectorOficina = payload.ubicacionNueva.sectorOficina.trim();
+  const sala = payload.ubicacionNueva.sala.trim();
+  if (!provincia || !sala) return { error: "Completá la provincia y la sala de la ubicación nueva." };
+
+  const { data: nueva, error } = await supabase
+    .from("ubicaciones")
+    .insert({ provincia, sector_oficina: sectorOficina || null, sala, created_by: userId })
+    .select("id")
+    .single();
+  if (!error && nueva) return { id: nueva.id };
+
+  if (error?.code === "23505") {
+    let query = supabase.from("ubicaciones").select("id").eq("provincia", provincia).eq("sala", sala);
+    query = sectorOficina ? query.eq("sector_oficina", sectorOficina) : query.is("sector_oficina", null);
+    const { data: existente } = await query.single();
+    if (existente) return { id: existente.id };
+  }
+  return { error: `No se pudo crear la ubicación: ${error?.message ?? "error desconocido"}` };
 }
 
 export async function crearRelevamientoRackAction(formData: FormData): Promise<CrearRelevamientoResult> {
@@ -53,8 +95,8 @@ export async function crearRelevamientoRackAction(formData: FormData): Promise<C
   if (!payload.lecturas.length) {
     return { success: false, error: "El rack no tiene equipamiento cargado." };
   }
-  if (!payload.rackId && (!payload.denominacionNueva.trim() || !payload.sitioNuevo.trim())) {
-    return { success: false, error: "Completá la denominación y el sitio del rack nuevo." };
+  if (!payload.rackId && !payload.denominacionNueva.trim()) {
+    return { success: false, error: "Completá la denominación del rack nuevo." };
   }
   if (!payload.fecha) {
     return { success: false, error: "Falta la fecha." };
@@ -67,14 +109,17 @@ export async function crearRelevamientoRackAction(formData: FormData): Promise<C
   // lo encuentra en el sitio).
   let rackId = payload.rackId;
   if (!rackId) {
+    const ubicacion = await resolverUbicacionId(supabase, payload, profile.id);
+    if ("error" in ubicacion) return { success: false, error: ubicacion.error };
+
     const { data: nuevoRack, error: rackErr } = await supabase
       .from("racks")
       .insert({
         denominacion: payload.denominacionNueva.trim(),
-        sitio: payload.sitioNuevo.trim(),
+        ubicacion_id: ubicacion.id,
         created_by: profile.id,
       })
-      .select("id, denominacion, sitio")
+      .select("id")
       .single();
     if (rackErr || !nuevoRack) {
       return { success: false, error: `No se pudo crear el rack: ${rackErr?.message ?? "error desconocido"}` };
@@ -82,9 +127,21 @@ export async function crearRelevamientoRackAction(formData: FormData): Promise<C
     rackId = nuevoRack.id;
   }
 
-  const { data: rackRow, error: rackReadErr } = await supabase.from("racks").select("denominacion, sitio").eq("id", rackId).single();
+  const { data: rackRow, error: rackReadErr } = await supabase
+    .from("racks")
+    .select("denominacion, ubicacion_id")
+    .eq("id", rackId)
+    .single();
   if (rackReadErr || !rackRow) {
     return { success: false, error: "No se encontró el rack." };
+  }
+  const { data: ubicacionRack, error: ubicacionReadErr } = await supabase
+    .from("ubicaciones")
+    .select("provincia, sector_oficina, sala")
+    .eq("id", rackRow.ubicacion_id)
+    .single();
+  if (ubicacionReadErr || !ubicacionRack) {
+    return { success: false, error: "No se encontró la ubicación del rack." };
   }
 
   // Equipamiento nuevo (equipamientoId null) se da de alta ahora — igual
@@ -185,7 +242,9 @@ export async function crearRelevamientoRackAction(formData: FormData): Promise<C
   const pdfBuffer = await renderRackPdf({
     numeroGeneracion,
     denominacion: rackRow.denominacion,
-    sitio: rackRow.sitio,
+    provincia: ubicacionRack.provincia,
+    sectorOficina: ubicacionRack.sector_oficina,
+    sala: ubicacionRack.sala,
     fecha: payload.fecha,
     resumen,
     fotoGeneralBuffer,
@@ -204,7 +263,7 @@ export async function crearRelevamientoRackAction(formData: FormData): Promise<C
     realizoNombre: profile.nombreCompleto,
   });
 
-  const pdfFilename = buildRackFilename({ numeroGeneracion, denominacion: rackRow.denominacion, sitio: rackRow.sitio });
+  const pdfFilename = buildRackFilename({ numeroGeneracion, denominacion: rackRow.denominacion, sitio: ubicacionRack.sala });
   const pdfPath = `${profile.id}/racks/${relevamientoId}/${pdfFilename}`;
   const { error: pdfUpErr } = await supabase.storage
     .from("informes-pdf")

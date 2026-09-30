@@ -240,8 +240,8 @@ npm run dev
 - **Relevamiento de Equipamiento** (`src/app/(app)/racks/`, migración
   `20260930010000_racks_relevamiento_equipamiento.sql`): mismo patrón que
   Tableros pero para inventariar equipamiento de sala técnica en vez de
-  circuitos eléctricos — un **Rack** (denominación + sitio/sala/shelter,
-  alta al vuelo) tiene una lista de equipamiento (router, switch, servidor,
+  circuitos eléctricos — un **Rack** (denominación + Ubicación, alta al
+  vuelo) tiene una lista de equipamiento (router, switch, servidor,
   rectificador, banco de baterías, UPS, ODF, patch panel, radio/enlace,
   convertidor de medios, firewall, multiplexor, PDU/regleta, otro) con
   categoría, marca/modelo, posición en el rack (U) y cantidad (para ítems
@@ -254,6 +254,29 @@ npm run dev
   marca esos casos para revisar. El resumen (total + por categoría) se ve
   en pantalla mientras se carga y se imprime en el PDF, junto con una foto
   general opcional del rack.
+- **Ubicaciones** (`src/app/(app)/ubicaciones/`, `src/components/ubicaciones/`,
+  migración `20260930020000_ubicaciones.sql`): el "sitio" de texto libre que
+  tenían Tableros y Racks por separado se reemplazó por una jerarquía
+  compartida **Provincia → Sector/Oficina (opcional) → Sala**
+  (`public.ubicaciones`, `unique (provincia, sector_oficina, sala)`), elegida
+  o dada de alta al vuelo con el mismo criterio que el resto de los
+  catálogos (`resolverUbicacionId` en cada `actions.ts`, con manejo del
+  choque de unicidad — código `23505` — para reusar una Ubicación existente
+  en vez de duplicarla). El objetivo: dos relevamientos de tipos distintos
+  en el mismo lugar físico (por ejemplo un tablero y un rack, los dos en la
+  sala "Luján 1") quedan bajo el mismo `ubicacion_id` en vez de fragmentarse
+  en variantes de texto distintas ("Luján 1", "sala lujan", "Lujan I"...). La
+  pestaña **Ubicaciones** lista todas las Ubicaciones cargadas con la
+  cantidad de tableros/racks en cada una, y el detalle de una Ubicación
+  agrega **todo** el equipamiento relevado ahí — el resumen por categoría de
+  Tableros (térmicas, disyuntores, cámaras...) y de Racks (routers,
+  switches, UPS...) combinados, más la fecha del último relevamiento de cada
+  tablero/rack — sin importar qué técnico cargó cada uno (el estado de
+  `tableros`/`racks`/sus circuitos y equipamiento es visible para cualquier
+  usuario autenticado por RLS, igual que el resto de esos catálogos; la
+  fecha del último relevamiento respeta la misma RLS de
+  Historial — visible si lo cargó el usuario actual o si es
+  Admin/Supervisor).
 - **Errores del dispositivo** (`src/components/client-error-reporter.tsx` +
   `src/app/api/errores/reportar/`): cualquier error de JS no manejado en el
   navegador del usuario (y los fallos explícitos al generar/editar un

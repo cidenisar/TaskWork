@@ -48,6 +48,10 @@ const NAV_CONFIG: Record<string, ModuleConfig> = {
       { href: "/racks/historial", label: "Historial" },
     ],
   },
+  ubicaciones: {
+    brand: "Ubicaciones",
+    tabs: [{ href: "/ubicaciones", label: "Todas las Ubicaciones" }],
+  },
   estadisticas: {
     brand: "Estadísticas",
     tabs: [

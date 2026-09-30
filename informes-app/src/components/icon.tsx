@@ -64,6 +64,7 @@ const PATHS: Record<string, React.ReactNode> = {
     </>
   ),
   check: <path d="m5 12.5 4.5 4.5L19.5 7" />,
+  "chevron-right": <path d="m9 5 7 7-7 7" />,
   x: (
     <>
       <path d="m6 6 12 12" />

@@ -34,7 +34,9 @@ export interface RackPdfLectura {
 export interface RackPdfProps {
   numeroGeneracion: string;
   denominacion: string;
-  sitio: string;
+  provincia: string;
+  sectorOficina: string | null;
+  sala: string;
   fecha: string;
   lecturas: RackPdfLectura[];
   resumen: ResumenEquipamiento;
@@ -47,10 +49,23 @@ export interface RackPdfProps {
 const W = { n: "5%", categoria: "14%", equipo: "22%", marca: "16%", posicion: "9%", cantidad: "7%", estado: "10%", comentario: "17%" };
 
 export function RackPdf(props: RackPdfProps) {
-  const { numeroGeneracion, denominacion, sitio, fecha, lecturas, resumen, fotoGeneralBuffer, logoBuffer, appName, realizoNombre } = props;
+  const {
+    numeroGeneracion,
+    denominacion,
+    provincia,
+    sectorOficina,
+    sala,
+    fecha,
+    lecturas,
+    resumen,
+    fotoGeneralBuffer,
+    logoBuffer,
+    appName,
+    realizoNombre,
+  } = props;
   const fechaLabel = formatFechaArg(fecha);
   const documentoLabel = "RELEVAMIENTO DE EQUIPAMIENTO";
-  const documentoLinea = `Documento: ${sitio || "—"}-Público · Generado por ${appName}`;
+  const documentoLinea = `Documento: ${sala || "—"}-Público · Generado por ${appName}`;
 
   return (
     <Document title={`${numeroGeneracion} — ${denominacion}`}>
@@ -64,13 +79,15 @@ export function RackPdf(props: RackPdfProps) {
         />
 
         <Text style={commonStyles.mainTitle}>
-          {denominacion} — {sitio}
+          {denominacion} — {sala}
         </Text>
 
         <View style={commonStyles.kvTable}>
           <KeyValueRow k="N° de Generación:" v={numeroGeneracion} />
           <KeyValueRow k="Rack:" v={denominacion} />
-          <KeyValueRow k="Sitio/Sala/Shelter:" v={sitio} />
+          <KeyValueRow k="Sala:" v={sala} />
+          {sectorOficina && <KeyValueRow k="Sector/Oficina:" v={sectorOficina} />}
+          <KeyValueRow k="Provincia:" v={provincia} />
           <KeyValueRow k="Fecha:" v={fechaLabel} last />
         </View>
 

@@ -1,6 +1,7 @@
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { HistorialTableros, type HistorialMedicionRow } from "@/components/tableros/historial";
+import { labelUbicacion, type Ubicacion } from "@/components/ubicaciones/types";
 import type { MantenimientoRow } from "@/components/tableros/types";
 
 export default async function HistorialTablerosPage() {
@@ -22,17 +23,28 @@ export default async function HistorialTablerosPage() {
   ];
   const circuitoIds = [...new Set((mantenimientosRes.data ?? []).map((m) => m.circuito_id).filter((id): id is string => !!id))];
 
-  const [tablerosRes, circuitosRes] = await Promise.all([
-    tableroIds.length > 0 ? supabase.from("tableros").select("id, subsistemas, denominacion, sitio").in("id", tableroIds) : { data: [] },
+  const [tablerosRes, circuitosRes, ubicacionesRes] = await Promise.all([
+    tableroIds.length > 0
+      ? supabase.from("tableros").select("id, subsistemas, denominacion, ubicacion_id").in("id", tableroIds)
+      : { data: [] },
     circuitoIds.length > 0 ? supabase.from("tablero_circuitos").select("id, texto").in("id", circuitoIds) : { data: [] },
+    supabase.from("ubicaciones").select("id, provincia, sector_oficina, sala"),
   ]);
+  const ubicaciones: Ubicacion[] = (ubicacionesRes.data ?? []).map((u) => ({
+    id: u.id,
+    provincia: u.provincia,
+    sectorOficina: u.sector_oficina,
+    sala: u.sala,
+  }));
+  const ubicacionesPorId = new Map(ubicaciones.map((u) => [u.id, u]));
   const tablerosPorId = new Map((tablerosRes.data ?? []).map((t) => [t.id, t]));
   const circuitosPorId = new Map((circuitosRes.data ?? []).map((c) => [c.id, c.texto]));
 
   const mediciones: HistorialMedicionRow[] = (medicionesRes.data ?? [])
     .map((m) => {
       const t = tablerosPorId.get(m.tablero_id);
-      if (!t) return null;
+      const ubicacion = t ? ubicacionesPorId.get(t.ubicacion_id) : undefined;
+      if (!t || !ubicacion) return null;
       return {
         id: m.id,
         numeroGeneracion: m.numero_generacion,
@@ -40,7 +52,7 @@ export default async function HistorialTablerosPage() {
         fecha: m.fecha,
         subsistemas: t.subsistemas,
         denominacion: t.denominacion,
-        sitio: t.sitio,
+        ubicacionLabel: labelUbicacion(ubicacion),
         pdfDisponible: !!m.pdf_url,
       };
     })
@@ -49,12 +61,13 @@ export default async function HistorialTablerosPage() {
   const mantenimientos: MantenimientoRow[] = (mantenimientosRes.data ?? [])
     .map((m) => {
       const t = tablerosPorId.get(m.tablero_id);
-      if (!t) return null;
+      const ubicacion = t ? ubicacionesPorId.get(t.ubicacion_id) : undefined;
+      if (!t || !ubicacion) return null;
       return {
         id: m.id,
         tableroId: m.tablero_id,
         tableroDenominacion: t.denominacion,
-        tableroSitio: t.sitio,
+        tableroUbicacion: labelUbicacion(ubicacion),
         circuitoTexto: m.circuito_id ? (circuitosPorId.get(m.circuito_id) ?? null) : null,
         fecha: m.fecha,
         descripcion: m.descripcion,

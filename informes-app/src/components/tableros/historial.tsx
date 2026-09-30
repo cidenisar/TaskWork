@@ -13,7 +13,7 @@ export interface HistorialMedicionRow {
   fecha: string;
   subsistemas: TableroTipo[];
   denominacion: string;
-  sitio: string;
+  ubicacionLabel: string;
   pdfDisponible: boolean;
 }
 
@@ -38,7 +38,7 @@ export function HistorialTableros({
     const q = query.trim().toLowerCase();
     if (!q) return mediciones;
     return mediciones.filter((m) =>
-      `${m.numeroGeneracion} ${m.denominacion} ${m.sitio} ${labelSubsistemas(m.subsistemas)} ${TABLERO_EVENTO_LABEL[m.tipoEvento]}`
+      `${m.numeroGeneracion} ${m.denominacion} ${m.ubicacionLabel} ${labelSubsistemas(m.subsistemas)} ${TABLERO_EVENTO_LABEL[m.tipoEvento]}`
         .toLowerCase()
         .includes(q),
     );
@@ -48,7 +48,7 @@ export function HistorialTableros({
     const q = query.trim().toLowerCase();
     if (!q) return mantenimientos;
     return mantenimientos.filter((m) =>
-      `${m.tableroDenominacion} ${m.tableroSitio} ${m.circuitoTexto ?? ""} ${m.descripcion}`.toLowerCase().includes(q),
+      `${m.tableroDenominacion} ${m.tableroUbicacion} ${m.circuitoTexto ?? ""} ${m.descripcion}`.toLowerCase().includes(q),
     );
   }, [mantenimientos, query]);
 
@@ -138,7 +138,7 @@ export function HistorialTableros({
                         </span>
                       </div>
                       <div className="hist-meta">
-                        {m.numeroGeneracion} · {TABLERO_EVENTO_LABEL[m.tipoEvento]} · {labelSubsistemas(m.subsistemas)} · {m.sitio} ·{" "}
+                        {m.numeroGeneracion} · {TABLERO_EVENTO_LABEL[m.tipoEvento]} · {labelSubsistemas(m.subsistemas)} · {m.ubicacionLabel} ·{" "}
                         {fmtFecha(m.fecha)}
                       </div>
                     </div>
@@ -175,7 +175,7 @@ export function HistorialTableros({
                       )}
                     </div>
                     <div className="hist-meta">
-                      {m.tableroSitio} · {fmtFecha(m.fecha)}
+                      {m.tableroUbicacion} · {fmtFecha(m.fecha)}
                       {m.circuitoTexto ? ` · ${m.circuitoTexto}` : ""}
                     </div>
                     <div className="hist-meta" style={{ marginTop: 4 }}>

@@ -60,7 +60,8 @@ export interface EquipamientoItem {
 export interface RackConEquipamiento {
   id: string;
   denominacion: string;
-  sitio: string;
+  ubicacionId: string;
+  ubicacionLabel: string;
   equipamiento: EquipamientoItem[];
 }
 

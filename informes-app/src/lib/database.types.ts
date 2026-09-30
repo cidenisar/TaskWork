@@ -246,7 +246,7 @@ export type TableroRow = {
   id: string;
   subsistemas: TableroTipo[];
   denominacion: string;
-  sitio: string;
+  ubicacion_id: string;
   created_by: string | null;
   created_at: string;
 }
@@ -303,7 +303,16 @@ export type TableroMedicionLecturaRow = {
 export type RackRow = {
   id: string;
   denominacion: string;
-  sitio: string;
+  ubicacion_id: string;
+  created_by: string | null;
+  created_at: string;
+}
+
+export type UbicacionRow = {
+  id: string;
+  provincia: string;
+  sector_oficina: string | null;
+  sala: string;
   created_by: string | null;
   created_at: string;
 }
@@ -452,7 +461,7 @@ export interface Database {
       client_errores: Tbl<ClientErrorRow, Partial<ClientErrorRow> & Pick<ClientErrorRow, "mensaje">, Partial<ClientErrorRow>>;
       tableros: Tbl<
         TableroRow,
-        Partial<TableroRow> & Pick<TableroRow, "subsistemas" | "denominacion" | "sitio">,
+        Partial<TableroRow> & Pick<TableroRow, "subsistemas" | "denominacion" | "ubicacion_id">,
         Partial<TableroRow>
       >;
       tablero_circuitos: Tbl<
@@ -477,7 +486,8 @@ export interface Database {
           Pick<TableroMantenimientoRow, "tablero_id" | "fecha" | "descripcion" | "created_by">,
         Partial<TableroMantenimientoRow>
       >;
-      racks: Tbl<RackRow, Partial<RackRow> & Pick<RackRow, "denominacion" | "sitio">, Partial<RackRow>>;
+      racks: Tbl<RackRow, Partial<RackRow> & Pick<RackRow, "denominacion" | "ubicacion_id">, Partial<RackRow>>;
+      ubicaciones: Tbl<UbicacionRow, Partial<UbicacionRow> & Pick<UbicacionRow, "provincia" | "sala">, Partial<UbicacionRow>>;
       rack_equipamientos: Tbl<
         RackEquipamientoRow,
         Partial<RackEquipamientoRow> & Pick<RackEquipamientoRow, "rack_id" | "numero" | "categoria_equipo" | "texto">,

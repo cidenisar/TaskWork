@@ -1,6 +1,7 @@
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { HistorialRacks, type HistorialRelevamientoRow } from "@/components/racks/historial";
+import { labelUbicacion, type Ubicacion } from "@/components/ubicaciones/types";
 
 export default async function HistorialRacksPage() {
   await requireProfile();
@@ -13,20 +14,30 @@ export default async function HistorialRacksPage() {
     .order("fecha", { ascending: false });
 
   const rackIds = [...new Set((relevamientosData ?? []).map((r) => r.rack_id))];
-  const { data: racksData } =
-    rackIds.length > 0 ? await supabase.from("racks").select("id, denominacion, sitio").in("id", rackIds) : { data: [] };
+  const [{ data: racksData }, { data: ubicacionesData }] = await Promise.all([
+    rackIds.length > 0 ? supabase.from("racks").select("id, denominacion, ubicacion_id").in("id", rackIds) : { data: [] },
+    supabase.from("ubicaciones").select("id, provincia, sector_oficina, sala"),
+  ]);
+  const ubicaciones: Ubicacion[] = (ubicacionesData ?? []).map((u) => ({
+    id: u.id,
+    provincia: u.provincia,
+    sectorOficina: u.sector_oficina,
+    sala: u.sala,
+  }));
+  const ubicacionesPorId = new Map(ubicaciones.map((u) => [u.id, u]));
   const racksPorId = new Map((racksData ?? []).map((r) => [r.id, r]));
 
   const relevamientos: HistorialRelevamientoRow[] = (relevamientosData ?? [])
     .map((r) => {
       const rack = racksPorId.get(r.rack_id);
-      if (!rack) return null;
+      const ubicacion = rack ? ubicacionesPorId.get(rack.ubicacion_id) : undefined;
+      if (!rack || !ubicacion) return null;
       return {
         id: r.id,
         numeroGeneracion: r.numero_generacion,
         fecha: r.fecha,
         denominacion: rack.denominacion,
-        sitio: rack.sitio,
+        ubicacionLabel: labelUbicacion(ubicacion),
         pdfDisponible: !!r.pdf_url,
         fotoDisponible: !!r.foto_general_url,
       };

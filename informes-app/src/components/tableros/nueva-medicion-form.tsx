@@ -6,6 +6,8 @@ import { reportarErrorCliente } from "@/lib/client-error-report";
 import { resizeImageToJpeg } from "@/lib/image-resize";
 import { ErrorNote, SuccessNote } from "@/components/notes";
 import { Icon } from "@/components/icon";
+import { UbicacionFields } from "@/components/ubicaciones/ubicacion-fields";
+import type { Ubicacion } from "@/components/ubicaciones/types";
 import type { TableroCategoriaEquipo, TableroEventoTipo, TableroTipo, TableroTipoCircuito } from "@/lib/database.types";
 import {
   TABLERO_TIPOS,
@@ -42,12 +44,23 @@ function toggleEnArray<T>(arr: T[], v: T): T[] {
   return arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v];
 }
 
-export function NuevaMedicionForm({ tableros }: { tableros: TableroConCircuitos[] }) {
+export function NuevaMedicionForm({
+  tableros,
+  ubicaciones,
+  provincias,
+}: {
+  tableros: TableroConCircuitos[];
+  ubicaciones: Ubicacion[];
+  provincias: string[];
+}) {
+  const [ubicacionId, setUbicacionId] = useState<string>(""); // "" = sin elegir, "__new" = crear
+  const [provinciaNueva, setProvinciaNueva] = useState("");
+  const [sectorOficinaNueva, setSectorOficinaNueva] = useState("");
+  const [salaNueva, setSalaNueva] = useState("");
   const [filtroSubsistemas, setFiltroSubsistemas] = useState<TableroTipo[]>([]);
   const [tableroId, setTableroId] = useState<string>(""); // "" = sin elegir, "__new" = crear
   const [subsistemasNuevo, setSubsistemasNuevo] = useState<TableroTipo[]>([]);
   const [denominacionNueva, setDenominacionNueva] = useState("");
-  const [sitioNueva, setSitioNueva] = useState("");
   const [tipoEventoElegido, setTipoEventoElegido] = useState<TableroEventoTipo>("medicion");
   const [fecha, setFecha] = useState(() => new Date().toISOString().slice(0, 10));
   const [circuitos, setCircuitos] = useState<CircuitoItem[]>([]);
@@ -70,13 +83,16 @@ export function NuevaMedicionForm({ tableros }: { tableros: TableroConCircuitos[
     };
   }, [fotoGeneralPreview]);
 
-  const tablerosFiltrados = useMemo(
-    () =>
-      filtroSubsistemas.length === 0
-        ? tableros
-        : tableros.filter((t) => filtroSubsistemas.some((s) => t.subsistemas.includes(s))),
-    [tableros, filtroSubsistemas],
-  );
+  // El Tablero solo se puede elegir/crear una vez que hay una Ubicación
+  // elegida — un tablero nuevo siempre pertenece a la ubicación seleccionada,
+  // así que la lista de tableros existentes se filtra a esa ubicación (nunca
+  // tiene sentido mostrar un tablero de otra sala).
+  const tablerosFiltrados = useMemo(() => {
+    if (!ubicacionId || ubicacionId === "__new") return [];
+    return tableros.filter(
+      (t) => t.ubicacionId === ubicacionId && (filtroSubsistemas.length === 0 || filtroSubsistemas.some((s) => t.subsistemas.includes(s))),
+    );
+  }, [tableros, ubicacionId, filtroSubsistemas]);
   const tableroExistente = useMemo(() => tableros.find((t) => t.id === tableroId) ?? null, [tableros, tableroId]);
   const subsistemasActuales = tableroId === "__new" ? subsistemasNuevo : (tableroExistente?.subsistemas ?? []);
   const tieneEnergia = subsistemasActuales.includes("energia");
@@ -85,6 +101,21 @@ export function NuevaMedicionForm({ tableros }: { tableros: TableroConCircuitos[
   // (nunca miden corriente).
   const tipoEvento: TableroEventoTipo = tieneEnergia ? tipoEventoElegido : "relevamiento";
   const resumen = useMemo(() => calcularResumenEquipamiento(circuitos), [circuitos]);
+
+  function elegirUbicacion(id: string) {
+    setUbicacionId(id);
+    setSuccess(null);
+    setTableroId("");
+    setSubsistemasNuevo([]);
+    setDenominacionNueva("");
+    setCircuitos([]);
+    setLecturas({});
+    if (id !== "__new") {
+      setProvinciaNueva("");
+      setSectorOficinaNueva("");
+      setSalaNueva("");
+    }
+  }
 
   function elegirTablero(id: string) {
     setTableroId(id);
@@ -246,12 +277,20 @@ export function NuevaMedicionForm({ tableros }: { tableros: TableroConCircuitos[
 
   async function guardar() {
     setError(null);
+    if (!ubicacionId) {
+      setError("Elegí una ubicación existente o creá una nueva.");
+      return;
+    }
+    if (ubicacionId === "__new" && (!provinciaNueva.trim() || !salaNueva.trim())) {
+      setError("Completá la provincia y la sala de la ubicación nueva.");
+      return;
+    }
     if (!tableroId) {
       setError("Elegí un tablero existente o creá uno nuevo.");
       return;
     }
-    if (tableroId === "__new" && (!denominacionNueva.trim() || !sitioNueva.trim())) {
-      setError("Completá la denominación y el sitio del tablero nuevo.");
+    if (tableroId === "__new" && !denominacionNueva.trim()) {
+      setError("Completá la denominación del tablero nuevo.");
       return;
     }
     if (tableroId === "__new" && subsistemasNuevo.length === 0) {
@@ -280,9 +319,11 @@ export function NuevaMedicionForm({ tableros }: { tableros: TableroConCircuitos[
         JSON.stringify({
           subsistemas: subsistemasActuales,
           tipoEvento,
+          ubicacionId: ubicacionId === "__new" ? null : ubicacionId,
+          ubicacionNueva:
+            ubicacionId === "__new" ? { provincia: provinciaNueva, sectorOficina: sectorOficinaNueva, sala: salaNueva } : null,
           tableroId: tableroId === "__new" ? null : tableroId,
           denominacionNueva,
-          sitioNuevo: sitioNueva,
           fecha,
           lecturas: circuitos.map((c, i) => {
             const l = lecturas[i] ?? LECTURA_VACIA;
@@ -332,10 +373,13 @@ export function NuevaMedicionForm({ tableros }: { tableros: TableroConCircuitos[
 
   function empezarOtra() {
     setSuccess(null);
+    setUbicacionId("");
+    setProvinciaNueva("");
+    setSectorOficinaNueva("");
+    setSalaNueva("");
     setTableroId("");
     setSubsistemasNuevo([]);
     setDenominacionNueva("");
-    setSitioNueva("");
     setCircuitos([]);
     setLecturas({});
     setFotoGeneral(null);
@@ -349,42 +393,59 @@ export function NuevaMedicionForm({ tableros }: { tableros: TableroConCircuitos[
       </div>
 
       <div className="card">
-        <div className="section-label">Tablero</div>
-        {tableros.length > 0 && (
-          <div className="field">
-            <label>Filtrar por subsistema (opcional)</label>
-            <div className="tech-form-grid" style={{ gridTemplateColumns: "repeat(3, 1fr)" }}>
-              {TABLERO_TIPOS.map((s) => (
-                <button
-                  key={s}
-                  type="button"
-                  className={`btn btn-sm ${filtroSubsistemas.includes(s) ? "btn-primary" : "btn-secondary"}`}
-                  onClick={() => setFiltroSubsistemas((prev) => toggleEnArray(prev, s))}
-                  disabled={submitting}
-                >
-                  {TABLERO_TIPO_LABEL[s]}
-                </button>
-              ))}
+        <div className="section-label">Ubicación</div>
+        <UbicacionFields
+          ubicaciones={ubicaciones}
+          provincias={provincias}
+          ubicacionId={ubicacionId}
+          onUbicacionIdChange={elegirUbicacion}
+          provinciaNueva={provinciaNueva}
+          onProvinciaNuevaChange={setProvinciaNueva}
+          sectorOficinaNueva={sectorOficinaNueva}
+          onSectorOficinaNuevaChange={setSectorOficinaNueva}
+          salaNueva={salaNueva}
+          onSalaNuevaChange={setSalaNueva}
+          disabled={submitting}
+        />
+      </div>
+
+      {ubicacionId && (
+        <div className="card">
+          <div className="section-label">Tablero</div>
+          {tableros.length > 0 && (
+            <div className="field">
+              <label>Filtrar por subsistema (opcional)</label>
+              <div className="tech-form-grid" style={{ gridTemplateColumns: "repeat(3, 1fr)" }}>
+                {TABLERO_TIPOS.map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    className={`btn btn-sm ${filtroSubsistemas.includes(s) ? "btn-primary" : "btn-secondary"}`}
+                    onClick={() => setFiltroSubsistemas((prev) => toggleEnArray(prev, s))}
+                    disabled={submitting}
+                  >
+                    {TABLERO_TIPO_LABEL[s]}
+                  </button>
+                ))}
+              </div>
             </div>
+          )}
+          <div className="field">
+            <label>
+              Elegí uno existente o creá uno nuevo <span className="req">*</span>
+            </label>
+            <select value={tableroId} onChange={(e) => elegirTablero(e.target.value)} disabled={submitting}>
+              <option value="">Seleccionar tablero...</option>
+              {tablerosFiltrados.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.denominacion} ({labelSubsistemas(t.subsistemas)})
+                </option>
+              ))}
+              <option value="__new">+ Crear tablero nuevo...</option>
+            </select>
           </div>
-        )}
-        <div className="field">
-          <label>
-            Elegí uno existente o creá uno nuevo <span className="req">*</span>
-          </label>
-          <select value={tableroId} onChange={(e) => elegirTablero(e.target.value)} disabled={submitting}>
-            <option value="">Seleccionar tablero...</option>
-            {tablerosFiltrados.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.denominacion} — {t.sitio} ({labelSubsistemas(t.subsistemas)})
-              </option>
-            ))}
-            <option value="__new">+ Crear tablero nuevo...</option>
-          </select>
-        </div>
-        {tableroId === "__new" && (
-          <>
-            <div className="grid2">
+          {tableroId === "__new" && (
+            <>
               <div className="field">
                 <label>
                   Denominación <span className="req">*</span>
@@ -399,133 +460,122 @@ export function NuevaMedicionForm({ tableros }: { tableros: TableroConCircuitos[
               </div>
               <div className="field">
                 <label>
-                  Sitio <span className="req">*</span>
+                  Subsistemas presentes en el tablero <span className="req">*</span>
                 </label>
-                <input
-                  type="text"
-                  placeholder="Ej: Sala RTIC Edificio Principal"
-                  value={sitioNueva}
-                  onChange={(e) => setSitioNueva(e.target.value)}
-                  disabled={submitting}
-                />
+                <div className="hint" style={{ margin: "-2px 0 8px" }}>
+                  Un tablero puede ser mixto — marcá todos los que correspondan.
+                </div>
+                <div className="tech-form-grid" style={{ gridTemplateColumns: "repeat(3, 1fr)" }}>
+                  {TABLERO_TIPOS.map((s) => (
+                    <button
+                      key={s}
+                      type="button"
+                      className={`btn ${subsistemasNuevo.includes(s) ? "btn-primary" : "btn-secondary"}`}
+                      onClick={() => setSubsistemasNuevo((prev) => toggleEnArray(prev, s))}
+                      disabled={submitting}
+                    >
+                      {TABLERO_TIPO_LABEL[s]}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
-            <div className="field">
-              <label>
-                Subsistemas presentes en el tablero <span className="req">*</span>
-              </label>
-              <div className="hint" style={{ margin: "-2px 0 8px" }}>
-                Un tablero puede ser mixto — marcá todos los que correspondan.
+            </>
+          )}
+          {tieneEnergia && (
+            <>
+              <div className="section-label" style={{ marginTop: 16 }}>
+                Tipo de Visita
               </div>
-              <div className="tech-form-grid" style={{ gridTemplateColumns: "repeat(3, 1fr)" }}>
-                {TABLERO_TIPOS.map((s) => (
+              <div className="hint" style={{ margin: "-4px 0 12px" }}>
+                Medición mide corriente por fase en térmicas/disyuntores; Relevamiento es un chequeo de estado más liviano, sin medir
+                corriente.
+              </div>
+              <div className="tech-form-grid" style={{ gridTemplateColumns: "repeat(2, 1fr)" }}>
+                {(["medicion", "relevamiento"] as const).map((te) => (
                   <button
-                    key={s}
+                    key={te}
                     type="button"
-                    className={`btn ${subsistemasNuevo.includes(s) ? "btn-primary" : "btn-secondary"}`}
-                    onClick={() => setSubsistemasNuevo((prev) => toggleEnArray(prev, s))}
+                    className={`btn ${tipoEventoElegido === te ? "btn-primary" : "btn-secondary"}`}
+                    onClick={() => setTipoEventoElegido(te)}
                     disabled={submitting}
                   >
-                    {TABLERO_TIPO_LABEL[s]}
+                    {TABLERO_EVENTO_LABEL[te]}
                   </button>
                 ))}
               </div>
+            </>
+          )}
+          <div className="field" style={{ marginTop: 16 }}>
+            <label>
+              Fecha <span className="req">*</span>
+            </label>
+            <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} disabled={submitting} style={{ maxWidth: 220 }} />
+          </div>
+          <div className="field" style={{ marginBottom: 0 }}>
+            <label>
+              Foto general del tablero <span className="opt">(opcional)</span>
+            </label>
+            <div className="hint" style={{ margin: "-2px 0 8px" }}>
+              Queda guardada como registro y se imprime en el PDF de esta visita.
             </div>
-          </>
-        )}
-        {tieneEnergia && (
-          <>
-            <div className="section-label" style={{ marginTop: 16 }}>
-              Tipo de Visita
-            </div>
-            <div className="hint" style={{ margin: "-4px 0 12px" }}>
-              Medición mide corriente por fase en térmicas/disyuntores; Relevamiento es un chequeo de estado más liviano, sin medir corriente.
-            </div>
-            <div className="tech-form-grid" style={{ gridTemplateColumns: "repeat(2, 1fr)" }}>
-              {(["medicion", "relevamiento"] as const).map((te) => (
+            <input
+              ref={fotoGeneralCameraInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              style={{ display: "none" }}
+              onChange={(e) => {
+                const file = e.target.files?.[0] ?? null;
+                e.target.value = "";
+                if (file) setFotoGeneral(file);
+              }}
+            />
+            <input
+              ref={fotoGeneralGaleriaInputRef}
+              type="file"
+              accept="image/*"
+              style={{ display: "none" }}
+              onChange={(e) => {
+                const file = e.target.files?.[0] ?? null;
+                e.target.value = "";
+                if (file) setFotoGeneral(file);
+              }}
+            />
+            {fotoGeneral && fotoGeneralPreview ? (
+              <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                {/* eslint-disable-next-line @next/next/no-img-element -- preview local, no vale la pena next/image acá */}
+                <img
+                  src={fotoGeneralPreview}
+                  alt=""
+                  style={{ width: 64, height: 64, objectFit: "cover", borderRadius: 8, border: "1px solid var(--field-border)" }}
+                />
+                <button type="button" className="btn btn-secondary btn-sm" onClick={() => setFotoGeneral(null)} disabled={submitting}>
+                  <Icon name="x" size={12} /> Quitar
+                </button>
+              </div>
+            ) : (
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                 <button
-                  key={te}
                   type="button"
-                  className={`btn ${tipoEventoElegido === te ? "btn-primary" : "btn-secondary"}`}
-                  onClick={() => setTipoEventoElegido(te)}
+                  className="ai-btn"
+                  onClick={() => fotoGeneralCameraInputRef.current?.click()}
                   disabled={submitting}
                 >
-                  {TABLERO_EVENTO_LABEL[te]}
+                  <Icon name="camera" size={13} /> Sacar foto
                 </button>
-              ))}
-            </div>
-          </>
-        )}
-        <div className="field" style={{ marginTop: 16 }}>
-          <label>
-            Fecha <span className="req">*</span>
-          </label>
-          <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} disabled={submitting} style={{ maxWidth: 220 }} />
-        </div>
-        <div className="field" style={{ marginBottom: 0 }}>
-          <label>
-            Foto general del tablero <span className="opt">(opcional)</span>
-          </label>
-          <div className="hint" style={{ margin: "-2px 0 8px" }}>
-            Queda guardada como registro y se imprime en el PDF de esta visita.
+                <button
+                  type="button"
+                  className="ai-btn"
+                  onClick={() => fotoGeneralGaleriaInputRef.current?.click()}
+                  disabled={submitting}
+                >
+                  <Icon name="upload" size={13} /> Subir foto
+                </button>
+              </div>
+            )}
           </div>
-          <input
-            ref={fotoGeneralCameraInputRef}
-            type="file"
-            accept="image/*"
-            capture="environment"
-            style={{ display: "none" }}
-            onChange={(e) => {
-              const file = e.target.files?.[0] ?? null;
-              e.target.value = "";
-              if (file) setFotoGeneral(file);
-            }}
-          />
-          <input
-            ref={fotoGeneralGaleriaInputRef}
-            type="file"
-            accept="image/*"
-            style={{ display: "none" }}
-            onChange={(e) => {
-              const file = e.target.files?.[0] ?? null;
-              e.target.value = "";
-              if (file) setFotoGeneral(file);
-            }}
-          />
-          {fotoGeneral && fotoGeneralPreview ? (
-            <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-              {/* eslint-disable-next-line @next/next/no-img-element -- preview local, no vale la pena next/image acá */}
-              <img
-                src={fotoGeneralPreview}
-                alt=""
-                style={{ width: 64, height: 64, objectFit: "cover", borderRadius: 8, border: "1px solid var(--field-border)" }}
-              />
-              <button type="button" className="btn btn-secondary btn-sm" onClick={() => setFotoGeneral(null)} disabled={submitting}>
-                <Icon name="x" size={12} /> Quitar
-              </button>
-            </div>
-          ) : (
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <button
-                type="button"
-                className="ai-btn"
-                onClick={() => fotoGeneralCameraInputRef.current?.click()}
-                disabled={submitting}
-              >
-                <Icon name="camera" size={13} /> Sacar foto
-              </button>
-              <button
-                type="button"
-                className="ai-btn"
-                onClick={() => fotoGeneralGaleriaInputRef.current?.click()}
-                disabled={submitting}
-              >
-                <Icon name="upload" size={13} /> Subir foto
-              </button>
-            </div>
-          )}
         </div>
-      </div>
+      )}
 
       {tableroId && (
         <div className="card">

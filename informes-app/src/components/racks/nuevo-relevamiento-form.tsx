@@ -6,6 +6,8 @@ import { reportarErrorCliente } from "@/lib/client-error-report";
 import { resizeImageToJpeg } from "@/lib/image-resize";
 import { ErrorNote, SuccessNote } from "@/components/notes";
 import { Icon } from "@/components/icon";
+import { UbicacionFields } from "@/components/ubicaciones/ubicacion-fields";
+import type { Ubicacion } from "@/components/ubicaciones/types";
 import type { RackCategoriaEquipo } from "@/lib/database.types";
 import {
   RACK_FOTO_IA_MAX,
@@ -25,10 +27,21 @@ interface LecturaState {
 const LECTURA_VACIA: LecturaState = { estado: "", comentario: "" };
 const EQUIPO_NUEVO_BASE = { categoriaEquipo: "otro" as RackCategoriaEquipo, marcaModelo: "", posicionU: "", cantidad: 1 };
 
-export function NuevoRelevamientoForm({ racks }: { racks: RackConEquipamiento[] }) {
+export function NuevoRelevamientoForm({
+  racks,
+  ubicaciones,
+  provincias,
+}: {
+  racks: RackConEquipamiento[];
+  ubicaciones: Ubicacion[];
+  provincias: string[];
+}) {
+  const [ubicacionId, setUbicacionId] = useState<string>(""); // "" = sin elegir, "__new" = crear
+  const [provinciaNueva, setProvinciaNueva] = useState("");
+  const [sectorOficinaNueva, setSectorOficinaNueva] = useState("");
+  const [salaNueva, setSalaNueva] = useState("");
   const [rackId, setRackId] = useState<string>(""); // "" = sin elegir, "__new" = crear
   const [denominacionNueva, setDenominacionNueva] = useState("");
-  const [sitioNueva, setSitioNueva] = useState("");
   const [fecha, setFecha] = useState(() => new Date().toISOString().slice(0, 10));
   const [equipamiento, setEquipamiento] = useState<EquipamientoItem[]>([]);
   const [lecturas, setLecturas] = useState<Record<number, LecturaState>>({});
@@ -51,6 +64,25 @@ export function NuevoRelevamientoForm({ racks }: { racks: RackConEquipamiento[] 
   }, [fotoGeneralPreview]);
 
   const resumen = useMemo(() => calcularResumenEquipamiento(equipamiento), [equipamiento]);
+
+  const racksFiltrados = useMemo(() => {
+    if (!ubicacionId || ubicacionId === "__new") return [];
+    return racks.filter((r) => r.ubicacionId === ubicacionId);
+  }, [racks, ubicacionId]);
+
+  function elegirUbicacion(id: string) {
+    setUbicacionId(id);
+    setSuccess(null);
+    setRackId("");
+    setDenominacionNueva("");
+    setEquipamiento([]);
+    setLecturas({});
+    if (id !== "__new") {
+      setProvinciaNueva("");
+      setSectorOficinaNueva("");
+      setSalaNueva("");
+    }
+  }
 
   function elegirRack(id: string) {
     setRackId(id);
@@ -184,12 +216,20 @@ export function NuevoRelevamientoForm({ racks }: { racks: RackConEquipamiento[] 
 
   async function guardar() {
     setError(null);
+    if (!ubicacionId) {
+      setError("Elegí una ubicación existente o creá una nueva.");
+      return;
+    }
+    if (ubicacionId === "__new" && (!provinciaNueva.trim() || !salaNueva.trim())) {
+      setError("Completá la provincia y la sala de la ubicación nueva.");
+      return;
+    }
     if (!rackId) {
       setError("Elegí un rack existente o creá uno nuevo.");
       return;
     }
-    if (rackId === "__new" && (!denominacionNueva.trim() || !sitioNueva.trim())) {
-      setError("Completá la denominación y el sitio/sala del rack nuevo.");
+    if (rackId === "__new" && !denominacionNueva.trim()) {
+      setError("Completá la denominación del rack nuevo.");
       return;
     }
     if (!fecha) {
@@ -213,8 +253,12 @@ export function NuevoRelevamientoForm({ racks }: { racks: RackConEquipamiento[] 
         "payload",
         JSON.stringify({
           rackId: rackId === "__new" ? null : rackId,
+          ubicacionId: ubicacionId === "__new" ? null : ubicacionId,
+          ubicacionNueva:
+            ubicacionId === "__new"
+              ? { provincia: provinciaNueva, sectorOficina: sectorOficinaNueva, sala: salaNueva }
+              : null,
           denominacionNueva,
-          sitioNuevo: sitioNueva,
           fecha,
           lecturas: equipamiento.map((e, i) => {
             const l = lecturas[i] ?? LECTURA_VACIA;
@@ -261,9 +305,12 @@ export function NuevoRelevamientoForm({ racks }: { racks: RackConEquipamiento[] 
 
   function empezarOtro() {
     setSuccess(null);
+    setUbicacionId("");
+    setProvinciaNueva("");
+    setSectorOficinaNueva("");
+    setSalaNueva("");
     setRackId("");
     setDenominacionNueva("");
-    setSitioNueva("");
     setEquipamiento([]);
     setLecturas({});
     setFotoGeneral(null);
@@ -277,23 +324,40 @@ export function NuevoRelevamientoForm({ racks }: { racks: RackConEquipamiento[] 
       </div>
 
       <div className="card">
-        <div className="section-label">Rack</div>
-        <div className="field">
-          <label>
-            Elegí uno existente o creá uno nuevo <span className="req">*</span>
-          </label>
-          <select value={rackId} onChange={(e) => elegirRack(e.target.value)} disabled={submitting}>
-            <option value="">Seleccionar rack...</option>
-            {racks.map((r) => (
-              <option key={r.id} value={r.id}>
-                {r.denominacion} — {r.sitio}
-              </option>
-            ))}
-            <option value="__new">+ Crear rack nuevo...</option>
-          </select>
-        </div>
-        {rackId === "__new" && (
-          <div className="grid2">
+        <div className="section-label">Ubicación</div>
+        <UbicacionFields
+          ubicaciones={ubicaciones}
+          provincias={provincias}
+          ubicacionId={ubicacionId}
+          onUbicacionIdChange={elegirUbicacion}
+          provinciaNueva={provinciaNueva}
+          onProvinciaNuevaChange={setProvinciaNueva}
+          sectorOficinaNueva={sectorOficinaNueva}
+          onSectorOficinaNuevaChange={setSectorOficinaNueva}
+          salaNueva={salaNueva}
+          onSalaNuevaChange={setSalaNueva}
+          disabled={submitting}
+        />
+      </div>
+
+      {ubicacionId && (
+        <div className="card">
+          <div className="section-label">Rack</div>
+          <div className="field">
+            <label>
+              Elegí uno existente o creá uno nuevo <span className="req">*</span>
+            </label>
+            <select value={rackId} onChange={(e) => elegirRack(e.target.value)} disabled={submitting}>
+              <option value="">Seleccionar rack...</option>
+              {racksFiltrados.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.denominacion}
+                </option>
+              ))}
+              <option value="__new">+ Crear rack nuevo...</option>
+            </select>
+          </div>
+          {rackId === "__new" && (
             <div className="field">
               <label>
                 Denominación <span className="req">*</span>
@@ -306,80 +370,68 @@ export function NuevoRelevamientoForm({ racks }: { racks: RackConEquipamiento[] 
                 disabled={submitting}
               />
             </div>
-            <div className="field">
-              <label>
-                Sitio/Sala/Shelter <span className="req">*</span>
-              </label>
-              <input
-                type="text"
-                placeholder="Ej: Shelter Cerro Colorado - Sala de Radio"
-                value={sitioNueva}
-                onChange={(e) => setSitioNueva(e.target.value)}
-                disabled={submitting}
-              />
-            </div>
-          </div>
-        )}
-        <div className="field" style={{ marginTop: 16 }}>
-          <label>
-            Fecha <span className="req">*</span>
-          </label>
-          <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} disabled={submitting} style={{ maxWidth: 220 }} />
-        </div>
-        <div className="field" style={{ marginBottom: 0 }}>
-          <label>
-            Foto general del rack <span className="opt">(opcional)</span>
-          </label>
-          <div className="hint" style={{ margin: "-2px 0 8px" }}>
-            Queda guardada como registro y se imprime en el PDF de esta visita.
-          </div>
-          <input
-            ref={fotoGeneralCameraInputRef}
-            type="file"
-            accept="image/*"
-            capture="environment"
-            style={{ display: "none" }}
-            onChange={(e) => {
-              const file = e.target.files?.[0] ?? null;
-              e.target.value = "";
-              if (file) setFotoGeneral(file);
-            }}
-          />
-          <input
-            ref={fotoGeneralGaleriaInputRef}
-            type="file"
-            accept="image/*"
-            style={{ display: "none" }}
-            onChange={(e) => {
-              const file = e.target.files?.[0] ?? null;
-              e.target.value = "";
-              if (file) setFotoGeneral(file);
-            }}
-          />
-          {fotoGeneral && fotoGeneralPreview ? (
-            <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-              {/* eslint-disable-next-line @next/next/no-img-element -- preview local, no vale la pena next/image acá */}
-              <img
-                src={fotoGeneralPreview}
-                alt=""
-                style={{ width: 64, height: 64, objectFit: "cover", borderRadius: 8, border: "1px solid var(--field-border)" }}
-              />
-              <button type="button" className="btn btn-secondary btn-sm" onClick={() => setFotoGeneral(null)} disabled={submitting}>
-                <Icon name="x" size={12} /> Quitar
-              </button>
-            </div>
-          ) : (
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <button type="button" className="ai-btn" onClick={() => fotoGeneralCameraInputRef.current?.click()} disabled={submitting}>
-                <Icon name="camera" size={13} /> Sacar foto
-              </button>
-              <button type="button" className="ai-btn" onClick={() => fotoGeneralGaleriaInputRef.current?.click()} disabled={submitting}>
-                <Icon name="upload" size={13} /> Subir foto
-              </button>
-            </div>
           )}
+          <div className="field" style={{ marginTop: 16 }}>
+            <label>
+              Fecha <span className="req">*</span>
+            </label>
+            <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} disabled={submitting} style={{ maxWidth: 220 }} />
+          </div>
+          <div className="field" style={{ marginBottom: 0 }}>
+            <label>
+              Foto general del rack <span className="opt">(opcional)</span>
+            </label>
+            <div className="hint" style={{ margin: "-2px 0 8px" }}>
+              Queda guardada como registro y se imprime en el PDF de esta visita.
+            </div>
+            <input
+              ref={fotoGeneralCameraInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              style={{ display: "none" }}
+              onChange={(e) => {
+                const file = e.target.files?.[0] ?? null;
+                e.target.value = "";
+                if (file) setFotoGeneral(file);
+              }}
+            />
+            <input
+              ref={fotoGeneralGaleriaInputRef}
+              type="file"
+              accept="image/*"
+              style={{ display: "none" }}
+              onChange={(e) => {
+                const file = e.target.files?.[0] ?? null;
+                e.target.value = "";
+                if (file) setFotoGeneral(file);
+              }}
+            />
+            {fotoGeneral && fotoGeneralPreview ? (
+              <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                {/* eslint-disable-next-line @next/next/no-img-element -- preview local, no vale la pena next/image acá */}
+                <img
+                  src={fotoGeneralPreview}
+                  alt=""
+                  style={{ width: 64, height: 64, objectFit: "cover", borderRadius: 8, border: "1px solid var(--field-border)" }}
+                />
+                <button type="button" className="btn btn-secondary btn-sm" onClick={() => setFotoGeneral(null)} disabled={submitting}>
+                  <Icon name="x" size={12} /> Quitar
+                </button>
+              </div>
+            ) : (
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <button type="button" className="ai-btn" onClick={() => fotoGeneralCameraInputRef.current?.click()} disabled={submitting}>
+                  <Icon name="camera" size={13} /> Sacar foto
+                </button>
+                <button type="button" className="ai-btn" onClick={() => fotoGeneralGaleriaInputRef.current?.click()} disabled={submitting}>
+                  <Icon name="upload" size={13} /> Subir foto
+                </button>
+              </div>
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
       {rackId && (
         <div className="card">

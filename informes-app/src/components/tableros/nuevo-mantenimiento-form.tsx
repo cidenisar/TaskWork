@@ -93,7 +93,7 @@ export function NuevoMantenimientoForm({ tableros }: { tableros: TableroConCircu
             <option value="">Seleccionar tablero...</option>
             {tableros.map((t) => (
               <option key={t.id} value={t.id}>
-                {t.denominacion} — {t.sitio} ({labelSubsistemas(t.subsistemas)})
+                {t.denominacion} — {t.ubicacionLabel} ({labelSubsistemas(t.subsistemas)})
               </option>
             ))}
           </select>

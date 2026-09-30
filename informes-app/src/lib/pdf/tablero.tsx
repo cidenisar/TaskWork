@@ -46,7 +46,9 @@ export interface TableroPdfProps {
   subsistemas: TableroTipo[];
   tipoEvento: TableroEventoTipo;
   denominacion: string;
-  sitio: string;
+  provincia: string;
+  sectorOficina: string | null;
+  sala: string;
   fecha: string;
   lecturas: TableroPdfLectura[];
   resumen: ResumenEquipamiento;
@@ -69,13 +71,27 @@ const WIDTHS_CON_CORRIENTE: ColWidths = { n: "4%", circuito: "16%", categoria: "
 const WIDTHS_SIN_CORRIENTE: ColWidths = { n: "5%", circuito: "22%", categoria: "16%", estado: "13%", amp: "0%", fase: "0%", comentario: "44%" };
 
 export function TableroPdf(props: TableroPdfProps) {
-  const { numeroGeneracion, subsistemas, tipoEvento, denominacion, sitio, fecha, lecturas, resumen, fotoGeneralBuffer, logoBuffer, appName, realizoNombre } =
-    props;
+  const {
+    numeroGeneracion,
+    subsistemas,
+    tipoEvento,
+    denominacion,
+    provincia,
+    sectorOficina,
+    sala,
+    fecha,
+    lecturas,
+    resumen,
+    fotoGeneralBuffer,
+    logoBuffer,
+    appName,
+    realizoNombre,
+  } = props;
   const algunaFilaMideCorriente = lecturas.some((l) => itemMideCorriente(l.categoriaEquipo, l.tipoCircuito, tipoEvento));
   const w = algunaFilaMideCorriente ? WIDTHS_CON_CORRIENTE : WIDTHS_SIN_CORRIENTE;
   const fechaLabel = formatFechaArg(fecha);
   const documentoLabel = `${TABLERO_EVENTO_LABEL[tipoEvento].toUpperCase()} — TABLERO ${labelSubsistemas(subsistemas).toUpperCase()}`;
-  const documentoLinea = `Documento: ${sitio || "—"}-Público · Generado por ${appName}`;
+  const documentoLinea = `Documento: ${sala || "—"}-Público · Generado por ${appName}`;
 
   return (
     <Document title={`${numeroGeneracion} — ${denominacion}`}>
@@ -89,7 +105,7 @@ export function TableroPdf(props: TableroPdfProps) {
         />
 
         <Text style={commonStyles.mainTitle}>
-          {denominacion} — {sitio}
+          {denominacion} — {sala}
         </Text>
 
         <View style={commonStyles.kvTable}>
@@ -97,7 +113,9 @@ export function TableroPdf(props: TableroPdfProps) {
           <KeyValueRow k="Tipo de Visita:" v={TABLERO_EVENTO_LABEL[tipoEvento]} />
           <KeyValueRow k="Subsistemas del Tablero:" v={labelSubsistemas(subsistemas)} />
           <KeyValueRow k="Denominación:" v={denominacion} />
-          <KeyValueRow k="Sitio:" v={sitio} />
+          <KeyValueRow k="Sala:" v={sala} />
+          {sectorOficina && <KeyValueRow k="Sector/Oficina:" v={sectorOficina} />}
+          <KeyValueRow k="Provincia:" v={provincia} />
           <KeyValueRow k="Fecha:" v={fechaLabel} last />
         </View>
 

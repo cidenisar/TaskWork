@@ -141,7 +141,8 @@ export interface TableroConCircuitos {
   id: string;
   subsistemas: TableroTipo[];
   denominacion: string;
-  sitio: string;
+  ubicacionId: string;
+  ubicacionLabel: string;
   circuitos: CircuitoItem[];
 }
 
@@ -149,7 +150,7 @@ export interface MantenimientoRow {
   id: string;
   tableroId: string;
   tableroDenominacion: string;
-  tableroSitio: string;
+  tableroUbicacion: string;
   circuitoTexto: string | null;
   fecha: string;
   descripcion: string;
