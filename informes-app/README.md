@@ -219,7 +219,7 @@ npm run dev
   el formulario como en el PDF y en el server action (se anula server-side
   aunque alguien fuerce el form). La lectura de fotos con IA
   (`/api/tableros/leer-foto`, Claude Vision) acepta hasta
-  `TABLERO_FOTO_IA_MAX` (3) fotos por lectura en un solo pedido — útil para
+  `TABLERO_FOTO_IA_MAX` (7) fotos por lectura en un solo pedido — útil para
   distintos ángulos, secciones de un tablero grande, o un close-up de una
   etiqueta que en la foto general se ve borrosa —, y le pide al modelo que
   las combine en una sola lista sin duplicar un elemento que aparezca en
@@ -227,7 +227,12 @@ npm run dev
   de circuito además de leer la etiqueta — cuando no hay etiqueta legible
   describe el elemento por lo que ve físicamente (polos, grosor de cable,
   contactor/fotocélula al lado, tipo de cámara, etc.) en vez de inventar un
-  nombre, y marca esos casos para que el técnico los revise. Aparte,
+  nombre, y marca esos casos para que el técnico los revise. Aparte de esas
+  fotos (que solo se usan para la lectura y no se guardan), el técnico puede
+  cargar una **foto general del tablero** opcional por visita — se sube al
+  bucket `informe-fotos` (`tablero_mediciones.foto_general_url`) y queda
+  impresa en el PDF de esa medición/relevamiento, como registro visual del
+  estado del tablero en ese momento. Aparte,
   **Mantenimiento** (`/tableros/mantenimiento`)
   registra el trabajo realizado sobre un tablero/circuito ya relevado —
   descripción, foto del trabajo/repuesto y próximo mantenimiento programado

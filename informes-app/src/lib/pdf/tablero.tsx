@@ -1,4 +1,4 @@
-import { Document, Page, Text, View, StyleSheet } from "@react-pdf/renderer";
+import { Document, Page, Text, View, Image, StyleSheet } from "@react-pdf/renderer";
 import { BORDER, commonStyles, KeyValueRow, PdfHeader, PdfFooter, formatFechaArg } from "./common";
 import {
   CATEGORIA_EQUIPO_LABEL,
@@ -50,6 +50,7 @@ export interface TableroPdfProps {
   fecha: string;
   lecturas: TableroPdfLectura[];
   resumen: ResumenEquipamiento;
+  fotoGeneralBuffer: Buffer | null;
   logoBuffer: Buffer | null;
   appName: string;
   realizoNombre: string;
@@ -68,7 +69,8 @@ const WIDTHS_CON_CORRIENTE: ColWidths = { n: "4%", circuito: "16%", categoria: "
 const WIDTHS_SIN_CORRIENTE: ColWidths = { n: "5%", circuito: "22%", categoria: "16%", estado: "13%", amp: "0%", fase: "0%", comentario: "44%" };
 
 export function TableroPdf(props: TableroPdfProps) {
-  const { numeroGeneracion, subsistemas, tipoEvento, denominacion, sitio, fecha, lecturas, resumen, logoBuffer, appName, realizoNombre } = props;
+  const { numeroGeneracion, subsistemas, tipoEvento, denominacion, sitio, fecha, lecturas, resumen, fotoGeneralBuffer, logoBuffer, appName, realizoNombre } =
+    props;
   const algunaFilaMideCorriente = lecturas.some((l) => itemMideCorriente(l.categoriaEquipo, l.tipoCircuito, tipoEvento));
   const w = algunaFilaMideCorriente ? WIDTHS_CON_CORRIENTE : WIDTHS_SIN_CORRIENTE;
   const fechaLabel = formatFechaArg(fecha);
@@ -116,6 +118,15 @@ export function TableroPdf(props: TableroPdfProps) {
             />
           )}
         </View>
+
+        {fotoGeneralBuffer && (
+          <>
+            <Text style={commonStyles.sectionTitle}>Foto General del Tablero</Text>
+            <View style={{ marginBottom: 6 }}>
+              <Image src={fotoGeneralBuffer} style={commonStyles.photo} />
+            </View>
+          </>
+        )}
 
         <Text style={commonStyles.sectionTitle}>Circuitos / Elementos</Text>
         <View style={styles.table}>

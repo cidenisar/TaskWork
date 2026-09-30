@@ -114,7 +114,7 @@ export async function POST(req: NextRequest) {
     const client = new Anthropic();
     const response = await client.messages.create({
       model: "claude-opus-5",
-      max_tokens: 4096,
+      max_tokens: 8192,
       output_config: { effort: "medium" },
       system:
         "Sos un asistente que ayuda a un técnico de campo a relevar un tablero eléctrico, que puede ser mixto: interruptores/térmicas " +

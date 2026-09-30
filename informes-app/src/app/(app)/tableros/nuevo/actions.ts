@@ -45,8 +45,20 @@ function parseNum(v: string): number | null {
   return v.trim() !== "" && Number.isFinite(n) ? n : null;
 }
 
-export async function crearMedicionTableroAction(payload: CrearMedicionPayload): Promise<CrearMedicionResult> {
+export async function crearMedicionTableroAction(formData: FormData): Promise<CrearMedicionResult> {
   const profile = await requireProfile();
+
+  const raw = formData.get("payload");
+  if (typeof raw !== "string") {
+    return { success: false, error: "Faltan datos de la medición." };
+  }
+  let payload: CrearMedicionPayload;
+  try {
+    payload = JSON.parse(raw);
+  } catch {
+    return { success: false, error: "Faltan datos de la medición." };
+  }
+  const fotoGeneral = formData.get("fotoGeneral");
 
   if (!payload.lecturas.length) {
     return { success: false, error: "El tablero no tiene circuitos/elementos cargados." };
@@ -170,6 +182,21 @@ export async function crearMedicionTableroAction(payload: CrearMedicionPayload):
     return { success: false, error: `No se pudieron guardar las lecturas: ${lecturasErr.message}` };
   }
 
+  // Foto general del tablero (opcional): registro + queda adjunta en el PDF.
+  // Reusa el bucket informe-fotos ya existente, no hace falta storage nuevo.
+  // Una foto que falla no debe tirar abajo toda la medición.
+  let fotoGeneralBuffer: Buffer | null = null;
+  if (fotoGeneral instanceof File) {
+    fotoGeneralBuffer = Buffer.from(await fotoGeneral.arrayBuffer());
+    const fotoPath = `${profile.id}/tableros/${medicionId}/general.jpg`;
+    const { error: fotoUpErr } = await supabase.storage
+      .from("informe-fotos")
+      .upload(fotoPath, fotoGeneralBuffer, { contentType: "image/jpeg", upsert: true });
+    if (!fotoUpErr) {
+      await supabase.from("tablero_mediciones").update({ foto_general_url: fotoPath }).eq("id", medicionId);
+    }
+  }
+
   // Logo de la empresa (cabecera del PDF), igual que Informe Técnico/Rendición.
   const { data: config } = await supabase.from("config_general").select("logo_empresa_url").eq("id", 1).single();
   let logoBuffer: Buffer | null = null;
@@ -192,6 +219,7 @@ export async function crearMedicionTableroAction(payload: CrearMedicionPayload):
     sitio: tableroRow.sitio,
     fecha: payload.fecha,
     resumen,
+    fotoGeneralBuffer,
     lecturas: payload.lecturas.map((l) => {
       const mideCorriente = itemMideCorriente(l.categoriaEquipo, l.tipoCircuito, payload.tipoEvento);
       return {

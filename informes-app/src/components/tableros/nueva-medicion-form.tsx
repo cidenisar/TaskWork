@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { crearMedicionTableroAction } from "@/app/(app)/tableros/nuevo/actions";
 import { reportarErrorCliente } from "@/lib/client-error-report";
 import { resizeImageToJpeg } from "@/lib/image-resize";
@@ -60,6 +60,15 @@ export function NuevaMedicionForm({ tableros }: { tableros: TableroConCircuitos[
   const [iaNote, setIaNote] = useState<string | null>(null);
   const fotoCameraInputRef = useRef<HTMLInputElement>(null);
   const fotoGaleriaInputRef = useRef<HTMLInputElement>(null);
+  const [fotoGeneral, setFotoGeneral] = useState<File | null>(null);
+  const fotoGeneralCameraInputRef = useRef<HTMLInputElement>(null);
+  const fotoGeneralGaleriaInputRef = useRef<HTMLInputElement>(null);
+  const fotoGeneralPreview = useMemo(() => (fotoGeneral ? URL.createObjectURL(fotoGeneral) : null), [fotoGeneral]);
+  useEffect(() => {
+    return () => {
+      if (fotoGeneralPreview) URL.revokeObjectURL(fotoGeneralPreview);
+    };
+  }, [fotoGeneralPreview]);
 
   const tablerosFiltrados = useMemo(
     () =>
@@ -265,31 +274,45 @@ export function NuevaMedicionForm({ tableros }: { tableros: TableroConCircuitos[
 
     setSubmitting(true);
     try {
-      const res = await crearMedicionTableroAction({
-        subsistemas: subsistemasActuales,
-        tipoEvento,
-        tableroId: tableroId === "__new" ? null : tableroId,
-        denominacionNueva,
-        sitioNuevo: sitioNueva,
-        fecha,
-        lecturas: circuitos.map((c, i) => {
-          const l = lecturas[i] ?? LECTURA_VACIA;
-          return {
-            circuitoId: c.id,
-            numero: c.numero,
-            texto: c.texto.trim(),
-            ampNominal: c.ampNominal.trim(),
-            categoriaEquipo: c.categoriaEquipo,
-            tipoCircuito: c.tipoCircuito,
-            estado: l.estado,
-            corrienteF: l.corrienteF,
-            corrienteR: l.corrienteR,
-            corrienteS: l.corrienteS,
-            corrienteT: l.corrienteT,
-            comentario: l.comentario,
-          };
+      const fd = new FormData();
+      fd.append(
+        "payload",
+        JSON.stringify({
+          subsistemas: subsistemasActuales,
+          tipoEvento,
+          tableroId: tableroId === "__new" ? null : tableroId,
+          denominacionNueva,
+          sitioNuevo: sitioNueva,
+          fecha,
+          lecturas: circuitos.map((c, i) => {
+            const l = lecturas[i] ?? LECTURA_VACIA;
+            return {
+              circuitoId: c.id,
+              numero: c.numero,
+              texto: c.texto.trim(),
+              ampNominal: c.ampNominal.trim(),
+              categoriaEquipo: c.categoriaEquipo,
+              tipoCircuito: c.tipoCircuito,
+              estado: l.estado,
+              corrienteF: l.corrienteF,
+              corrienteR: l.corrienteR,
+              corrienteS: l.corrienteS,
+              corrienteT: l.corrienteT,
+              comentario: l.comentario,
+            };
+          }),
         }),
-      });
+      );
+      if (fotoGeneral) {
+        try {
+          const jpeg = await resizeImageToJpeg(fotoGeneral);
+          fd.append("fotoGeneral", jpeg, "general.jpg");
+        } catch (err) {
+          setError(err instanceof Error ? err.message : "No se pudo leer la foto general del tablero.");
+          return;
+        }
+      }
+      const res = await crearMedicionTableroAction(fd);
       if (!res.success) {
         const mensaje = res.error || "No se pudo guardar la medición.";
         setError(mensaje);
@@ -297,6 +320,7 @@ export function NuevaMedicionForm({ tableros }: { tableros: TableroConCircuitos[
         return;
       }
       setSuccess({ numeroGeneracion: res.numeroGeneracion!, pdfUrl: res.pdfUrl ?? null });
+      setFotoGeneral(null);
     } catch (err) {
       const mensaje = err instanceof Error ? err.message : "Ocurrió un error inesperado guardando la medición.";
       setError(mensaje);
@@ -314,6 +338,7 @@ export function NuevaMedicionForm({ tableros }: { tableros: TableroConCircuitos[
     setSitioNueva("");
     setCircuitos([]);
     setLecturas({});
+    setFotoGeneral(null);
   }
 
   return (
@@ -431,11 +456,74 @@ export function NuevaMedicionForm({ tableros }: { tableros: TableroConCircuitos[
             </div>
           </>
         )}
-        <div className="field" style={{ marginBottom: 0, marginTop: 16 }}>
+        <div className="field" style={{ marginTop: 16 }}>
           <label>
             Fecha <span className="req">*</span>
           </label>
           <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} disabled={submitting} style={{ maxWidth: 220 }} />
+        </div>
+        <div className="field" style={{ marginBottom: 0 }}>
+          <label>
+            Foto general del tablero <span className="opt">(opcional)</span>
+          </label>
+          <div className="hint" style={{ margin: "-2px 0 8px" }}>
+            Queda guardada como registro y se imprime en el PDF de esta visita.
+          </div>
+          <input
+            ref={fotoGeneralCameraInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            style={{ display: "none" }}
+            onChange={(e) => {
+              const file = e.target.files?.[0] ?? null;
+              e.target.value = "";
+              if (file) setFotoGeneral(file);
+            }}
+          />
+          <input
+            ref={fotoGeneralGaleriaInputRef}
+            type="file"
+            accept="image/*"
+            style={{ display: "none" }}
+            onChange={(e) => {
+              const file = e.target.files?.[0] ?? null;
+              e.target.value = "";
+              if (file) setFotoGeneral(file);
+            }}
+          />
+          {fotoGeneral && fotoGeneralPreview ? (
+            <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+              {/* eslint-disable-next-line @next/next/no-img-element -- preview local, no vale la pena next/image acá */}
+              <img
+                src={fotoGeneralPreview}
+                alt=""
+                style={{ width: 64, height: 64, objectFit: "cover", borderRadius: 8, border: "1px solid var(--field-border)" }}
+              />
+              <button type="button" className="btn btn-secondary btn-sm" onClick={() => setFotoGeneral(null)} disabled={submitting}>
+                <Icon name="x" size={12} /> Quitar
+              </button>
+            </div>
+          ) : (
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <button
+                type="button"
+                className="ai-btn"
+                onClick={() => fotoGeneralCameraInputRef.current?.click()}
+                disabled={submitting}
+              >
+                <Icon name="camera" size={13} /> Sacar foto
+              </button>
+              <button
+                type="button"
+                className="ai-btn"
+                onClick={() => fotoGeneralGaleriaInputRef.current?.click()}
+                disabled={submitting}
+              >
+                <Icon name="upload" size={13} /> Subir foto
+              </button>
+            </div>
+          )}
         </div>
       </div>
 

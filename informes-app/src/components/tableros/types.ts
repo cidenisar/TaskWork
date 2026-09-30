@@ -1,7 +1,7 @@
 import type { TableroCategoriaEquipo, TableroEventoTipo, TableroTipo, TableroTipoCircuito } from "@/lib/database.types";
 
 /** Máximo de fotos que se pueden mandar juntas a la lectura con IA de un tablero (distintos ángulos/secciones del mismo gabinete). */
-export const TABLERO_FOTO_IA_MAX = 3;
+export const TABLERO_FOTO_IA_MAX = 7;
 
 export const TABLERO_TIPOS: TableroTipo[] = ["energia", "cctv", "control_acceso"];
 
