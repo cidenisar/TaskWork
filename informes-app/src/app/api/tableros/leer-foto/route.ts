@@ -136,10 +136,12 @@ export async function POST(req: NextRequest) {
         `- "tipoCircuito": EXACTAMENTE una de estas cadenas: ${TIPOS_CIRCUITO_TEXTO}. Para térmicas/disyuntores inferí mono/trifásico por ` +
         "la cantidad de polos y el grosor de cable si no hay etiqueta. Para fuentes/UPS/baterías/conversores usá el voltaje de salida si " +
         'es identificable (ej. un conversor a 12V es "12vdc"). Para cámaras/lectoras/cerraduras/bornera/otros sin tensión relevante, usá "na".\n' +
-        '- "estadoDetectado": SOLO tiene sentido cuando "categoriaEquipo" es "termica" o "disyuntor" — mirá la posición física de la ' +
-        'palanca/llave: arriba / posición ON = "Cerrado"; abajo / posición OFF = "Abierto"; posición intermedia, o con una marca/bandera/' +
-        'ventana de color (normalmente roja) que indique que saltó = "Disparado". Si la palanca no se ve con claridad o no estás seguro, ' +
-        'poné null (nunca inventes el estado). Para cualquier otra categoriaEquipo, siempre null.\n\n' +
+        '- "estadoDetectado": SOLO tiene sentido cuando "categoriaEquipo" es "termica" o "disyuntor". REGLA FIJA sobre la posición física ' +
+        "de la palanca/llave del interruptor (mirá SOLO hacia dónde apunta la palanca, no razones sobre si el circuito \"debería\" estar " +
+        'energizado): palanca hacia ARRIBA → "Cerrado". Palanca hacia ABAJO → "Abierto". Palanca en una posición intermedia entre arriba y ' +
+        'abajo, o el interruptor muestra una marca/bandera/ventana de color (normalmente roja) indicando que saltó → "Disparado". Si no se ' +
+        've la palanca con claridad (ángulo, obstruida, foto borrosa) → null (nunca inventes el estado). Para cualquier otra ' +
+        "categoriaEquipo, estadoDetectado siempre null.\n\n" +
         "No inventes elementos que no estén en la foto, y no adivines un amperaje, tensión o estado que no puedas justificar por lo que " +
         'ves — pero "texto" y "categoriaEquipo" son obligatorios en todos los casos, con tu mejor estimación visual si hace falta.\n\n' +
         'Respondé ÚNICAMENTE con un JSON válido: un array de objetos {"numero": number, "texto": string, "ampNominal": string, ' +
