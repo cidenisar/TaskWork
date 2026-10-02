@@ -21,11 +21,30 @@ function generarPassword(): string {
   return out;
 }
 
+/**
+ * createServiceRoleClient() tira una excepción (no un objeto { error }) si
+ * falta SUPABASE_SERVICE_ROLE_KEY en el entorno — sin este try/catch esa
+ * excepción se escapaba de la server action y el admin veía un error genérico
+ * de Next.js en vez de un mensaje accionable.
+ */
+function obtenerClienteAdmin(): { client: ReturnType<typeof createServiceRoleClient> } | { error: string } {
+  try {
+    return { client: createServiceRoleClient() };
+  } catch {
+    return {
+      error:
+        "Falta configurar SUPABASE_SERVICE_ROLE_KEY en el servidor — sin esa variable de entorno no se pueden crear usuarios ni " +
+        "cambiar contraseñas (ver README, sección 'Primer usuario Administrador').",
+    };
+  }
+}
+
 export async function crearUsuarioAction(
   email: string,
   nombreCompleto: string,
   rol: Rol,
   torre: string,
+  passwordManual?: string,
 ): Promise<CrearUsuarioResult> {
   const profile = await requireAdmin();
   const correo = email.trim().toLowerCase();
@@ -33,8 +52,14 @@ export async function crearUsuarioAction(
   const torreValue = torre.trim() || null;
   if (!correo || !nombre) return { success: false, error: "Completá el nombre y el email." };
 
-  const password = generarPassword();
-  const admin = createServiceRoleClient();
+  const manual = (passwordManual ?? "").trim();
+  if (manual && manual.length < 6) {
+    return { success: false, error: "La contraseña tiene que tener al menos 6 caracteres." };
+  }
+  const password = manual || generarPassword();
+  const adminRes = obtenerClienteAdmin();
+  if ("error" in adminRes) return { success: false, error: adminRes.error };
+  const admin = adminRes.client;
   const { data, error } = await admin.auth.admin.createUser({
     email: correo,
     password,
@@ -138,7 +163,9 @@ export async function editarUsuarioAction(
   if (!actual) return { success: false, error: "No se encontró el usuario." };
 
   if (correo !== actual.email) {
-    const admin = createServiceRoleClient();
+    const adminRes = obtenerClienteAdmin();
+    if ("error" in adminRes) return { success: false, error: adminRes.error };
+    const admin = adminRes.client;
     const { error: authError } = await admin.auth.admin.updateUserById(userId, { email: correo, email_confirm: true });
     if (authError) {
       const mensaje = authError.message ?? "No se pudo actualizar el email de acceso.";
@@ -163,12 +190,22 @@ export interface BlanquearPasswordResult extends ConfigActionResult {
   password?: string;
 }
 
-/** Genera una contraseña temporal nueva y la fuerza en auth.users — el usuario la usa para volver a entrar. */
-export async function blanquearPasswordAction(userId: string, nombre: string): Promise<BlanquearPasswordResult> {
+/** Genera una contraseña temporal (o usa la que eligió el admin) y la fuerza en auth.users — el usuario la usa para volver a entrar. */
+export async function blanquearPasswordAction(
+  userId: string,
+  nombre: string,
+  passwordManual?: string,
+): Promise<BlanquearPasswordResult> {
   const profile = await requireAdmin();
-  const password = generarPassword();
+  const manual = (passwordManual ?? "").trim();
+  if (manual && manual.length < 6) {
+    return { success: false, error: "La contraseña tiene que tener al menos 6 caracteres." };
+  }
+  const password = manual || generarPassword();
 
-  const admin = createServiceRoleClient();
+  const adminRes = obtenerClienteAdmin();
+  if ("error" in adminRes) return { success: false, error: adminRes.error };
+  const admin = adminRes.client;
   const { error } = await admin.auth.admin.updateUserById(userId, { password });
   if (error) return { success: false, error: error.message ?? "No se pudo blanquear la contraseña." };
 

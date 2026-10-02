@@ -39,6 +39,7 @@ export function UsuariosCard({
   const [nombre, setNombre] = useState("");
   const [rol, setRol] = useState<Rol>("tecnico");
   const [torre, setTorre] = useState("");
+  const [passwordNueva, setPasswordNueva] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [creado, setCreado] = useState<{ email: string; password: string } | null>(null);
@@ -56,16 +57,22 @@ export function UsuariosCard({
   const [rowBusyId, setRowBusyId] = useState<string | null>(null);
   const [rowError, setRowError] = useState<Record<string, string>>({});
   const [blanqueado, setBlanqueado] = useState<Record<string, string>>({});
+  const [blanqueandoId, setBlanqueandoId] = useState<string | null>(null);
+  const [passwordBlanqueo, setPasswordBlanqueo] = useState("");
 
   async function crear() {
     if (!email.trim() || !nombre.trim()) {
       setError("Completá el nombre y el email.");
       return;
     }
+    if (passwordNueva.trim() && passwordNueva.trim().length < 6) {
+      setError("La contraseña tiene que tener al menos 6 caracteres.");
+      return;
+    }
     setBusy(true);
     setError(null);
     setCreado(null);
-    const res = await crearUsuarioAction(email, nombre, rol, torre);
+    const res = await crearUsuarioAction(email, nombre, rol, torre, passwordNueva);
     setBusy(false);
     if (!res.success || !res.credenciales) {
       setError(res.error || "No se pudo crear el usuario.");
@@ -87,6 +94,7 @@ export function UsuariosCard({
     setNombre("");
     setRol("tecnico");
     setTorre("");
+    setPasswordNueva("");
   }
 
   async function cambiarRol(u: UsuarioRow, nuevoRol: Rol) {
@@ -146,16 +154,28 @@ export function UsuariosCard({
     setEditingId(null);
   }
 
-  async function blanquear(u: UsuarioRow) {
+  function empezarBlanqueo(u: UsuarioRow) {
+    setBlanqueandoId(u.id);
+    setPasswordBlanqueo("");
+    setRowError((prev) => ({ ...prev, [u.id]: "" }));
+  }
+
+  async function blanquear(u: UsuarioRow, passwordManual: string) {
+    if (passwordManual.trim() && passwordManual.trim().length < 6) {
+      setRowError((prev) => ({ ...prev, [u.id]: "La contraseña tiene que tener al menos 6 caracteres." }));
+      return;
+    }
     setRowBusyId(u.id);
     setRowError((prev) => ({ ...prev, [u.id]: "" }));
-    const res = await blanquearPasswordAction(u.id, u.nombreCompleto);
+    const res = await blanquearPasswordAction(u.id, u.nombreCompleto, passwordManual);
     setRowBusyId(null);
     if (!res.success || !res.password) {
       setRowError((prev) => ({ ...prev, [u.id]: res.error || "No se pudo blanquear la contraseña." }));
       return;
     }
     setBlanqueado((prev) => ({ ...prev, [u.id]: res.password! }));
+    setBlanqueandoId(null);
+    setPasswordBlanqueo("");
   }
 
   async function toggleActivo(u: UsuarioRow) {
@@ -205,6 +225,15 @@ export function UsuariosCard({
           ))}
         </select>
         <AutocompleteInput value={torre} onChange={setTorre} suggestions={torres} placeholder="Torre (opcional)" disabled={busy} />
+      </div>
+      <div className="field" style={{ marginTop: 10, marginBottom: 0 }}>
+        <input
+          type="text"
+          placeholder="Contraseña (opcional — si la dejás vacía se genera una automática)"
+          value={passwordNueva}
+          onChange={(e) => setPasswordNueva(e.target.value)}
+          disabled={busy}
+        />
       </div>
       <button type="button" className="btn btn-primary" onClick={crear} disabled={busy} style={{ marginTop: 10 }}>
         + Crear usuario
@@ -307,7 +336,7 @@ export function UsuariosCard({
                   <button type="button" className="btn btn-secondary btn-sm" onClick={() => empezarEdicion(u)} disabled={rowBusy}>
                     <Icon name="edit" size={13} /> Editar
                   </button>
-                  <button type="button" className="btn btn-secondary btn-sm" onClick={() => blanquear(u)} disabled={rowBusy}>
+                  <button type="button" className="btn btn-secondary btn-sm" onClick={() => empezarBlanqueo(u)} disabled={rowBusy}>
                     <Icon name="lock" size={13} /> Blanquear contraseña
                   </button>
                   {u.id !== currentUserId && (
@@ -315,6 +344,38 @@ export function UsuariosCard({
                       <Icon name={u.activo ? "x" : "check"} size={13} /> {u.activo ? "Desactivar" : "Reactivar"}
                     </button>
                   )}
+                </div>
+              )}
+
+              {blanqueandoId === u.id && (
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                  <input
+                    type="text"
+                    placeholder="Contraseña nueva (vacío = generar automática)"
+                    value={passwordBlanqueo}
+                    onChange={(e) => setPasswordBlanqueo(e.target.value)}
+                    disabled={rowBusy}
+                    style={{ maxWidth: 260 }}
+                  />
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-sm"
+                    onClick={() => blanquear(u, passwordBlanqueo)}
+                    disabled={rowBusy}
+                  >
+                    {rowBusy ? "Guardando..." : passwordBlanqueo.trim() ? "Poner esta contraseña" : "Generar automática"}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => {
+                      setBlanqueandoId(null);
+                      setPasswordBlanqueo("");
+                    }}
+                    disabled={rowBusy}
+                  >
+                    Cancelar
+                  </button>
                 </div>
               )}
 
