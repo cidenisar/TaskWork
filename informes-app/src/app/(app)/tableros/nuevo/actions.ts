@@ -5,6 +5,7 @@ import { requireProfile } from "@/lib/auth";
 import { nuevoNumeroGeneracionTablero } from "@/lib/tableros/numero-generacion";
 import { renderTableroPdf } from "@/lib/pdf/render";
 import { buildTableroFilename } from "@/lib/pdf/filename";
+import { resolverUbicacionId, tagGpsSiFalta, type PayloadUbicacionNueva, type PayloadGps } from "@/lib/ubicaciones/resolver";
 import { calcularResumenEquipamiento, itemMideCorriente } from "@/components/tableros/types";
 import type { TableroCategoriaEquipo, TableroEventoTipo, TableroTipo, TableroTipoCircuito } from "@/lib/database.types";
 
@@ -21,20 +22,6 @@ interface PayloadLectura {
   corrienteS: string;
   corrienteT: string;
   comentario: string;
-}
-
-interface PayloadUbicacionNueva {
-  provincia: string;
-  localidad: string;
-  sitio: string;
-  planta: string;
-  oficina: string;
-}
-
-interface PayloadGps {
-  lat: number;
-  lng: number;
-  accuracy: number | null;
 }
 
 export interface CrearMedicionPayload {
@@ -59,89 +46,6 @@ export interface CrearMedicionResult {
 function parseNum(v: string): number | null {
   const n = Number(v.replace(",", "."));
   return v.trim() !== "" && Number.isFinite(n) ? n : null;
-}
-
-/**
- * Resuelve el id de la Ubicación a usar para un tablero nuevo: la existente
- * elegida, o da de alta una nueva (alta al vuelo). La Región nunca la tipea
- * el técnico — se deriva de la Provincia vía catalogo_provincias (misma idea
- * que a futuro la va a completar el GPS). Si ya existe una Ubicación
- * idéntica (misma provincia+localidad+sitio+planta+oficina) la reusa en vez
- * de duplicarla — mismo criterio que catalogo_clientes/catalogo_torres.
- */
-async function resolverUbicacionId(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  payload: Pick<CrearMedicionPayload, "ubicacionId" | "ubicacionNueva">,
-  userId: string,
-): Promise<{ id: string } | { error: string }> {
-  if (payload.ubicacionId) return { id: payload.ubicacionId };
-  if (!payload.ubicacionNueva) return { error: "Elegí o creá una ubicación para el tablero." };
-
-  const provincia = payload.ubicacionNueva.provincia.trim();
-  const localidad = payload.ubicacionNueva.localidad.trim();
-  const sitio = payload.ubicacionNueva.sitio.trim();
-  const planta = payload.ubicacionNueva.planta.trim();
-  const oficina = payload.ubicacionNueva.oficina.trim();
-  if (!provincia || !sitio) return { error: "Completá la provincia y el sitio de la ubicación nueva." };
-
-  const { data: provinciaRow } = await supabase.from("catalogo_provincias").select("region").eq("nombre", provincia).single();
-  const region = provinciaRow?.region ?? "Sin especificar";
-
-  const { data: nueva, error } = await supabase
-    .from("ubicaciones")
-    .insert({
-      pais: "Argentina",
-      region,
-      provincia,
-      localidad: localidad || null,
-      sitio,
-      planta: planta || null,
-      oficina: oficina || null,
-      created_by: userId,
-    })
-    .select("id")
-    .single();
-  if (!error && nueva) return { id: nueva.id };
-
-  if (error?.code === "23505") {
-    let query = supabase.from("ubicaciones").select("id").eq("provincia", provincia).eq("sitio", sitio);
-    query = localidad ? query.eq("localidad", localidad) : query.is("localidad", null);
-    query = planta ? query.eq("planta", planta) : query.is("planta", null);
-    query = oficina ? query.eq("oficina", oficina) : query.is("oficina", null);
-    const { data: existente } = await query.single();
-    if (existente) return { id: existente.id };
-  }
-  return { error: `No se pudo crear la ubicación: ${error?.message ?? "error desconocido"}` };
-}
-
-/**
- * Si el técnico capturó GPS en este envío y la Ubicación resultante (nueva o
- * ya existente) todavía no tiene coordenadas guardadas, las guarda ahora —
- * es el "aprendizaje": la próxima vez que alguien esté cerca de ese punto,
- * la app ya va a reconocer el sitio solo. Nunca pisa coordenadas que ya
- * estaban guardadas (eso evitaría que un GPS de mala precisión corrompa un
- * punto bueno confirmado antes).
- */
-async function tagGpsSiFalta(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  ubicacionId: string,
-  gps: PayloadGps | null | undefined,
-  userId: string,
-) {
-  if (!gps) return;
-  const { data: row } = await supabase.from("ubicaciones").select("lat").eq("id", ubicacionId).single();
-  if (row && row.lat === null) {
-    await supabase
-      .from("ubicaciones")
-      .update({
-        lat: gps.lat,
-        lng: gps.lng,
-        gps_accuracy_m: gps.accuracy,
-        gps_confirmado_at: new Date().toISOString(),
-        gps_confirmado_por: userId,
-      })
-      .eq("id", ubicacionId);
-  }
 }
 
 export async function crearMedicionTableroAction(formData: FormData): Promise<CrearMedicionResult> {
@@ -179,7 +83,7 @@ export async function crearMedicionTableroAction(formData: FormData): Promise<Cr
   // vez que lo encuentra en el sitio).
   let tableroId = payload.tableroId;
   if (!tableroId) {
-    const ubicacion = await resolverUbicacionId(supabase, payload, profile.id);
+    const ubicacion = await resolverUbicacionId(supabase, payload, profile.id, "el tablero");
     if ("error" in ubicacion) return { success: false, error: ubicacion.error };
 
     const { data: nuevoTablero, error: tableroErr } = await supabase

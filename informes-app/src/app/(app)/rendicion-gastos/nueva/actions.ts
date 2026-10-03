@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireProfile } from "@/lib/auth";
 import { nuevoNumeroGeneracionRendicion } from "@/lib/rendicion-gastos/numero-generacion";
 import type { RendicionFormState } from "@/components/rendicion-gastos/types";
+import { resolverUbicacionId, tagGpsSiFalta } from "@/lib/ubicaciones/resolver";
 
 export interface CrearRendicionResult {
   success: boolean;
@@ -26,6 +27,39 @@ export async function crearRendicionAction(payload: RendicionFormState): Promise
   }
 
   const supabase = await createClient();
+
+  // Ubicación es opcional en este módulo — si no se eligió/creó ninguna, se
+  // sigue como antes sin provincia ni ubicacion_id.
+  let provinciaFinal: string | null = null;
+  let ubicacionIdFinal: string | null = null;
+  if (payload.ubicacionId) {
+    const resuelta = await resolverUbicacionId(
+      supabase,
+      {
+        ubicacionId: payload.ubicacionId !== "__new" ? payload.ubicacionId : null,
+        ubicacionNueva:
+          payload.ubicacionId === "__new"
+            ? {
+                provincia: payload.provinciaFiltro,
+                localidad: payload.localidadNueva,
+                sitio: payload.sitioNueva,
+                planta: payload.plantaNueva,
+                oficina: payload.oficinaNueva,
+              }
+            : null,
+      },
+      profile.id,
+      "la rendición",
+    );
+    if ("error" in resuelta) return { success: false, error: resuelta.error };
+    await tagGpsSiFalta(supabase, resuelta.id, payload.gps, profile.id);
+
+    const { data: ubicacionRow } = await supabase.from("ubicaciones").select("provincia").eq("id", resuelta.id).single();
+    if (!ubicacionRow) return { success: false, error: "No se encontró la ubicación recién resuelta." };
+    provinciaFinal = ubicacionRow.provincia;
+    ubicacionIdFinal = resuelta.id;
+  }
+
   let numeroGeneracion = nuevoNumeroGeneracionRendicion();
   let rendicionId: string | null = null;
   for (let attempt = 0; attempt < 5 && !rendicionId; attempt++) {
@@ -36,7 +70,8 @@ export async function crearRendicionAction(payload: RendicionFormState): Promise
         motivo: payload.motivo.trim(),
         fecha: payload.fecha,
         proyecto_cliente: payload.proyectoCliente.trim() || null,
-        provincia: payload.provincia || null,
+        provincia: provinciaFinal,
+        ubicacion_id: ubicacionIdFinal,
         viatico_recibido: viatico,
         moneda: payload.moneda,
         created_by: profile.id,

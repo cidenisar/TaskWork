@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import type { CatalogosInforme, InformeFormState } from "./types";
 import { Icon, StatusDot } from "@/components/icon";
 import { AutocompleteInput } from "@/components/ui/autocomplete-input";
+import { UbicacionFields } from "@/components/ubicaciones/ubicacion-fields";
 
 interface SpeechRecognitionResultLike {
   0: { transcript: string };
@@ -209,39 +210,46 @@ export function Step1General({
           )}
         </div>
       </div>
-      <div className="grid2">
-        <div className="field">
-          <label>
-            Permiso de Trabajo <span className="opt">(opcional)</span>
-          </label>
-          <input
-            type="text"
-            placeholder="N° de permiso de trabajo"
-            value={form.permisoTrabajo}
-            onChange={(e) => onChange({ permisoTrabajo: e.target.value })}
-          />
-        </div>
-        <div className="field">
-          <label>Provincia</label>
-          <select value={form.provincia} onChange={(e) => onChange({ provincia: e.target.value })}>
-            <option value="">Seleccionar provincia...</option>
-            {catalogos.provincias.map((p) => (
-              <option key={p} value={p}>
-                {p}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
       <div className="field">
-        <label>Ubicación</label>
+        <label>
+          Permiso de Trabajo <span className="opt">(opcional)</span>
+        </label>
         <input
           type="text"
-          placeholder="Dirección o ubicación"
-          value={form.ubicacion}
-          onChange={(e) => onChange({ ubicacion: e.target.value })}
+          placeholder="N° de permiso de trabajo"
+          value={form.permisoTrabajo}
+          onChange={(e) => onChange({ permisoTrabajo: e.target.value })}
         />
       </div>
+      <div className="section-label" style={{ marginTop: 4 }}>
+        Ubicación <span className="opt">(opcional)</span>
+      </div>
+      <UbicacionFields
+        ubicaciones={catalogos.ubicaciones}
+        provincias={catalogos.provincias}
+        provinciaFiltro={form.provinciaFiltro}
+        onProvinciaFiltroChange={(p) =>
+          onChange({ provinciaFiltro: p, ubicacionId: "", localidadNueva: "", sitioNueva: "", plantaNueva: "", oficinaNueva: "" })
+        }
+        ubicacionId={form.ubicacionId}
+        onUbicacionIdChange={(id) =>
+          onChange(
+            id === "__new"
+              ? { ubicacionId: id }
+              : { ubicacionId: id, localidadNueva: "", sitioNueva: "", plantaNueva: "", oficinaNueva: "" },
+          )
+        }
+        localidadNueva={form.localidadNueva}
+        onLocalidadNuevaChange={(v) => onChange({ localidadNueva: v })}
+        sitioNueva={form.sitioNueva}
+        onSitioNuevaChange={(v) => onChange({ sitioNueva: v })}
+        plantaNueva={form.plantaNueva}
+        onPlantaNuevaChange={(v) => onChange({ plantaNueva: v })}
+        oficinaNueva={form.oficinaNueva}
+        onOficinaNuevaChange={(v) => onChange({ oficinaNueva: v })}
+        onGpsCapturado={(gps) => onChange({ gps })}
+        requerido={false}
+      />
       <div className="field">
         <div className="field-label-row">
           <label>Descripción del Trabajo</label>

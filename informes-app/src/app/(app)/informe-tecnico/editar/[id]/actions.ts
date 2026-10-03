@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireProfile } from "@/lib/auth";
 import { renderInformeTecnicoPdf } from "@/lib/pdf/render";
 import { buildInformeTecnicoFilename } from "@/lib/pdf/filename";
+import { resolverUbicacionId, tagGpsSiFalta, type PayloadGps } from "@/lib/ubicaciones/resolver";
 
 interface PayloadTecnico {
   nombre: string;
@@ -23,8 +24,13 @@ interface Payload {
   tipoInforme: string;
   tipoInformeNuevo: string;
   permisoTrabajo: string;
-  provincia: string;
-  ubicacion: string;
+  provinciaFiltro: string;
+  ubicacionId: string; // "" = no se tocó la ubicación en esta edición
+  localidadNueva: string;
+  sitioNueva: string;
+  plantaNueva: string;
+  oficinaNueva: string;
+  gps: PayloadGps | null;
   descripcionTrabajo: string;
   tareasPendientes: string;
   tecnicos: PayloadTecnico[];
@@ -71,13 +77,53 @@ export async function actualizarInformeTecnicoAction(
   // si no es el dueño, esto devuelve null y cortamos acá.
   const { data: informeActual, error: fetchErr } = await supabase
     .from("informes_tecnicos")
-    .select("numero_generacion")
+    .select("numero_generacion, provincia, ubicacion")
     .eq("id", informeId)
     .single();
   if (fetchErr || !informeActual) {
     return { success: false, error: "No se encontró el informe, o no tenés permiso para editarlo." };
   }
   const numeroGeneracion = informeActual.numero_generacion;
+
+  // La Ubicación solo se toca si en esta edición se eligió/creó una — si el
+  // picker quedó vacío (informe viejo con provincia/ubicación de texto
+  // libre que nadie reemplazó), se deja tal cual estaba en vez de borrarla.
+  let provinciaFinal = informeActual.provincia;
+  let ubicacionTextoFinal = informeActual.ubicacion;
+  let ubicacionIdFinal: string | null | undefined; // undefined = no incluir en el update
+  if (payload.ubicacionId) {
+    const resuelta = await resolverUbicacionId(
+      supabase,
+      {
+        ubicacionId: payload.ubicacionId !== "__new" ? payload.ubicacionId : null,
+        ubicacionNueva:
+          payload.ubicacionId === "__new"
+            ? {
+                provincia: payload.provinciaFiltro,
+                localidad: payload.localidadNueva,
+                sitio: payload.sitioNueva,
+                planta: payload.plantaNueva,
+                oficina: payload.oficinaNueva,
+              }
+            : null,
+      },
+      profile.id,
+      "el informe",
+    );
+    if ("error" in resuelta) return { success: false, error: resuelta.error };
+    await tagGpsSiFalta(supabase, resuelta.id, payload.gps, profile.id);
+
+    const { data: ubicacionRow } = await supabase
+      .from("ubicaciones")
+      .select("provincia, localidad, sitio, planta, oficina")
+      .eq("id", resuelta.id)
+      .single();
+    if (!ubicacionRow) return { success: false, error: "No se encontró la ubicación recién resuelta." };
+
+    provinciaFinal = ubicacionRow.provincia;
+    ubicacionTextoFinal = [ubicacionRow.oficina, ubicacionRow.planta, ubicacionRow.sitio].filter(Boolean).join(" - ") || null;
+    ubicacionIdFinal = resuelta.id;
+  }
 
   const tipoInformeFinal =
     payload.tipoInforme === "__new" ? payload.tipoInformeNuevo.trim() : payload.tipoInforme.trim();
@@ -107,8 +153,9 @@ export async function actualizarInformeTecnicoAction(
       ticket_numero: payload.ticketNumero.trim() || null,
       permiso_trabajo: payload.permisoTrabajo.trim() || null,
       tipo_informe: tipoInformeFinal || null,
-      provincia: payload.provincia || null,
-      ubicacion: payload.ubicacion.trim() || null,
+      provincia: provinciaFinal,
+      ubicacion: ubicacionTextoFinal,
+      ...(ubicacionIdFinal !== undefined ? { ubicacion_id: ubicacionIdFinal } : {}),
       descripcion_trabajo: payload.descripcionTrabajo.trim() || null,
       tareas_pendientes: payload.tareasPendientes.trim() || null,
     })
@@ -188,8 +235,8 @@ export async function actualizarInformeTecnicoAction(
     ticketNumero: payload.ticketNumero.trim() || null,
     tipoInforme: tipoInformeFinal || null,
     permisoTrabajo: payload.permisoTrabajo.trim() || null,
-    provincia: payload.provincia || null,
-    ubicacion: payload.ubicacion.trim() || null,
+    provincia: provinciaFinal,
+    ubicacion: ubicacionTextoFinal,
     descripcionTrabajo: payload.descripcionTrabajo.trim() || null,
     tareasPendientes,
     tecnicos: payload.tecnicos.map((t) => ({
@@ -210,8 +257,8 @@ export async function actualizarInformeTecnicoAction(
   const pdfFilename = buildInformeTecnicoFilename({
     numeroGeneracion,
     titulo: payload.titulo.trim(),
-    provincia: payload.provincia || null,
-    ubicacion: payload.ubicacion.trim() || null,
+    provincia: provinciaFinal,
+    ubicacion: ubicacionTextoFinal,
   });
   const pdfPath = `${profile.id}/${informeId}/${pdfFilename}`;
   const { error: pdfUpErr } = await supabase.storage

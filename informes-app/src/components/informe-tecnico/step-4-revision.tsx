@@ -1,7 +1,8 @@
 "use client";
 
 import type { ImagenInforme, Tecnico, Vehiculo } from "@/lib/types";
-import type { EmailDestinatario, InformeFormState } from "./types";
+import { labelUbicacionDesdeForm, type EmailDestinatario, type InformeFormState } from "./types";
+import type { Ubicacion } from "@/components/ubicaciones/types";
 import { ErrorNote, SuccessNote } from "@/components/notes";
 
 function fmtFecha(fecha: string) {
@@ -13,6 +14,7 @@ function fmtFecha(fecha: string) {
 export function Step4Revision({
   numeroGeneracion,
   form,
+  ubicaciones,
   tecnicos,
   vehiculos,
   imagenes,
@@ -25,6 +27,7 @@ export function Step4Revision({
 }: {
   numeroGeneracion: string;
   form: InformeFormState;
+  ubicaciones: Ubicacion[];
   tecnicos: Tecnico[];
   vehiculos: Vehiculo[];
   imagenes: ImagenInforme[];
@@ -36,6 +39,7 @@ export function Step4Revision({
   success: { numeroGeneracion: string; pdfUrl: string | null; emailEnviado?: boolean } | null;
 }) {
   const tipoLabel = form.tipoInforme === "__new" ? form.tipoInformeNuevo || "Nuevo tipo sin nombrar" : form.tipoInforme || "—";
+  const ubicacionLabel = labelUbicacionDesdeForm(form, ubicaciones);
   const tareas = form.tareasPendientes
     .split("\n")
     .map((s) => s.trim())
@@ -65,7 +69,7 @@ export function Step4Revision({
             </tr>
             <tr>
               <td className="k">Lugar</td>
-              <td className="v">{form.ubicacion || "—"}</td>
+              <td className="v">{ubicacionLabel}</td>
             </tr>
           </tbody>
         </table>
@@ -107,12 +111,8 @@ export function Step4Revision({
               <td className="v">{form.permisoTrabajo || "—"}</td>
             </tr>
             <tr>
-              <td className="k">Provincia</td>
-              <td className="v">{form.provincia || "—"}</td>
-            </tr>
-            <tr>
               <td className="k">Ubicación</td>
-              <td className="v">{form.ubicacion || "—"}</td>
+              <td className="v">{ubicacionLabel}</td>
             </tr>
           </tbody>
         </table>

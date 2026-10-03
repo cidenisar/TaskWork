@@ -1,6 +1,7 @@
 "use client";
 
 import type { CatalogosRendicion, RendicionFormState } from "./types";
+import { UbicacionFields } from "@/components/ubicaciones/ubicacion-fields";
 
 export function Step1Datos({
   form,
@@ -33,30 +34,46 @@ export function Step1Datos({
           <input type="date" value={form.fecha} onChange={(e) => onChange({ fecha: e.target.value })} required />
         </div>
       </div>
-      <div className="grid2">
-        <div className="field">
-          <label>
-            Proyecto / Cliente <span className="opt">(opcional)</span>
-          </label>
-          <input
-            type="text"
-            placeholder="Ej: YPF — Ed. Comunicaciones"
-            value={form.proyectoCliente}
-            onChange={(e) => onChange({ proyectoCliente: e.target.value })}
-          />
-        </div>
-        <div className="field">
-          <label>Provincia</label>
-          <select value={form.provincia} onChange={(e) => onChange({ provincia: e.target.value })}>
-            <option value="">Seleccionar provincia...</option>
-            {catalogos.provincias.map((p) => (
-              <option key={p} value={p}>
-                {p}
-              </option>
-            ))}
-          </select>
-        </div>
+      <div className="field">
+        <label>
+          Proyecto / Cliente <span className="opt">(opcional)</span>
+        </label>
+        <input
+          type="text"
+          placeholder="Ej: YPF — Ed. Comunicaciones"
+          value={form.proyectoCliente}
+          onChange={(e) => onChange({ proyectoCliente: e.target.value })}
+        />
       </div>
+      <div className="section-label" style={{ marginTop: 4 }}>
+        Ubicación <span className="opt">(opcional)</span>
+      </div>
+      <UbicacionFields
+        ubicaciones={catalogos.ubicaciones}
+        provincias={catalogos.provincias}
+        provinciaFiltro={form.provinciaFiltro}
+        onProvinciaFiltroChange={(p) =>
+          onChange({ provinciaFiltro: p, ubicacionId: "", localidadNueva: "", sitioNueva: "", plantaNueva: "", oficinaNueva: "" })
+        }
+        ubicacionId={form.ubicacionId}
+        onUbicacionIdChange={(id) =>
+          onChange(
+            id === "__new"
+              ? { ubicacionId: id }
+              : { ubicacionId: id, localidadNueva: "", sitioNueva: "", plantaNueva: "", oficinaNueva: "" },
+          )
+        }
+        localidadNueva={form.localidadNueva}
+        onLocalidadNuevaChange={(v) => onChange({ localidadNueva: v })}
+        sitioNueva={form.sitioNueva}
+        onSitioNuevaChange={(v) => onChange({ sitioNueva: v })}
+        plantaNueva={form.plantaNueva}
+        onPlantaNuevaChange={(v) => onChange({ plantaNueva: v })}
+        oficinaNueva={form.oficinaNueva}
+        onOficinaNuevaChange={(v) => onChange({ oficinaNueva: v })}
+        onGpsCapturado={(gps) => onChange({ gps })}
+        requerido={false}
+      />
       <div className="grid2">
         <div className="field">
           <label>

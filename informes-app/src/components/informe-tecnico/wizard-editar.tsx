@@ -7,7 +7,7 @@ import type { Tecnico, Vehiculo } from "@/lib/types";
 import { actualizarInformeTecnicoAction } from "@/app/(app)/informe-tecnico/editar/[id]/actions";
 import { Step1General } from "./step-1-general";
 import { Step2Equipo } from "./step-2-equipo";
-import type { CatalogosInforme, InformeFormState } from "./types";
+import { labelUbicacionDesdeForm, type CatalogosInforme, type InformeFormState } from "./types";
 import { ErrorNote, SuccessNote } from "@/components/notes";
 import { reportarErrorCliente } from "@/lib/client-error-report";
 
@@ -107,6 +107,7 @@ export function EditarInformeTecnicoWizard({
   }
 
   const tipoLabel = form.tipoInforme === "__new" ? form.tipoInformeNuevo || "Nuevo tipo sin nombrar" : form.tipoInforme || "—";
+  const ubicacionLabel = labelUbicacionDesdeForm(form, catalogos.ubicaciones);
   const vehText = vehiculos.length ? vehiculos.map((v) => (v.marcaModelo ? `${v.patente} (${v.marcaModelo})` : v.patente)).join(", ") : "—";
   const seguridad = tecnicos.filter((t) => t.esSeguridad);
 
@@ -154,12 +155,8 @@ export function EditarInformeTecnicoWizard({
                 <td className="v">{tipoLabel}</td>
               </tr>
               <tr>
-                <td className="k">Provincia</td>
-                <td className="v">{form.provincia || "—"}</td>
-              </tr>
-              <tr>
                 <td className="k">Ubicación</td>
-                <td className="v">{form.ubicacion || "—"}</td>
+                <td className="v">{ubicacionLabel}</td>
               </tr>
               <tr>
                 <td className="k">Personal Afectado</td>

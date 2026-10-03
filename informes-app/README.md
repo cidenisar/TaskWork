@@ -306,7 +306,25 @@ npm run dev
   usuario autenticado por RLS, igual que el resto de esos catálogos; la
   fecha del último relevamiento respeta la misma RLS de
   Historial — visible si lo cargó el usuario actual o si es
-  Admin/Supervisor).
+  Admin/Supervisor). **Informe Técnico** y **Rendición de Gastos** usan el
+  mismo picker (`UbicacionFields`, con `requerido={false}` porque ahí la
+  Ubicación es opcional) y el mismo botón "Usar mi ubicación" —
+  `src/lib/ubicaciones/resolver.ts` concentra `resolverUbicacionId`/
+  `tagGpsSiFalta` para que los cuatro módulos (Tableros, Racks, Informe
+  Técnico, Rendición de Gastos) resuelvan/den de alta/etiqueten GPS con la
+  misma lógica en vez de reimplementarla cada uno. Para no tocar el PDF, el
+  nombre de archivo ni los agregados de Estadísticas en este incremento,
+  ambos módulos siguen escribiendo las columnas de texto libre
+  `provincia`/`ubicacion` — ahora derivadas automáticamente de la Ubicación
+  estructurada elegida — además de la nueva `ubicacion_id`; los ~16 informes
+  y 6 rendiciones reales que ya existían (con texto libre inconsistente,
+  ej. variantes de escritura del mismo sitio en Mendoza) no se migraron
+  automáticamente a una Ubicación del catálogo nuevo, para no adivinar una
+  correspondencia sin que alguien la confirme — al editar un informe viejo
+  el picker arranca vacío y el texto histórico queda intacto si no se toca.
+  Migrar `src/lib/estadisticas/aggregates.ts` (que todavía lee
+  `informes_tecnicos.ubicacion` como texto libre) a `ubicacion_id` queda
+  pendiente para un incremento futuro.
 - **Errores del dispositivo** (`src/components/client-error-reporter.tsx` +
   `src/app/api/errores/reportar/`): cualquier error de JS no manejado en el
   navegador del usuario (y los fallos explícitos al generar/editar un

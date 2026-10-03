@@ -5,6 +5,7 @@ import { requireProfile } from "@/lib/auth";
 import { nuevoNumeroGeneracionInforme } from "@/lib/informe-tecnico/numero-generacion";
 import { renderInformeTecnicoPdf } from "@/lib/pdf/render";
 import { buildInformeTecnicoFilename } from "@/lib/pdf/filename";
+import { resolverUbicacionId, tagGpsSiFalta, type PayloadGps } from "@/lib/ubicaciones/resolver";
 
 interface PayloadTecnico {
   nombre: string;
@@ -30,8 +31,13 @@ interface Payload {
   tipoInforme: string;
   tipoInformeNuevo: string;
   permisoTrabajo: string;
-  provincia: string;
-  ubicacion: string;
+  provinciaFiltro: string;
+  ubicacionId: string; // "" | "__new" | id
+  localidadNueva: string;
+  sitioNueva: string;
+  plantaNueva: string;
+  oficinaNueva: string;
+  gps: PayloadGps | null;
   descripcionTrabajo: string;
   tareasPendientes: string;
   tecnicos: PayloadTecnico[];
@@ -39,6 +45,55 @@ interface Payload {
   imagenes: PayloadImagenMeta[];
   emailsSeleccionados: string[];
   numeroGeneracionPreferido: string;
+}
+
+/**
+ * La Ubicación en Informe Técnico es opcional (a diferencia de Tableros/
+ * Racks) — si no se eligió ni se creó ninguna, devuelve todo null sin
+ * error. Si se eligió/creó una, la resuelve igual que el resto de los
+ * módulos y devuelve también el texto plano que esperan el PDF y el
+ * cálculo de mantenimiento predictivo de Estadísticas (que todavía leen
+ * `provincia`/`ubicacion` como texto libre — migrarlos a `ubicacion_id`
+ * directamente queda para una próxima vuelta).
+ */
+async function resolverUbicacionInforme(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  payload: Payload,
+  userId: string,
+): Promise<{ ubicacionId: string | null; provincia: string | null; ubicacionTexto: string | null } | { error: string }> {
+  if (!payload.ubicacionId) return { ubicacionId: null, provincia: null, ubicacionTexto: null };
+
+  const resuelta = await resolverUbicacionId(
+    supabase,
+    {
+      ubicacionId: payload.ubicacionId !== "__new" ? payload.ubicacionId : null,
+      ubicacionNueva:
+        payload.ubicacionId === "__new"
+          ? {
+              provincia: payload.provinciaFiltro,
+              localidad: payload.localidadNueva,
+              sitio: payload.sitioNueva,
+              planta: payload.plantaNueva,
+              oficina: payload.oficinaNueva,
+            }
+          : null,
+    },
+    userId,
+    "el informe",
+  );
+  if ("error" in resuelta) return { error: resuelta.error };
+
+  await tagGpsSiFalta(supabase, resuelta.id, payload.gps, userId);
+
+  const { data: ubicacionRow } = await supabase
+    .from("ubicaciones")
+    .select("provincia, localidad, sitio, planta, oficina")
+    .eq("id", resuelta.id)
+    .single();
+  if (!ubicacionRow) return { error: "No se encontró la ubicación recién resuelta." };
+
+  const ubicacionTexto = [ubicacionRow.oficina, ubicacionRow.planta, ubicacionRow.sitio].filter(Boolean).join(" - ") || null;
+  return { ubicacionId: resuelta.id, provincia: ubicacionRow.provincia, ubicacionTexto };
 }
 
 export interface CrearInformeResult {
@@ -132,6 +187,9 @@ export async function crearInformeTecnicoAction(formData: FormData): Promise<Cre
     }
   }
 
+  const ubicacionResuelta = await resolverUbicacionInforme(supabase, payload, profile.id);
+  if ("error" in ubicacionResuelta) return { success: false, error: ubicacionResuelta.error };
+
   // Número de generación único (INF-{año}-{4 dígitos}), con reintento ante colisión.
   let numeroGeneracion = payload.numeroGeneracionPreferido || nuevoNumeroGeneracionInforme();
   let informeId: string | null = null;
@@ -147,8 +205,9 @@ export async function crearInformeTecnicoAction(formData: FormData): Promise<Cre
         ticket_numero: payload.ticketNumero.trim() || null,
         permiso_trabajo: payload.permisoTrabajo.trim() || null,
         tipo_informe: tipoInformeFinal || null,
-        provincia: payload.provincia || null,
-        ubicacion: payload.ubicacion.trim() || null,
+        provincia: ubicacionResuelta.provincia,
+        ubicacion: ubicacionResuelta.ubicacionTexto,
+        ubicacion_id: ubicacionResuelta.ubicacionId,
         descripcion_trabajo: payload.descripcionTrabajo.trim() || null,
         tareas_pendientes: payload.tareasPendientes.trim() || null,
         created_by: profile.id,
@@ -249,8 +308,8 @@ export async function crearInformeTecnicoAction(formData: FormData): Promise<Cre
     ticketNumero: payload.ticketNumero.trim() || null,
     tipoInforme: tipoInformeFinal || null,
     permisoTrabajo: payload.permisoTrabajo.trim() || null,
-    provincia: payload.provincia || null,
-    ubicacion: payload.ubicacion.trim() || null,
+    provincia: ubicacionResuelta.provincia,
+    ubicacion: ubicacionResuelta.ubicacionTexto,
     descripcionTrabajo: payload.descripcionTrabajo.trim() || null,
     tareasPendientes,
     tecnicos: payload.tecnicos.map((t) => ({
@@ -273,8 +332,8 @@ export async function crearInformeTecnicoAction(formData: FormData): Promise<Cre
   const pdfFilename = buildInformeTecnicoFilename({
     numeroGeneracion,
     titulo: payload.titulo.trim(),
-    provincia: payload.provincia || null,
-    ubicacion: payload.ubicacion.trim() || null,
+    provincia: ubicacionResuelta.provincia,
+    ubicacion: ubicacionResuelta.ubicacionTexto,
   });
   const pdfPath = `${profile.id}/${informeId}/${pdfFilename}`;
   const { error: pdfUpErr } = await supabase.storage

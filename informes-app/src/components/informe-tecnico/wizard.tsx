@@ -144,6 +144,7 @@ export function InformeTecnicoWizard({
         <Step4Revision
           numeroGeneracion={numeroGeneracion}
           form={form}
+          ubicaciones={catalogos.ubicaciones}
           tecnicos={tecnicos}
           vehiculos={vehiculos}
           imagenes={imagenes}

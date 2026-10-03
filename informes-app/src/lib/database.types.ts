@@ -152,6 +152,7 @@ export type InformeTecnicoRow = {
   tipo_informe: string | null;
   provincia: string | null;
   ubicacion: string | null;
+  ubicacion_id: string | null;
   descripcion_trabajo: string | null;
   tareas_pendientes: string | null;
   pdf_url: string | null;
@@ -194,6 +195,7 @@ export type RendicionGastosRow = {
   fecha: string;
   proyecto_cliente: string | null;
   provincia: string | null;
+  ubicacion_id: string | null;
   viatico_recibido: number;
   moneda: Moneda;
   pdf_url: string | null;

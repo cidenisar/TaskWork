@@ -46,6 +46,7 @@ export function UbicacionFields({
   onOficinaNuevaChange,
   onGpsCapturado,
   disabled,
+  requerido = true,
 }: {
   ubicaciones: Ubicacion[];
   provincias: string[];
@@ -63,6 +64,8 @@ export function UbicacionFields({
   onOficinaNuevaChange: (v: string) => void;
   onGpsCapturado: (gps: GpsCapturado | null) => void;
   disabled?: boolean;
+  /** false para módulos donde la ubicación es opcional (Informe Técnico, Rendición de Gastos) — no muestra los asteriscos de obligatorio. */
+  requerido?: boolean;
 }) {
   const [gpsBusy, setGpsBusy] = useState(false);
   const [gpsError, setGpsError] = useState<string | null>(null);
@@ -146,7 +149,7 @@ export function UbicacionFields({
       </div>
       <div className="field">
         <label>
-          Provincia <span className="req">*</span>
+          Provincia {requerido ? <span className="req">*</span> : <span className="opt">(opcional)</span>}
         </label>
         <select
           value={provinciaFiltro}
@@ -167,7 +170,7 @@ export function UbicacionFields({
       {provinciaFiltro && (
         <div className="field">
           <label>
-            Ubicación (sitio/sala) <span className="req">*</span>
+            Ubicación (sitio/sala) {requerido ? <span className="req">*</span> : <span className="opt">(opcional)</span>}
           </label>
           <select value={ubicacionId} onChange={(e) => onUbicacionIdChange(e.target.value)} disabled={disabled}>
             <option value="">Seleccionar ubicación...</option>
