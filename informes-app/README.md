@@ -84,6 +84,14 @@ Rendición de Gastos, Configuración, Estadísticas).
   implementado.
 - Vista de mapa de todas las ubicaciones históricas fuera de Estadísticas —
   explícitamente fuera de alcance en spec sección 6.6/13.
+- Ubicaciones: captura de GPS ("Usar mi ubicación") para completar Región/
+  Provincia/Localidad solos y acotar Sitio/Planta a una lista corta en vez
+  del catálogo completo, con aprendizaje por sitio (la primera vez que se
+  confirma un Sitio/Planta con GPS esas coordenadas quedan guardadas en
+  `ubicaciones.lat/lng`, y la próxima vez que alguien esté cerca se sugiere
+  directamente, sin tener que elegir de una lista) — columnas `lat`, `lng`,
+  `gps_accuracy_m`, `gps_confirmado_at`, `gps_confirmado_por` ya están en el
+  schema, pendiente la UI/lógica.
 
 ## Setup
 
@@ -255,22 +263,34 @@ npm run dev
   en pantalla mientras se carga y se imprime en el PDF, junto con una foto
   general opcional del rack.
 - **Ubicaciones** (`src/app/(app)/ubicaciones/`, `src/components/ubicaciones/`,
-  migración `20260930020000_ubicaciones.sql`): el "sitio" de texto libre que
-  tenían Tableros y Racks por separado se reemplazó por una jerarquía
-  compartida **Provincia → Sector/Oficina (opcional) → Sala**
-  (`public.ubicaciones`, `unique (provincia, sector_oficina, sala)`), elegida
-  o dada de alta al vuelo con el mismo criterio que el resto de los
-  catálogos (`resolverUbicacionId` en cada `actions.ts`, con manejo del
-  choque de unicidad — código `23505` — para reusar una Ubicación existente
-  en vez de duplicarla). El objetivo: dos relevamientos de tipos distintos
-  en el mismo lugar físico (por ejemplo un tablero y un rack, los dos en la
-  sala "Luján 1") quedan bajo el mismo `ubicacion_id` en vez de fragmentarse
-  en variantes de texto distintas ("Luján 1", "sala lujan", "Lujan I"...). La
-  pestaña **Ubicaciones** lista todas las Ubicaciones cargadas con la
-  cantidad de tableros/racks en cada una, y el detalle de una Ubicación
-  agrega **todo** el equipamiento relevado ahí — el resumen por categoría de
-  Tableros (térmicas, disyuntores, cámaras...) y de Racks (routers,
-  switches, UPS...) combinados, más la fecha del último relevamiento de cada
+  migraciones `20260930020000_ubicaciones.sql`,
+  `20261003000000_ubicaciones_jerarquia_completa.sql`,
+  `20261003000100_ubicaciones_seed_ypf_argentina.sql`): el "sitio" de texto
+  libre que tenían Tableros y Racks por separado se reemplazó por una
+  jerarquía compartida **País → Región → Provincia → Localidad → Sitio →
+  Planta → Oficina** (`public.ubicaciones`), elegida o dada de alta al vuelo
+  con el mismo criterio que el resto de los catálogos (`resolverUbicacionId`
+  en cada `actions.ts`, con manejo del choque de unicidad — código `23505` —
+  para reusar una Ubicación existente en vez de duplicarla). País y Región
+  nunca los tipea el técnico: Región se deriva de la Provincia elegida vía
+  `catalogo_provincias.region` (NOA/NEA/SUR, zonificación interna real de la
+  operación — no la agrupación "de libro" por Cuyo/Centro/Pampeana que
+  sugería la planilla fuente, a pedido del usuario se usó tal cual la
+  columna "Región" de los datos). El formulario pide primero la Provincia
+  para acotar el catálogo (se precargaron ~1747 sitios de la operación en
+  Argentina desde una planilla de la empresa) y de ahí elegís una Ubicación
+  existente o creás una nueva con Localidad/Sitio/Planta/Oficina — los tres
+  últimos niveles están pensados para completarse solos con la captura de
+  GPS en una mejora futura (ver "⏳ Explícitamente pendiente" más abajo). El
+  objetivo: dos relevamientos de tipos distintos en el mismo lugar físico
+  (por ejemplo un tablero y un rack, los dos en la sala "Luján 1") quedan
+  bajo el mismo `ubicacion_id` en vez de fragmentarse en variantes de texto
+  distintas ("Luján 1", "sala lujan", "Lujan I"...). La pestaña
+  **Ubicaciones** lista todas las Ubicaciones cargadas con la cantidad de
+  tableros/racks en cada una, y el detalle de una Ubicación agrega **todo**
+  el equipamiento relevado ahí — el resumen por categoría de Tableros
+  (térmicas, disyuntores, cámaras...) y de Racks (routers, switches,
+  UPS...) combinados, más la fecha del último relevamiento de cada
   tablero/rack — sin importar qué técnico cargó cada uno (el estado de
   `tableros`/`racks`/sus circuitos y equipamiento es visible para cualquier
   usuario autenticado por RLS, igual que el resto de esos catálogos; la

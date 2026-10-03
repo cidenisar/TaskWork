@@ -53,10 +53,12 @@ export function NuevaMedicionForm({
   ubicaciones: Ubicacion[];
   provincias: string[];
 }) {
+  const [provinciaFiltro, setProvinciaFiltro] = useState("");
   const [ubicacionId, setUbicacionId] = useState<string>(""); // "" = sin elegir, "__new" = crear
-  const [provinciaNueva, setProvinciaNueva] = useState("");
-  const [sectorOficinaNueva, setSectorOficinaNueva] = useState("");
-  const [salaNueva, setSalaNueva] = useState("");
+  const [localidadNueva, setLocalidadNueva] = useState("");
+  const [sitioNueva, setSitioNueva] = useState("");
+  const [plantaNueva, setPlantaNueva] = useState("");
+  const [oficinaNueva, setOficinaNueva] = useState("");
   const [filtroSubsistemas, setFiltroSubsistemas] = useState<TableroTipo[]>([]);
   const [tableroId, setTableroId] = useState<string>(""); // "" = sin elegir, "__new" = crear
   const [subsistemasNuevo, setSubsistemasNuevo] = useState<TableroTipo[]>([]);
@@ -102,6 +104,14 @@ export function NuevaMedicionForm({
   const tipoEvento: TableroEventoTipo = tieneEnergia ? tipoEventoElegido : "relevamiento";
   const resumen = useMemo(() => calcularResumenEquipamiento(circuitos), [circuitos]);
 
+  function elegirProvinciaFiltro(provincia: string) {
+    setProvinciaFiltro(provincia);
+    setLocalidadNueva("");
+    setSitioNueva("");
+    setPlantaNueva("");
+    setOficinaNueva("");
+  }
+
   function elegirUbicacion(id: string) {
     setUbicacionId(id);
     setSuccess(null);
@@ -111,9 +121,10 @@ export function NuevaMedicionForm({
     setCircuitos([]);
     setLecturas({});
     if (id !== "__new") {
-      setProvinciaNueva("");
-      setSectorOficinaNueva("");
-      setSalaNueva("");
+      setLocalidadNueva("");
+      setSitioNueva("");
+      setPlantaNueva("");
+      setOficinaNueva("");
     }
   }
 
@@ -281,8 +292,8 @@ export function NuevaMedicionForm({
       setError("Elegí una ubicación existente o creá una nueva.");
       return;
     }
-    if (ubicacionId === "__new" && (!provinciaNueva.trim() || !salaNueva.trim())) {
-      setError("Completá la provincia y la sala de la ubicación nueva.");
+    if (ubicacionId === "__new" && (!provinciaFiltro.trim() || !sitioNueva.trim())) {
+      setError("Completá la provincia y el sitio de la ubicación nueva.");
       return;
     }
     if (!tableroId) {
@@ -321,7 +332,9 @@ export function NuevaMedicionForm({
           tipoEvento,
           ubicacionId: ubicacionId === "__new" ? null : ubicacionId,
           ubicacionNueva:
-            ubicacionId === "__new" ? { provincia: provinciaNueva, sectorOficina: sectorOficinaNueva, sala: salaNueva } : null,
+            ubicacionId === "__new"
+              ? { provincia: provinciaFiltro, localidad: localidadNueva, sitio: sitioNueva, planta: plantaNueva, oficina: oficinaNueva }
+              : null,
           tableroId: tableroId === "__new" ? null : tableroId,
           denominacionNueva,
           fecha,
@@ -373,10 +386,12 @@ export function NuevaMedicionForm({
 
   function empezarOtra() {
     setSuccess(null);
+    setProvinciaFiltro("");
     setUbicacionId("");
-    setProvinciaNueva("");
-    setSectorOficinaNueva("");
-    setSalaNueva("");
+    setLocalidadNueva("");
+    setSitioNueva("");
+    setPlantaNueva("");
+    setOficinaNueva("");
     setTableroId("");
     setSubsistemasNuevo([]);
     setDenominacionNueva("");
@@ -397,14 +412,18 @@ export function NuevaMedicionForm({
         <UbicacionFields
           ubicaciones={ubicaciones}
           provincias={provincias}
+          provinciaFiltro={provinciaFiltro}
+          onProvinciaFiltroChange={elegirProvinciaFiltro}
           ubicacionId={ubicacionId}
           onUbicacionIdChange={elegirUbicacion}
-          provinciaNueva={provinciaNueva}
-          onProvinciaNuevaChange={setProvinciaNueva}
-          sectorOficinaNueva={sectorOficinaNueva}
-          onSectorOficinaNuevaChange={setSectorOficinaNueva}
-          salaNueva={salaNueva}
-          onSalaNuevaChange={setSalaNueva}
+          localidadNueva={localidadNueva}
+          onLocalidadNuevaChange={setLocalidadNueva}
+          sitioNueva={sitioNueva}
+          onSitioNuevaChange={setSitioNueva}
+          plantaNueva={plantaNueva}
+          onPlantaNuevaChange={setPlantaNueva}
+          oficinaNueva={oficinaNueva}
+          onOficinaNuevaChange={setOficinaNueva}
           disabled={submitting}
         />
       </div>

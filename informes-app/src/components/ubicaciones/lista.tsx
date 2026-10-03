@@ -3,13 +3,9 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Icon } from "@/components/icon";
-import { labelUbicacion } from "./types";
+import type { Ubicacion } from "./types";
 
-export interface UbicacionRow {
-  id: string;
-  provincia: string;
-  sectorOficina: string | null;
-  sala: string;
+export interface UbicacionRow extends Ubicacion {
   cantTableros: number;
   cantRacks: number;
 }
@@ -20,7 +16,9 @@ export function ListaUbicaciones({ ubicaciones }: { ubicaciones: UbicacionRow[] 
   const filtradas = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return ubicaciones;
-    return ubicaciones.filter((u) => `${u.sala} ${u.sectorOficina ?? ""} ${u.provincia}`.toLowerCase().includes(q));
+    return ubicaciones.filter((u) =>
+      `${u.sitio} ${u.planta ?? ""} ${u.oficina ?? ""} ${u.localidad ?? ""} ${u.provincia} ${u.region}`.toLowerCase().includes(q),
+    );
   }, [ubicaciones, query]);
 
   return (
@@ -48,9 +46,9 @@ export function ListaUbicaciones({ ubicaciones }: { ubicaciones: UbicacionRow[] 
               <Link href={`/ubicaciones/${u.id}`} className="hist-item" key={u.id} style={{ textDecoration: "none", color: "inherit" }}>
                 <div className="info">
                   <div className="hist-main">
-                    <div className="hist-title">{u.sala}</div>
+                    <div className="hist-title">{u.sitio}</div>
                     <div className="hist-meta">
-                      {[u.sectorOficina, u.provincia].filter(Boolean).join(" · ")}
+                      {[u.planta, u.localidad, u.provincia, u.region].filter(Boolean).join(" · ")}
                     </div>
                   </div>
                 </div>
@@ -76,5 +74,3 @@ export function ListaUbicaciones({ ubicaciones }: { ubicaciones: UbicacionRow[] 
     </div>
   );
 }
-
-export { labelUbicacion };

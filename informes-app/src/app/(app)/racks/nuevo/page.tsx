@@ -14,16 +14,11 @@ export default async function NuevoRelevamientoPage() {
       .from("rack_equipamientos")
       .select("id, rack_id, numero, categoria_equipo, texto, marca_modelo, posicion_u, cantidad")
       .order("numero"),
-    supabase.from("ubicaciones").select("id, provincia, sector_oficina, sala").order("sala"),
+    supabase.from("ubicaciones").select("id, pais, region, provincia, localidad, sitio, planta, oficina, lat, lng").order("sitio"),
     supabase.from("catalogo_provincias").select("nombre").order("nombre"),
   ]);
 
-  const ubicaciones: Ubicacion[] = (ubicacionesRes.data ?? []).map((u) => ({
-    id: u.id,
-    provincia: u.provincia,
-    sectorOficina: u.sector_oficina,
-    sala: u.sala,
-  }));
+  const ubicaciones: Ubicacion[] = ubicacionesRes.data ?? [];
   const ubicacionesPorId = new Map(ubicaciones.map((u) => [u.id, u]));
   const provincias = (provinciasRes.data ?? []).map((p) => p.nombre);
 

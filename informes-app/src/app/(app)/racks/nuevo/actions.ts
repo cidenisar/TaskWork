@@ -22,8 +22,10 @@ interface PayloadLectura {
 
 interface PayloadUbicacionNueva {
   provincia: string;
-  sectorOficina: string;
-  sala: string;
+  localidad: string;
+  sitio: string;
+  planta: string;
+  oficina: string;
 }
 
 export interface CrearRelevamientoPayload {
@@ -44,9 +46,11 @@ export interface CrearRelevamientoResult {
 
 /**
  * Resuelve el id de la Ubicación a usar para un rack nuevo: la existente
- * elegida, o da de alta una nueva (alta al vuelo). Si ya existe una
- * Ubicación idéntica (misma provincia+sector/oficina+sala) la reusa en vez
- * de duplicarla — mismo criterio que Tableros/catalogo_clientes.
+ * elegida, o da de alta una nueva (alta al vuelo). La Región nunca la tipea
+ * el técnico — se deriva de la Provincia vía catalogo_provincias. Si ya
+ * existe una Ubicación idéntica (misma provincia+localidad+sitio+planta+
+ * oficina) la reusa en vez de duplicarla — mismo criterio que
+ * Tableros/catalogo_clientes.
  */
 async function resolverUbicacionId(
   supabase: Awaited<ReturnType<typeof createClient>>,
@@ -57,20 +61,36 @@ async function resolverUbicacionId(
   if (!payload.ubicacionNueva) return { error: "Elegí o creá una ubicación para el rack." };
 
   const provincia = payload.ubicacionNueva.provincia.trim();
-  const sectorOficina = payload.ubicacionNueva.sectorOficina.trim();
-  const sala = payload.ubicacionNueva.sala.trim();
-  if (!provincia || !sala) return { error: "Completá la provincia y la sala de la ubicación nueva." };
+  const localidad = payload.ubicacionNueva.localidad.trim();
+  const sitio = payload.ubicacionNueva.sitio.trim();
+  const planta = payload.ubicacionNueva.planta.trim();
+  const oficina = payload.ubicacionNueva.oficina.trim();
+  if (!provincia || !sitio) return { error: "Completá la provincia y el sitio de la ubicación nueva." };
+
+  const { data: provinciaRow } = await supabase.from("catalogo_provincias").select("region").eq("nombre", provincia).single();
+  const region = provinciaRow?.region ?? "Sin especificar";
 
   const { data: nueva, error } = await supabase
     .from("ubicaciones")
-    .insert({ provincia, sector_oficina: sectorOficina || null, sala, created_by: userId })
+    .insert({
+      pais: "Argentina",
+      region,
+      provincia,
+      localidad: localidad || null,
+      sitio,
+      planta: planta || null,
+      oficina: oficina || null,
+      created_by: userId,
+    })
     .select("id")
     .single();
   if (!error && nueva) return { id: nueva.id };
 
   if (error?.code === "23505") {
-    let query = supabase.from("ubicaciones").select("id").eq("provincia", provincia).eq("sala", sala);
-    query = sectorOficina ? query.eq("sector_oficina", sectorOficina) : query.is("sector_oficina", null);
+    let query = supabase.from("ubicaciones").select("id").eq("provincia", provincia).eq("sitio", sitio);
+    query = localidad ? query.eq("localidad", localidad) : query.is("localidad", null);
+    query = planta ? query.eq("planta", planta) : query.is("planta", null);
+    query = oficina ? query.eq("oficina", oficina) : query.is("oficina", null);
     const { data: existente } = await query.single();
     if (existente) return { id: existente.id };
   }
@@ -137,7 +157,7 @@ export async function crearRelevamientoRackAction(formData: FormData): Promise<C
   }
   const { data: ubicacionRack, error: ubicacionReadErr } = await supabase
     .from("ubicaciones")
-    .select("provincia, sector_oficina, sala")
+    .select("region, provincia, localidad, sitio, planta, oficina")
     .eq("id", rackRow.ubicacion_id)
     .single();
   if (ubicacionReadErr || !ubicacionRack) {
@@ -242,9 +262,12 @@ export async function crearRelevamientoRackAction(formData: FormData): Promise<C
   const pdfBuffer = await renderRackPdf({
     numeroGeneracion,
     denominacion: rackRow.denominacion,
+    region: ubicacionRack.region,
     provincia: ubicacionRack.provincia,
-    sectorOficina: ubicacionRack.sector_oficina,
-    sala: ubicacionRack.sala,
+    localidad: ubicacionRack.localidad,
+    sitio: ubicacionRack.sitio,
+    planta: ubicacionRack.planta,
+    oficina: ubicacionRack.oficina,
     fecha: payload.fecha,
     resumen,
     fotoGeneralBuffer,
@@ -263,7 +286,7 @@ export async function crearRelevamientoRackAction(formData: FormData): Promise<C
     realizoNombre: profile.nombreCompleto,
   });
 
-  const pdfFilename = buildRackFilename({ numeroGeneracion, denominacion: rackRow.denominacion, sitio: ubicacionRack.sala });
+  const pdfFilename = buildRackFilename({ numeroGeneracion, denominacion: rackRow.denominacion, sitio: ubicacionRack.sitio });
   const pdfPath = `${profile.id}/racks/${relevamientoId}/${pdfFilename}`;
   const { error: pdfUpErr } = await supabase.storage
     .from("informes-pdf")

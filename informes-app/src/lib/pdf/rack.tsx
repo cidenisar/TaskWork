@@ -34,9 +34,12 @@ export interface RackPdfLectura {
 export interface RackPdfProps {
   numeroGeneracion: string;
   denominacion: string;
+  region: string;
   provincia: string;
-  sectorOficina: string | null;
-  sala: string;
+  localidad: string | null;
+  sitio: string;
+  planta: string | null;
+  oficina: string | null;
   fecha: string;
   lecturas: RackPdfLectura[];
   resumen: ResumenEquipamiento;
@@ -52,9 +55,12 @@ export function RackPdf(props: RackPdfProps) {
   const {
     numeroGeneracion,
     denominacion,
+    region,
     provincia,
-    sectorOficina,
-    sala,
+    localidad,
+    sitio,
+    planta,
+    oficina,
     fecha,
     lecturas,
     resumen,
@@ -65,7 +71,7 @@ export function RackPdf(props: RackPdfProps) {
   } = props;
   const fechaLabel = formatFechaArg(fecha);
   const documentoLabel = "RELEVAMIENTO DE EQUIPAMIENTO";
-  const documentoLinea = `Documento: ${sala || "—"}-Público · Generado por ${appName}`;
+  const documentoLinea = `Documento: ${sitio || "—"}-Público · Generado por ${appName}`;
 
   return (
     <Document title={`${numeroGeneracion} — ${denominacion}`}>
@@ -79,15 +85,18 @@ export function RackPdf(props: RackPdfProps) {
         />
 
         <Text style={commonStyles.mainTitle}>
-          {denominacion} — {sala}
+          {denominacion} — {sitio}
         </Text>
 
         <View style={commonStyles.kvTable}>
           <KeyValueRow k="N° de Generación:" v={numeroGeneracion} />
           <KeyValueRow k="Rack:" v={denominacion} />
-          <KeyValueRow k="Sala:" v={sala} />
-          {sectorOficina && <KeyValueRow k="Sector/Oficina:" v={sectorOficina} />}
+          <KeyValueRow k="Sitio:" v={sitio} />
+          {planta && <KeyValueRow k="Planta:" v={planta} />}
+          {oficina && <KeyValueRow k="Oficina:" v={oficina} />}
+          {localidad && <KeyValueRow k="Localidad:" v={localidad} />}
           <KeyValueRow k="Provincia:" v={provincia} />
+          <KeyValueRow k="Región:" v={region} />
           <KeyValueRow k="Fecha:" v={fechaLabel} last />
         </View>
 

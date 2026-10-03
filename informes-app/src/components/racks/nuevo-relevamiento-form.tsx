@@ -36,10 +36,12 @@ export function NuevoRelevamientoForm({
   ubicaciones: Ubicacion[];
   provincias: string[];
 }) {
+  const [provinciaFiltro, setProvinciaFiltro] = useState("");
   const [ubicacionId, setUbicacionId] = useState<string>(""); // "" = sin elegir, "__new" = crear
-  const [provinciaNueva, setProvinciaNueva] = useState("");
-  const [sectorOficinaNueva, setSectorOficinaNueva] = useState("");
-  const [salaNueva, setSalaNueva] = useState("");
+  const [localidadNueva, setLocalidadNueva] = useState("");
+  const [sitioNueva, setSitioNueva] = useState("");
+  const [plantaNueva, setPlantaNueva] = useState("");
+  const [oficinaNueva, setOficinaNueva] = useState("");
   const [rackId, setRackId] = useState<string>(""); // "" = sin elegir, "__new" = crear
   const [denominacionNueva, setDenominacionNueva] = useState("");
   const [fecha, setFecha] = useState(() => new Date().toISOString().slice(0, 10));
@@ -70,6 +72,14 @@ export function NuevoRelevamientoForm({
     return racks.filter((r) => r.ubicacionId === ubicacionId);
   }, [racks, ubicacionId]);
 
+  function elegirProvinciaFiltro(provincia: string) {
+    setProvinciaFiltro(provincia);
+    setLocalidadNueva("");
+    setSitioNueva("");
+    setPlantaNueva("");
+    setOficinaNueva("");
+  }
+
   function elegirUbicacion(id: string) {
     setUbicacionId(id);
     setSuccess(null);
@@ -78,9 +88,10 @@ export function NuevoRelevamientoForm({
     setEquipamiento([]);
     setLecturas({});
     if (id !== "__new") {
-      setProvinciaNueva("");
-      setSectorOficinaNueva("");
-      setSalaNueva("");
+      setLocalidadNueva("");
+      setSitioNueva("");
+      setPlantaNueva("");
+      setOficinaNueva("");
     }
   }
 
@@ -220,8 +231,8 @@ export function NuevoRelevamientoForm({
       setError("Elegí una ubicación existente o creá una nueva.");
       return;
     }
-    if (ubicacionId === "__new" && (!provinciaNueva.trim() || !salaNueva.trim())) {
-      setError("Completá la provincia y la sala de la ubicación nueva.");
+    if (ubicacionId === "__new" && (!provinciaFiltro.trim() || !sitioNueva.trim())) {
+      setError("Completá la provincia y el sitio de la ubicación nueva.");
       return;
     }
     if (!rackId) {
@@ -256,7 +267,7 @@ export function NuevoRelevamientoForm({
           ubicacionId: ubicacionId === "__new" ? null : ubicacionId,
           ubicacionNueva:
             ubicacionId === "__new"
-              ? { provincia: provinciaNueva, sectorOficina: sectorOficinaNueva, sala: salaNueva }
+              ? { provincia: provinciaFiltro, localidad: localidadNueva, sitio: sitioNueva, planta: plantaNueva, oficina: oficinaNueva }
               : null,
           denominacionNueva,
           fecha,
@@ -305,10 +316,12 @@ export function NuevoRelevamientoForm({
 
   function empezarOtro() {
     setSuccess(null);
+    setProvinciaFiltro("");
     setUbicacionId("");
-    setProvinciaNueva("");
-    setSectorOficinaNueva("");
-    setSalaNueva("");
+    setLocalidadNueva("");
+    setSitioNueva("");
+    setPlantaNueva("");
+    setOficinaNueva("");
     setRackId("");
     setDenominacionNueva("");
     setEquipamiento([]);
@@ -328,14 +341,18 @@ export function NuevoRelevamientoForm({
         <UbicacionFields
           ubicaciones={ubicaciones}
           provincias={provincias}
+          provinciaFiltro={provinciaFiltro}
+          onProvinciaFiltroChange={elegirProvinciaFiltro}
           ubicacionId={ubicacionId}
           onUbicacionIdChange={elegirUbicacion}
-          provinciaNueva={provinciaNueva}
-          onProvinciaNuevaChange={setProvinciaNueva}
-          sectorOficinaNueva={sectorOficinaNueva}
-          onSectorOficinaNuevaChange={setSectorOficinaNueva}
-          salaNueva={salaNueva}
-          onSalaNuevaChange={setSalaNueva}
+          localidadNueva={localidadNueva}
+          onLocalidadNuevaChange={setLocalidadNueva}
+          sitioNueva={sitioNueva}
+          onSitioNuevaChange={setSitioNueva}
+          plantaNueva={plantaNueva}
+          onPlantaNuevaChange={setPlantaNueva}
+          oficinaNueva={oficinaNueva}
+          onOficinaNuevaChange={setOficinaNueva}
           disabled={submitting}
         />
       </div>

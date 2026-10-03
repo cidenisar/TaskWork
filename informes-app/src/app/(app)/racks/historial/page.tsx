@@ -16,14 +16,9 @@ export default async function HistorialRacksPage() {
   const rackIds = [...new Set((relevamientosData ?? []).map((r) => r.rack_id))];
   const [{ data: racksData }, { data: ubicacionesData }] = await Promise.all([
     rackIds.length > 0 ? supabase.from("racks").select("id, denominacion, ubicacion_id").in("id", rackIds) : { data: [] },
-    supabase.from("ubicaciones").select("id, provincia, sector_oficina, sala"),
+    supabase.from("ubicaciones").select("id, pais, region, provincia, localidad, sitio, planta, oficina, lat, lng"),
   ]);
-  const ubicaciones: Ubicacion[] = (ubicacionesData ?? []).map((u) => ({
-    id: u.id,
-    provincia: u.provincia,
-    sectorOficina: u.sector_oficina,
-    sala: u.sala,
-  }));
+  const ubicaciones: Ubicacion[] = ubicacionesData ?? [];
   const ubicacionesPorId = new Map(ubicaciones.map((u) => [u.id, u]));
   const racksPorId = new Map((racksData ?? []).map((r) => [r.id, r]));
 

@@ -14,16 +14,11 @@ export default async function NuevaMedicionPage() {
       .from("tablero_circuitos")
       .select("id, tablero_id, numero, texto, amp_nominal, categoria_equipo, tipo_circuito")
       .order("numero"),
-    supabase.from("ubicaciones").select("id, provincia, sector_oficina, sala").order("sala"),
+    supabase.from("ubicaciones").select("id, pais, region, provincia, localidad, sitio, planta, oficina, lat, lng").order("sitio"),
     supabase.from("catalogo_provincias").select("nombre").order("nombre"),
   ]);
 
-  const ubicaciones: Ubicacion[] = (ubicacionesRes.data ?? []).map((u) => ({
-    id: u.id,
-    provincia: u.provincia,
-    sectorOficina: u.sector_oficina,
-    sala: u.sala,
-  }));
+  const ubicaciones: Ubicacion[] = ubicacionesRes.data ?? [];
   const ubicacionesPorId = new Map(ubicaciones.map((u) => [u.id, u]));
   const provincias = (provinciasRes.data ?? []).map((p) => p.nombre);
 

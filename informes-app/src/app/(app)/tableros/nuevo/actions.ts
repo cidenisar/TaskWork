@@ -25,8 +25,10 @@ interface PayloadLectura {
 
 interface PayloadUbicacionNueva {
   provincia: string;
-  sectorOficina: string;
-  sala: string;
+  localidad: string;
+  sitio: string;
+  planta: string;
+  oficina: string;
 }
 
 export interface CrearMedicionPayload {
@@ -54,8 +56,10 @@ function parseNum(v: string): number | null {
 
 /**
  * Resuelve el id de la Ubicación a usar para un tablero nuevo: la existente
- * elegida, o da de alta una nueva (alta al vuelo). Si ya existe una
- * Ubicación idéntica (misma provincia+sector/oficina+sala) la reusa en vez
+ * elegida, o da de alta una nueva (alta al vuelo). La Región nunca la tipea
+ * el técnico — se deriva de la Provincia vía catalogo_provincias (misma idea
+ * que a futuro la va a completar el GPS). Si ya existe una Ubicación
+ * idéntica (misma provincia+localidad+sitio+planta+oficina) la reusa en vez
  * de duplicarla — mismo criterio que catalogo_clientes/catalogo_torres.
  */
 async function resolverUbicacionId(
@@ -67,20 +71,36 @@ async function resolverUbicacionId(
   if (!payload.ubicacionNueva) return { error: "Elegí o creá una ubicación para el tablero." };
 
   const provincia = payload.ubicacionNueva.provincia.trim();
-  const sectorOficina = payload.ubicacionNueva.sectorOficina.trim();
-  const sala = payload.ubicacionNueva.sala.trim();
-  if (!provincia || !sala) return { error: "Completá la provincia y la sala de la ubicación nueva." };
+  const localidad = payload.ubicacionNueva.localidad.trim();
+  const sitio = payload.ubicacionNueva.sitio.trim();
+  const planta = payload.ubicacionNueva.planta.trim();
+  const oficina = payload.ubicacionNueva.oficina.trim();
+  if (!provincia || !sitio) return { error: "Completá la provincia y el sitio de la ubicación nueva." };
+
+  const { data: provinciaRow } = await supabase.from("catalogo_provincias").select("region").eq("nombre", provincia).single();
+  const region = provinciaRow?.region ?? "Sin especificar";
 
   const { data: nueva, error } = await supabase
     .from("ubicaciones")
-    .insert({ provincia, sector_oficina: sectorOficina || null, sala, created_by: userId })
+    .insert({
+      pais: "Argentina",
+      region,
+      provincia,
+      localidad: localidad || null,
+      sitio,
+      planta: planta || null,
+      oficina: oficina || null,
+      created_by: userId,
+    })
     .select("id")
     .single();
   if (!error && nueva) return { id: nueva.id };
 
   if (error?.code === "23505") {
-    let query = supabase.from("ubicaciones").select("id").eq("provincia", provincia).eq("sala", sala);
-    query = sectorOficina ? query.eq("sector_oficina", sectorOficina) : query.is("sector_oficina", null);
+    let query = supabase.from("ubicaciones").select("id").eq("provincia", provincia).eq("sitio", sitio);
+    query = localidad ? query.eq("localidad", localidad) : query.is("localidad", null);
+    query = planta ? query.eq("planta", planta) : query.is("planta", null);
+    query = oficina ? query.eq("oficina", oficina) : query.is("oficina", null);
     const { data: existente } = await query.single();
     if (existente) return { id: existente.id };
   }
@@ -151,7 +171,7 @@ export async function crearMedicionTableroAction(formData: FormData): Promise<Cr
   }
   const { data: ubicacionTablero, error: ubicacionReadErr } = await supabase
     .from("ubicaciones")
-    .select("provincia, sector_oficina, sala")
+    .select("region, provincia, localidad, sitio, planta, oficina")
     .eq("id", tableroRow.ubicacion_id)
     .single();
   if (ubicacionReadErr || !ubicacionTablero) {
@@ -269,9 +289,12 @@ export async function crearMedicionTableroAction(formData: FormData): Promise<Cr
     subsistemas: tableroRow.subsistemas,
     tipoEvento: payload.tipoEvento,
     denominacion: tableroRow.denominacion,
+    region: ubicacionTablero.region,
     provincia: ubicacionTablero.provincia,
-    sectorOficina: ubicacionTablero.sector_oficina,
-    sala: ubicacionTablero.sala,
+    localidad: ubicacionTablero.localidad,
+    sitio: ubicacionTablero.sitio,
+    planta: ubicacionTablero.planta,
+    oficina: ubicacionTablero.oficina,
     fecha: payload.fecha,
     resumen,
     fotoGeneralBuffer,
@@ -299,7 +322,7 @@ export async function crearMedicionTableroAction(formData: FormData): Promise<Cr
   const pdfFilename = buildTableroFilename({
     numeroGeneracion,
     denominacion: tableroRow.denominacion,
-    sitio: ubicacionTablero.sala,
+    sitio: ubicacionTablero.sitio,
   });
   const pdfPath = `${profile.id}/tableros/${medicionId}/${pdfFilename}`;
   const { error: pdfUpErr } = await supabase.storage

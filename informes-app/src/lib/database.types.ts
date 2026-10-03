@@ -100,6 +100,7 @@ export type CatalogoClienteRow = {
 export type CatalogoProvinciaRow = {
   id: string;
   nombre: string;
+  region: string;
   created_at: string;
 }
 
@@ -310,9 +311,18 @@ export type RackRow = {
 
 export type UbicacionRow = {
   id: string;
+  pais: string;
+  region: string;
   provincia: string;
-  sector_oficina: string | null;
-  sala: string;
+  localidad: string | null;
+  sitio: string;
+  planta: string | null;
+  oficina: string | null;
+  lat: number | null;
+  lng: number | null;
+  gps_accuracy_m: number | null;
+  gps_confirmado_at: string | null;
+  gps_confirmado_por: string | null;
   created_by: string | null;
   created_at: string;
 }
@@ -387,7 +397,7 @@ export interface Database {
       >;
       catalogo_provincias: Tbl<
         CatalogoProvinciaRow,
-        Partial<CatalogoProvinciaRow> & Pick<CatalogoProvinciaRow, "nombre">,
+        Partial<CatalogoProvinciaRow> & Pick<CatalogoProvinciaRow, "nombre" | "region">,
         Partial<CatalogoProvinciaRow>
       >;
       catalogo_tipos_informe: Tbl<
@@ -487,7 +497,7 @@ export interface Database {
         Partial<TableroMantenimientoRow>
       >;
       racks: Tbl<RackRow, Partial<RackRow> & Pick<RackRow, "denominacion" | "ubicacion_id">, Partial<RackRow>>;
-      ubicaciones: Tbl<UbicacionRow, Partial<UbicacionRow> & Pick<UbicacionRow, "provincia" | "sala">, Partial<UbicacionRow>>;
+      ubicaciones: Tbl<UbicacionRow, Partial<UbicacionRow> & Pick<UbicacionRow, "provincia" | "sitio">, Partial<UbicacionRow>>;
       rack_equipamientos: Tbl<
         RackEquipamientoRow,
         Partial<RackEquipamientoRow> & Pick<RackEquipamientoRow, "rack_id" | "numero" | "categoria_equipo" | "texto">,

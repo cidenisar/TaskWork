@@ -46,9 +46,12 @@ export interface TableroPdfProps {
   subsistemas: TableroTipo[];
   tipoEvento: TableroEventoTipo;
   denominacion: string;
+  region: string;
   provincia: string;
-  sectorOficina: string | null;
-  sala: string;
+  localidad: string | null;
+  sitio: string;
+  planta: string | null;
+  oficina: string | null;
   fecha: string;
   lecturas: TableroPdfLectura[];
   resumen: ResumenEquipamiento;
@@ -76,9 +79,12 @@ export function TableroPdf(props: TableroPdfProps) {
     subsistemas,
     tipoEvento,
     denominacion,
+    region,
     provincia,
-    sectorOficina,
-    sala,
+    localidad,
+    sitio,
+    planta,
+    oficina,
     fecha,
     lecturas,
     resumen,
@@ -91,7 +97,7 @@ export function TableroPdf(props: TableroPdfProps) {
   const w = algunaFilaMideCorriente ? WIDTHS_CON_CORRIENTE : WIDTHS_SIN_CORRIENTE;
   const fechaLabel = formatFechaArg(fecha);
   const documentoLabel = `${TABLERO_EVENTO_LABEL[tipoEvento].toUpperCase()} — TABLERO ${labelSubsistemas(subsistemas).toUpperCase()}`;
-  const documentoLinea = `Documento: ${sala || "—"}-Público · Generado por ${appName}`;
+  const documentoLinea = `Documento: ${sitio || "—"}-Público · Generado por ${appName}`;
 
   return (
     <Document title={`${numeroGeneracion} — ${denominacion}`}>
@@ -105,7 +111,7 @@ export function TableroPdf(props: TableroPdfProps) {
         />
 
         <Text style={commonStyles.mainTitle}>
-          {denominacion} — {sala}
+          {denominacion} — {sitio}
         </Text>
 
         <View style={commonStyles.kvTable}>
@@ -113,9 +119,12 @@ export function TableroPdf(props: TableroPdfProps) {
           <KeyValueRow k="Tipo de Visita:" v={TABLERO_EVENTO_LABEL[tipoEvento]} />
           <KeyValueRow k="Subsistemas del Tablero:" v={labelSubsistemas(subsistemas)} />
           <KeyValueRow k="Denominación:" v={denominacion} />
-          <KeyValueRow k="Sala:" v={sala} />
-          {sectorOficina && <KeyValueRow k="Sector/Oficina:" v={sectorOficina} />}
+          <KeyValueRow k="Sitio:" v={sitio} />
+          {planta && <KeyValueRow k="Planta:" v={planta} />}
+          {oficina && <KeyValueRow k="Oficina:" v={oficina} />}
+          {localidad && <KeyValueRow k="Localidad:" v={localidad} />}
           <KeyValueRow k="Provincia:" v={provincia} />
+          <KeyValueRow k="Región:" v={region} />
           <KeyValueRow k="Fecha:" v={fechaLabel} last />
         </View>
 

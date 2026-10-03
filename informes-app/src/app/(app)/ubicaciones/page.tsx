@@ -7,7 +7,11 @@ export default async function UbicacionesPage() {
   const supabase = await createClient();
 
   const [ubicacionesRes, tablerosRes, racksRes] = await Promise.all([
-    supabase.from("ubicaciones").select("id, provincia, sector_oficina, sala").order("provincia").order("sala"),
+    supabase
+      .from("ubicaciones")
+      .select("id, pais, region, provincia, localidad, sitio, planta, oficina, lat, lng")
+      .order("provincia")
+      .order("sitio"),
     supabase.from("tableros").select("id, ubicacion_id"),
     supabase.from("racks").select("id, ubicacion_id"),
   ]);
@@ -23,9 +27,15 @@ export default async function UbicacionesPage() {
 
   const ubicaciones: UbicacionRow[] = (ubicacionesRes.data ?? []).map((u) => ({
     id: u.id,
+    pais: u.pais,
+    region: u.region,
     provincia: u.provincia,
-    sectorOficina: u.sector_oficina,
-    sala: u.sala,
+    localidad: u.localidad,
+    sitio: u.sitio,
+    planta: u.planta,
+    oficina: u.oficina,
+    lat: u.lat,
+    lng: u.lng,
     cantTableros: tablerosPorUbicacion.get(u.id) ?? 0,
     cantRacks: racksPorUbicacion.get(u.id) ?? 0,
   }));

@@ -28,14 +28,9 @@ export default async function HistorialTablerosPage() {
       ? supabase.from("tableros").select("id, subsistemas, denominacion, ubicacion_id").in("id", tableroIds)
       : { data: [] },
     circuitoIds.length > 0 ? supabase.from("tablero_circuitos").select("id, texto").in("id", circuitoIds) : { data: [] },
-    supabase.from("ubicaciones").select("id, provincia, sector_oficina, sala"),
+    supabase.from("ubicaciones").select("id, pais, region, provincia, localidad, sitio, planta, oficina, lat, lng"),
   ]);
-  const ubicaciones: Ubicacion[] = (ubicacionesRes.data ?? []).map((u) => ({
-    id: u.id,
-    provincia: u.provincia,
-    sectorOficina: u.sector_oficina,
-    sala: u.sala,
-  }));
+  const ubicaciones: Ubicacion[] = ubicacionesRes.data ?? [];
   const ubicacionesPorId = new Map(ubicaciones.map((u) => [u.id, u]));
   const tablerosPorId = new Map((tablerosRes.data ?? []).map((t) => [t.id, t]));
   const circuitosPorId = new Map((circuitosRes.data ?? []).map((c) => [c.id, c.texto]));

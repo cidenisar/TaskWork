@@ -21,7 +21,11 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
   const { id } = await params;
   const supabase = await createClient();
 
-  const { data: ubicacion } = await supabase.from("ubicaciones").select("id, provincia, sector_oficina, sala").eq("id", id).single();
+  const { data: ubicacion } = await supabase
+    .from("ubicaciones")
+    .select("id, pais, region, provincia, localidad, sitio, planta, oficina, lat, lng")
+    .eq("id", id)
+    .single();
   if (!ubicacion) notFound();
 
   const [tablerosRes, racksRes] = await Promise.all([
@@ -69,8 +73,8 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
         <Link href="/ubicaciones" className="hint" style={{ display: "inline-flex", alignItems: "center", gap: 4, marginBottom: 6 }}>
           <Icon name="chevron-right" size={13} style={{ transform: "rotate(180deg)" }} /> Todas las ubicaciones
         </Link>
-        <h1>{ubicacion.sala}</h1>
-        <p>{[ubicacion.sector_oficina, ubicacion.provincia].filter(Boolean).join(" · ")}</p>
+        <h1>{ubicacion.sitio}</h1>
+        <p>{[ubicacion.planta, ubicacion.localidad, ubicacion.provincia, ubicacion.region].filter(Boolean).join(" · ")}</p>
       </div>
 
       <div className="kpi-grid">
@@ -91,7 +95,7 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
       <div className="card">
         <div className="section-label">Tableros en esta ubicación</div>
         {tableros.length === 0 ? (
-          <div className="empty-note">No hay tableros relevados en {labelUbicacion({ ...ubicacion, sectorOficina: ubicacion.sector_oficina })}.</div>
+          <div className="empty-note">No hay tableros relevados en {labelUbicacion(ubicacion)}.</div>
         ) : (
           <>
             {resumenTableros.porCategoria.length > 0 && (
@@ -128,7 +132,7 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
       <div className="card">
         <div className="section-label">Racks en esta ubicación</div>
         {racks.length === 0 ? (
-          <div className="empty-note">No hay racks relevados en {labelUbicacion({ ...ubicacion, sectorOficina: ubicacion.sector_oficina })}.</div>
+          <div className="empty-note">No hay racks relevados en {labelUbicacion(ubicacion)}.</div>
         ) : (
           <>
             {resumenRacks.porCategoria.length > 0 && (
