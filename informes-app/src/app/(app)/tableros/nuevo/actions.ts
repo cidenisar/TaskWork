@@ -31,11 +31,18 @@ interface PayloadUbicacionNueva {
   oficina: string;
 }
 
+interface PayloadGps {
+  lat: number;
+  lng: number;
+  accuracy: number | null;
+}
+
 export interface CrearMedicionPayload {
   subsistemas: TableroTipo[];
   tipoEvento: TableroEventoTipo;
   ubicacionId: string | null;
   ubicacionNueva: PayloadUbicacionNueva | null;
+  gps: PayloadGps | null;
   tableroId: string | null;
   denominacionNueva: string;
   fecha: string;
@@ -105,6 +112,36 @@ async function resolverUbicacionId(
     if (existente) return { id: existente.id };
   }
   return { error: `No se pudo crear la ubicación: ${error?.message ?? "error desconocido"}` };
+}
+
+/**
+ * Si el técnico capturó GPS en este envío y la Ubicación resultante (nueva o
+ * ya existente) todavía no tiene coordenadas guardadas, las guarda ahora —
+ * es el "aprendizaje": la próxima vez que alguien esté cerca de ese punto,
+ * la app ya va a reconocer el sitio solo. Nunca pisa coordenadas que ya
+ * estaban guardadas (eso evitaría que un GPS de mala precisión corrompa un
+ * punto bueno confirmado antes).
+ */
+async function tagGpsSiFalta(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  ubicacionId: string,
+  gps: PayloadGps | null | undefined,
+  userId: string,
+) {
+  if (!gps) return;
+  const { data: row } = await supabase.from("ubicaciones").select("lat").eq("id", ubicacionId).single();
+  if (row && row.lat === null) {
+    await supabase
+      .from("ubicaciones")
+      .update({
+        lat: gps.lat,
+        lng: gps.lng,
+        gps_accuracy_m: gps.accuracy,
+        gps_confirmado_at: new Date().toISOString(),
+        gps_confirmado_por: userId,
+      })
+      .eq("id", ubicacionId);
+  }
 }
 
 export async function crearMedicionTableroAction(formData: FormData): Promise<CrearMedicionResult> {
@@ -177,6 +214,7 @@ export async function crearMedicionTableroAction(formData: FormData): Promise<Cr
   if (ubicacionReadErr || !ubicacionTablero) {
     return { success: false, error: "No se encontró la ubicación del tablero." };
   }
+  await tagGpsSiFalta(supabase, tableroRow.ubicacion_id, payload.gps, profile.id);
 
   // Circuitos nuevos (circuitoId null) se dan de alta ahora — igual criterio
   // que el tablero en sí: el técnico puede agregar un circuito que no

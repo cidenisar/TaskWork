@@ -6,7 +6,7 @@ import { reportarErrorCliente } from "@/lib/client-error-report";
 import { resizeImageToJpeg } from "@/lib/image-resize";
 import { ErrorNote, SuccessNote } from "@/components/notes";
 import { Icon } from "@/components/icon";
-import { UbicacionFields } from "@/components/ubicaciones/ubicacion-fields";
+import { UbicacionFields, type GpsCapturado } from "@/components/ubicaciones/ubicacion-fields";
 import type { Ubicacion } from "@/components/ubicaciones/types";
 import type { RackCategoriaEquipo } from "@/lib/database.types";
 import {
@@ -42,6 +42,7 @@ export function NuevoRelevamientoForm({
   const [sitioNueva, setSitioNueva] = useState("");
   const [plantaNueva, setPlantaNueva] = useState("");
   const [oficinaNueva, setOficinaNueva] = useState("");
+  const [gps, setGps] = useState<GpsCapturado | null>(null);
   const [rackId, setRackId] = useState<string>(""); // "" = sin elegir, "__new" = crear
   const [denominacionNueva, setDenominacionNueva] = useState("");
   const [fecha, setFecha] = useState(() => new Date().toISOString().slice(0, 10));
@@ -269,6 +270,7 @@ export function NuevoRelevamientoForm({
             ubicacionId === "__new"
               ? { provincia: provinciaFiltro, localidad: localidadNueva, sitio: sitioNueva, planta: plantaNueva, oficina: oficinaNueva }
               : null,
+          gps,
           denominacionNueva,
           fecha,
           lecturas: equipamiento.map((e, i) => {
@@ -322,6 +324,7 @@ export function NuevoRelevamientoForm({
     setSitioNueva("");
     setPlantaNueva("");
     setOficinaNueva("");
+    setGps(null);
     setRackId("");
     setDenominacionNueva("");
     setEquipamiento([]);
@@ -353,6 +356,7 @@ export function NuevoRelevamientoForm({
           onPlantaNuevaChange={setPlantaNueva}
           oficinaNueva={oficinaNueva}
           onOficinaNuevaChange={setOficinaNueva}
+          onGpsCapturado={setGps}
           disabled={submitting}
         />
       </div>

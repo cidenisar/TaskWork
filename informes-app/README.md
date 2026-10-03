@@ -84,14 +84,12 @@ Rendición de Gastos, Configuración, Estadísticas).
   implementado.
 - Vista de mapa de todas las ubicaciones históricas fuera de Estadísticas —
   explícitamente fuera de alcance en spec sección 6.6/13.
-- Ubicaciones: captura de GPS ("Usar mi ubicación") para completar Región/
-  Provincia/Localidad solos y acotar Sitio/Planta a una lista corta en vez
-  del catálogo completo, con aprendizaje por sitio (la primera vez que se
-  confirma un Sitio/Planta con GPS esas coordenadas quedan guardadas en
-  `ubicaciones.lat/lng`, y la próxima vez que alguien esté cerca se sugiere
-  directamente, sin tener que elegir de una lista) — columnas `lat`, `lng`,
-  `gps_accuracy_m`, `gps_confirmado_at`, `gps_confirmado_por` ya están en el
-  schema, pendiente la UI/lógica.
+- Ubicaciones/GPS: si una Ubicación ya tiene coordenadas confirmadas y
+  alguien confirma la misma Ubicación desde un punto lejano (posible GPS
+  con mala señal, o dos sitios distintos mal identificados como el mismo),
+  no se marca nada para revisar — simplemente no se pisa el punto guardado.
+  Una vista en Configuración/Ubicaciones para detectar y resolver esos
+  casos quedaría para una próxima vuelta.
 
 ## Setup
 
@@ -279,9 +277,21 @@ npm run dev
   columna "Región" de los datos). El formulario pide primero la Provincia
   para acotar el catálogo (se precargaron ~1747 sitios de la operación en
   Argentina desde una planilla de la empresa) y de ahí elegís una Ubicación
-  existente o creás una nueva con Localidad/Sitio/Planta/Oficina — los tres
-  últimos niveles están pensados para completarse solos con la captura de
-  GPS en una mejora futura (ver "⏳ Explícitamente pendiente" más abajo). El
+  existente o creás una nueva con Localidad/Sitio/Planta/Oficina. El botón
+  **"Usar mi ubicación"** (`src/app/api/ubicaciones/resolver-gps/route.ts`,
+  `src/lib/geo.ts`) toma el GPS del dispositivo y: (1) si el punto cae a
+  menos de 300m de una Ubicación que algún técnico ya confirmó antes (tiene
+  `lat`/`lng` guardado), la selecciona directo — la app "aprende" sitio por
+  sitio con el uso real, sin tener que elegir de una lista cada vez más
+  grande; (2) si no, geocodea el punto con Nominatim (OpenStreetMap, sin API
+  key) para completar Provincia/Localidad solo, y Claude Haiku elige —
+  mirando la lista de Localidades ya usadas en esa Provincia en el
+  catálogo — cuál corresponde al municipio detectado, en vez de crear una
+  variante nueva que lo fragmente; el técnico solo termina de elegir/
+  escribir el Sitio. La primera vez que se confirma una Ubicación con GPS
+  (sea por este flujo o eligiéndola/creándola a mano después de la
+  detección), esas coordenadas quedan guardadas (`gps_accuracy_m`,
+  `gps_confirmado_at`, `gps_confirmado_por`) y nunca se pisan después. El
   objetivo: dos relevamientos de tipos distintos en el mismo lugar físico
   (por ejemplo un tablero y un rack, los dos en la sala "Luján 1") quedan
   bajo el mismo `ubicacion_id` en vez de fragmentarse en variantes de texto
