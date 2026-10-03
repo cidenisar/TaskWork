@@ -67,6 +67,11 @@ const ICON_PATHS: Record<string, React.ReactNode> = {
       <rect x="13.5" y="13.5" width="7" height="7" rx="1.3" />
     </>
   ),
+  equipos: (
+    <>
+      <path d="M13 2 7 13h4l-1 9 7-12h-4l1-8Z" />
+    </>
+  ),
 };
 
 /**

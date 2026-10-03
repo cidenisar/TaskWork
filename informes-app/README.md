@@ -326,17 +326,41 @@ npm run dev
   `informes_tecnicos.ubicacion` como texto libre) a `ubicacion_id` queda
   pendiente para un incremento futuro.
 - **Relevamiento de Equipos** (`src/app/(app)/relevamiento/`,
-  `src/components/app-shell.tsx`): Tableros y Racks dejaron de ser dos
-  módulos sueltos en el inicio — ahora son dos "tipos" dentro de un mismo
-  hub, porque conceptualmente los dos son equipamiento relevado en un
-  sitio. El hub (`/relevamiento`) deja elegir el tipo, y una vez adentro un
-  selector (`grouptabs` en el shell) permite saltar de Tableros a
-  Comunicaciones sin volver atrás. Los tipos están en un solo array
-  (`RELEVAMIENTO_GROUP` en `app-shell.tsx`) pensado para sumar más
-  (UPS, Cámaras...) agregando una entrada ahí y una card en el hub, sin
-  tocar cada formulario — cada tipo sigue con su propio modelo de datos y
-  flujo (Tableros con circuitos/térmicas/disyuntores, Racks con lista de
-  equipamiento por IA), no se migró a un modelo genérico único.
+  `src/components/app-shell.tsx`): Tableros, Racks y Equipos Individuales
+  dejaron de ser módulos sueltos en el inicio — ahora son "tipos" dentro de
+  un mismo hub, porque conceptualmente los tres son equipamiento relevado
+  en un sitio. El hub (`/relevamiento`) deja elegir el tipo, y una vez
+  adentro un selector (`grouptabs` en el shell) permite saltar de uno a
+  otro sin volver atrás. Los tipos están en un solo array
+  (`RELEVAMIENTO_GROUP` en `app-shell.tsx`). Tableros y Racks siguen con su
+  propio modelo de datos y flujo porque son **contenedores** con varios
+  componentes internos (circuitos/térmicas/disyuntores; lista de
+  equipamiento de rack) — no se migraron a un modelo genérico único.
+- **Equipos Individuales** (`src/app/(app)/equipos/`,
+  `src/components/equipos/`, `src/app/api/equipos/leer-foto/`,
+  migración `20261005000000_equipos_individuales.sql`): para equipamiento
+  **suelto** que no vive dentro de un rack ni de un tablero (UPS
+  standalone, cámaras, control de acceso, impresoras...) no se hizo un
+  módulo dedicado por tipo de equipo — sería un tablero/rack nuevo por cada
+  tipo que aparezca (UPS hoy, cámaras después, y así). En vez de eso hay
+  **un solo flujo genérico**: se eligen la Ubicación y el GPS (mismo
+  `UbicacionFields`/`resolverUbicacionId` que el resto de los módulos), se
+  sacan hasta `EQUIPO_FOTO_IA_MAX` = 7 fotos de los equipos sueltos
+  (chapa de serie, vista general) y Claude Vision identifica **qué es cada
+  uno** — categoría (`ups`/`banco_baterias`/`camara_cctv`/`control_acceso`/
+  `impresora`/`telefonia`/`climatizacion`/`otro`), marca/modelo y número de
+  serie — en vez de que el técnico tenga que saberlo de antemano. Cada
+  equipo queda como su propia fila en `public.equipos` (atada directo a la
+  Ubicación, sin tabla contenedora intermedia como `racks`/`tableros`), así
+  que sumar una categoría nueva de equipamiento suelto es ampliar el enum
+  `equipo_categoria`, no crear una tabla/migración/formulario nuevos. Una
+  visita (`equipo_relevamientos`) puede registrar varios equipos distintos
+  a la vez (ej. un UPS y dos cámaras relevados juntos) y genera un solo PDF,
+  igual criterio que Racks combinando varias fotos en un solo relevamiento.
+  Al elegir una Ubicación existente se precargan los equipos ya conocidos
+  ahí para reconfirmar estado/comentario, igual que Racks precarga el
+  equipamiento de un rack ya elegido. La ficha de Ubicación y el listado de
+  Ubicaciones ya muestran estos equipos junto con Tableros y Racks.
 - **Errores del dispositivo** (`src/components/client-error-reporter.tsx` +
   `src/app/api/errores/reportar/`): cualquier error de JS no manejado en el
   navegador del usuario (y los fallos explícitos al generar/editar un

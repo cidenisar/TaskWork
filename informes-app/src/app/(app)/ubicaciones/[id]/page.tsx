@@ -10,6 +10,7 @@ import {
   CATEGORIA_EQUIPO_LABEL as TABLERO_CATEGORIA_LABEL,
 } from "@/components/tableros/types";
 import { calcularResumenEquipamiento as calcularResumenRacks, CATEGORIA_EQUIPO_LABEL as RACK_CATEGORIA_LABEL } from "@/components/racks/types";
+import { calcularResumenEquipos, CATEGORIA_EQUIPO_LABEL as EQUIPO_CATEGORIA_LABEL } from "@/components/equipos/types";
 
 function fmtFecha(fecha: string) {
   const [y, m, d] = fecha.split("-");
@@ -28,12 +29,18 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
     .single();
   if (!ubicacion) notFound();
 
-  const [tablerosRes, racksRes] = await Promise.all([
+  const [tablerosRes, racksRes, equiposRes] = await Promise.all([
     supabase.from("tableros").select("id, denominacion, subsistemas").eq("ubicacion_id", id).order("denominacion"),
     supabase.from("racks").select("id, denominacion").eq("ubicacion_id", id).order("denominacion"),
+    supabase
+      .from("equipos")
+      .select("id, categoria_equipo, texto, marca_modelo, numero_serie, cantidad")
+      .eq("ubicacion_id", id)
+      .order("texto"),
   ]);
   const tableros = tablerosRes.data ?? [];
   const racks = racksRes.data ?? [];
+  const equipos = equiposRes.data ?? [];
   const tableroIds = tableros.map((t) => t.id);
   const rackIds = racks.map((r) => r.id);
 
@@ -65,7 +72,8 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
     (circuitosRes.data ?? []).map((c) => ({ categoriaEquipo: c.categoria_equipo, tipoCircuito: c.tipo_circuito })),
   );
   const resumenRacks = calcularResumenRacks((equipamientosRes.data ?? []).map((e) => ({ categoriaEquipo: e.categoria_equipo, cantidad: e.cantidad })));
-  const totalEquipos = resumenTableros.total + resumenRacks.total;
+  const resumenEquipos = calcularResumenEquipos(equipos.map((e) => ({ categoriaEquipo: e.categoria_equipo, cantidad: e.cantidad })));
+  const totalEquipos = resumenTableros.total + resumenRacks.total + resumenEquipos.total;
 
   return (
     <div>
@@ -85,6 +93,10 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
         <div className="kpi-card">
           <div className="kpi-value">{racks.length}</div>
           <div className="kpi-label">RACKS</div>
+        </div>
+        <div className="kpi-card">
+          <div className="kpi-value">{equipos.length}</div>
+          <div className="kpi-label">EQUIPOS INDIVIDUALES</div>
         </div>
         <div className="kpi-card">
           <div className="kpi-value">{totalEquipos}</div>
@@ -158,6 +170,41 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
                   </div>
                 );
               })}
+            </div>
+          </>
+        )}
+      </div>
+
+      <div className="card">
+        <div className="section-label">Equipos individuales en esta ubicación</div>
+        {equipos.length === 0 ? (
+          <div className="empty-note">No hay equipos individuales relevados en {labelUbicacion(ubicacion)}.</div>
+        ) : (
+          <>
+            {resumenEquipos.porCategoria.length > 0 && (
+              <div className="chip-row" style={{ marginTop: 0, marginBottom: 12 }}>
+                {resumenEquipos.porCategoria.map((c) => (
+                  <span className="chip" key={c.categoria}>
+                    {c.cantidad} {EQUIPO_CATEGORIA_LABEL[c.categoria]}
+                  </span>
+                ))}
+              </div>
+            )}
+            <div>
+              {equipos.map((e) => (
+                <div className="hist-item" key={e.id}>
+                  <div className="info">
+                    <div className="hist-main">
+                      <div className="hist-title">{e.texto}</div>
+                      <div className="hist-meta">
+                        {EQUIPO_CATEGORIA_LABEL[e.categoria_equipo]}
+                        {e.marca_modelo ? ` · ${e.marca_modelo}` : ""}
+                        {e.numero_serie ? ` · S/N ${e.numero_serie}` : ""}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           </>
         )}

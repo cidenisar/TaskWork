@@ -28,10 +28,13 @@ interface ModuleConfig {
 }
 
 // Un solo lugar para los tipos de "Relevamiento de Equipos" — sumar un tipo
-// nuevo (UPS, Cámaras...) es agregar una entrada acá y en el hub /relevamiento.
+// nuevo es agregar una entrada acá y en el hub /relevamiento (Equipos
+// Individuales ya cubre UPS/cámaras/etc. sin necesitar una entrada propia
+// por cada uno — ver src/components/equipos).
 const RELEVAMIENTO_GROUP: GroupOption[] = [
   { href: "/tableros/nuevo", label: "Tableros" },
   { href: "/racks/nuevo", label: "Comunicaciones" },
+  { href: "/equipos/nuevo", label: "Equipos Individuales" },
 ];
 
 const NAV_CONFIG: Record<string, ModuleConfig> = {
@@ -70,6 +73,15 @@ const NAV_CONFIG: Record<string, ModuleConfig> = {
     tabs: [
       { href: "/racks/nuevo", label: "Nuevo Relevamiento" },
       { href: "/racks/historial", label: "Historial" },
+    ],
+  },
+  equipos: {
+    brand: "Relevamiento de Equipos",
+    backHref: "/relevamiento",
+    group: RELEVAMIENTO_GROUP,
+    tabs: [
+      { href: "/equipos/nuevo", label: "Nuevo Relevamiento" },
+      { href: "/equipos/historial", label: "Historial" },
     ],
   },
   ubicaciones: {

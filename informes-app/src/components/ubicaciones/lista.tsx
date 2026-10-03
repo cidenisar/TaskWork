@@ -8,6 +8,7 @@ import type { Ubicacion } from "./types";
 export interface UbicacionRow extends Ubicacion {
   cantTableros: number;
   cantRacks: number;
+  cantEquipos: number;
 }
 
 export function ListaUbicaciones({ ubicaciones }: { ubicaciones: UbicacionRow[] }) {
@@ -37,7 +38,7 @@ export function ListaUbicaciones({ ubicaciones }: { ubicaciones: UbicacionRow[] 
         {filtradas.length === 0 ? (
           <div className="empty-note">
             {ubicaciones.length === 0
-              ? "Todavía no hay ninguna ubicación cargada — se crean al relevar un tablero o un rack."
+              ? "Todavía no hay ninguna ubicación cargada — se crean al relevar un tablero, un rack o un equipo."
               : "No se encontraron ubicaciones con esa búsqueda."}
           </div>
         ) : (
@@ -63,7 +64,12 @@ export function ListaUbicaciones({ ubicaciones }: { ubicaciones: UbicacionRow[] 
                       {u.cantRacks} rack{u.cantRacks === 1 ? "" : "s"}
                     </span>
                   )}
-                  {u.cantTableros === 0 && u.cantRacks === 0 && <span className="chip">Sin equipamiento</span>}
+                  {u.cantEquipos > 0 && (
+                    <span className="chip">
+                      {u.cantEquipos} equipo{u.cantEquipos === 1 ? "" : "s"}
+                    </span>
+                  )}
+                  {u.cantTableros === 0 && u.cantRacks === 0 && u.cantEquipos === 0 && <span className="chip">Sin equipamiento</span>}
                   <Icon name="chevron-right" size={15} />
                 </div>
               </Link>

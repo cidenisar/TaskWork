@@ -43,6 +43,15 @@ export type RackCategoriaEquipo =
   | "multiplexor"
   | "pdu_regleta"
   | "otro";
+export type EquipoCategoria =
+  | "ups"
+  | "banco_baterias"
+  | "camara_cctv"
+  | "control_acceso"
+  | "impresora"
+  | "telefonia"
+  | "climatizacion"
+  | "otro";
 
 /** Helper para darle a cada tabla la forma que espera postgrest-js (incluye Relationships). */
 type Tbl<
@@ -361,6 +370,38 @@ export type RackRelevamientoLecturaRow = {
   comentario: string | null;
 }
 
+export type EquipoRow = {
+  id: string;
+  ubicacion_id: string;
+  categoria_equipo: EquipoCategoria;
+  texto: string;
+  marca_modelo: string | null;
+  numero_serie: string | null;
+  cantidad: number;
+  created_by: string | null;
+  created_at: string;
+}
+
+export type EquipoRelevamientoRow = {
+  id: string;
+  ubicacion_id: string;
+  numero_generacion: string;
+  fecha: string;
+  created_by: string;
+  pdf_url: string | null;
+  pdf_generado_at: string | null;
+  foto_general_url: string | null;
+  created_at: string;
+}
+
+export type EquipoRelevamientoLecturaRow = {
+  id: string;
+  relevamiento_id: string;
+  equipo_id: string;
+  estado: string | null;
+  comentario: string | null;
+}
+
 export type ClientErrorRow = {
   id: string;
   user_id: string | null;
@@ -514,6 +555,21 @@ export interface Database {
         RackRelevamientoLecturaRow,
         Partial<RackRelevamientoLecturaRow> & Pick<RackRelevamientoLecturaRow, "relevamiento_id" | "equipamiento_id">,
         Partial<RackRelevamientoLecturaRow>
+      >;
+      equipos: Tbl<
+        EquipoRow,
+        Partial<EquipoRow> & Pick<EquipoRow, "ubicacion_id" | "categoria_equipo" | "texto">,
+        Partial<EquipoRow>
+      >;
+      equipo_relevamientos: Tbl<
+        EquipoRelevamientoRow,
+        Partial<EquipoRelevamientoRow> & Pick<EquipoRelevamientoRow, "ubicacion_id" | "numero_generacion" | "fecha" | "created_by">,
+        Partial<EquipoRelevamientoRow>
+      >;
+      equipo_relevamiento_lecturas: Tbl<
+        EquipoRelevamientoLecturaRow,
+        Partial<EquipoRelevamientoLecturaRow> & Pick<EquipoRelevamientoLecturaRow, "relevamiento_id" | "equipo_id">,
+        Partial<EquipoRelevamientoLecturaRow>
       >;
     };
     Views: Record<string, never>;
