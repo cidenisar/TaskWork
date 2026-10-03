@@ -65,7 +65,7 @@ export function HistorialRacks({ relevamientos }: { relevamientos: HistorialRele
   return (
     <div>
       <div className="page-heading">
-        <h1>Historial de Relevamiento de Equipamiento</h1>
+        <h1>Historial de Comunicaciones (Racks)</h1>
         <p>Relevamientos cargados por rack — sitios, salas y shelters</p>
       </div>
 

@@ -325,6 +325,18 @@ npm run dev
   Migrar `src/lib/estadisticas/aggregates.ts` (que todavía lee
   `informes_tecnicos.ubicacion` como texto libre) a `ubicacion_id` queda
   pendiente para un incremento futuro.
+- **Relevamiento de Equipos** (`src/app/(app)/relevamiento/`,
+  `src/components/app-shell.tsx`): Tableros y Racks dejaron de ser dos
+  módulos sueltos en el inicio — ahora son dos "tipos" dentro de un mismo
+  hub, porque conceptualmente los dos son equipamiento relevado en un
+  sitio. El hub (`/relevamiento`) deja elegir el tipo, y una vez adentro un
+  selector (`grouptabs` en el shell) permite saltar de Tableros a
+  Comunicaciones sin volver atrás. Los tipos están en un solo array
+  (`RELEVAMIENTO_GROUP` en `app-shell.tsx`) pensado para sumar más
+  (UPS, Cámaras...) agregando una entrada ahí y una card en el hub, sin
+  tocar cada formulario — cada tipo sigue con su propio modelo de datos y
+  flujo (Tableros con circuitos/térmicas/disyuntores, Racks con lista de
+  equipamiento por IA), no se migró a un modelo genérico único.
 - **Errores del dispositivo** (`src/components/client-error-reporter.tsx` +
   `src/app/api/errores/reportar/`): cualquier error de JS no manejado en el
   navegador del usuario (y los fallos explícitos al generar/editar un

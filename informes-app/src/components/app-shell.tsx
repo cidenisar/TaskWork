@@ -13,10 +13,26 @@ interface NavTab {
   gated?: boolean;
 }
 
+interface GroupOption {
+  href: string;
+  label: string;
+}
+
 interface ModuleConfig {
   brand: string;
   tabs: NavTab[];
+  /** Para módulos anidados bajo un hub (ej. Relevamiento de Equipos): a dónde vuelve "Volver". */
+  backHref?: string;
+  /** Selector de tipo de equipo (Tableros / Comunicaciones / ...) para moverse entre hermanos sin pasar por el hub. */
+  group?: GroupOption[];
 }
+
+// Un solo lugar para los tipos de "Relevamiento de Equipos" — sumar un tipo
+// nuevo (UPS, Cámaras...) es agregar una entrada acá y en el hub /relevamiento.
+const RELEVAMIENTO_GROUP: GroupOption[] = [
+  { href: "/tableros/nuevo", label: "Tableros" },
+  { href: "/racks/nuevo", label: "Comunicaciones" },
+];
 
 const NAV_CONFIG: Record<string, ModuleConfig> = {
   "informe-tecnico": {
@@ -33,8 +49,14 @@ const NAV_CONFIG: Record<string, ModuleConfig> = {
       { href: "/rendicion-gastos/historial", label: "Historial" },
     ],
   },
+  relevamiento: {
+    brand: "Relevamiento de Equipos",
+    tabs: [],
+  },
   tableros: {
-    brand: "Tableros",
+    brand: "Relevamiento de Equipos",
+    backHref: "/relevamiento",
+    group: RELEVAMIENTO_GROUP,
     tabs: [
       { href: "/tableros/nuevo", label: "Nueva Medición" },
       { href: "/tableros/mantenimiento", label: "Mantenimiento" },
@@ -42,7 +64,9 @@ const NAV_CONFIG: Record<string, ModuleConfig> = {
     ],
   },
   racks: {
-    brand: "Relevamiento de Equipamiento",
+    brand: "Relevamiento de Equipos",
+    backHref: "/relevamiento",
+    group: RELEVAMIENTO_GROUP,
     tabs: [
       { href: "/racks/nuevo", label: "Nuevo Relevamiento" },
       { href: "/racks/historial", label: "Historial" },
@@ -74,13 +98,15 @@ export function AppShell({ profile, children }: { profile: Profile; children: Re
   const moduleConfig = moduleKey ? NAV_CONFIG[moduleKey] : null;
   const isHome = pathname === "/";
   const brand = moduleConfig?.brand ?? (pathname === "/configuracion" ? "Configuración" : "Informes");
+  const backHref = moduleConfig?.backHref ?? "/";
+  const backLabel = moduleConfig?.backHref ? "Volver a Relevamiento de Equipos" : "Volver al inicio";
 
   return (
     <div className="app">
       <div className="topbar">
         {!isHome ? (
-          <Link href="/" className="back">
-            <Icon name="arrow-left" size={13} /> Volver al inicio
+          <Link href={backHref} className="back">
+            <Icon name="arrow-left" size={13} /> {backLabel}
           </Link>
         ) : (
           <span />
@@ -120,7 +146,20 @@ export function AppShell({ profile, children }: { profile: Profile; children: Re
         </div>
       </div>
 
-      {moduleConfig && (
+      {moduleConfig?.group && (
+        <div className="grouptabs">
+          {moduleConfig.group.map((opt) => {
+            const active = pathname.startsWith(opt.href.split("/").slice(0, 2).join("/"));
+            return (
+              <Link key={opt.href} href={opt.href} className={`grouptab${active ? " active" : ""}`}>
+                {opt.label}
+              </Link>
+            );
+          })}
+        </div>
+      )}
+
+      {moduleConfig && moduleConfig.tabs.length > 0 && (
         <div className="navtabs">
           {moduleConfig.tabs.map((tab) => {
             const locked = tab.gated && !puedeVerConfiguracion(profile.rol);
