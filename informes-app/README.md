@@ -386,6 +386,24 @@ npm run dev
   entre generarla y usarla. Aplicado en los 6 lugares que mostraban un link
   "ver PDF" apenas terminaba de guardar/cerrar (Informe Técnico nuevo y
   editar, Tableros, Racks, Rendición de Gastos, Equipos Individuales).
+- **Bug de RLS: faltaba la policy de UPDATE en 4 tablas**
+  (`20261005010000_fix_relevamiento_update_rls.sql`): al probar el fix de
+  arriba apareció un problema más de fondo — en Equipos Individuales el PDF
+  directamente decía "ya no está disponible" apenas generado. Causa real:
+  `tablero_mediciones`, `tablero_mantenimientos`, `rack_relevamientos` y
+  `equipo_relevamientos` tenían policy de SELECT e INSERT pero **no de
+  UPDATE** (a diferencia de `informes_tecnicos`/`rendiciones_gastos`, que sí
+  la tienen) — el `.update({pdf_url, ...})`/`.update({foto_general_url, ...})`
+  que corre después de subir el archivo a Storage se ejecutaba sin tirar
+  error pero afectaba 0 filas (RLS deniega en silencio), así que el archivo
+  quedaba subido a Storage pero el registro nunca se enteraba. Esto llevaba
+  ahí desde que se armaron Tableros y Racks — el Historial de esos dos
+  módulos venía mostrando "Sin PDF disponible"/sin foto en **absolutamente
+  todos** los registros, sin que nada en la UI lo delatara como error. Se
+  agregó la policy de UPDATE faltante en las 4 tablas y se recuperaron los
+  archivos ya existentes con un backfill (se buscaron en `storage.objects`
+  los PDFs/fotos ya subidos bajo el path de cada registro y se linkearon) —
+  ninguno de los PDFs/fotos generados hasta ahora se perdió.
 - **Sistema de íconos** (`src/components/icon.tsx`): reemplaza los emoji
   sueltos que había por toda la app por un set propio de íconos de línea
   SVG (`<Icon name="..."/>`, `<StatusDot tone="ok|warn|danger"/>`) — un
