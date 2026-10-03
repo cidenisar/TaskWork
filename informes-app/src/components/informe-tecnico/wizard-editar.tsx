@@ -10,6 +10,8 @@ import { Step2Equipo } from "./step-2-equipo";
 import { labelUbicacionDesdeForm, type CatalogosInforme, type InformeFormState } from "./types";
 import { ErrorNote, SuccessNote } from "@/components/notes";
 import { reportarErrorCliente } from "@/lib/client-error-report";
+import { VerPdfLink } from "@/components/ver-pdf-link";
+import { obtenerUrlPdfInformeAction } from "@/app/(app)/informe-tecnico/historial/actions";
 
 const STEPS: WizardStep[] = [
   { title: "Información General", sub: "Datos básicos del informe" },
@@ -181,11 +183,7 @@ export function EditarInformeTecnicoWizard({
           {success && (
             <SuccessNote>
               Informe actualizado y PDF regenerado.{" "}
-              {success.pdfUrl && (
-                <a href={success.pdfUrl} target="_blank" rel="noreferrer" style={{ color: "inherit", textDecoration: "underline" }}>
-                  ver PDF
-                </a>
-              )}
+              {success.pdfUrl && <VerPdfLink obtenerUrl={() => obtenerUrlPdfInformeAction(informeId)} />}
             </SuccessNote>
           )}
         </div>

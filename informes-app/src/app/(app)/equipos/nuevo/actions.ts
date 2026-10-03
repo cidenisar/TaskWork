@@ -31,6 +31,7 @@ export interface CrearRelevamientoEquiposPayload {
 export interface CrearRelevamientoEquiposResult {
   success: boolean;
   error?: string;
+  relevamientoId?: string;
   numeroGeneracion?: string;
   pdfUrl?: string | null;
 }
@@ -207,5 +208,5 @@ export async function crearRelevamientoEquiposAction(formData: FormData): Promis
     pdfUrl = signed?.signedUrl ?? null;
   }
 
-  return { success: true, numeroGeneracion, pdfUrl };
+  return { success: true, relevamientoId: relevamientoId!, numeroGeneracion, pdfUrl };
 }

@@ -6,6 +6,8 @@ import { reportarErrorCliente } from "@/lib/client-error-report";
 import { resizeImageToJpeg } from "@/lib/image-resize";
 import { ErrorNote, SuccessNote } from "@/components/notes";
 import { Icon } from "@/components/icon";
+import { VerPdfLink } from "@/components/ver-pdf-link";
+import { obtenerUrlPdfRelevamientoEquiposAction } from "@/app/(app)/equipos/historial/actions";
 import { UbicacionFields, type GpsCapturado } from "@/components/ubicaciones/ubicacion-fields";
 import type { Ubicacion } from "@/components/ubicaciones/types";
 import type { EquipoCategoria } from "@/lib/database.types";
@@ -47,7 +49,7 @@ export function NuevoRelevamientoEquiposForm({
   const [lecturas, setLecturas] = useState<Record<number, LecturaState>>({});
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<{ numeroGeneracion: string; pdfUrl: string | null } | null>(null);
+  const [success, setSuccess] = useState<{ relevamientoId: string; numeroGeneracion: string; pdfUrl: string | null } | null>(null);
   const [fotosIa, setFotosIa] = useState<File[]>([]);
   const [iaBusy, setIaBusy] = useState(false);
   const [iaNote, setIaNote] = useState<string | null>(null);
@@ -269,7 +271,7 @@ export function NuevoRelevamientoEquiposForm({
         reportarErrorCliente(mensaje, "crear-relevamiento-equipos");
         return;
       }
-      setSuccess({ numeroGeneracion: res.numeroGeneracion!, pdfUrl: res.pdfUrl ?? null });
+      setSuccess({ relevamientoId: res.relevamientoId!, numeroGeneracion: res.numeroGeneracion!, pdfUrl: res.pdfUrl ?? null });
       setFotoGeneral(null);
     } catch (err) {
       const mensaje = err instanceof Error ? err.message : "Ocurrió un error inesperado guardando el relevamiento.";
@@ -608,11 +610,7 @@ export function NuevoRelevamientoEquiposForm({
           <SuccessNote>
             Relevamiento guardado ({success.numeroGeneracion})
             {success.pdfUrl ? " — " : ""}
-            {success.pdfUrl && (
-              <a href={success.pdfUrl} target="_blank" rel="noreferrer" style={{ color: "inherit", textDecoration: "underline" }}>
-                ver PDF
-              </a>
-            )}
+            {success.pdfUrl && <VerPdfLink obtenerUrl={() => obtenerUrlPdfRelevamientoEquiposAction(success.relevamientoId)} />}
           </SuccessNote>
           <div className="footer-nav">
             <span />

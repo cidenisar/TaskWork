@@ -41,7 +41,12 @@ export function InformeTecnicoWizard({
   );
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<{ numeroGeneracion: string; pdfUrl: string | null; emailEnviado?: boolean } | null>(
+  const [success, setSuccess] = useState<{
+    informeId: string;
+    numeroGeneracion: string;
+    pdfUrl: string | null;
+    emailEnviado?: boolean;
+  } | null>(
     null,
   );
   const [stepError, setStepError] = useState<string | null>(null);
@@ -111,7 +116,12 @@ export function InformeTecnicoWizard({
         reportarErrorCliente(mensaje, "generar-informe-tecnico");
         return;
       }
-      setSuccess({ numeroGeneracion: result.numeroGeneracion!, pdfUrl: result.pdfUrl ?? null, emailEnviado: result.emailEnviado });
+      setSuccess({
+        informeId: result.informeId!,
+        numeroGeneracion: result.numeroGeneracion!,
+        pdfUrl: result.pdfUrl ?? null,
+        emailEnviado: result.emailEnviado,
+      });
       router.refresh();
     } catch (err) {
       // Mostramos el mensaje real (aunque sea técnico) en vez de uno genérico:

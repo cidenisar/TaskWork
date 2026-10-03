@@ -4,11 +4,13 @@ import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { EstadoRendicion, Moneda } from "@/lib/database.types";
 import { agregarGastoAction, cerrarRendicionAction, eliminarGastoAction } from "@/app/(app)/rendicion-gastos/[id]/actions";
+import { obtenerUrlPdfRendicionAction } from "@/app/(app)/rendicion-gastos/historial/actions";
 import type { CatalogosRendicion, GastoTecnicoChip } from "./types";
 import { ErrorNote } from "@/components/notes";
 import { reportarErrorCliente } from "@/lib/client-error-report";
 import { AutocompleteInput } from "@/components/ui/autocomplete-input";
 import { Icon } from "@/components/icon";
+import { VerPdfLink } from "@/components/ver-pdf-link";
 
 function fmtFecha(fecha: string) {
   const [y, m, d] = fecha.split("-");
@@ -38,7 +40,7 @@ export function RendicionWorkspace({
   viaticoRecibido,
   moneda,
   estado,
-  pdfUrl,
+  pdfDisponible: pdfDisponibleInicial,
   gastos,
   catalogos,
 }: {
@@ -51,7 +53,7 @@ export function RendicionWorkspace({
   viaticoRecibido: number;
   moneda: Moneda;
   estado: EstadoRendicion;
-  pdfUrl: string | null;
+  pdfDisponible: boolean;
   gastos: GastoWorkspaceItem[];
   catalogos: CatalogosRendicion;
 }) {
@@ -63,7 +65,7 @@ export function RendicionWorkspace({
 
   const [cerrando, setCerrando] = useState(false);
   const [cerrarError, setCerrarError] = useState<string | null>(null);
-  const [cerrarOk, setCerrarOk] = useState<string | null>(pdfUrl);
+  const [pdfDisponible, setPdfDisponible] = useState<boolean>(pdfDisponibleInicial);
   const [busyGastoId, setBusyGastoId] = useState<string | null>(null);
 
   async function cerrar() {
@@ -78,7 +80,7 @@ export function RendicionWorkspace({
         reportarErrorCliente(mensaje, "cerrar-rendicion");
         return;
       }
-      setCerrarOk(res.pdfUrl ?? null);
+      setPdfDisponible(!!res.pdfUrl);
       router.refresh();
     } catch (err) {
       // Antes esto no tenía try/catch: si fallaba acá el botón quedaba
@@ -163,10 +165,14 @@ export function RendicionWorkspace({
           </>
         ) : (
           <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
-            {cerrarOk && (
-              <a className="btn btn-primary" style={{ flex: 1, justifyContent: "center" }} href={cerrarOk} target="_blank" rel="noreferrer">
+            {pdfDisponible && (
+              <VerPdfLink
+                className="btn btn-primary"
+                style={{ flex: 1, justifyContent: "center" }}
+                obtenerUrl={() => obtenerUrlPdfRendicionAction(rendicionId)}
+              >
                 <Icon name="document" size={14} /> Ver PDF
-              </a>
+              </VerPdfLink>
             )}
             <a
               className="btn btn-secondary"

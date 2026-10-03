@@ -4,6 +4,8 @@ import type { ImagenInforme, Tecnico, Vehiculo } from "@/lib/types";
 import { labelUbicacionDesdeForm, type EmailDestinatario, type InformeFormState } from "./types";
 import type { Ubicacion } from "@/components/ubicaciones/types";
 import { ErrorNote, SuccessNote } from "@/components/notes";
+import { VerPdfLink } from "@/components/ver-pdf-link";
+import { obtenerUrlPdfInformeAction } from "@/app/(app)/informe-tecnico/historial/actions";
 
 function fmtFecha(fecha: string) {
   if (!fecha) return "—";
@@ -36,7 +38,7 @@ export function Step4Revision({
   onToggleEmail: (email: string) => void;
   submitting: boolean;
   error: string | null;
-  success: { numeroGeneracion: string; pdfUrl: string | null; emailEnviado?: boolean } | null;
+  success: { informeId: string; numeroGeneracion: string; pdfUrl: string | null; emailEnviado?: boolean } | null;
 }) {
   const tipoLabel = form.tipoInforme === "__new" ? form.tipoInformeNuevo || "Nuevo tipo sin nombrar" : form.tipoInforme || "—";
   const ubicacionLabel = labelUbicacionDesdeForm(form, ubicaciones);
@@ -224,11 +226,7 @@ export function Step4Revision({
         {success && (
           <SuccessNote>
             PDF generado ({success.numeroGeneracion}){success.pdfUrl ? " — " : ""}
-            {success.pdfUrl && (
-              <a href={success.pdfUrl} target="_blank" rel="noreferrer" style={{ color: "inherit", textDecoration: "underline" }}>
-                ver PDF
-              </a>
-            )}
+            {success.pdfUrl && <VerPdfLink obtenerUrl={() => obtenerUrlPdfInformeAction(success.informeId)} />}
           </SuccessNote>
         )}
         {success && chosen.length > 0 && (

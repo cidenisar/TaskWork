@@ -59,11 +59,11 @@ export default async function RendicionAbiertaPage({ params }: { params: Promise
     supabase.from("catalogo_torres").select("nombre").order("nombre"),
   ]);
 
-  let pdfUrl: string | null = null;
-  if (rendicion.estado === "cerrada" && rendicion.pdf_url) {
-    const { data: signed } = await supabase.storage.from("informes-pdf").createSignedUrl(rendicion.pdf_url, 60 * 15);
-    pdfUrl = signed?.signedUrl ?? null;
-  }
+  // El link "Ver PDF" pide una URL firmada fresca al tocarlo (ver VerPdfLink)
+  // en vez de usar una generada acá en el render de la página — evita que
+  // quede vencida si el técnico la abre bastante después de cargar la
+  // pantalla. Acá solo hace falta saber si HAY un PDF, no firmarlo.
+  const pdfDisponible = rendicion.estado === "cerrada" && !!rendicion.pdf_url;
 
   return (
     <RendicionWorkspace
@@ -76,7 +76,7 @@ export default async function RendicionAbiertaPage({ params }: { params: Promise
       viaticoRecibido={Number(rendicion.viatico_recibido)}
       moneda={rendicion.moneda}
       estado={rendicion.estado}
-      pdfUrl={pdfUrl}
+      pdfDisponible={pdfDisponible}
       gastos={gastos}
       catalogos={{
         provincias: [],

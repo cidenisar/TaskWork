@@ -39,6 +39,7 @@ export interface CrearMedicionPayload {
 export interface CrearMedicionResult {
   success: boolean;
   error?: string;
+  medicionId?: string;
   numeroGeneracion?: string;
   pdfUrl?: string | null;
 }
@@ -278,5 +279,5 @@ export async function crearMedicionTableroAction(formData: FormData): Promise<Cr
     pdfUrl = signed?.signedUrl ?? null;
   }
 
-  return { success: true, numeroGeneracion, pdfUrl };
+  return { success: true, medicionId: medicionId!, numeroGeneracion, pdfUrl };
 }

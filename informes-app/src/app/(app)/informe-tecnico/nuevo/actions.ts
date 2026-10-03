@@ -99,6 +99,7 @@ async function resolverUbicacionInforme(
 export interface CrearInformeResult {
   success: boolean;
   error?: string;
+  informeId?: string;
   numeroGeneracion?: string;
   pdfUrl?: string | null;
   emailEnviado?: boolean;
@@ -361,5 +362,5 @@ export async function crearInformeTecnicoAction(formData: FormData): Promise<Cre
     });
   }
 
-  return { success: true, numeroGeneracion, pdfUrl, emailEnviado };
+  return { success: true, informeId: informeId!, numeroGeneracion, pdfUrl, emailEnviado };
 }

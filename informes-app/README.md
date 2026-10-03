@@ -373,6 +373,19 @@ npm run dev
   pasado el umbral configurado todavía no está implementado (vive en el
   módulo Configuración, pendiente); la UI del historial ya distingue
   "PDF disponible" de "Solo registro".
+- **Links "ver PDF" con URL firmada fresca** (`src/components/ver-pdf-link.tsx`):
+  los links a PDFs/fotos en Supabase Storage son privados — se acceden con
+  una URL firmada que vence. El error típico cuando vence
+  (`InvalidJWT` / `"exp" claim timestamp check failed`) pasaba al tocar
+  "ver PDF" justo después de generarlo, porque esos links usaban la URL
+  firmada que había devuelto la propia Server Action de creación/cierre en
+  vez de pedir una nueva al tocarlos. `VerPdfLink` centraliza el arreglo: pide
+  la URL firmada recién al hacer click (reusando las acciones
+  `obtenerUrlPdf...Action` que ya tenía cada módulo para su Historial, que
+  respetan RLS por id de registro), en vez de depender de cuánto tiempo pasó
+  entre generarla y usarla. Aplicado en los 6 lugares que mostraban un link
+  "ver PDF" apenas terminaba de guardar/cerrar (Informe Técnico nuevo y
+  editar, Tableros, Racks, Rendición de Gastos, Equipos Individuales).
 - **Sistema de íconos** (`src/components/icon.tsx`): reemplaza los emoji
   sueltos que había por toda la app por un set propio de íconos de línea
   SVG (`<Icon name="..."/>`, `<StatusDot tone="ok|warn|danger"/>`) — un
