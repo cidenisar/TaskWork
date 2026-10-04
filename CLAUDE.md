@@ -6,17 +6,18 @@ aprendizajes reales, juntados de varias apps (Informes, Via-Cash, el
 Sistema de emergencias de refinería), pensados para servir en cualquier
 proyecto nuevo, no solo en el que salieron.
 
-**Ese archivo no está en esta branch** (esta branch — `claude/
-emergencias-refineria-resume-kmlfvl` — tiene el código del Sistema de
-emergencias de refinería, pero el archivo de criterios se escribió desde
-otra branch de este mismo repo: `claude/proyecto-informes-9l1n2g`, la del
-proyecto Informes). Para encontrarlo:
+**Ese archivo no está en esta branch** — vive en `main` (que desde
+2026-10-04 es el contenido del proyecto Informes, pensado como branch
+principal del repo). Esta branch (`emergencias-refineria`) es el proyecto
+del Sistema de emergencias de refinería, aparte. Para encontrar el
+archivo:
 ```
-git fetch origin claude/proyecto-informes-9l1n2g
-git show origin/claude/proyecto-informes-9l1n2g:CRITERIOS_Y_IDEAS.md
+git fetch origin main
+git show origin/main:CRITERIOS_Y_IDEAS.md
 ```
-o simplemente hacer merge de esa branch a esta si se quiere tener el
-archivo real acá, en vez de ir a buscarlo cada vez.
+o simplemente traerlo a esta branch (`git checkout origin/main --
+CRITERIOS_Y_IDEAS.md`) si se lo va a editar seguido desde acá, en vez de
+ir a buscarlo cada vez.
 
 Si en el camino aparece un bug real, un hallazgo de seguridad, un patrón
 reusable o una decisión de arquitectura que valga la pena para la
