@@ -130,8 +130,8 @@ export function ListaUbicaciones({ ubicaciones }: { ubicaciones: UbicacionRow[] 
   return (
     <div>
       <div className="page-heading">
-        <h1>Ubicaciones</h1>
-        <p>Región → Provincia → Sitio — solo se muestran los lugares donde ya se relevó equipamiento.</p>
+        <h1>Sitios</h1>
+        <p>Región → Provincia → Sitio — todo lo cargado en cada lugar: informes, rendiciones, tableros, racks y equipos.</p>
       </div>
 
       <div className="card">

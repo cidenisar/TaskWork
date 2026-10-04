@@ -85,8 +85,8 @@ const NAV_CONFIG: Record<string, ModuleConfig> = {
     ],
   },
   ubicaciones: {
-    brand: "Ubicaciones",
-    tabs: [{ href: "/ubicaciones", label: "Todas las Ubicaciones" }],
+    brand: "Sitios",
+    tabs: [{ href: "/ubicaciones", label: "Todos los Sitios" }],
   },
   estadisticas: {
     brand: "Estadísticas",

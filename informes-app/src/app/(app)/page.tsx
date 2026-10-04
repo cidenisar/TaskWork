@@ -45,9 +45,9 @@ export default async function HomePage() {
           <div className="module-ico">
             <ModuleIcon name="ubicaciones" />
           </div>
-          <div className="module-title">Ubicaciones</div>
+          <div className="module-title">Sitios</div>
           <div className="module-sub">
-            Navegá Región → Provincia → Sitio y mirá todo lo relevado en cada lugar — tableros, racks y equipos
+            Navegá Región → Provincia → Sitio y mirá todo lo cargado en cada lugar — informes, rendiciones, tableros, racks y equipos
           </div>
         </Link>
         <Link href="/estadisticas" className="module-card">

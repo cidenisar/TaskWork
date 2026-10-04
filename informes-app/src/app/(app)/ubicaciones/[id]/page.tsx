@@ -93,7 +93,7 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
     <div>
       <div className="page-heading">
         <Link href="/ubicaciones" className="hint" style={{ display: "inline-flex", alignItems: "center", gap: 4, marginBottom: 6 }}>
-          <Icon name="chevron-right" size={13} style={{ transform: "rotate(180deg)" }} /> Todas las ubicaciones
+          <Icon name="chevron-right" size={13} style={{ transform: "rotate(180deg)" }} /> Todos los sitios
         </Link>
         <h1>{ubicacion.sitio}</h1>
         <p>{[ubicacion.planta, ubicacion.localidad, ubicacion.provincia, ubicacion.region].filter(Boolean).join(" · ")}</p>
