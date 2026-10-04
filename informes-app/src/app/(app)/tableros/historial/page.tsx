@@ -1,8 +1,9 @@
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { HistorialTableros, type HistorialMedicionRow } from "@/components/tableros/historial";
-import { labelUbicacion, type Ubicacion } from "@/components/ubicaciones/types";
+import { labelUbicacion } from "@/components/ubicaciones/types";
 import type { MantenimientoRow } from "@/components/tableros/types";
+import { fetchTodasLasUbicaciones } from "@/lib/ubicaciones/fetch-todas";
 
 export default async function HistorialTablerosPage() {
   await requireProfile();
@@ -23,14 +24,13 @@ export default async function HistorialTablerosPage() {
   ];
   const circuitoIds = [...new Set((mantenimientosRes.data ?? []).map((m) => m.circuito_id).filter((id): id is string => !!id))];
 
-  const [tablerosRes, circuitosRes, ubicacionesRes] = await Promise.all([
+  const [tablerosRes, circuitosRes, ubicaciones] = await Promise.all([
     tableroIds.length > 0
       ? supabase.from("tableros").select("id, subsistemas, denominacion, ubicacion_id").in("id", tableroIds)
       : { data: [] },
     circuitoIds.length > 0 ? supabase.from("tablero_circuitos").select("id, texto").in("id", circuitoIds) : { data: [] },
-    supabase.from("ubicaciones").select("id, pais, region, provincia, localidad, sitio, planta, oficina, lat, lng"),
+    fetchTodasLasUbicaciones(supabase),
   ]);
-  const ubicaciones: Ubicacion[] = ubicacionesRes.data ?? [];
   const ubicacionesPorId = new Map(ubicaciones.map((u) => [u.id, u]));
   const tablerosPorId = new Map((tablerosRes.data ?? []).map((t) => [t.id, t]));
   const circuitosPorId = new Map((circuitosRes.data ?? []).map((c) => [c.id, c.texto]));

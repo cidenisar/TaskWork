@@ -1,17 +1,14 @@
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { ListaUbicaciones, type UbicacionRow } from "@/components/ubicaciones/lista";
+import { fetchTodasLasUbicaciones } from "@/lib/ubicaciones/fetch-todas";
 
 export default async function UbicacionesPage() {
   await requireProfile();
   const supabase = await createClient();
 
-  const [ubicacionesRes, tablerosRes, racksRes, equiposRes, informesRes, rendicionesRes] = await Promise.all([
-    supabase
-      .from("ubicaciones")
-      .select("id, pais, region, provincia, localidad, sitio, planta, oficina, lat, lng")
-      .order("provincia")
-      .order("sitio"),
+  const [ubicacionesData, tablerosRes, racksRes, equiposRes, informesRes, rendicionesRes] = await Promise.all([
+    fetchTodasLasUbicaciones(supabase),
     supabase.from("tableros").select("id, ubicacion_id"),
     supabase.from("racks").select("id, ubicacion_id"),
     supabase.from("equipos").select("id, ubicacion_id"),
@@ -50,7 +47,7 @@ export default async function UbicacionesPage() {
   // al menos uno de esos. Los informes/rendiciones viejos que se cargaron
   // sin elegir una Ubicación estructurada (texto libre) no cuentan acá
   // todavía — no se migraron automáticamente, ver README.
-  const ubicaciones: UbicacionRow[] = (ubicacionesRes.data ?? [])
+  const ubicaciones: UbicacionRow[] = ubicacionesData
     .map((u) => ({
       id: u.id,
       pais: u.pais,

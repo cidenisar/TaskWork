@@ -1,18 +1,18 @@
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { InformeTecnicoWizard } from "@/components/informe-tecnico/wizard";
-import type { Ubicacion } from "@/components/ubicaciones/types";
+import { fetchTodasLasUbicaciones } from "@/lib/ubicaciones/fetch-todas";
 
 export default async function NuevoInformePage() {
   await requireProfile();
   const supabase = await createClient();
 
-  const [tiposRes, clientesRes, provinciasRes, ubicacionesRes, tecnicosRes, torresRes, vehiculosRes, configRes, emailsRes] =
+  const [tiposRes, clientesRes, provinciasRes, ubicaciones, tecnicosRes, torresRes, vehiculosRes, configRes, emailsRes] =
     await Promise.all([
       supabase.from("catalogo_tipos_informe").select("nombre").order("nombre"),
       supabase.from("catalogo_clientes").select("nombre").order("nombre"),
       supabase.from("catalogo_provincias").select("nombre").order("nombre"),
-      supabase.from("ubicaciones").select("id, pais, region, provincia, localidad, sitio, planta, oficina, lat, lng").order("sitio"),
+      fetchTodasLasUbicaciones(supabase),
       // El catálogo de técnicos ya no es una carga manual aparte: se arma con
       // los usuarios registrados (Configuración → Usuarios y roles).
       supabase.from("profiles").select("nombre_completo, torre").eq("activo", true).order("nombre_completo"),
@@ -21,8 +21,6 @@ export default async function NuevoInformePage() {
       supabase.from("config_general").select("logo_empresa_url").eq("id", 1).single(),
       supabase.from("config_emails_envio").select("email, activo").eq("activo", true).order("email"),
     ]);
-
-  const ubicaciones: Ubicacion[] = ubicacionesRes.data ?? [];
 
   return (
     <div>

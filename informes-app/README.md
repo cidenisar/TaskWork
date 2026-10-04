@@ -457,6 +457,25 @@ npm run dev
   sin referencias pero **no se pudieron borrar** en la sesión (el DELETE
   quedó pendiente de confirmación en la herramienta de Supabase) — siguen
   existiendo en el catálogo sin usarse, pendiente de limpiar.
+- **Bug: el catálogo de Ubicaciones se cortaba a la mitad en el picker**
+  (`src/lib/ubicaciones/fetch-todas.ts`): después de cargar los ~1747 sitios
+  más los agregados de esta sesión, `ubicaciones` pasó las 1758 filas —
+  justo por encima del límite por defecto de PostgREST/Supabase (1000 filas
+  por consulta). Todas las páginas que traían el catálogo completo
+  (`Tableros`, `Racks`, `Equipos Individuales`, `Informe Técnico`,
+  `Rendición de Gastos`, nuevo/editar/historial) lo hacían con un
+  `.select(...)` sin `.range()`, así que el corte pasaba en silencio: no
+  había error, simplemente la respuesta llegaba incompleta. Como esas
+  consultas no iban ordenadas por provincia, el corte global por orden de
+  `id` dejaba afuera, dentro de **cada** provincia, todo lo que quedaba del
+  lado equivocado del corte — en Mendoza, por ejemplo, el selector de Sitio
+  llegaba hasta "NODO CUYO TASA" y saltaba directo a "+ Crear sitio
+  nuevo...", sin mostrar "REFINERIA LUJAN DE CUYO" ni nada alfabéticamente
+  posterior, aunque la fila existiera en la base (confirmado por SQL
+  directo). `fetchTodasLasUbicaciones` pagina con `.range()` en bloques de
+  1000 hasta agotar la tabla, sin depender de ningún límite — reemplaza el
+  `.from("ubicaciones").select(...)` suelto en los 11 lugares que leían el
+  catálogo completo.
 - **Sistema de íconos** (`src/components/icon.tsx`): reemplaza los emoji
   sueltos que había por toda la app por un set propio de íconos de línea
   SVG (`<Icon name="..."/>`, `<StatusDot tone="ok|warn|danger"/>`) — un

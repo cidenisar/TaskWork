@@ -1,24 +1,24 @@
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { NuevaMedicionForm } from "@/components/tableros/nueva-medicion-form";
-import { labelUbicacion, type Ubicacion } from "@/components/ubicaciones/types";
+import { labelUbicacion } from "@/components/ubicaciones/types";
 import type { TableroConCircuitos } from "@/components/tableros/types";
+import { fetchTodasLasUbicaciones } from "@/lib/ubicaciones/fetch-todas";
 
 export default async function NuevaMedicionPage() {
   await requireProfile();
   const supabase = await createClient();
 
-  const [tablerosRes, circuitosRes, ubicacionesRes, provinciasRes] = await Promise.all([
+  const [tablerosRes, circuitosRes, ubicaciones, provinciasRes] = await Promise.all([
     supabase.from("tableros").select("id, subsistemas, denominacion, ubicacion_id").order("denominacion"),
     supabase
       .from("tablero_circuitos")
       .select("id, tablero_id, numero, texto, amp_nominal, categoria_equipo, tipo_circuito")
       .order("numero"),
-    supabase.from("ubicaciones").select("id, pais, region, provincia, localidad, sitio, planta, oficina, lat, lng").order("sitio"),
+    fetchTodasLasUbicaciones(supabase),
     supabase.from("catalogo_provincias").select("nombre").order("nombre"),
   ]);
 
-  const ubicaciones: Ubicacion[] = ubicacionesRes.data ?? [];
   const ubicacionesPorId = new Map(ubicaciones.map((u) => [u.id, u]));
   const provincias = (provinciasRes.data ?? []).map((p) => p.nombre);
 

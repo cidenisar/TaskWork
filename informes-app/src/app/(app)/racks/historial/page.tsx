@@ -1,7 +1,8 @@
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { HistorialRacks, type HistorialRelevamientoRow } from "@/components/racks/historial";
-import { labelUbicacion, type Ubicacion } from "@/components/ubicaciones/types";
+import { labelUbicacion } from "@/components/ubicaciones/types";
+import { fetchTodasLasUbicaciones } from "@/lib/ubicaciones/fetch-todas";
 
 export default async function HistorialRacksPage() {
   await requireProfile();
@@ -14,11 +15,10 @@ export default async function HistorialRacksPage() {
     .order("fecha", { ascending: false });
 
   const rackIds = [...new Set((relevamientosData ?? []).map((r) => r.rack_id))];
-  const [{ data: racksData }, { data: ubicacionesData }] = await Promise.all([
+  const [{ data: racksData }, ubicaciones] = await Promise.all([
     rackIds.length > 0 ? supabase.from("racks").select("id, denominacion, ubicacion_id").in("id", rackIds) : { data: [] },
-    supabase.from("ubicaciones").select("id, pais, region, provincia, localidad, sitio, planta, oficina, lat, lng"),
+    fetchTodasLasUbicaciones(supabase),
   ]);
-  const ubicaciones: Ubicacion[] = ubicacionesData ?? [];
   const ubicacionesPorId = new Map(ubicaciones.map((u) => [u.id, u]));
   const racksPorId = new Map((racksData ?? []).map((r) => [r.id, r]));
 

@@ -1,20 +1,19 @@
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { NuevoRelevamientoEquiposForm } from "@/components/equipos/nuevo-relevamiento-form";
-import type { Ubicacion } from "@/components/ubicaciones/types";
 import type { EquipoItem } from "@/components/equipos/types";
+import { fetchTodasLasUbicaciones } from "@/lib/ubicaciones/fetch-todas";
 
 export default async function NuevoRelevamientoEquiposPage() {
   await requireProfile();
   const supabase = await createClient();
 
-  const [equiposRes, ubicacionesRes, provinciasRes] = await Promise.all([
+  const [equiposRes, ubicaciones, provinciasRes] = await Promise.all([
     supabase.from("equipos").select("id, ubicacion_id, categoria_equipo, texto, marca_modelo, numero_serie, cantidad").order("texto"),
-    supabase.from("ubicaciones").select("id, pais, region, provincia, localidad, sitio, planta, oficina, lat, lng").order("sitio"),
+    fetchTodasLasUbicaciones(supabase),
     supabase.from("catalogo_provincias").select("nombre").order("nombre"),
   ]);
 
-  const ubicaciones: Ubicacion[] = ubicacionesRes.data ?? [];
   const provincias = (provinciasRes.data ?? []).map((p) => p.nombre);
 
   const equiposPorUbicacion = new Map<string, EquipoItem[]>();

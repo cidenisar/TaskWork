@@ -1,7 +1,8 @@
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { HistorialEquipos, type HistorialRelevamientoRow } from "@/components/equipos/historial";
-import { labelUbicacion, type Ubicacion } from "@/components/ubicaciones/types";
+import { labelUbicacion } from "@/components/ubicaciones/types";
+import { fetchTodasLasUbicaciones } from "@/lib/ubicaciones/fetch-todas";
 
 export default async function HistorialEquiposPage() {
   await requireProfile();
@@ -13,7 +14,7 @@ export default async function HistorialEquiposPage() {
     .select("id, numero_generacion, fecha, pdf_url, foto_general_url, ubicacion_id")
     .order("fecha", { ascending: false });
 
-  const ubicaciones: Ubicacion[] = (await supabase.from("ubicaciones").select("id, pais, region, provincia, localidad, sitio, planta, oficina, lat, lng")).data ?? [];
+  const ubicaciones = await fetchTodasLasUbicaciones(supabase);
   const ubicacionesPorId = new Map(ubicaciones.map((u) => [u.id, u]));
 
   const relevamientos: HistorialRelevamientoRow[] = (relevamientosData ?? [])

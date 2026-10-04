@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { EditarInformeTecnicoWizard } from "@/components/informe-tecnico/wizard-editar";
-import type { Ubicacion } from "@/components/ubicaciones/types";
+import { fetchTodasLasUbicaciones } from "@/lib/ubicaciones/fetch-todas";
 
 export default async function EditarInformePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -26,7 +26,7 @@ export default async function EditarInformePage({ params }: { params: Promise<{ 
     tiposRes,
     clientesRes,
     provinciasRes,
-    ubicacionesRes,
+    ubicaciones,
     tecnicosRes,
     torresRes,
     vehiculosCatRes,
@@ -38,14 +38,13 @@ export default async function EditarInformePage({ params }: { params: Promise<{ 
     supabase.from("catalogo_tipos_informe").select("nombre").order("nombre"),
     supabase.from("catalogo_clientes").select("nombre").order("nombre"),
     supabase.from("catalogo_provincias").select("nombre").order("nombre"),
-    supabase.from("ubicaciones").select("id, pais, region, provincia, localidad, sitio, planta, oficina, lat, lng").order("sitio"),
+    fetchTodasLasUbicaciones(supabase),
     supabase.from("profiles").select("nombre_completo, torre").eq("activo", true).order("nombre_completo"),
     supabase.from("catalogo_torres").select("nombre").order("nombre"),
     supabase.from("catalogo_vehiculos").select("patente, marca_modelo").order("patente"),
     supabase.from("config_general").select("logo_empresa_url").eq("id", 1).single(),
   ]);
 
-  const ubicaciones: Ubicacion[] = ubicacionesRes.data ?? [];
   // Si el informe ya tiene una Ubicación estructurada (ubicacion_id), se
   // preselecciona en el picker; si es un informe viejo (solo provincia/
   // ubicacion de texto libre), el picker arranca vacío y ese texto se deja

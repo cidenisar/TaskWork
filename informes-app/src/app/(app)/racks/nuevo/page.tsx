@@ -1,24 +1,24 @@
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { NuevoRelevamientoForm } from "@/components/racks/nuevo-relevamiento-form";
-import { labelUbicacion, type Ubicacion } from "@/components/ubicaciones/types";
+import { labelUbicacion } from "@/components/ubicaciones/types";
 import type { RackConEquipamiento } from "@/components/racks/types";
+import { fetchTodasLasUbicaciones } from "@/lib/ubicaciones/fetch-todas";
 
 export default async function NuevoRelevamientoPage() {
   await requireProfile();
   const supabase = await createClient();
 
-  const [racksRes, equipamientosRes, ubicacionesRes, provinciasRes] = await Promise.all([
+  const [racksRes, equipamientosRes, ubicaciones, provinciasRes] = await Promise.all([
     supabase.from("racks").select("id, denominacion, ubicacion_id").order("denominacion"),
     supabase
       .from("rack_equipamientos")
       .select("id, rack_id, numero, categoria_equipo, texto, marca_modelo, posicion_u, cantidad")
       .order("numero"),
-    supabase.from("ubicaciones").select("id, pais, region, provincia, localidad, sitio, planta, oficina, lat, lng").order("sitio"),
+    fetchTodasLasUbicaciones(supabase),
     supabase.from("catalogo_provincias").select("nombre").order("nombre"),
   ]);
 
-  const ubicaciones: Ubicacion[] = ubicacionesRes.data ?? [];
   const ubicacionesPorId = new Map(ubicaciones.map((u) => [u.id, u]));
   const provincias = (provinciasRes.data ?? []).map((p) => p.nombre);
 
