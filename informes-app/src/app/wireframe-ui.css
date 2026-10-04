@@ -263,23 +263,37 @@ body {
 /* Estadísticas en pantalla ancha: las tarjetas secundarias (todo lo que no
    es el KpiGrid) pasan de apilarse una debajo de la otra a un grid de 2
    columnas — el mapa de calor y el asistente ocupan las dos (necesitan el
-   ancho), el resto se empareja. Envueltas en `.stats-cell` en vez de
+   ancho), el resto se empareja. Envueltas en `.wide-cell` en vez de
    `.card + .card` directo: así ninguna `.card` queda adyacente a otra en el
    DOM y la regla de arriba no duplica el espaciado sumado al `gap` del grid. */
-.stats-cell + .stats-cell {
+.wide-cell + .wide-cell {
   margin-top: 16px;
 }
 @media (min-width: 1024px) {
-  .stats-grid {
+  .wide-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 16px;
   }
-  .stats-cell + .stats-cell {
+  .wide-cell + .wide-cell {
     margin-top: 0;
   }
-  .stats-span-2 {
+  .wide-span-2 {
     grid-column: 1 / -1;
+  }
+}
+
+/* Listas de filas clickeables (drill-down de Región/Provincia/Sitio,
+   resultados de búsqueda): en pantalla ancha se acomodan en 2 columnas en
+   vez de una fila larga por ítem — mismo breakpoint que .wide-grid. */
+@media (min-width: 1024px) {
+  .list-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .list-grid > .hist-item {
+    margin-bottom: 0;
   }
 }
 

@@ -464,50 +464,52 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
         )}
       </div>
 
-      <div className="card">
-        <div className="section-label">Informes Técnicos en este sitio</div>
-        {informes.length === 0 ? (
-          <div className="empty-note">No hay informes técnicos cargados en {ubicacion.sitio}.</div>
-        ) : (
-          <div>
-            {informes.map((i) => (
-              <div className="hist-item" key={i.id}>
-                <div className="info">
-                  <div className="hist-main">
-                    <div className="hist-title">{i.titulo}</div>
-                    <div className="hist-meta">
-                      {hayVariasPlantas && i.ubicacion_id ? `${labelPorUbicacionId.get(i.ubicacion_id)} · ` : ""}
-                      {fmtFecha(i.fecha)} · {i.estado === "generado" ? "Generado" : "Borrador"}
+      <div className="wide-grid">
+        <div className="wide-cell card">
+          <div className="section-label">Informes Técnicos en este sitio</div>
+          {informes.length === 0 ? (
+            <div className="empty-note">No hay informes técnicos cargados en {ubicacion.sitio}.</div>
+          ) : (
+            <div>
+              {informes.map((i) => (
+                <div className="hist-item" key={i.id}>
+                  <div className="info">
+                    <div className="hist-main">
+                      <div className="hist-title">{i.titulo}</div>
+                      <div className="hist-meta">
+                        {hayVariasPlantas && i.ubicacion_id ? `${labelPorUbicacionId.get(i.ubicacion_id)} · ` : ""}
+                        {fmtFecha(i.fecha)} · {i.estado === "generado" ? "Generado" : "Borrador"}
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+              ))}
+            </div>
+          )}
+        </div>
 
-      <div className="card">
-        <div className="section-label">Rendiciones de Gastos en este sitio</div>
-        {rendiciones.length === 0 ? (
-          <div className="empty-note">No hay rendiciones de gastos cargadas en {ubicacion.sitio}.</div>
-        ) : (
-          <div>
-            {rendiciones.map((r) => (
-              <div className="hist-item" key={r.id}>
-                <div className="info">
-                  <div className="hist-main">
-                    <div className="hist-title">{r.motivo}</div>
-                    <div className="hist-meta">
-                      {hayVariasPlantas && r.ubicacion_id ? `${labelPorUbicacionId.get(r.ubicacion_id)} · ` : ""}
-                      {fmtFecha(r.fecha)} · {r.estado === "cerrada" ? "Cerrada" : "Abierta"}
+        <div className="wide-cell card">
+          <div className="section-label">Rendiciones de Gastos en este sitio</div>
+          {rendiciones.length === 0 ? (
+            <div className="empty-note">No hay rendiciones de gastos cargadas en {ubicacion.sitio}.</div>
+          ) : (
+            <div>
+              {rendiciones.map((r) => (
+                <div className="hist-item" key={r.id}>
+                  <div className="info">
+                    <div className="hist-main">
+                      <div className="hist-title">{r.motivo}</div>
+                      <div className="hist-meta">
+                        {hayVariasPlantas && r.ubicacion_id ? `${labelPorUbicacionId.get(r.ubicacion_id)} · ` : ""}
+                        {fmtFecha(r.fecha)} · {r.estado === "cerrada" ? "Cerrada" : "Abierta"}
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        )}
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

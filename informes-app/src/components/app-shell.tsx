@@ -114,7 +114,7 @@ export function AppShell({ profile, children }: { profile: Profile; children: Re
   const backLabel = moduleConfig?.backHref ? "Volver a Relevamiento de Equipos" : "Volver al inicio";
 
   return (
-    <div className={moduleKey === "estadisticas" ? "app app-wide" : "app"}>
+    <div className={moduleKey === "estadisticas" || moduleKey === "ubicaciones" ? "app app-wide" : "app"}>
       <div className="topbar">
         {!isHome ? (
           <Link href={backHref} className="back">

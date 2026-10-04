@@ -539,24 +539,35 @@ npm run dev
   `equipos`, y el prompt de lectura de fotos ahora la busca
   específicamente, aclarando que no es ni la marca/modelo ni el número de
   serie del fabricante.
-- **Estadísticas aprovecha el ancho en pantallas grandes** (primer caso
-  de un patrón pensado para el resto de la app): toda la app es mobile-
-  first — `.app` limita el contenido a 800px, centrado, sea cual sea el
-  ancho real de la pantalla — así que en una PC con monitor ancho sobraba
-  espacio vacío a los costados en vez de aprovecharse para mostrar más
-  datos a la vez. En vez de armar una app aparte tipo Via-Cash (que
-  separa `apps/movil`/`apps/oficina` porque son **roles** distintos —
-  chofer vs. oficina —, no el mismo usuario en otro dispositivo),
-  acá alcanza con responsive: en `/estadisticas` el contenedor pasa a usar
-  `.app-wide` (ya existía en el CSS, 1080px, pero no se usaba en ningún
-  lado) y las tarjetas secundarias (Gastos por categoría, Informes por
-  técnico, Insights, Mantenimiento predictivo, Comparación, Verificación
-  de fotos) se acomodan en un grid de 2 columnas a partir de 1024px de
-  ancho (`.stats-grid`/`.stats-cell` en `wireframe-ui.css`) — el Mapa de
-  calor y "Preguntale a tus datos" ocupan las dos columnas
-  (`.stats-span-2`) porque se benefician del ancho completo (un mapa más
-  grande, un chat). Por debajo de 1024px (celular/tablet) se ve exactamente
-  igual que antes, apilado en una columna. El mismo patrón
-  (`.app-wide` + `.stats-grid`-equivalente) es el que se replicaría en
-  Sitios u otras pantallas con mucho dato para visualizar, si hace falta
-  más adelante.
+- **Patrón responsive para pantallas con mucho dato** (`Estadísticas` y
+  `Sitios`, pensado para reusarse en cualquier pantalla nueva que lo
+  necesite): toda la app es mobile-first — `.app` limita el contenido a
+  800px, centrado, sea cual sea el ancho real de la pantalla — así que en
+  una PC con monitor ancho sobraba espacio vacío a los costados en vez de
+  aprovecharse para mostrar más datos a la vez. En vez de armar una app
+  aparte tipo Via-Cash (que separa `apps/movil`/`apps/oficina` porque son
+  **roles** distintos — chofer vs. oficina —, no el mismo usuario en otro
+  dispositivo), alcanza con responsive, con 3 piezas genéricas en
+  `wireframe-ui.css` (`.app-wide`, 1080px, ya existía pero no se usaba en
+  ningún lado; `.wide-grid`/`.wide-cell`/`.wide-span-2`, grid de 2
+  columnas a partir de 1024px; `.list-grid`, igual idea para listas de
+  filas clickeables) que `AppShell` activa por módulo
+  (`src/components/app-shell.tsx`, el `moduleKey` de la URL decide si el
+  contenedor usa `.app-wide`). Por debajo de 1024px (celular/tablet) se ve
+  exactamente igual que antes en los dos casos, apilado en una columna —
+  nada de esto toca el comportamiento mobile.
+  - **Estadísticas** (primer caso, donde se armó el patrón): las tarjetas
+    secundarias (Gastos por categoría, Informes por técnico, Insights,
+    Mantenimiento predictivo, Comparación, Verificación de fotos) se
+    emparejan de a 2; el Mapa de calor y "Preguntale a tus datos" ocupan
+    las dos columnas porque se benefician del ancho completo (un mapa más
+    grande, un chat).
+  - **Sitios**: en la lista (`/ubicaciones`, `lista.tsx`) las filas
+    clickeables del drill-down (Región/Provincia/Sitio) y los resultados
+    de búsqueda pasan de una fila larga por ítem a 2 columnas
+    (`.list-grid`). En la ficha de un Sitio (`/ubicaciones/[id]`),
+    Tableros/Racks/Equipos Individuales **quedan a ancho completo** a
+    propósito — sus tablas ya tienen 9-11 columnas y necesitan el espacio,
+    emparejarlas las haría peor, no mejor — y solo Informes Técnicos y
+    Rendiciones de Gastos (listas simples de título + fecha) se emparejan
+    de a 2, mismo criterio que Estadísticas.
