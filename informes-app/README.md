@@ -411,6 +411,21 @@ npm run dev
   archivos ya existentes con un backfill (se buscaron en `storage.objects`
   los PDFs/fotos ya subidos bajo el path de cada registro y se linkearon) —
   ninguno de los PDFs/fotos generados hasta ahora se perdió.
+- **"Ubicaciones" pasó a llamarse "Sitios" en la UI** (ruta y modelo de
+  datos siguen siendo `ubicaciones`/`Ubicación` — solo cambió el texto que
+  ve el usuario), porque el plan es que termine mostrando todo lo cargado
+  por lugar, no solo un catálogo de sitios. De paso se matchearon a mano
+  (`20261005020000_backfill_informes_cilc_tvm.sql`) los ~16 Informes
+  Técnicos y 6 Rendiciones de Gastos reales que se habían cargado antes de
+  que existiera el picker de Ubicación, con texto libre inconsistente
+  ("CILC", "PUESTO 1 CILC", "PUESTO 1 CILCO"...) — confirmado con el
+  usuario antes de aplicar: el grupo "CILC" quedó linkeado a
+  `REFINERIA LUJAN DE CUYO` (plantas PUESTO 1/PUESTO 2, que ya existían en
+  el catálogo), y el grupo "TVM" dio de alta un sitio nuevo
+  `TERMINAL VILLA MERCEDES` en San Luis (corrigiendo la provincia, que
+  estaba cargada como "Mendoza" a mano). Unos pocos registros con texto
+  demasiado vago ("Sala", "Laboratorio de infraestructura") o datos de
+  prueba quedaron sin tocar.
 - **Sistema de íconos** (`src/components/icon.tsx`): reemplaza los emoji
   sueltos que había por toda la app por un set propio de íconos de línea
   SVG (`<Icon name="..."/>`, `<StatusDot tone="ok|warn|danger"/>`) — un
