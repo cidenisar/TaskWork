@@ -25,6 +25,7 @@ interface EquipoDetectado {
   marcaModelo: string;
   numeroSerie: string;
   identificado: boolean;
+  consumoEstimadoW: number | null;
 }
 
 const CATEGORIAS_TEXTO = CATEGORIA_EQUIPO_OPCIONES.map((c) => `"${c}" (${CATEGORIA_EQUIPO_LABEL[c]})`).join(", ");
@@ -111,11 +112,18 @@ export async function POST(req: NextRequest) {
         'puedas leer.\n' +
         '- "numeroSerie": el número de serie si se ve en una chapa/etiqueta (buscalo especialmente en UPS y bancos de batería, suele ' +
         'estar en una chapa metálica o etiqueta blanca en el costado/parte de atrás). Cadena vacía "" si no es legible — no inventes ni ' +
-        "adivines un número de serie que no puedas leer con certeza.\n\n" +
+        "adivines un número de serie que no puedas leer con certeza.\n" +
+        '- "consumoEstimadoW": SOLO si identificaste una marca/modelo específica en "marcaModelo" y la reconocés con confianza por tu ' +
+        "conocimiento general de ese producto (no por la foto) — tu mejor estimación del consumo eléctrico típico en Watts de ese " +
+        "equipo en operación normal (ej. un UPS chico puede ser unos 300-600W, una cámara CCTV unos 5-15W). Es una ESTIMACIÓN para " +
+        "planificación energética, no una medición — está bien dar un número aproximado si conocés el rango típico de ese modelo o de " +
+        "modelos muy similares de la misma familia/fabricante. Usá null si no viste marca/modelo legible, o si la marca/modelo no te " +
+        "resulta nada familiar — nunca inventes un número para un equipo que no podés justificar de ninguna forma.\n\n" +
         "No inventes equipos que no estén en la foto, y no adivines una marca/modelo/serie que no puedas justificar por lo que ves — " +
         'pero "texto" y "categoriaEquipo" son obligatorios en todos los casos, con tu mejor estimación visual si hace falta.\n\n' +
         'Respondé ÚNICAMENTE con un JSON válido: un array de objetos {"texto": string, "categoriaEquipo": string, "marcaModelo": ' +
-        'string, "numeroSerie": string, "identificado": boolean}, sin texto antes ni después, sin bloque de código markdown.',
+        'string, "numeroSerie": string, "identificado": boolean, "consumoEstimadoW": number | null}, sin texto antes ni después, sin ' +
+        "bloque de código markdown.",
       messages: [
         {
           role: "user",
@@ -166,6 +174,7 @@ export async function POST(req: NextRequest) {
           marcaModelo: typeof e.marcaModelo === "string" ? e.marcaModelo.trim().slice(0, 80) : "",
           numeroSerie: typeof e.numeroSerie === "string" ? e.numeroSerie.trim().slice(0, 60) : "",
           identificado: e.identificado === true,
+          consumoEstimadoW: Number.isFinite(e.consumoEstimadoW) && (e.consumoEstimadoW as number) > 0 ? (e.consumoEstimadoW as number) : null,
         })),
     });
   } catch (err) {

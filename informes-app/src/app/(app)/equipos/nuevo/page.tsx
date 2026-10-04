@@ -9,7 +9,10 @@ export default async function NuevoRelevamientoEquiposPage() {
   const supabase = await createClient();
 
   const [equiposRes, ubicaciones, provinciasRes] = await Promise.all([
-    supabase.from("equipos").select("id, ubicacion_id, categoria_equipo, texto, marca_modelo, numero_serie, cantidad").order("texto"),
+    supabase
+      .from("equipos")
+      .select("id, ubicacion_id, categoria_equipo, texto, marca_modelo, numero_serie, cantidad, consumo_estimado_w")
+      .order("texto"),
     fetchTodasLasUbicaciones(supabase),
     supabase.from("catalogo_provincias").select("nombre").order("nombre"),
   ]);
@@ -26,6 +29,7 @@ export default async function NuevoRelevamientoEquiposPage() {
       marcaModelo: e.marca_modelo ?? "",
       numeroSerie: e.numero_serie ?? "",
       cantidad: e.cantidad,
+      consumoEstimadoW: e.consumo_estimado_w,
     });
     equiposPorUbicacion.set(e.ubicacion_id, lista);
   }

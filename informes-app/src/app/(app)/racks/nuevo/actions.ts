@@ -17,6 +17,7 @@ interface PayloadLectura {
   marcaModelo: string;
   posicionU: string;
   cantidad: number;
+  consumoEstimadoW: number | null;
   estado: string;
   comentario: string;
 }
@@ -125,6 +126,7 @@ export async function crearRelevamientoRackAction(formData: FormData): Promise<C
         marca_modelo: l.marcaModelo.trim() || null,
         posicion_u: l.posicionU.trim() || null,
         cantidad: Number.isFinite(l.cantidad) && l.cantidad > 0 ? l.cantidad : 1,
+        consumo_estimado_w: Number.isFinite(l.consumoEstimadoW) && (l.consumoEstimadoW as number) > 0 ? l.consumoEstimadoW : null,
       })
       .select("id")
       .single();

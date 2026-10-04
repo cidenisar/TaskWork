@@ -27,7 +27,13 @@ interface LecturaState {
 }
 
 const LECTURA_VACIA: LecturaState = { estado: "", comentario: "" };
-const EQUIPO_NUEVO_BASE = { categoriaEquipo: "otro" as RackCategoriaEquipo, marcaModelo: "", posicionU: "", cantidad: 1 };
+const EQUIPO_NUEVO_BASE = {
+  categoriaEquipo: "otro" as RackCategoriaEquipo,
+  marcaModelo: "",
+  posicionU: "",
+  cantidad: 1,
+  consumoEstimadoW: null as number | null,
+};
 
 export function NuevoRelevamientoForm({
   racks,
@@ -162,6 +168,7 @@ export function NuevoRelevamientoForm({
         marcaModelo: string;
         posicionU: string;
         identificado: boolean;
+        consumoEstimadoW: number | null;
       }[] = data.equipos ?? [];
       if (detectados.length === 0) {
         setIaNote(
@@ -182,6 +189,7 @@ export function NuevoRelevamientoForm({
           marcaModelo: d.marcaModelo,
           posicionU: d.posicionU,
           cantidad: 1,
+          consumoEstimadoW: d.consumoEstimadoW,
           revisar: d.identificado !== true,
         })),
       ]);
@@ -285,6 +293,7 @@ export function NuevoRelevamientoForm({
               marcaModelo: e.marcaModelo.trim(),
               posicionU: e.posicionU.trim(),
               cantidad: e.cantidad,
+              consumoEstimadoW: e.consumoEstimadoW,
               estado: l.estado,
               comentario: l.comentario,
             };
@@ -633,6 +642,17 @@ export function NuevoRelevamientoForm({
                             disabled={submitting}
                           />
                         </div>
+                        <div className="field" style={{ marginBottom: 0, width: 100 }}>
+                          <label style={{ fontSize: 11 }}>Consumo est. (W)</label>
+                          <input
+                            type="number"
+                            min={0}
+                            placeholder="IA / manual"
+                            value={e.consumoEstimadoW ?? ""}
+                            onChange={(ev) => actualizarEquipo(i, { consumoEstimadoW: ev.target.value === "" ? null : Number(ev.target.value) })}
+                            disabled={submitting}
+                          />
+                        </div>
                         <button type="button" className="remove-btn" onClick={() => quitarEquipo(i)} disabled={submitting}>
                           <Icon name="x" size={12} />
                         </button>
@@ -644,6 +664,7 @@ export function NuevoRelevamientoForm({
                       {e.marcaModelo ? ` · ${e.marcaModelo}` : ""}
                       {e.posicionU ? ` · ${e.posicionU}` : ""}
                       {e.cantidad > 1 ? ` · x${e.cantidad}` : ""}
+                      {e.consumoEstimadoW ? ` · ~${e.consumoEstimadoW}W` : ""}
                     </div>
                   )}
 

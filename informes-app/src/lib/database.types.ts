@@ -347,6 +347,7 @@ export type RackEquipamientoRow = {
   marca_modelo: string | null;
   posicion_u: string | null;
   cantidad: number;
+  consumo_estimado_w: number | null;
   created_at: string;
 }
 
@@ -378,6 +379,7 @@ export type EquipoRow = {
   marca_modelo: string | null;
   numero_serie: string | null;
   cantidad: number;
+  consumo_estimado_w: number | null;
   created_by: string | null;
   created_at: string;
 }

@@ -486,3 +486,36 @@ npm run dev
   "dibujos") y los emoji dentro del prompt de IA en
   `src/app/api/estadisticas/insights/route.ts` (son contenido generado por
   la IA, no chrome de la UI).
+- **Detalle de Sitio con el mismo nivel que el PDF** (`/ubicaciones/[id]`):
+  la ficha de un Sitio solo mostraba un resumen por categoría — para ver
+  marca/modelo, número de serie o la corriente medida había que abrir el
+  PDF del relevamiento. Ahora cada tablero/rack se puede desplegar
+  (`<details>`, clase `.detalle-item` en `wireframe-ui.css`) y muestra la
+  tabla completa de circuitos/equipamiento con la última lectura conocida
+  (estado, corriente por fase, comentario), reusando la misma lógica de
+  negocio que ya usa el PDF (`itemMideCorriente`, `categoriaLlevaAmp`) para
+  decidir cuándo corresponde mostrar corriente — nada de esto es un dato
+  nuevo, ya estaba guardado, solo no se mostraba.
+- **Consumo estimado por IA en Racks y Equipos Individuales**
+  (migración `20261005040000_consumo_estimado_ia.sql`,
+  `src/app/(app)/ubicaciones/actions.ts`): los Tableros de energía ya
+  tienen consumo REAL medido con instrumento (corriente por fase en cada
+  Medición) — pero el equipamiento de Racks y Equipos Individuales
+  (routers, switches, UPS, rectificadores...) no se mide así. Para poder
+  armar a futuro una estimación de consumo energético que cubra **todo**
+  el equipamiento de un sitio, no solo lo que tiene térmica, se agregó
+  `consumo_estimado_w` (nullable) a `rack_equipamientos` y `equipos`: la
+  misma IA que ya lee las fotos para identificar categoría/marca/modelo
+  ahora también devuelve su mejor estimación del consumo típico en Watts
+  de esa marca/modelo **por su conocimiento general del producto, no por
+  la foto** — null si no reconoce el modelo con confianza, nunca inventa
+  un número. El técnico puede corregirlo/completarlo a mano igual que el
+  resto de los campos. Para lo que ya estaba cargado antes de este campo
+  (o donde la IA no pudo estimar en su momento), un botón "Estimar consumo
+  de lo que falta" en la ficha de Sitio (visible solo para Administrador,
+  porque el `UPDATE` de `rack_equipamientos`/`equipos` es admin-only por
+  RLS — a propósito, para que un técnico no pueda editar equipamiento que
+  cargó otro) manda todo lo pendiente de ese sitio en un solo pedido de
+  texto a Claude (sin fotos) y completa lo que pueda. Siempre se muestra
+  marcado como **estimado** (`~123W`), nunca mezclado visualmente con una
+  medición real.

@@ -181,6 +181,22 @@ Reservar un módulo propio solo cuando la entidad es realmente un
 **contenedor** con estructura interna distinta (ej. un tablero con sus
 circuitos) — ahí sí se justifica.
 
+**Una IA que identifica un objeto real por foto puede, en el mismo
+pedido, estimar algo que no se ve en la imagen (consumo típico, vida
+útil, lo que sea) — pero hay que separarle explícitamente en el prompt
+cuál es cuál fuente.** Si se le pide "identificá marca/modelo" y
+"estimá el consumo" en el mismo turno sin aclarar la diferencia, el
+modelo puede mezclar "lo que veo en la foto" con "lo que sé en general de
+ese producto" y perder el criterio de cuándo decir que no sabe. Separarlo
+en el prompt ("el campo X viene de lo que ves en la imagen; el campo Y es
+tu estimación por conocimiento general del producto, no de la foto, devolvé
+null si el modelo no te resulta familiar") deja al modelo dar una
+estimación razonable sin inventar specs de un equipo que no reconoce.
+Para lo que ya estaba cargado antes de agregar un campo así (o donde no
+se pudo estimar en el momento), conviene un backfill aparte — un pedido de
+texto (sin fotos, más barato) sobre lo que falta, disparado a demanda, no
+automático en cada carga de página.
+
 ## 6. Avisos push (web)
 
 **No usar Firebase Cloud Messaging para push web — ir directo al estándar

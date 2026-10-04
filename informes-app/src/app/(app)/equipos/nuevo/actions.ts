@@ -16,6 +16,7 @@ interface PayloadLectura {
   marcaModelo: string;
   numeroSerie: string;
   cantidad: number;
+  consumoEstimadoW: number | null;
   estado: string;
   comentario: string;
 }
@@ -90,6 +91,7 @@ export async function crearRelevamientoEquiposAction(formData: FormData): Promis
         marca_modelo: l.marcaModelo.trim() || null,
         numero_serie: l.numeroSerie.trim() || null,
         cantidad: Number.isFinite(l.cantidad) && l.cantidad > 0 ? l.cantidad : 1,
+        consumo_estimado_w: Number.isFinite(l.consumoEstimadoW) && (l.consumoEstimadoW as number) > 0 ? l.consumoEstimadoW : null,
         created_by: profile.id,
       })
       .select("id")

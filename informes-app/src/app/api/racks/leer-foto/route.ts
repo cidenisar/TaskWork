@@ -25,6 +25,7 @@ interface EquipoDetectado {
   marcaModelo: string;
   posicionU: string;
   identificado: boolean;
+  consumoEstimadoW: number | null;
 }
 
 const CATEGORIAS_TEXTO = CATEGORIA_EQUIPO_OPCIONES.map((c) => `"${c}" (${CATEGORIA_EQUIPO_LABEL[c]})`).join(", ");
@@ -109,11 +110,18 @@ export async function POST(req: NextRequest) {
         '- "marcaModelo": marca y/o modelo impreso en el frente del equipo si es legible (ej. "Cisco Catalyst 2960", "Huawei ETP48200"). ' +
         'Cadena vacía "" si no se ve o no es legible — no inventes ni adivines una marca/modelo que no puedas leer.\n' +
         '- "posicionU": la posición en el rack si se ve numeración de unidades (U) en el riel lateral (ej. "U12"). Cadena vacía "" si no ' +
-        "hay numeración visible en la foto.\n\n" +
+        "hay numeración visible en la foto.\n" +
+        '- "consumoEstimadoW": SOLO si identificaste una marca/modelo específica en "marcaModelo" y la reconocés con confianza por tu ' +
+        "conocimiento general de ese producto (no por la foto) — tu mejor estimación del consumo eléctrico típico en Watts de ese " +
+        "equipo en operación normal (ej. un rectificador grande puede ser varios cientos de W, un switch chico unos 20-40W). Es una " +
+        "ESTIMACIÓN para planificación energética, no una medición — está bien dar un número aproximado si conocés el rango típico de " +
+        "ese modelo o de modelos muy similares de la misma familia/fabricante. Usá null si no viste marca/modelo legible, o si la " +
+        "marca/modelo no te resulta nada familiar — nunca inventes un número para un equipo que no podés justificar de ninguna forma.\n\n" +
         "No inventes equipos que no estén en la foto, y no adivines una marca/modelo/posición que no puedas justificar por lo que ves — " +
         'pero "texto" y "categoriaEquipo" son obligatorios en todos los casos, con tu mejor estimación visual si hace falta.\n\n' +
         'Respondé ÚNICAMENTE con un JSON válido: un array de objetos {"numero": number, "texto": string, "categoriaEquipo": string, ' +
-        '"marcaModelo": string, "posicionU": string, "identificado": boolean}, sin texto antes ni después, sin bloque de código markdown.',
+        '"marcaModelo": string, "posicionU": string, "identificado": boolean, "consumoEstimadoW": number | null}, sin texto antes ni ' +
+        "después, sin bloque de código markdown.",
       messages: [
         {
           role: "user",
@@ -165,6 +173,7 @@ export async function POST(req: NextRequest) {
           marcaModelo: typeof e.marcaModelo === "string" ? e.marcaModelo.trim().slice(0, 80) : "",
           posicionU: typeof e.posicionU === "string" ? e.posicionU.trim().slice(0, 20) : "",
           identificado: e.identificado === true,
+          consumoEstimadoW: Number.isFinite(e.consumoEstimadoW) && (e.consumoEstimadoW as number) > 0 ? (e.consumoEstimadoW as number) : null,
         })),
     });
   } catch (err) {

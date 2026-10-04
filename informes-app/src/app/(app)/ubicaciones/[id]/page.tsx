@@ -12,6 +12,8 @@ import {
 } from "@/components/tableros/types";
 import { calcularResumenEquipamiento as calcularResumenRacks, CATEGORIA_EQUIPO_LABEL as RACK_CATEGORIA_LABEL } from "@/components/racks/types";
 import { calcularResumenEquipos, CATEGORIA_EQUIPO_LABEL as EQUIPO_CATEGORIA_LABEL } from "@/components/equipos/types";
+import { EstimarConsumoButton } from "@/components/ubicaciones/estimar-consumo-button";
+import { estimarConsumoRacksAction, estimarConsumoEquiposAction } from "../actions";
 
 function fmtFecha(fecha: string) {
   const [y, m, d] = fecha.split("-");
@@ -23,7 +25,7 @@ function fmtCorriente(v: number | null) {
 }
 
 export default async function UbicacionDetallePage({ params }: { params: Promise<{ id: string }> }) {
-  await requireProfile();
+  const profile = await requireProfile();
   const { id } = await params;
   const supabase = await createClient();
 
@@ -55,7 +57,7 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
     supabase.from("racks").select("id, denominacion, ubicacion_id").in("ubicacion_id", siblingIds).order("denominacion"),
     supabase
       .from("equipos")
-      .select("id, categoria_equipo, texto, marca_modelo, numero_serie, cantidad, ubicacion_id")
+      .select("id, categoria_equipo, texto, marca_modelo, numero_serie, cantidad, consumo_estimado_w, ubicacion_id")
       .in("ubicacion_id", siblingIds)
       .order("texto"),
     // RLS (informes_tecnicos_select_own/select_stats) ya limita esto a informes propios, o todos si sos Admin/Supervisor.
@@ -90,7 +92,7 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
     rackIds.length > 0
       ? supabase
           .from("rack_equipamientos")
-          .select("id, rack_id, numero, categoria_equipo, texto, marca_modelo, posicion_u, cantidad")
+          .select("id, rack_id, numero, categoria_equipo, texto, marca_modelo, posicion_u, cantidad, consumo_estimado_w")
           .in("rack_id", rackIds)
           .order("numero")
       : { data: [] },
@@ -307,8 +309,14 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
       <div className="card">
         <div className="section-label">Racks en este sitio</div>
         <div className="hint" style={{ margin: "0 0 10px" }}>
-          Tocá un rack para ver su equipamiento — categoría, marca/modelo y posición U, con el último estado conocido.
+          Tocá un rack para ver su equipamiento — categoría, marca/modelo y posición U, con el último estado conocido y el consumo
+          estimado por IA (nunca una medición real).
         </div>
+        {racks.length > 0 && profile.rol === "admin" && (
+          <div style={{ marginBottom: 10 }}>
+            <EstimarConsumoButton accion={estimarConsumoRacksAction.bind(null, rackIds)} />
+          </div>
+        )}
         {racks.length === 0 ? (
           <div className="empty-note">No hay racks relevados en {ubicacion.sitio}.</div>
         ) : (
@@ -355,6 +363,7 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
                               <th>Marca/Modelo</th>
                               <th>Posición U</th>
                               <th style={{ textAlign: "right" }}>Cant.</th>
+                              <th style={{ textAlign: "right" }}>Consumo est.</th>
                               <th>Estado</th>
                               <th>Comentario</th>
                             </tr>
@@ -370,6 +379,7 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
                                   <td>{e.marca_modelo || "—"}</td>
                                   <td>{e.posicion_u || "—"}</td>
                                   <td style={{ textAlign: "right" }}>{e.cantidad}</td>
+                                  <td style={{ textAlign: "right" }}>{e.consumo_estimado_w ? `~${e.consumo_estimado_w}W` : "—"}</td>
                                   <td>{lectura?.estado || "—"}</td>
                                   <td>{lectura?.comentario || "—"}</td>
                                 </tr>
@@ -389,6 +399,11 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
 
       <div className="card">
         <div className="section-label">Equipos individuales en este sitio</div>
+        {equipos.length > 0 && profile.rol === "admin" && (
+          <div style={{ marginBottom: 10 }}>
+            <EstimarConsumoButton accion={estimarConsumoEquiposAction.bind(null, siblingIds)} />
+          </div>
+        )}
         {equipos.length === 0 ? (
           <div className="empty-note">No hay equipos individuales relevados en {ubicacion.sitio}.</div>
         ) : (
@@ -416,6 +431,7 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
                           {e.marca_modelo ? ` · ${e.marca_modelo}` : ""}
                           {e.numero_serie ? ` · S/N ${e.numero_serie}` : ""}
                           {e.cantidad > 1 ? ` · x${e.cantidad}` : ""}
+                          {e.consumo_estimado_w ? ` · ~${e.consumo_estimado_w}W` : ""}
                           {lectura?.estado ? ` · ${lectura.estado}` : ""}
                           {lectura?.comentario ? ` · ${lectura.comentario}` : ""}
                         </div>

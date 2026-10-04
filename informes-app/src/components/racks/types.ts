@@ -49,6 +49,13 @@ export interface EquipamientoItem {
   posicionU: string;
   cantidad: number;
   /**
+   * Potencia típica ESTIMADA por IA en Watts a partir de la marca/modelo
+   * (nunca una medición real, a diferencia de la corriente de Tableros) —
+   * null si todavía no se estimó o la IA no reconoció el modelo con
+   * confianza suficiente.
+   */
+  consumoEstimadoW: number | null;
+  /**
    * Solo transitorio en el form (no se persiste): true cuando lo cargó la
    * lectura de foto con IA sin encontrar una etiqueta legible, así el
    * técnico sabe que el texto es una descripción visual y conviene
