@@ -246,6 +246,7 @@ export type ConfigGeneralRow = {
   umbral_aviso_historial: UmbralAviso;
   recordatorio_semanal_archivo: boolean;
   resumen_semanal_ia: boolean;
+  liberacion_automatica_activa: boolean;
 }
 
 export type AuditLogRow = {

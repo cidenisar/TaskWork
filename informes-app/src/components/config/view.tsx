@@ -17,6 +17,7 @@ export interface ConfiguracionViewData {
   catalogos: CatalogosData;
   umbralAviso: UmbralAviso;
   recordatorioSemanal: boolean;
+  liberacionAutomatica: boolean;
   resumenSemanalIa: boolean;
   auditLog: AuditLogRow[];
   erroresCliente: ErrorClienteRow[];
@@ -34,7 +35,11 @@ export function ConfiguracionView({ data }: { data: ConfiguracionViewData }) {
       <UsuariosCard usuarios={data.usuarios} currentUserId={data.currentUserId} torres={data.catalogos.torres.map((t) => t.nombre)} />
       <EmailsCard autoEnviar={data.autoEnviarEmail} emails={data.emails} />
       <CatalogosCard data={data.catalogos} />
-      <HistorialAlmacenamientoCard umbral={data.umbralAviso} recordatorio={data.recordatorioSemanal} />
+      <HistorialAlmacenamientoCard
+        umbral={data.umbralAviso}
+        recordatorio={data.recordatorioSemanal}
+        liberacionAutomatica={data.liberacionAutomatica}
+      />
       <ResumenSemanalCard activo={data.resumenSemanalIa} />
       <AuditLogCard rows={data.auditLog} />
       <ErroresClienteCard rows={data.erroresCliente} />

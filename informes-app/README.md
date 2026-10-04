@@ -76,9 +76,6 @@ Rendición de Gastos, Configuración, Estadísticas).
 
 ⏳ Explícitamente pendiente (jobs de background, no UI):
 
-- El job que efectivamente libera del storage el PDF/fotos pasado el umbral
-  configurado (el umbral ya se guarda y se muestra en el historial, pero
-  nada lo aplica todavía).
 - Resumen semanal por IA y recordatorio de archivo: el switch y el ejemplo
   ya están en Configuración, pero el envío real (cron + email) no está
   implementado.
@@ -124,6 +121,12 @@ cp .env.example .env.local
   las funciones 🤖 avisan que no están disponibles en vez de fallar en silencio.
 - `RESEND_API_KEY` / `RESEND_FROM_EMAIL`: opcional — sin ellas, el informe se
   genera igual pero no se manda el email automático.
+- `CRON_SECRET`: opcional, pero obligatoria para que corra la liberación
+  automática de storage (ver sección más abajo) — sin ella, el endpoint de
+  cron rechaza cualquier pedido en vez de correr sin protección. Se
+  configura también como env var del proyecto en Vercel (no solo local),
+  porque es la que Vercel Cron manda en el header `Authorization` al
+  invocar el endpoint.
 
 ### 3. Primer usuario Administrador
 
@@ -396,10 +399,11 @@ npm run dev
   pensado para diagnosticar fallos en equipos que no probamos nosotros
   directamente, sin depender de que alguien nos cuente el error de memoria.
 - **Modelo dato-vs-archivo del historial** (spec 6.5): el registro es
-  permanente, el PDF/fotos son temporales. El job que libera el storage
-  pasado el umbral configurado todavía no está implementado (vive en el
-  módulo Configuración, pendiente); la UI del historial ya distingue
-  "PDF disponible" de "Solo registro".
+  permanente, el PDF/fotos son temporales. El job que libera el PDF del
+  storage pasado el umbral configurado ya está implementado — ver
+  "Liberación automática de PDFs viejos" más abajo; la UI del historial ya
+  distinguía "PDF disponible" de "Solo registro" desde antes de que el job
+  existiera.
 - **Links "ver PDF" con URL firmada fresca** (`src/components/ver-pdf-link.tsx`):
   los links a PDFs/fotos en Supabase Storage son privados — se acceden con
   una URL firmada que vence. El error típico cuando vence
@@ -618,3 +622,43 @@ npm run dev
   comprobante (misma "URL firmada fresca al tocar" que el resto de la
   app); la ficha de Sitio además tiene su propia sección "Equipamiento
   dado de baja en este sitio", acotada a ese sitio.
+- **Liberación automática de PDFs viejos del storage** (migración
+  `20261005070000_liberacion_automatica_storage.sql`,
+  `src/lib/storage/liberacion-automatica.ts`,
+  `src/app/api/cron/liberar-storage/route.ts`, `vercel.json`): implementa
+  el job que el modelo dato-vs-archivo del historial (spec 6.5) venía
+  dejando pendiente — primer job programado de la app, no existía ninguna
+  infraestructura de cron antes de este incremento. **Apagado por
+  default**, a propósito: la spec (9.5) dice explícitamente "nunca se
+  borra nada automáticamente — el sistema solo avisa", así que activarlo
+  es una decisión explícita de un Administrador (switch nuevo "Liberar
+  archivos automáticamente" en Configuración → Historial y
+  almacenamiento), no un cambio de comportamiento que le llegue a nadie
+  sin pedirlo. Al activarlo, reusa el mismo número de semanas que ya
+  elige el selector de aviso (20/50/100 informes → 4/8/12 semanas) — una
+  sola decisión de umbral para avisar y, opcionalmente, también liberar,
+  en vez de un segundo número que explicar. Corre una vez por día vía
+  Vercel Cron (`/api/cron/liberar-storage`, protegido con `CRON_SECRET`
+  — sin esa env var, el endpoint rechaza cualquier pedido en vez de
+  correr sin protección) y por cada PDF más viejo que el umbral (en los
+  6 módulos: Informe Técnico, Rendición de Gastos —solo cerradas—,
+  Tableros, Racks, Equipos Individuales y Bajas) **primero lo copia** al
+  bucket `informes-pdf-archivo` (mismo path, mismo proyecto de Supabase)
+  y **recién si esa copia confirma éxito** borra el original de
+  `informes-pdf` y vacía `pdf_url` en la fila — si la copia falla, el
+  original queda intacto, nunca se borra "a ciegas". El registro en sí
+  nunca se toca más que para vaciar esa columna: el dato queda para
+  siempre, como ya exige el modelo dato-vs-archivo. **Ojo**: mover el
+  archivo a otro bucket del mismo proyecto de Supabase no reduce el costo
+  de storage (Supabase cobra por bytes totales del proyecto, no hay un
+  nivel "frío" más barato dentro del mismo proyecto) — lo que gana esto es
+  un backup seguro y una separación clara entre "storage activo" y
+  "archivo", no un ahorro de plata; si en algún momento el volumen crece y
+  el costo importa, un backup afuera de Supabase (S3/Backblaze) sería el
+  siguiente paso, evaluado y descartado por ahora por sumar una cuenta/
+  credencial nueva para el volumen actual. **Alcance de este incremento:
+  solo PDFs, no fotos** — a diferencia del PDF (inmutable una vez
+  generado), varias fotos siguen referenciadas desde flujos de edición
+  (Informe Técnico permite reabrir y regenerar el PDF sin tocar las fotos
+  ya cargadas) que necesitan su propio diseño antes de tocarlas sin
+  romper nada; queda para un próximo incremento.

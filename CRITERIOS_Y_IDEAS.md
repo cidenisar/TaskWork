@@ -186,6 +186,32 @@ persona — la policy bloquea al nuevo dueño legítimo. Hace falta una
 función intermedia (`security definer`) que libere explícitamente la fila
 del dueño anterior antes de que el nuevo la reclame.
 
+**Job programado en Vercel sin infraestructura nueva: `vercel.json` +
+una ruta API protegida por secreto, nunca sin protección.** Para una
+tarea en background que tiene que correr sola (liberar storage viejo,
+mandar un resumen, lo que sea) en una app ya desplegada en Vercel, no
+hace falta sumar un worker/cola aparte: un `vercel.json` con `crons`
+apuntando a una ruta `GET` alcanza. Esa ruta **tiene que fallar cerrado**
+si falta el secreto (`CRON_SECRET` sin configurar → 500, nunca "corro
+igual sin chequear") y comparar el header `Authorization: Bearer
+<secreto>` que Vercel manda solo automáticamente — nunca conformarse con
+"nadie va a adivinar la URL".
+
+**Un job que borra algo "viejo" para liberar espacio: nunca borrar sin
+confirmar el backup primero, y entender qué es lo que realmente se
+ahorra.** Patrón de dos pasos, en ese orden exacto: 1) copiar el archivo a
+donde sea que viva el backup, 2) recién si esa copia devuelve éxito,
+borrar el original — si la copia falla, el original queda intacto, nunca
+"borro y después me fijo". Ojo con un error de diseño fácil de cometer acá:
+mover un archivo a OTRO bucket/carpeta **dentro del mismo proveedor y
+proyecto** no reduce el costo de storage si ese proveedor cobra por bytes
+totales del proyecto (es el caso de Supabase Storage) — da una separación
+prolija entre "activo" y "archivo" y un lugar seguro para recuperar algo,
+pero no es un ahorro real de plata; eso solo se logra sacando el dato del
+proveedor (otro proveedor externo, más barato para guardar en frío). Si el
+objetivo real es bajar el costo, no solo "ordenar", hay que decirlo
+explícito antes de elegir dónde va el backup.
+
 ## 5. Un módulo genérico con IA, en vez de uno por tipo
 
 Cuando el usuario necesita relevar/registrar cosas de **distintos tipos**

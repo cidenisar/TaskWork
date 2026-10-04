@@ -34,7 +34,9 @@ export default async function ConfiguracionPage() {
   ] = await Promise.all([
     supabase
       .from("config_general")
-      .select("logo_empresa_url, auto_enviar_email, umbral_aviso_historial, recordatorio_semanal_archivo, resumen_semanal_ia")
+      .select(
+        "logo_empresa_url, auto_enviar_email, umbral_aviso_historial, recordatorio_semanal_archivo, resumen_semanal_ia, liberacion_automatica_activa",
+      )
       .eq("id", 1)
       .single(),
     supabase.from("profiles").select("id, email, nombre_completo, rol, torre, activo").order("nombre_completo"),
@@ -99,6 +101,7 @@ export default async function ConfiguracionPage() {
         },
         umbralAviso: configRes.data?.umbral_aviso_historial ?? "20",
         recordatorioSemanal: configRes.data?.recordatorio_semanal_archivo ?? true,
+        liberacionAutomatica: configRes.data?.liberacion_automatica_activa ?? false,
         resumenSemanalIa: configRes.data?.resumen_semanal_ia ?? true,
         auditLog: (auditRes.data ?? []).map((a) => ({
           id: a.id,
