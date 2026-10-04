@@ -1,0 +1,20 @@
+-- ============================================================================
+-- Backfill (no DDL): "Sala de Radio Lujan 1" y "Sala Energia 1°Piso" estaban
+-- cargadas como Sitios propios del catálogo (con oficina "COMUNICACIONES
+-- CILC"), separadas de REFINERIA LUJAN DE CUYO — pero según confirmó el
+-- usuario, son en realidad oficinas DENTRO de la refinería, planta
+-- "EDIF. COMUNICACIONES" (ya existente en el catálogo importado). Quedaron
+-- así por cómo se cargaron la primera vez (alta al vuelo, antes de que la
+-- jerarquía completa estuviera armada) — exactamente el tipo de
+-- fragmentación que Ubicaciones existe para evitar.
+--
+-- Se dieron de alta dos Ubicaciones nuevas (REFINERIA LUJAN DE CUYO →
+-- EDIF. COMUNICACIONES → oficina "Sala de Radio Lujan 1" / "Sala Energia
+-- 1°Piso") y se re-apuntaron los 2 racks que ya estaban relevados ahí
+-- (ningún otro módulo las usaba, ni tenían GPS confirmado). Las 2
+-- Ubicaciones viejas (ids eb4345f7-d1fc-4a24-8533-c82114f0db3d,
+-- 600abbad-fa1d-4883-81b5-4a490cf4b208) quedaron sin referencias — no se
+-- pudieron borrar en esta sesión (el DELETE quedó pendiente de
+-- confirmación), así que por ahora siguen existiendo en el catálogo pero
+-- sin usarse.
+-- ============================================================================

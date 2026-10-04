@@ -440,6 +440,17 @@ npm run dev
   estaba cargada como "Mendoza" a mano). Unos pocos registros con texto
   demasiado vago ("Sala", "Laboratorio de infraestructura") o datos de
   prueba quedaron sin tocar.
+- **Fusión de "Sala de Radio Lujan 1" / "Sala Energia 1°Piso" en Refinería
+  Luján de Cuyo** (`20261005030000_fusionar_salas_comunicaciones_refineria.sql`):
+  estaban cargadas como Sitios propios del catálogo (con oficina
+  "COMUNICACIONES CILC"), separadas de `REFINERIA LUJAN DE CUYO` — pero
+  confirmado con el usuario, son oficinas dentro de la refinería, planta
+  `EDIF. COMUNICACIONES` (ya existente en el catálogo importado). Se dieron
+  de alta como oficinas ahí y se re-apuntaron los 2 racks que ya estaban
+  relevados en las Ubicaciones viejas. Esas 2 Ubicaciones viejas quedaron
+  sin referencias pero **no se pudieron borrar** en la sesión (el DELETE
+  quedó pendiente de confirmación en la herramienta de Supabase) — siguen
+  existiendo en el catálogo sin usarse, pendiente de limpiar.
 - **Sistema de íconos** (`src/components/icon.tsx`): reemplaza los emoji
   sueltos que había por toda la app por un set propio de íconos de línea
   SVG (`<Icon name="..."/>`, `<StatusDot tone="ok|warn|danger"/>`) — un
