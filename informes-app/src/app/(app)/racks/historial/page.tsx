@@ -5,7 +5,7 @@ import { labelUbicacion } from "@/components/ubicaciones/types";
 import { fetchTodasLasUbicaciones } from "@/lib/ubicaciones/fetch-todas";
 
 export default async function HistorialRacksPage() {
-  await requireProfile();
+  const profile = await requireProfile();
   const supabase = await createClient();
 
   // RLS (rack_relevamientos_select_own) ya limita esto a lo propio, o a todo si sos Admin/Supervisor.
@@ -39,5 +39,5 @@ export default async function HistorialRacksPage() {
     })
     .filter((r): r is HistorialRelevamientoRow => r !== null);
 
-  return <HistorialRacks relevamientos={relevamientos} />;
+  return <HistorialRacks relevamientos={relevamientos} esAdmin={profile.rol === "admin"} />;
 }

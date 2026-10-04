@@ -1,8 +1,9 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
-import { requireProfile } from "@/lib/auth";
+import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
+import { requireProfile, requireAdmin } from "@/lib/auth";
 import { filenameDesdeStoragePath } from "@/lib/pdf/filename";
+import { eliminarRegistroConArchivos, type EliminarResult } from "@/lib/admin/eliminar-registro";
 
 export interface UrlPdfResult {
   url: string | null;
@@ -46,4 +47,45 @@ export async function obtenerUrlFotoMantenimientoAction(mantenimientoId: string)
     return { url: null, error: "No se pudo generar el link de la foto." };
   }
   return { url: signed.signedUrl };
+}
+
+/** Solo Administrador. Borra la medición, sus lecturas (cascada por FK) y el PDF/foto del storage. */
+export async function eliminarMedicionAction(medicionId: string): Promise<EliminarResult> {
+  const profile = await requireAdmin();
+  const service = createServiceRoleClient();
+
+  const { data: medicion } = await service
+    .from("tablero_mediciones")
+    .select("pdf_url, foto_general_url, numero_generacion")
+    .eq("id", medicionId)
+    .single();
+
+  return eliminarRegistroConArchivos(
+    service,
+    profile,
+    "tablero_mediciones",
+    medicionId,
+    [
+      { bucket: "informes-pdf", path: medicion?.pdf_url ?? null },
+      { bucket: "informe-fotos", path: medicion?.foto_general_url ?? null },
+    ],
+    `Eliminó la medición de tablero ${medicion?.numero_generacion ?? medicionId}`,
+  );
+}
+
+/** Solo Administrador. Borra el mantenimiento y su foto del storage. */
+export async function eliminarMantenimientoAction(mantenimientoId: string): Promise<EliminarResult> {
+  const profile = await requireAdmin();
+  const service = createServiceRoleClient();
+
+  const { data: mantenimiento } = await service.from("tablero_mantenimientos").select("foto_url, fecha").eq("id", mantenimientoId).single();
+
+  return eliminarRegistroConArchivos(
+    service,
+    profile,
+    "tablero_mantenimientos",
+    mantenimientoId,
+    [{ bucket: "informe-fotos", path: mantenimiento?.foto_url ?? null }],
+    `Eliminó el mantenimiento de tablero del ${mantenimiento?.fecha ?? mantenimientoId}`,
+  );
 }

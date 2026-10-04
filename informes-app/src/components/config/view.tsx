@@ -6,6 +6,7 @@ import { HistorialAlmacenamientoCard } from "./historial-almacenamiento";
 import { ResumenSemanalCard } from "./resumen-semanal";
 import { AuditLogCard, type AuditLogRow } from "./audit-log";
 import { ErroresClienteCard, type ErrorClienteRow } from "./errores-cliente";
+import { VaciarDatosPruebaCard } from "./vaciar-datos-prueba";
 import type { UmbralAviso } from "@/lib/database.types";
 
 export interface ConfiguracionViewData {
@@ -43,6 +44,7 @@ export function ConfiguracionView({ data }: { data: ConfiguracionViewData }) {
       <ResumenSemanalCard activo={data.resumenSemanalIa} />
       <AuditLogCard rows={data.auditLog} />
       <ErroresClienteCard rows={data.erroresCliente} />
+      <VaciarDatosPruebaCard />
     </div>
   );
 }

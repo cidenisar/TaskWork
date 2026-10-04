@@ -1,7 +1,12 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { obtenerUrlFotoMantenimientoAction, obtenerUrlPdfMedicionAction } from "@/app/(app)/tableros/historial/actions";
+import {
+  obtenerUrlFotoMantenimientoAction,
+  obtenerUrlPdfMedicionAction,
+  eliminarMedicionAction,
+  eliminarMantenimientoAction,
+} from "@/app/(app)/tableros/historial/actions";
 import { Icon } from "@/components/icon";
 import { TABLERO_EVENTO_LABEL, labelSubsistemas, type MantenimientoRow } from "./types";
 import type { TableroEventoTipo, TableroTipo } from "@/lib/database.types";
@@ -23,12 +28,16 @@ function fmtFecha(fecha: string) {
 }
 
 export function HistorialTableros({
-  mediciones,
-  mantenimientos,
+  mediciones: medicionesIniciales,
+  mantenimientos: mantenimientosIniciales,
+  esAdmin,
 }: {
   mediciones: HistorialMedicionRow[];
   mantenimientos: MantenimientoRow[];
+  esAdmin: boolean;
 }) {
+  const [mediciones, setMediciones] = useState(medicionesIniciales);
+  const [mantenimientos, setMantenimientos] = useState(mantenimientosIniciales);
   const [tab, setTab] = useState<"mediciones" | "mantenimientos">("mediciones");
   const [query, setQuery] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -82,6 +91,32 @@ export function HistorialTableros({
       return;
     }
     window.open(res.url, "_blank", "noopener,noreferrer");
+  }
+
+  async function eliminarMedicion(id: string, denominacion: string) {
+    if (!window.confirm(`¿Borrar definitivamente la medición de "${denominacion}"? Esto no se puede deshacer.`)) return;
+    setBusyId(id);
+    setNotice(null);
+    const res = await eliminarMedicionAction(id);
+    setBusyId(null);
+    if (!res.success) {
+      setNotice(res.error || "No se pudo borrar la medición.");
+      return;
+    }
+    setMediciones((prev) => prev.filter((m) => m.id !== id));
+  }
+
+  async function eliminarMantenimiento(id: string, denominacion: string) {
+    if (!window.confirm(`¿Borrar definitivamente el mantenimiento de "${denominacion}"? Esto no se puede deshacer.`)) return;
+    setBusyId(id);
+    setNotice(null);
+    const res = await eliminarMantenimientoAction(id);
+    setBusyId(null);
+    if (!res.success) {
+      setNotice(res.error || "No se pudo borrar el mantenimiento.");
+      return;
+    }
+    setMantenimientos((prev) => prev.filter((m) => m.id !== id));
   }
 
   return (
@@ -153,6 +188,17 @@ export function HistorialTableros({
                     >
                       {busyId === m.id ? "…" : <Icon name="download" size={15} />}
                     </button>
+                    {esAdmin && (
+                      <button
+                        type="button"
+                        className="icon-btn icon-btn-danger"
+                        title="Borrar medición"
+                        disabled={busyId === m.id}
+                        onClick={() => eliminarMedicion(m.id, m.denominacion)}
+                      >
+                        <Icon name="trash" size={15} />
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}
@@ -193,6 +239,17 @@ export function HistorialTableros({
                   >
                     {busyId === m.id ? "…" : <Icon name="camera" size={15} />}
                   </button>
+                  {esAdmin && (
+                    <button
+                      type="button"
+                      className="icon-btn icon-btn-danger"
+                      title="Borrar mantenimiento"
+                      disabled={busyId === m.id}
+                      onClick={() => eliminarMantenimiento(m.id, m.tableroDenominacion)}
+                    >
+                      <Icon name="trash" size={15} />
+                    </button>
+                  )}
                 </div>
               </div>
             ))}

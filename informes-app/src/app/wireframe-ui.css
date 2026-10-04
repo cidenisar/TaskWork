@@ -463,6 +463,13 @@ textarea {
 .btn-secondary:hover {
   border-color: var(--text-faint);
 }
+.btn-danger {
+  background: var(--accent-2);
+  color: #fff;
+}
+.btn-danger:hover {
+  opacity: 0.9;
+}
 .btn-sm {
   padding: 8px 14px;
   font-size: 13px;
@@ -968,6 +975,10 @@ textarea {
 .icon-btn:hover {
   border-color: var(--text-faint);
   color: var(--text);
+}
+.icon-btn-danger:hover {
+  border-color: var(--accent-2);
+  color: var(--accent-2);
 }
 .icon-btn:disabled {
   opacity: 0.35;

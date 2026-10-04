@@ -1,7 +1,11 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { obtenerUrlFotoGeneralEquiposAction, obtenerUrlPdfRelevamientoEquiposAction } from "@/app/(app)/equipos/historial/actions";
+import {
+  obtenerUrlFotoGeneralEquiposAction,
+  obtenerUrlPdfRelevamientoEquiposAction,
+  eliminarRelevamientoEquiposAction,
+} from "@/app/(app)/equipos/historial/actions";
 import { Icon } from "@/components/icon";
 
 export interface HistorialRelevamientoRow {
@@ -18,7 +22,8 @@ function fmtFecha(fecha: string) {
   return d && m && y ? `${d}/${m}/${y}` : fecha;
 }
 
-export function HistorialEquipos({ relevamientos }: { relevamientos: HistorialRelevamientoRow[] }) {
+export function HistorialEquipos({ relevamientos: relevamientosIniciales, esAdmin }: { relevamientos: HistorialRelevamientoRow[]; esAdmin: boolean }) {
+  const [relevamientos, setRelevamientos] = useState(relevamientosIniciales);
   const [query, setQuery] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -59,6 +64,19 @@ export function HistorialEquipos({ relevamientos }: { relevamientos: HistorialRe
       return;
     }
     window.open(res.url, "_blank", "noopener,noreferrer");
+  }
+
+  async function eliminar(id: string, numeroGeneracion: string) {
+    if (!window.confirm(`¿Borrar definitivamente el relevamiento "${numeroGeneracion}"? Esto no se puede deshacer.`)) return;
+    setBusyId(id);
+    setNotice(null);
+    const res = await eliminarRelevamientoEquiposAction(id);
+    setBusyId(null);
+    if (!res.success) {
+      setNotice(res.error || "No se pudo borrar el relevamiento.");
+      return;
+    }
+    setRelevamientos((prev) => prev.filter((r) => r.id !== id));
   }
 
   return (
@@ -120,6 +138,17 @@ export function HistorialEquipos({ relevamientos }: { relevamientos: HistorialRe
                   >
                     {busyId === r.id ? "…" : <Icon name="download" size={15} />}
                   </button>
+                  {esAdmin && (
+                    <button
+                      type="button"
+                      className="icon-btn icon-btn-danger"
+                      title="Borrar relevamiento"
+                      disabled={busyId === r.id}
+                      onClick={() => eliminar(r.id, r.numeroGeneracion)}
+                    >
+                      <Icon name="trash" size={15} />
+                    </button>
+                  )}
                 </div>
               </div>
             ))}

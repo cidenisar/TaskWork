@@ -1,7 +1,11 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { obtenerUrlFotoGeneralRackAction, obtenerUrlPdfRelevamientoAction } from "@/app/(app)/racks/historial/actions";
+import {
+  obtenerUrlFotoGeneralRackAction,
+  obtenerUrlPdfRelevamientoAction,
+  eliminarRelevamientoRackAction,
+} from "@/app/(app)/racks/historial/actions";
 import { Icon } from "@/components/icon";
 
 export interface HistorialRelevamientoRow {
@@ -19,7 +23,8 @@ function fmtFecha(fecha: string) {
   return d && m && y ? `${d}/${m}/${y}` : fecha;
 }
 
-export function HistorialRacks({ relevamientos }: { relevamientos: HistorialRelevamientoRow[] }) {
+export function HistorialRacks({ relevamientos: relevamientosIniciales, esAdmin }: { relevamientos: HistorialRelevamientoRow[]; esAdmin: boolean }) {
+  const [relevamientos, setRelevamientos] = useState(relevamientosIniciales);
   const [query, setQuery] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -60,6 +65,19 @@ export function HistorialRacks({ relevamientos }: { relevamientos: HistorialRele
       return;
     }
     window.open(res.url, "_blank", "noopener,noreferrer");
+  }
+
+  async function eliminar(id: string, denominacion: string) {
+    if (!window.confirm(`¿Borrar definitivamente el relevamiento de "${denominacion}"? Esto no se puede deshacer.`)) return;
+    setBusyId(id);
+    setNotice(null);
+    const res = await eliminarRelevamientoRackAction(id);
+    setBusyId(null);
+    if (!res.success) {
+      setNotice(res.error || "No se pudo borrar el relevamiento.");
+      return;
+    }
+    setRelevamientos((prev) => prev.filter((r) => r.id !== id));
   }
 
   return (
@@ -121,6 +139,17 @@ export function HistorialRacks({ relevamientos }: { relevamientos: HistorialRele
                   >
                     {busyId === r.id ? "…" : <Icon name="download" size={15} />}
                   </button>
+                  {esAdmin && (
+                    <button
+                      type="button"
+                      className="icon-btn icon-btn-danger"
+                      title="Borrar relevamiento"
+                      disabled={busyId === r.id}
+                      onClick={() => eliminar(r.id, r.denominacion)}
+                    >
+                      <Icon name="trash" size={15} />
+                    </button>
+                  )}
                 </div>
               </div>
             ))}

@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { HistorialRendiciones, type HistorialRendicionRow } from "@/components/rendicion-gastos/historial";
 
 export default async function HistorialRendicionesPage() {
-  await requireProfile();
+  const profile = await requireProfile();
   const supabase = await createClient();
 
   const [rendicionesRes, gastosRes] = await Promise.all([
@@ -50,5 +50,5 @@ export default async function HistorialRendicionesPage() {
     pdfDisponible: r.estado === "cerrada" && !!r.pdf_url,
   }));
 
-  return <HistorialRendiciones rendiciones={rows} />;
+  return <HistorialRendiciones rendiciones={rows} esAdmin={profile.rol === "admin"} />;
 }

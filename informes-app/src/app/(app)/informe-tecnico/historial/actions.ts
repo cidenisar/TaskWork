@@ -1,8 +1,9 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
-import { requireProfile } from "@/lib/auth";
+import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
+import { requireProfile, requireAdmin } from "@/lib/auth";
 import { filenameDesdeStoragePath } from "@/lib/pdf/filename";
+import { eliminarRegistroConArchivos, type EliminarResult } from "@/lib/admin/eliminar-registro";
 
 export interface UrlPdfResult {
   url: string | null;
@@ -37,4 +38,27 @@ export async function obtenerUrlPdfInformeAction(informeId: string): Promise<Url
     return { url: null, error: "No se pudo generar el link de descarga." };
   }
   return { url: signed.signedUrl, filename: filenameDesdeStoragePath(informe.pdf_url) };
+}
+
+/** Solo Administrador. Borra el informe, sus asignados/vehículos/imágenes (cascada por FK) y el PDF/fotos del storage. */
+export async function eliminarInformeAction(informeId: string): Promise<EliminarResult> {
+  const profile = await requireAdmin();
+  const service = createServiceRoleClient();
+
+  const [{ data: informe }, { data: imagenes }] = await Promise.all([
+    service.from("informes_tecnicos").select("pdf_url, numero_generacion, titulo").eq("id", informeId).single(),
+    service.from("informe_imagenes").select("url").eq("informe_id", informeId),
+  ]);
+
+  return eliminarRegistroConArchivos(
+    service,
+    profile,
+    "informes_tecnicos",
+    informeId,
+    [
+      { bucket: "informes-pdf", path: informe?.pdf_url ?? null },
+      ...(imagenes ?? []).map((i) => ({ bucket: "informe-fotos", path: i.url })),
+    ],
+    `Eliminó el informe técnico ${informe?.numero_generacion ?? informeId}${informe?.titulo ? ` (${informe.titulo})` : ""}`,
+  );
 }

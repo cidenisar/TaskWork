@@ -662,3 +662,44 @@ npm run dev
   (Informe Técnico permite reabrir y regenerar el PDF sin tocar las fotos
   ya cargadas) que necesitan su propio diseño antes de tocarlas sin
   romper nada; queda para un próximo incremento.
+- **Borrado real por Administrador** (`src/lib/admin/eliminar-registro.ts`,
+  `src/lib/admin/vaciar-datos-prueba.ts`, acciones nuevas en los 5
+  `historial/actions.ts` de Informe Técnico/Rendición/Tableros/Racks/
+  Equipos y en `configuracion/actions/mantenimiento.ts`): hasta este
+  incremento, **nada** en la app se borraba de verdad — el modelo
+  dato-vs-archivo (spec 6.5) dice "el registro es permanente" a
+  propósito, y así sigue siendo para el uso normal. Pero mientras la app
+  todavía está en etapa de pruebas (no en producción real todavía), hacía
+  falta poder sacar lo que se cargó de prueba — así que se agregó, **solo
+  para Administrador**, borrado real en dos formas:
+  - **Fila por fila**: un ícono de tacho en cada uno de los 5 Historiales
+    (Informe Técnico, Rendición, Tableros —mediciones y mantenimientos
+    por separado—, Racks, Equipos) borra ese registro puntual (con
+    confirmación) — las filas hijas caen solas por `cascade` de FK (ya
+    estaban así en el schema) y el PDF/fotos asociados se borran del
+    storage antes de que la fila desaparezca (si no, se pierde el path
+    para encontrarlos). Queda disponible para siempre, no solo durante
+    las pruebas — un Administrador puede necesitar borrar un informe
+    cargado por error también en producción real.
+  - **"Vaciar datos de prueba"** (Configuración, al final, con borde rojo
+    a propósito): un solo botón que borra TODO lo cargado hasta ahora en
+    los 5 módulos + Bajas de Equipamiento — el equipo cargado en cada
+    sitio incluido, no solo su historial de mediciones/relevamientos — y
+    vacía los buckets de PDFs/fotos. Pensado como un "reset" para usar
+    las veces que haga falta mientras se sigue probando, no para uso
+    diario. El gate es más fuerte que el `window.confirm` de siempre:
+    hay que escribir la frase exacta "BORRAR TODO" en un campo de texto
+    para que el botón se habilite — a propósito, para una acción que no
+    tiene vuelta atrás. Nunca toca Ubicaciones (es el catálogo real de
+    ~1747 sitios YPF, no un dato de prueba), catálogos, usuarios ni el
+    resto de Configuración.
+
+  Ninguna de estas tablas tenía policy de **DELETE** (a propósito —
+  nadie más que un Administrador puede borrar) así que ambas formas usan
+  `createServiceRoleClient()` para el borrado en sí, con `requireAdmin()`
+  validado en código ANTES de leer nada — mismo criterio que "Bajas de
+  Equipamiento" (service-role para una acción puntual en vez de aflojar
+  la policy para todo el rol). El orden de los `DELETE` en "Vaciar datos
+  de prueba" importa por las FK entre tablas (algunas son `RESTRICT`
+  hacia su tabla "padre", no `CASCADE`) — documentado en el propio
+  archivo.

@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { HistorialInformes, type HistorialInformeRow } from "@/components/informe-tecnico/historial";
 
 export default async function HistorialInformesPage() {
-  await requireProfile();
+  const profile = await requireProfile();
   const supabase = await createClient();
 
   const [informesRes, asignadosRes] = await Promise.all([
@@ -33,5 +33,5 @@ export default async function HistorialInformesPage() {
     pdfDisponible: i.estado === "generado" && !!i.pdf_url,
   }));
 
-  return <HistorialInformes informes={rows} />;
+  return <HistorialInformes informes={rows} esAdmin={profile.rol === "admin"} />;
 }
