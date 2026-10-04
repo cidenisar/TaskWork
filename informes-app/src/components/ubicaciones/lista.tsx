@@ -13,6 +13,15 @@ export interface UbicacionRow extends Ubicacion {
   cantRendiciones: number;
 }
 
+interface SitioAgrupado {
+  clave: string;
+  region: string;
+  provincia: string;
+  sitio: string;
+  repId: string;
+  filas: UbicacionRow[];
+}
+
 // Zonificación real de la operación (no alfabética) — el resto de las
 // regiones que puedan aparecer (ej. una "Sin especificar" de datos viejos)
 // se muestran después, ordenadas alfabéticamente.
@@ -20,6 +29,24 @@ const ORDEN_REGIONES = ["NOA", "NEA", "SUR"];
 
 function ordenarPorNombre<T extends [string, unknown]>(entries: T[]): T[] {
   return [...entries].sort((a, b) => a[0].localeCompare(b[0]));
+}
+
+/**
+ * Un mismo Sitio (ej. una refinería grande) puede tener muchas Plantas/
+ * Oficinas cargadas en el catálogo, cada una su propia fila en
+ * `ubicaciones` — acá se agrupan bajo un solo ítem de lista para no repetir
+ * el nombre del sitio una vez por cada planta. El detalle (al entrar) sí
+ * desglosa planta por planta.
+ */
+function agruparPorSitio(filas: UbicacionRow[]): SitioAgrupado[] {
+  const map = new Map<string, SitioAgrupado>();
+  for (const u of filas) {
+    const clave = `${u.provincia}::${u.sitio}`;
+    const g = map.get(clave);
+    if (g) g.filas.push(u);
+    else map.set(clave, { clave, region: u.region, provincia: u.provincia, sitio: u.sitio, repId: u.id, filas: [u] });
+  }
+  return [...map.values()];
 }
 
 const backBtnStyle: React.CSSProperties = {
@@ -37,11 +64,11 @@ const drillBtnStyle: React.CSSProperties = { width: "100%", textAlign: "left", f
 
 /**
  * `ubicaciones` ya viene filtrada desde la página (solo las que tienen algún
- * tablero/rack/equipo relevado — el catálogo completo de ~1747 sitios de
- * Argentina no se muestra acá, es ruido para esta pantalla). Navegación en
- * 3 pasos, como estaba organizada la planilla original: Región → Provincia →
- * Sitio. El buscador de arriba es un atajo que ignora el nivel en el que
- * estás y busca en todo lo relevado de una.
+ * tablero/rack/equipo/informe/rendición — el catálogo completo de ~1747
+ * sitios de Argentina no se muestra acá, es ruido para esta pantalla).
+ * Navegación en 3 pasos, como estaba organizada la planilla original:
+ * Región → Provincia → Sitio. El buscador de arriba es un atajo que ignora
+ * el nivel en el que estás y busca en todo lo relevado de una.
  */
 export function ListaUbicaciones({ ubicaciones }: { ubicaciones: UbicacionRow[] }) {
   const [query, setQuery] = useState("");
@@ -52,9 +79,10 @@ export function ListaUbicaciones({ ubicaciones }: { ubicaciones: UbicacionRow[] 
 
   const resultadosBusqueda = useMemo(() => {
     if (!q) return null;
-    return ubicaciones.filter((u) =>
+    const filtradas = ubicaciones.filter((u) =>
       `${u.sitio} ${u.planta ?? ""} ${u.oficina ?? ""} ${u.localidad ?? ""} ${u.provincia} ${u.region}`.toLowerCase().includes(q),
     );
+    return agruparPorSitio(filtradas);
   }, [ubicaciones, q]);
 
   const regiones = useMemo(() => {
@@ -76,9 +104,10 @@ export function ListaUbicaciones({ ubicaciones }: { ubicaciones: UbicacionRow[] 
     return ordenarPorNombre([...map.entries()]);
   }, [ubicaciones, region]);
 
-  const ubicacionesDeLaProvincia = useMemo(() => {
+  const sitiosDeLaProvincia = useMemo(() => {
     if (!region || !provincia) return [];
-    return ubicaciones.filter((u) => u.region === region && u.provincia === provincia);
+    const filas = ubicaciones.filter((u) => u.region === region && u.provincia === provincia);
+    return agruparPorSitio(filas).sort((a, b) => a.sitio.localeCompare(b.sitio));
   }, [ubicaciones, region, provincia]);
 
   function elegirRegion(r: string) {
@@ -86,39 +115,51 @@ export function ListaUbicaciones({ ubicaciones }: { ubicaciones: UbicacionRow[] 
     setProvincia(null);
   }
 
-  function filaUbicacion(u: UbicacionRow) {
+  function filaSitio(g: SitioAgrupado) {
+    const totales = {
+      tableros: g.filas.reduce((s, u) => s + u.cantTableros, 0),
+      racks: g.filas.reduce((s, u) => s + u.cantRacks, 0),
+      equipos: g.filas.reduce((s, u) => s + u.cantEquipos, 0),
+      informes: g.filas.reduce((s, u) => s + u.cantInformes, 0),
+      rendiciones: g.filas.reduce((s, u) => s + u.cantRendiciones, 0),
+    };
+    const localidades = [...new Set(g.filas.map((u) => u.localidad).filter((v): v is string => Boolean(v)))];
+    const metaPartes = [...localidades, g.provincia, g.region];
     return (
-      <Link href={`/ubicaciones/${u.id}`} className="hist-item" key={u.id} style={{ textDecoration: "none", color: "inherit" }}>
+      <Link href={`/ubicaciones/${g.repId}`} className="hist-item" key={g.clave} style={{ textDecoration: "none", color: "inherit" }}>
         <div className="info">
           <div className="hist-main">
-            <div className="hist-title">{u.sitio}</div>
-            <div className="hist-meta">{[u.planta, u.localidad, u.provincia, u.region].filter(Boolean).join(" · ")}</div>
+            <div className="hist-title">{g.sitio}</div>
+            <div className="hist-meta">
+              {metaPartes.join(" · ")}
+              {g.filas.length > 1 ? ` · ${g.filas.length} plantas/oficinas` : ""}
+            </div>
           </div>
         </div>
         <div className="hist-actions" style={{ gap: 6 }}>
-          {u.cantTableros > 0 && (
+          {totales.tableros > 0 && (
             <span className="chip">
-              {u.cantTableros} tablero{u.cantTableros === 1 ? "" : "s"}
+              {totales.tableros} tablero{totales.tableros === 1 ? "" : "s"}
             </span>
           )}
-          {u.cantRacks > 0 && (
+          {totales.racks > 0 && (
             <span className="chip">
-              {u.cantRacks} rack{u.cantRacks === 1 ? "" : "s"}
+              {totales.racks} rack{totales.racks === 1 ? "" : "s"}
             </span>
           )}
-          {u.cantEquipos > 0 && (
+          {totales.equipos > 0 && (
             <span className="chip">
-              {u.cantEquipos} equipo{u.cantEquipos === 1 ? "" : "s"}
+              {totales.equipos} equipo{totales.equipos === 1 ? "" : "s"}
             </span>
           )}
-          {u.cantInformes > 0 && (
+          {totales.informes > 0 && (
             <span className="chip">
-              {u.cantInformes} informe{u.cantInformes === 1 ? "" : "s"}
+              {totales.informes} informe{totales.informes === 1 ? "" : "s"}
             </span>
           )}
-          {u.cantRendiciones > 0 && (
+          {totales.rendiciones > 0 && (
             <span className="chip">
-              {u.cantRendiciones} rendici{u.cantRendiciones === 1 ? "ón" : "ones"}
+              {totales.rendiciones} rendici{totales.rendiciones === 1 ? "ón" : "ones"}
             </span>
           )}
           <Icon name="chevron-right" size={15} />
@@ -144,7 +185,7 @@ export function ListaUbicaciones({ ubicaciones }: { ubicaciones: UbicacionRow[] 
           resultadosBusqueda.length === 0 ? (
             <div className="empty-note">No se encontraron ubicaciones con esa búsqueda.</div>
           ) : (
-            <div style={{ marginTop: 12 }}>{resultadosBusqueda.map(filaUbicacion)}</div>
+            <div style={{ marginTop: 12 }}>{resultadosBusqueda.map(filaSitio)}</div>
           )
         ) : ubicaciones.length === 0 ? (
           <div className="empty-note">
@@ -154,14 +195,15 @@ export function ListaUbicaciones({ ubicaciones }: { ubicaciones: UbicacionRow[] 
           <div style={{ marginTop: 12 }}>
             {regiones.map(([r, lista]) => {
               const provinciasEnRegion = new Set(lista.map((u) => u.provincia)).size;
+              const sitiosEnRegion = new Set(lista.map((u) => `${u.provincia}::${u.sitio}`)).size;
               return (
                 <button type="button" key={r} className="hist-item" style={drillBtnStyle} onClick={() => elegirRegion(r)}>
                   <div className="info">
                     <div className="hist-main">
                       <div className="hist-title">{r}</div>
                       <div className="hist-meta">
-                        {provinciasEnRegion} provincia{provinciasEnRegion === 1 ? "" : "s"} · {lista.length} ubicaci
-                        {lista.length === 1 ? "ón" : "ones"}
+                        {provinciasEnRegion} provincia{provinciasEnRegion === 1 ? "" : "s"} · {sitiosEnRegion} sitio
+                        {sitiosEnRegion === 1 ? "" : "s"}
                       </div>
                     </div>
                   </div>
@@ -178,21 +220,24 @@ export function ListaUbicaciones({ ubicaciones }: { ubicaciones: UbicacionRow[] 
               <Icon name="chevron-right" size={13} style={{ transform: "rotate(180deg)" }} /> Todas las regiones
             </button>
             <div className="section-label">{region}</div>
-            {provinciasDeLaRegion.map(([p, lista]) => (
-              <button type="button" key={p} className="hist-item" style={drillBtnStyle} onClick={() => setProvincia(p)}>
-                <div className="info">
-                  <div className="hist-main">
-                    <div className="hist-title">{p}</div>
-                    <div className="hist-meta">
-                      {lista.length} ubicaci{lista.length === 1 ? "ón" : "ones"}
+            {provinciasDeLaRegion.map(([p, lista]) => {
+              const sitiosEnProvincia = new Set(lista.map((u) => u.sitio)).size;
+              return (
+                <button type="button" key={p} className="hist-item" style={drillBtnStyle} onClick={() => setProvincia(p)}>
+                  <div className="info">
+                    <div className="hist-main">
+                      <div className="hist-title">{p}</div>
+                      <div className="hist-meta">
+                        {sitiosEnProvincia} sitio{sitiosEnProvincia === 1 ? "" : "s"}
+                      </div>
                     </div>
                   </div>
-                </div>
-                <div className="hist-actions" style={{ gap: 6 }}>
-                  <Icon name="chevron-right" size={15} />
-                </div>
-              </button>
-            ))}
+                  <div className="hist-actions" style={{ gap: 6 }}>
+                    <Icon name="chevron-right" size={15} />
+                  </div>
+                </button>
+              );
+            })}
           </div>
         ) : (
           <div style={{ marginTop: 12 }}>
@@ -202,7 +247,7 @@ export function ListaUbicaciones({ ubicaciones }: { ubicaciones: UbicacionRow[] 
             <div className="section-label">
               {region} · {provincia}
             </div>
-            {ubicacionesDeLaProvincia.map(filaUbicacion)}
+            {sitiosDeLaProvincia.map(filaSitio)}
           </div>
         )}
       </div>

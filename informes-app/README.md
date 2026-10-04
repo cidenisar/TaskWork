@@ -276,8 +276,15 @@ npm run dev
   sugería la planilla fuente, a pedido del usuario se usó tal cual la
   columna "Región" de los datos). El formulario pide primero la Provincia
   para acotar el catálogo (se precargaron ~1747 sitios de la operación en
-  Argentina desde una planilla de la empresa) y de ahí elegís una Ubicación
-  existente o creás una nueva con Localidad/Sitio/Planta/Oficina. El botón
+  Argentina desde una planilla de la empresa), después el **Sitio**
+  (lista corta de nombres únicos de esa provincia), y recién si ese Sitio
+  tiene más de una Planta/Oficina cargada aparece un tercer select ya
+  acotado a ese Sitio — antes era un solo select plano con todas las
+  combinaciones Sitio+Planta+Oficina de la provincia juntas, que para una
+  provincia con un complejo grande (ej. una refinería con ~80 plantas
+  cargadas) se volvía un desplegable de cientos de opciones, imposible de
+  recorrer bien en el celular. Crear una Ubicación nueva sigue siendo
+  Localidad/Sitio/Planta/Oficina. El botón
   **"Usar mi ubicación"** (`src/app/api/ubicaciones/resolver-gps/route.ts`,
   `src/lib/geo.ts`) toma el GPS del dispositivo y: (1) si el punto cae a
   menos de 300m de una Ubicación que algún técnico ya confirmó antes (tiene
@@ -304,7 +311,14 @@ npm run dev
   catálogo completo sigue existiendo para elegir/crear al relevar, pero acá
   sería puro ruido. Un buscador arriba de todo es el atajo — tipear ahí
   busca en todo lo relevado de una, salteándose la navegación por niveles.
-  El detalle de una Ubicación agrega **todo** el equipamiento relevado ahí
+  Dentro de una provincia, un mismo Sitio con varias Plantas/Oficinas
+  cargadas (ej. una refinería grande) se muestra como **una sola fila**
+  agrupada (`agruparPorSitio` en `lista.tsx`), no una por cada combinación
+  — el detalle desglosa planta por planta adentro. El detalle de un Sitio
+  agrega **todo** el equipamiento relevado ahí, sumando las filas
+  agrupadas (`/ubicaciones/[id]` levanta las Ubicaciones "hermanas" con el
+  mismo `provincia`+`sitio` y junta todo lo que cuelga de cualquiera de
+  ellas)
   — el resumen por categoría de Tableros (térmicas, disyuntores,
   cámaras...), Racks (routers, switches, UPS...) y Equipos Individuales
   (UPS, cámaras CCTV...) combinados, más la fecha del último relevamiento
