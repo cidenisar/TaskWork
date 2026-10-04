@@ -52,6 +52,9 @@ export type EquipoCategoria =
   | "telefonia"
   | "climatizacion"
   | "otro";
+export type EstadoEquipamiento = "activo" | "baja";
+export type MotivoBaja = "rotura" | "ampliacion" | "obsolescencia" | "otro";
+export type TipoEquipoBaja = "tablero_circuito" | "rack_equipamiento" | "equipo_individual";
 
 /** Helper para darle a cada tabla la forma que espera postgrest-js (incluye Relationships). */
 type Tbl<
@@ -272,6 +275,7 @@ export type TableroCircuitoRow = {
   categoria_equipo: TableroCategoriaEquipo;
   tipo_circuito: TableroTipoCircuito;
   orden: number;
+  estado: EstadoEquipamiento;
   created_at: string;
 }
 
@@ -352,6 +356,7 @@ export type RackEquipamientoRow = {
   consumo_promedio_w: number | null;
   consumo_max_w: number | null;
   etiqueta_ypf: string | null;
+  estado: EstadoEquipamiento;
   created_at: string;
 }
 
@@ -388,6 +393,7 @@ export type EquipoRow = {
   consumo_promedio_w: number | null;
   consumo_max_w: number | null;
   etiqueta_ypf: string | null;
+  estado: EstadoEquipamiento;
   created_by: string | null;
   created_at: string;
 }
@@ -410,6 +416,26 @@ export type EquipoRelevamientoLecturaRow = {
   equipo_id: string;
   estado: string | null;
   comentario: string | null;
+}
+
+export type BajaEquipamientoRow = {
+  id: string;
+  numero_generacion: string;
+  tipo_equipo: TipoEquipoBaja;
+  equipo_id: string;
+  equipo_texto: string;
+  equipo_categoria: string;
+  equipo_marca_modelo: string | null;
+  equipo_numero_serie: string | null;
+  equipo_etiqueta_ypf: string | null;
+  ubicacion_id: string;
+  motivo: MotivoBaja;
+  comentario: string | null;
+  fecha: string;
+  created_by: string;
+  pdf_url: string | null;
+  pdf_generado_at: string | null;
+  created_at: string;
 }
 
 export type ClientErrorRow = {
@@ -580,6 +606,12 @@ export interface Database {
         EquipoRelevamientoLecturaRow,
         Partial<EquipoRelevamientoLecturaRow> & Pick<EquipoRelevamientoLecturaRow, "relevamiento_id" | "equipo_id">,
         Partial<EquipoRelevamientoLecturaRow>
+      >;
+      bajas_equipamiento: Tbl<
+        BajaEquipamientoRow,
+        Partial<BajaEquipamientoRow> &
+          Pick<BajaEquipamientoRow, "numero_generacion" | "tipo_equipo" | "equipo_id" | "equipo_texto" | "equipo_categoria" | "ubicacion_id" | "motivo" | "fecha" | "created_by">,
+        Partial<BajaEquipamientoRow>
       >;
     };
     Views: Record<string, never>;

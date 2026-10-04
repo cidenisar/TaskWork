@@ -116,6 +116,23 @@ explícitamente: confirmar con un usuario de alcance angosto que RLS sola
 deja leer un registro fuera de su alcance (si lo deja, el gate de
 aplicación es la única protección real, no un refuerzo redundante).
 
+**Cuando un rol nuevo necesita escribir una tabla cuyo UPDATE es
+admin-only por RLS, no aflojar la policy — mover la decisión de rol al
+código y escribir con el cliente de service-role.** Pasó en Informes con
+"dar de baja equipamiento": `rack_equipamientos`/`equipos` tenían UPDATE
+`is_admin()`-only (a propósito, para que un técnico no edite equipamiento
+que cargó otro) y la feature nueva necesitaba que Supervisor también
+pudiera. Ensanchar la policy a `is_admin_or_supervisor()` hubiera abierto
+esas tablas a CUALQUIER update de un Supervisor, no solo al de esta
+acción puntual. En vez de eso: la Server Action valida el rol explícitamente
+al principio (antes de tocar la base), y de ahí en más usa el cliente de
+service-role (bypassea RLS) solo para ese flujo — la restricción de "quién
+puede" queda en el código de la acción, no en la tabla. Mismo criterio que
+el ítem de "alcance dentro de un rol" de más arriba: la policy de la tabla
+sigue siendo la barrera general (admin-only para ediciones libres), y el
+gate de aplicación es la excepción puntual y auditada para una acción
+específica — no al revés.
+
 **Diagnosticar RLS con los logs reales y reproduciendo la consulta exacta —
 nunca a ciegas.** `edge_logs`/API logs (qué pedido llegó, con qué código) y
 los logs de Postgres (el error real, a veces con el SQL completo) resuelven

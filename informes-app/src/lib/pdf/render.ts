@@ -4,6 +4,7 @@ import { RendicionGastosPdf, type RendicionPdfProps } from "./rendicion-gastos";
 import { TableroPdf, type TableroPdfProps } from "./tablero";
 import { RackPdf, type RackPdfProps } from "./rack";
 import { EquipoPdf, type EquipoPdfProps } from "./equipo";
+import { BajaPdf, type BajaPdfProps } from "./baja";
 
 export async function renderInformeTecnicoPdf(props: InformePdfProps): Promise<Buffer> {
   return renderToBuffer(InformeTecnicoPdf(props));
@@ -23,4 +24,8 @@ export async function renderRackPdf(props: RackPdfProps): Promise<Buffer> {
 
 export async function renderEquipoPdf(props: EquipoPdfProps): Promise<Buffer> {
   return renderToBuffer(EquipoPdf(props));
+}
+
+export async function renderBajaPdf(props: BajaPdfProps): Promise<Buffer> {
+  return renderToBuffer(BajaPdf(props));
 }

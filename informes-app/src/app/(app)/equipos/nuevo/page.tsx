@@ -12,6 +12,7 @@ export default async function NuevoRelevamientoEquiposPage() {
     supabase
       .from("equipos")
       .select("id, ubicacion_id, categoria_equipo, texto, marca_modelo, numero_serie, etiqueta_ypf, cantidad, consumo_promedio_w, consumo_max_w")
+      .neq("estado", "baja")
       .order("texto"),
     fetchTodasLasUbicaciones(supabase),
     supabase.from("catalogo_provincias").select("nombre").order("nombre"),

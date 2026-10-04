@@ -88,6 +88,10 @@ const NAV_CONFIG: Record<string, ModuleConfig> = {
     brand: "Sitios",
     tabs: [{ href: "/ubicaciones", label: "Todos los Sitios" }],
   },
+  bajas: {
+    brand: "Bajas de Equipamiento",
+    tabs: [{ href: "/bajas/historial", label: "Historial" }],
+  },
   estadisticas: {
     brand: "Estadísticas",
     tabs: [

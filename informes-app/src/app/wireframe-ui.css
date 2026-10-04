@@ -1433,3 +1433,27 @@ textarea {
   margin-top: 8px;
   line-height: 1.5;
 }
+
+/* Modal chico autocontenido (ej. "Dar de baja" sobre una fila de una tabla
+   densa) — no hay otro modal en la app todavía, así que es genérico a
+   propósito: fondo fijo + tarjeta centrada, sin librería. */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  z-index: 50;
+}
+.modal-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  max-width: 420px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+}

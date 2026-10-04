@@ -72,6 +72,13 @@ const ICON_PATHS: Record<string, React.ReactNode> = {
       <path d="M13 2 7 13h4l-1 9 7-12h-4l1-8Z" />
     </>
   ),
+  bajas: (
+    <>
+      <path d="M3 8 12 3l9 5-9 5-9-5Z" />
+      <path d="M3 8v8l9 5 9-5V8" />
+      <path d="M12 13v8" />
+    </>
+  ),
 };
 
 /**

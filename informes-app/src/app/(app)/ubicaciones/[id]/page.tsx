@@ -14,6 +14,10 @@ import { calcularResumenEquipamiento as calcularResumenRacks, CATEGORIA_EQUIPO_L
 import { calcularResumenEquipos, CATEGORIA_EQUIPO_LABEL as EQUIPO_CATEGORIA_LABEL } from "@/components/equipos/types";
 import { EstimarConsumoButton } from "@/components/ubicaciones/estimar-consumo-button";
 import { estimarConsumoRacksAction, estimarConsumoEquiposAction } from "../actions";
+import { puedeGestionarBajas } from "@/lib/types";
+import { DarDeBajaButton } from "@/components/bajas/dar-de-baja-button";
+import { DescargarBajaBoton } from "@/components/bajas/descargar-boton";
+import { MOTIVO_BAJA_LABEL, TIPO_EQUIPO_BAJA_LABEL } from "@/components/bajas/types";
 
 function fmtFecha(fecha: string) {
   const [y, m, d] = fecha.split("-");
@@ -57,7 +61,9 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
     supabase.from("racks").select("id, denominacion, ubicacion_id").in("ubicacion_id", siblingIds).order("denominacion"),
     supabase
       .from("equipos")
-      .select("id, categoria_equipo, texto, marca_modelo, numero_serie, etiqueta_ypf, cantidad, consumo_promedio_w, consumo_max_w, ubicacion_id")
+      .select(
+        "id, categoria_equipo, texto, marca_modelo, numero_serie, etiqueta_ypf, cantidad, consumo_promedio_w, consumo_max_w, ubicacion_id, estado",
+      )
       .in("ubicacion_id", siblingIds)
       .order("texto"),
     // RLS (informes_tecnicos_select_own/select_stats) ya limita esto a informes propios, o todos si sos Admin/Supervisor.
@@ -75,7 +81,9 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
   ]);
   const tableros = tablerosRes.data ?? [];
   const racks = racksRes.data ?? [];
-  const equipos = equiposRes.data ?? [];
+  // Un equipo dado de baja ya no es equipamiento activo del sitio — se muestra
+  // aparte, en la sección "dado de baja" (que lee bajas_equipamiento, no esta lista).
+  const equipos = (equiposRes.data ?? []).filter((e) => e.estado !== "baja");
   const informes = informesRes.data ?? [];
   const rendiciones = rendicionesRes.data ?? [];
   const tableroIds = tableros.map((t) => t.id);
@@ -85,14 +93,16 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
     tableroIds.length > 0
       ? supabase
           .from("tablero_circuitos")
-          .select("id, tablero_id, numero, texto, categoria_equipo, tipo_circuito, amp_nominal")
+          .select("id, tablero_id, numero, texto, categoria_equipo, tipo_circuito, amp_nominal, estado")
           .in("tablero_id", tableroIds)
           .order("numero")
       : { data: [] },
     rackIds.length > 0
       ? supabase
           .from("rack_equipamientos")
-          .select("id, rack_id, numero, categoria_equipo, texto, marca_modelo, posicion_u, etiqueta_ypf, cantidad, consumo_promedio_w, consumo_max_w")
+          .select(
+            "id, rack_id, numero, categoria_equipo, texto, marca_modelo, posicion_u, etiqueta_ypf, cantidad, consumo_promedio_w, consumo_max_w, estado",
+          )
           .in("rack_id", rackIds)
           .order("numero")
       : { data: [] },
@@ -111,8 +121,8 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
     supabase.from("equipo_relevamientos").select("id, ubicacion_id, fecha").in("ubicacion_id", siblingIds).order("fecha", { ascending: false }),
   ]);
 
-  const circuitos = circuitosRes.data ?? [];
-  const equipamientos = equipamientosRes.data ?? [];
+  const circuitos = (circuitosRes.data ?? []).filter((c) => c.estado !== "baja");
+  const equipamientos = (equipamientosRes.data ?? []).filter((e) => e.estado !== "baja");
 
   const ultimaFechaTablero = new Map<string, string>();
   const ultimaMedicionPorTablero = new Map<string, { id: string; tipoEvento: "medicion" | "relevamiento" }>();
@@ -166,6 +176,19 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
   const resumenRacks = calcularResumenRacks(equipamientos.map((e) => ({ categoriaEquipo: e.categoria_equipo, cantidad: e.cantidad })));
   const resumenEquipos = calcularResumenEquipos(equipos.map((e) => ({ categoriaEquipo: e.categoria_equipo, cantidad: e.cantidad })));
   const totalEquipos = resumenTableros.total + resumenRacks.total + resumenEquipos.total;
+
+  const puedeBajas = puedeGestionarBajas(profile.rol);
+  // bajas_equipamiento guarda su propia "foto" del equipo al momento de la baja
+  // (RLS bajas_equipamiento_select ya limita esto a Admin/Supervisor) — no hace
+  // falta cruzar con las tablas de origen para mostrar esta sección.
+  const { data: bajasData } = puedeBajas
+    ? await supabase
+        .from("bajas_equipamiento")
+        .select("id, numero_generacion, tipo_equipo, equipo_texto, equipo_categoria, motivo, comentario, fecha, pdf_url")
+        .in("ubicacion_id", siblingIds)
+        .order("fecha", { ascending: false })
+    : { data: [] };
+  const bajas = bajasData ?? [];
 
   return (
     <div>
@@ -269,6 +292,7 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
                                 </>
                               )}
                               <th>Comentario</th>
+                              {puedeBajas && <th />}
                             </tr>
                           </thead>
                           <tbody>
@@ -291,6 +315,11 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
                                     </>
                                   )}
                                   <td>{lectura?.comentario || "—"}</td>
+                                  {puedeBajas && (
+                                    <td>
+                                      <DarDeBajaButton tipoEquipo="tablero_circuito" equipoId={c.id} equipoTexto={c.texto} />
+                                    </td>
+                                  )}
                                 </tr>
                               );
                             })}
@@ -368,6 +397,7 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
                               <th style={{ textAlign: "right" }}>Cons. máx.</th>
                               <th>Estado</th>
                               <th>Comentario</th>
+                              {puedeBajas && <th />}
                             </tr>
                           </thead>
                           <tbody>
@@ -386,6 +416,11 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
                                   <td style={{ textAlign: "right" }}>{e.consumo_max_w ? `~${e.consumo_max_w}W` : "—"}</td>
                                   <td>{lectura?.estado || "—"}</td>
                                   <td>{lectura?.comentario || "—"}</td>
+                                  {puedeBajas && (
+                                    <td>
+                                      <DarDeBajaButton tipoEquipo="rack_equipamiento" equipoId={e.id} equipoTexto={e.texto} />
+                                    </td>
+                                  )}
                                 </tr>
                               );
                             })}
@@ -436,6 +471,7 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
                     <th style={{ textAlign: "right" }}>Cons. máx.</th>
                     <th>Estado</th>
                     <th>Comentario</th>
+                    {puedeBajas && <th />}
                   </tr>
                 </thead>
                 <tbody>
@@ -454,6 +490,11 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
                         <td style={{ textAlign: "right" }}>{e.consumo_max_w ? `~${e.consumo_max_w}W` : "—"}</td>
                         <td>{lectura?.estado || "—"}</td>
                         <td>{lectura?.comentario || "—"}</td>
+                        {puedeBajas && (
+                          <td>
+                            <DarDeBajaButton tipoEquipo="equipo_individual" equipoId={e.id} equipoTexto={e.texto} />
+                          </td>
+                        )}
                       </tr>
                     );
                   })}
@@ -463,6 +504,42 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
           </>
         )}
       </div>
+
+      {puedeBajas && bajas.length > 0 && (
+        <div className="card">
+          <div className="section-label">Equipamiento dado de baja en este sitio</div>
+          <div className="hint" style={{ margin: "0 0 10px" }}>
+            Retirado del equipamiento activo por rotura, ampliación u obsolescencia — comprobante entregado a depósito.
+          </div>
+          <div className="list-grid">
+            {bajas.map((b) => (
+              <div className="hist-item" key={b.id}>
+                <div className="info">
+                  <div className="hist-main">
+                    <div className="hist-title">{b.equipo_texto}</div>
+                    <div className="hist-meta">
+                      {b.numero_generacion} · {TIPO_EQUIPO_BAJA_LABEL[b.tipo_equipo]} ({b.equipo_categoria}) · {MOTIVO_BAJA_LABEL[b.motivo]} ·{" "}
+                      {fmtFecha(b.fecha)}
+                    </div>
+                    {b.comentario && (
+                      <div className="hist-meta" style={{ marginTop: 4 }}>
+                        {b.comentario}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div className="hist-actions">
+                  {b.pdf_url ? (
+                    <DescargarBajaBoton bajaId={b.id} numeroGeneracion={b.numero_generacion} />
+                  ) : (
+                    <span className="hint">Sin comprobante</span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="wide-grid">
         <div className="wide-cell card">

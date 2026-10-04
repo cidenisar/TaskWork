@@ -14,6 +14,7 @@ export default async function NuevaMedicionPage() {
     supabase
       .from("tablero_circuitos")
       .select("id, tablero_id, numero, texto, amp_nominal, categoria_equipo, tipo_circuito")
+      .neq("estado", "baja")
       .order("numero"),
     fetchTodasLasUbicaciones(supabase),
     supabase.from("catalogo_provincias").select("nombre").order("nombre"),

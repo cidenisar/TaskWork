@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { requireProfile } from "@/lib/auth";
-import { puedeVerEstadisticas, puedeVerConfiguracion } from "@/lib/types";
+import { puedeVerEstadisticas, puedeVerConfiguracion, puedeGestionarBajas } from "@/lib/types";
 import { ModuleIcon } from "@/components/module-icon";
 import { Icon } from "@/components/icon";
 
@@ -8,6 +8,7 @@ export default async function HomePage() {
   const profile = await requireProfile();
   const statsLocked = !puedeVerEstadisticas(profile.rol);
   const configLocked = !puedeVerConfiguracion(profile.rol);
+  const bajasLocked = !puedeGestionarBajas(profile.rol);
 
   return (
     <div>
@@ -48,6 +49,17 @@ export default async function HomePage() {
           <div className="module-title">Sitios</div>
           <div className="module-sub">
             Navegá Región → Provincia → Sitio y mirá todo lo cargado en cada lugar — informes, rendiciones, tableros, racks y equipos
+          </div>
+        </Link>
+        <Link href="/bajas/historial" className="module-card">
+          <div className="module-ico">
+            <ModuleIcon name="bajas" />
+          </div>
+          <div className="module-title">
+            Bajas de Equipamiento {bajasLocked && <span className="lock"><Icon name="lock" size={12} /></span>}
+          </div>
+          <div className="module-sub">
+            Dar de baja equipamiento por rotura, ampliación u obsolescencia y generar el comprobante para depósito
           </div>
         </Link>
         <Link href="/estadisticas" className="module-card">

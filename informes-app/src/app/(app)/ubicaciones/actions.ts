@@ -3,9 +3,16 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { revalidatePath } from "next/cache";
 import { requireProfile } from "@/lib/auth";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
+import { puedeGestionarBajas } from "@/lib/types";
 import { CATEGORIA_EQUIPO_LABEL as RACK_CATEGORIA_LABEL } from "@/components/racks/types";
 import { CATEGORIA_EQUIPO_LABEL as EQUIPO_CATEGORIA_LABEL } from "@/components/equipos/types";
+import { CATEGORIA_EQUIPO_LABEL as TABLERO_CATEGORIA_LABEL } from "@/components/tableros/types";
+import { TIPO_EQUIPO_BAJA_LABEL } from "@/components/bajas/types";
+import { nuevoNumeroGeneracionBaja } from "@/lib/bajas/numero-generacion";
+import { renderBajaPdf } from "@/lib/pdf/render";
+import { buildBajaFilename } from "@/lib/pdf/filename";
+import type { MotivoBaja, TipoEquipoBaja } from "@/lib/database.types";
 
 export interface EstimarConsumoResult {
   success: boolean;
@@ -156,4 +163,224 @@ export async function estimarConsumoEquiposAction(ubicacionIds: string[]): Promi
   }
   revalidatePath("/ubicaciones/[id]", "page");
   return { success: true, estimados, sinDato };
+}
+
+export interface DarDeBajaPayload {
+  tipoEquipo: TipoEquipoBaja;
+  equipoId: string;
+  motivo: MotivoBaja;
+  comentario: string;
+  fecha: string;
+}
+
+export interface DarDeBajaResult {
+  success: boolean;
+  error?: string;
+  bajaId?: string;
+  numeroGeneracion?: string;
+}
+
+interface EquipoResuelto {
+  texto: string;
+  categoriaLabel: string;
+  marcaModelo: string | null;
+  numeroSerie: string | null;
+  etiquetaYpf: string | null;
+  ubicacionId: string;
+  estadoActual: string;
+}
+
+/**
+ * Los 3 tipos de equipamiento viven en tablas distintas, con columnas
+ * distintas (ej. tablero_circuitos no tiene marca/modelo ni serie) y
+ * `ubicacion_id` resuelto distinto (directo en `equipos`, vía
+ * `racks`/`tableros` en los otros dos) — se normaliza una sola vez acá para
+ * que el resto de la action sea genérico.
+ */
+async function resolverEquipo(
+  service: ReturnType<typeof createServiceRoleClient>,
+  tipoEquipo: TipoEquipoBaja,
+  equipoId: string,
+): Promise<EquipoResuelto | null> {
+  if (tipoEquipo === "tablero_circuito") {
+    const { data: circuito } = await service
+      .from("tablero_circuitos")
+      .select("texto, categoria_equipo, estado, tablero_id")
+      .eq("id", equipoId)
+      .single();
+    if (!circuito) return null;
+    const { data: tablero } = await service.from("tableros").select("ubicacion_id").eq("id", circuito.tablero_id).single();
+    if (!tablero) return null;
+    return {
+      texto: circuito.texto,
+      categoriaLabel: TABLERO_CATEGORIA_LABEL[circuito.categoria_equipo],
+      marcaModelo: null,
+      numeroSerie: null,
+      etiquetaYpf: null,
+      ubicacionId: tablero.ubicacion_id,
+      estadoActual: circuito.estado,
+    };
+  }
+  if (tipoEquipo === "rack_equipamiento") {
+    const { data: item } = await service
+      .from("rack_equipamientos")
+      .select("texto, categoria_equipo, marca_modelo, etiqueta_ypf, estado, rack_id")
+      .eq("id", equipoId)
+      .single();
+    if (!item) return null;
+    const { data: rack } = await service.from("racks").select("ubicacion_id").eq("id", item.rack_id).single();
+    if (!rack) return null;
+    return {
+      texto: item.texto,
+      categoriaLabel: RACK_CATEGORIA_LABEL[item.categoria_equipo],
+      marcaModelo: item.marca_modelo,
+      numeroSerie: null,
+      etiquetaYpf: item.etiqueta_ypf,
+      ubicacionId: rack.ubicacion_id,
+      estadoActual: item.estado,
+    };
+  }
+  const { data: item } = await service
+    .from("equipos")
+    .select("texto, categoria_equipo, marca_modelo, numero_serie, etiqueta_ypf, estado, ubicacion_id")
+    .eq("id", equipoId)
+    .single();
+  if (!item) return null;
+  return {
+    texto: item.texto,
+    categoriaLabel: EQUIPO_CATEGORIA_LABEL[item.categoria_equipo],
+    marcaModelo: item.marca_modelo,
+    numeroSerie: item.numero_serie,
+    etiquetaYpf: item.etiqueta_ypf,
+    ubicacionId: item.ubicacion_id,
+    estadoActual: item.estado,
+  };
+}
+
+const TABLA_POR_TIPO: Record<TipoEquipoBaja, "tablero_circuitos" | "rack_equipamientos" | "equipos"> = {
+  tablero_circuito: "tablero_circuitos",
+  rack_equipamiento: "rack_equipamientos",
+  equipo_individual: "equipos",
+};
+
+/**
+ * Dar de baja un equipo: lo saca del equipamiento activo del sitio
+ * (`estado = 'baja'`, nunca se borra la fila) y genera un comprobante en
+ * PDF para entregar junto con el equipo físico a depósito. Solo Admin/
+ * Supervisor — mismo gate que Estadísticas — y por eso corre con el
+ * cliente de Service Role: `rack_equipamientos`/`equipos` tienen UPDATE
+ * restringido a `is_admin()` por RLS (un Supervisor no pasaría ese check
+ * directo), y `tablero_circuitos` no tiene ninguna policy de UPDATE
+ * todavía — bypasear RLS acá es controlado porque la action en sí ya
+ * valida el rol antes de tocar nada.
+ */
+export async function darDeBajaAction(payload: DarDeBajaPayload): Promise<DarDeBajaResult> {
+  const profile = await requireProfile();
+  if (!puedeGestionarBajas(profile.rol)) {
+    return { success: false, error: "Solo un Administrador o Supervisor puede dar de baja equipamiento." };
+  }
+  if (!payload.fecha) return { success: false, error: "Falta la fecha." };
+
+  let service: ReturnType<typeof createServiceRoleClient>;
+  try {
+    service = createServiceRoleClient();
+  } catch {
+    return {
+      success: false,
+      error: "Falta configurar SUPABASE_SERVICE_ROLE_KEY en el servidor — sin esa variable no se puede dar de baja equipamiento.",
+    };
+  }
+
+  const equipo = await resolverEquipo(service, payload.tipoEquipo, payload.equipoId);
+  if (!equipo) return { success: false, error: "No se encontró el equipo." };
+  if (equipo.estadoActual === "baja") return { success: false, error: "Este equipo ya estaba dado de baja." };
+
+  const { data: ubicacion } = await service
+    .from("ubicaciones")
+    .select("region, provincia, localidad, sitio, planta, oficina")
+    .eq("id", equipo.ubicacionId)
+    .single();
+  if (!ubicacion) return { success: false, error: "No se encontró la ubicación del equipo." };
+
+  // N° de generación único (BAJA-{año}-{4 dígitos}), con reintento ante colisión.
+  let numeroGeneracion = nuevoNumeroGeneracionBaja();
+  let bajaId: string | null = null;
+  for (let attempt = 0; attempt < 5 && !bajaId; attempt++) {
+    const { data, error } = await service
+      .from("bajas_equipamiento")
+      .insert({
+        numero_generacion: numeroGeneracion,
+        tipo_equipo: payload.tipoEquipo,
+        equipo_id: payload.equipoId,
+        equipo_texto: equipo.texto,
+        equipo_categoria: equipo.categoriaLabel,
+        equipo_marca_modelo: equipo.marcaModelo,
+        equipo_numero_serie: equipo.numeroSerie,
+        equipo_etiqueta_ypf: equipo.etiquetaYpf,
+        ubicacion_id: equipo.ubicacionId,
+        motivo: payload.motivo,
+        comentario: payload.comentario.trim() || null,
+        fecha: payload.fecha,
+        created_by: profile.id,
+      })
+      .select("id")
+      .single();
+    if (error) {
+      if (error.code === "23505") {
+        numeroGeneracion = nuevoNumeroGeneracionBaja();
+        continue;
+      }
+      return { success: false, error: `No se pudo registrar la baja: ${error.message}` };
+    }
+    bajaId = data!.id;
+  }
+  if (!bajaId) return { success: false, error: "No se pudo asignar un número de generación único. Probá de nuevo." };
+
+  await service.from(TABLA_POR_TIPO[payload.tipoEquipo]).update({ estado: "baja" }).eq("id", payload.equipoId);
+
+  // Logo de la empresa (cabecera del PDF), igual que el resto de los módulos.
+  const { data: config } = await service.from("config_general").select("logo_empresa_url").eq("id", 1).single();
+  let logoBuffer: Buffer | null = null;
+  if (config?.logo_empresa_url) {
+    try {
+      const res = await fetch(config.logo_empresa_url);
+      if (res.ok) logoBuffer = Buffer.from(await res.arrayBuffer());
+    } catch {
+      // seguimos sin logo antes que fallar la generación del PDF
+    }
+  }
+
+  const pdfBuffer = await renderBajaPdf({
+    numeroGeneracion,
+    region: ubicacion.region,
+    provincia: ubicacion.provincia,
+    localidad: ubicacion.localidad,
+    sitio: ubicacion.sitio,
+    planta: ubicacion.planta,
+    oficina: ubicacion.oficina,
+    fecha: payload.fecha,
+    tipoEquipoLabel: TIPO_EQUIPO_BAJA_LABEL[payload.tipoEquipo],
+    categoriaLabel: equipo.categoriaLabel,
+    equipoTexto: equipo.texto,
+    marcaModelo: equipo.marcaModelo,
+    numeroSerie: equipo.numeroSerie,
+    etiquetaYpf: equipo.etiquetaYpf,
+    motivo: payload.motivo,
+    comentario: payload.comentario.trim() || null,
+    logoBuffer,
+    appName: "Informe Técnico App",
+    realizoNombre: profile.nombreCompleto,
+  });
+
+  const pdfFilename = buildBajaFilename({ numeroGeneracion, equipoTexto: equipo.texto, sitio: ubicacion.sitio });
+  const pdfPath = `${profile.id}/bajas/${bajaId}/${pdfFilename}`;
+  const { error: pdfUpErr } = await service.storage
+    .from("informes-pdf")
+    .upload(pdfPath, pdfBuffer, { contentType: "application/pdf", upsert: true });
+  if (!pdfUpErr) {
+    await service.from("bajas_equipamiento").update({ pdf_url: pdfPath, pdf_generado_at: new Date().toISOString() }).eq("id", bajaId);
+  }
+
+  revalidatePath("/ubicaciones/[id]", "page");
+  return { success: true, bajaId, numeroGeneracion };
 }

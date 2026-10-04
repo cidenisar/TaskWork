@@ -582,3 +582,39 @@ npm run dev
     mismo cambio — el `<div>` que envuelve el `.map(...)` de cada lista
     pasa a `.list-grid`, sin tocar nada de la lógica de búsqueda,
     selección múltiple o descarga de cada uno.
+- **Bajas de Equipamiento** (nuevo módulo, solo Administrador/Supervisor —
+  `puedeGestionarBajas` en `src/lib/types.ts` —, migración
+  `20261005060000_bajas_equipamiento.sql`, `src/components/bajas/`,
+  `src/app/(app)/bajas/historial/`, acción `darDeBajaAction` en
+  `src/app/(app)/ubicaciones/actions.ts`): un tablero/rack/equipo
+  individual que se rompe, queda obsoleto o se reemplaza por una ampliación
+  no desaparecía del relevamiento — había que borrarlo a mano o dejarlo
+  "fantasma" en la lista activa. Ahora, en la ficha de un Sitio
+  (`/ubicaciones/[id]`), cada fila de las 3 tablas de equipamiento tiene un
+  botón "Dar de baja" (ícono `box`) que abre un modal chico (motivo —
+  rotura/ampliación-reemplazo/obsolescencia/otro—, fecha, comentario
+  opcional) — primer modal de la app, `.modal-overlay`/`.modal-card` en
+  `wireframe-ui.css`, genérico a propósito porque las tablas de 9-11
+  columnas no tienen lugar para un formulario inline. Al confirmar: el
+  equipo pasa a `estado = 'baja'` (columna nueva en `tablero_circuitos`/
+  `rack_equipamientos`/`equipos`, default `'activo'`) y desaparece de la
+  lista de equipamiento activo (y de los selects de "Nueva Medición"/
+  "Mantenimiento"/"Nuevo Relevamiento" de los 3 tipos) sin borrar ningún
+  dato histórico (mediciones/relevamientos viejos del equipo siguen
+  intactos); se genera **en el momento**, sin batching (se evaluó un
+  "remito" que junte varias bajas y se descartó — un PDF por baja
+  individual es lo que se pidió), un comprobante PDF de una sola página
+  ("Comprobante de baja", `src/lib/pdf/baja.tsx`) con la foto de los datos
+  del equipo al momento de la baja (no un join en vivo — mismo criterio
+  que el resto de los PDFs de la app) y un número de generación propio
+  (`BAJA-{año}-{4 dígitos}`), pensado para entregar junto con el equipo
+  físico en depósito. La escritura (`estado` + el insert en
+  `bajas_equipamiento`) usa `createServiceRoleClient()` porque el `UPDATE`
+  de `rack_equipamientos`/`equipos` es admin-only por RLS pero Supervisor
+  también tiene que poder dar de baja — el control de rol se hace en
+  código, antes de cualquier escritura, no relajando la policy. El
+  **Historial de Bajas** (`/bajas/historial`, tile propio en el inicio)
+  lista todas las bajas de todos los sitios con buscador y descarga del
+  comprobante (misma "URL firmada fresca al tocar" que el resto de la
+  app); la ficha de Sitio además tiene su propia sección "Equipamiento
+  dado de baja en este sitio", acotada a ese sitio.
