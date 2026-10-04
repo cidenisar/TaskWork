@@ -151,7 +151,7 @@ export function HistorialInformes({ informes }: { informes: HistorialInformeRow[
         {filtered.length === 0 ? (
           <div className="empty-note">No se encontraron informes con esa búsqueda.</div>
         ) : (
-          <div>
+          <div className="list-grid">
             {filtered.map((i) => (
               <div className={`hist-item${i.pdfDisponible ? "" : " archived"}`} key={i.id}>
                 <div className="info">

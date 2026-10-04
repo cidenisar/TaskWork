@@ -83,7 +83,7 @@ export function HistorialRendiciones({ rendiciones }: { rendiciones: HistorialRe
         {filtered.length === 0 ? (
           <div className="empty-note">No se encontraron rendiciones con esa búsqueda.</div>
         ) : (
-          <div>
+          <div className="list-grid">
             {filtered.map((r) => {
               const saldo = r.viaticoRecibido - r.totalGastado;
               const abierta = r.estado === "abierta";

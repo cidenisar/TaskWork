@@ -112,9 +112,15 @@ export function AppShell({ profile, children }: { profile: Profile; children: Re
   const brand = moduleConfig?.brand ?? (pathname === "/configuracion" ? "Configuración" : "Informes");
   const backHref = moduleConfig?.backHref ?? "/";
   const backLabel = moduleConfig?.backHref ? "Volver a Relevamiento de Equipos" : "Volver al inicio";
+  // Pantallas con mucho dato para visualizar (listas largas, tablas) — en
+  // pantalla ancha usan .app-wide en vez de los 800px fijos de siempre. Los
+  // historiales entran por ruta, no por módulo entero: las pantallas de
+  // carga (nuevo/mantenimiento) del mismo módulo son formularios angostos,
+  // no se benefician de más ancho.
+  const anchoCompleto = moduleKey === "estadisticas" || moduleKey === "ubicaciones" || pathname.endsWith("/historial");
 
   return (
-    <div className={moduleKey === "estadisticas" || moduleKey === "ubicaciones" ? "app app-wide" : "app"}>
+    <div className={anchoCompleto ? "app app-wide" : "app"}>
       <div className="topbar">
         {!isHome ? (
           <Link href={backHref} className="back">

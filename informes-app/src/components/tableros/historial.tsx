@@ -126,7 +126,7 @@ export function HistorialTableros({
           medicionesFiltradas.length === 0 ? (
             <div className="empty-note">No se encontraron mediciones ni relevamientos con esa búsqueda.</div>
           ) : (
-            <div>
+            <div className="list-grid">
               {medicionesFiltradas.map((m) => (
                 <div className={`hist-item${m.pdfDisponible ? "" : " archived"}`} key={m.id}>
                   <div className="info">
@@ -161,7 +161,7 @@ export function HistorialTableros({
         ) : mantenimientosFiltrados.length === 0 ? (
           <div className="empty-note">No se encontraron mantenimientos con esa búsqueda.</div>
         ) : (
-          <div>
+          <div className="list-grid">
             {mantenimientosFiltrados.map((m) => (
               <div className="hist-item" key={m.id}>
                 <div className="info">

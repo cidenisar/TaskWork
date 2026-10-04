@@ -86,7 +86,7 @@ export function HistorialRacks({ relevamientos }: { relevamientos: HistorialRele
         {filtrados.length === 0 ? (
           <div className="empty-note">No se encontraron relevamientos con esa búsqueda.</div>
         ) : (
-          <div>
+          <div className="list-grid">
             {filtrados.map((r) => (
               <div className={`hist-item${r.pdfDisponible ? "" : " archived"}`} key={r.id}>
                 <div className="info">
