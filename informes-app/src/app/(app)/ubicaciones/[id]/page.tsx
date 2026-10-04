@@ -5,6 +5,8 @@ import { createClient } from "@/lib/supabase/server";
 import { Icon } from "@/components/icon";
 import {
   calcularResumenEquipamiento as calcularResumenTableros,
+  categoriaLlevaAmp,
+  itemMideCorriente,
   labelSubsistemas,
   CATEGORIA_EQUIPO_LABEL as TABLERO_CATEGORIA_LABEL,
 } from "@/components/tableros/types";
@@ -14,6 +16,10 @@ import { calcularResumenEquipos, CATEGORIA_EQUIPO_LABEL as EQUIPO_CATEGORIA_LABE
 function fmtFecha(fecha: string) {
   const [y, m, d] = fecha.split("-");
   return d && m && y ? `${d}/${m}/${y}` : fecha;
+}
+
+function fmtCorriente(v: number | null) {
+  return v === null || v === undefined ? "—" : String(v);
 }
 
 export default async function UbicacionDetallePage({ params }: { params: Promise<{ id: string }> }) {
@@ -73,34 +79,89 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
   const tableroIds = tableros.map((t) => t.id);
   const rackIds = racks.map((r) => r.id);
 
-  const [circuitosRes, equipamientosRes, medicionesRes, relevamientosRes] = await Promise.all([
+  const [circuitosRes, equipamientosRes, medicionesRes, relevamientosRes, equipoRelevamientosRes] = await Promise.all([
     tableroIds.length > 0
-      ? supabase.from("tablero_circuitos").select("tablero_id, categoria_equipo, tipo_circuito").in("tablero_id", tableroIds)
+      ? supabase
+          .from("tablero_circuitos")
+          .select("id, tablero_id, numero, texto, categoria_equipo, tipo_circuito, amp_nominal")
+          .in("tablero_id", tableroIds)
+          .order("numero")
       : { data: [] },
-    rackIds.length > 0 ? supabase.from("rack_equipamientos").select("rack_id, categoria_equipo, cantidad").in("rack_id", rackIds) : { data: [] },
+    rackIds.length > 0
+      ? supabase
+          .from("rack_equipamientos")
+          .select("id, rack_id, numero, categoria_equipo, texto, marca_modelo, posicion_u, cantidad")
+          .in("rack_id", rackIds)
+          .order("numero")
+      : { data: [] },
     // Última fecha de medición/relevamiento por tablero-rack — respeta RLS (visible según el rol y quién lo cargó,
     // igual criterio que el resto de la app), es un dato "mejor esfuerzo", no una fuente de verdad de inventario.
     tableroIds.length > 0
-      ? supabase.from("tablero_mediciones").select("tablero_id, fecha").in("tablero_id", tableroIds).order("fecha", { ascending: false })
+      ? supabase
+          .from("tablero_mediciones")
+          .select("id, tablero_id, fecha, tipo_evento")
+          .in("tablero_id", tableroIds)
+          .order("fecha", { ascending: false })
       : { data: [] },
     rackIds.length > 0
-      ? supabase.from("rack_relevamientos").select("rack_id, fecha").in("rack_id", rackIds).order("fecha", { ascending: false })
+      ? supabase.from("rack_relevamientos").select("id, rack_id, fecha").in("rack_id", rackIds).order("fecha", { ascending: false })
       : { data: [] },
+    supabase.from("equipo_relevamientos").select("id, ubicacion_id, fecha").in("ubicacion_id", siblingIds).order("fecha", { ascending: false }),
   ]);
 
+  const circuitos = circuitosRes.data ?? [];
+  const equipamientos = equipamientosRes.data ?? [];
+
   const ultimaFechaTablero = new Map<string, string>();
+  const ultimaMedicionPorTablero = new Map<string, { id: string; tipoEvento: "medicion" | "relevamiento" }>();
   for (const m of medicionesRes.data ?? []) {
-    if (!ultimaFechaTablero.has(m.tablero_id)) ultimaFechaTablero.set(m.tablero_id, m.fecha);
+    if (!ultimaFechaTablero.has(m.tablero_id)) {
+      ultimaFechaTablero.set(m.tablero_id, m.fecha);
+      ultimaMedicionPorTablero.set(m.tablero_id, { id: m.id, tipoEvento: m.tipo_evento });
+    }
   }
   const ultimaFechaRack = new Map<string, string>();
+  const ultimoRelevamientoPorRack = new Map<string, string>();
   for (const r of relevamientosRes.data ?? []) {
-    if (!ultimaFechaRack.has(r.rack_id)) ultimaFechaRack.set(r.rack_id, r.fecha);
+    if (!ultimaFechaRack.has(r.rack_id)) {
+      ultimaFechaRack.set(r.rack_id, r.fecha);
+      ultimoRelevamientoPorRack.set(r.rack_id, r.id);
+    }
+  }
+  const ultimoRelevamientoEquipoPorUbicacion = new Map<string, string>();
+  for (const r of equipoRelevamientosRes.data ?? []) {
+    if (!ultimoRelevamientoEquipoPorUbicacion.has(r.ubicacion_id)) ultimoRelevamientoEquipoPorUbicacion.set(r.ubicacion_id, r.id);
   }
 
-  const resumenTableros = calcularResumenTableros(
-    (circuitosRes.data ?? []).map((c) => ({ categoriaEquipo: c.categoria_equipo, tipoCircuito: c.tipo_circuito })),
-  );
-  const resumenRacks = calcularResumenRacks((equipamientosRes.data ?? []).map((e) => ({ categoriaEquipo: e.categoria_equipo, cantidad: e.cantidad })));
+  const medicionIds = [...ultimaMedicionPorTablero.values()].map((m) => m.id);
+  const relevamientoRackIds = [...ultimoRelevamientoPorRack.values()];
+  const relevamientoEquipoIds = [...ultimoRelevamientoEquipoPorUbicacion.values()];
+
+  const [lecturasTableroRes, lecturasRackRes, lecturasEquipoRes] = await Promise.all([
+    medicionIds.length > 0
+      ? supabase
+          .from("tablero_medicion_lecturas")
+          .select("circuito_id, estado, corriente_f, corriente_r, corriente_s, corriente_t, comentario")
+          .in("medicion_id", medicionIds)
+      : { data: [] },
+    relevamientoRackIds.length > 0
+      ? supabase.from("rack_relevamiento_lecturas").select("equipamiento_id, estado, comentario").in("relevamiento_id", relevamientoRackIds)
+      : { data: [] },
+    relevamientoEquipoIds.length > 0
+      ? supabase.from("equipo_relevamiento_lecturas").select("equipo_id, estado, comentario").in("relevamiento_id", relevamientoEquipoIds)
+      : { data: [] },
+  ]);
+  const lecturaPorCircuito = new Map((lecturasTableroRes.data ?? []).map((l) => [l.circuito_id, l]));
+  const lecturaPorEquipamiento = new Map((lecturasRackRes.data ?? []).map((l) => [l.equipamiento_id, l]));
+  const lecturaPorEquipo = new Map((lecturasEquipoRes.data ?? []).map((l) => [l.equipo_id, l]));
+
+  const circuitosPorTablero = new Map<string, typeof circuitos>();
+  for (const c of circuitos) circuitosPorTablero.set(c.tablero_id, [...(circuitosPorTablero.get(c.tablero_id) ?? []), c]);
+  const equipamientosPorRack = new Map<string, typeof equipamientos>();
+  for (const e of equipamientos) equipamientosPorRack.set(e.rack_id, [...(equipamientosPorRack.get(e.rack_id) ?? []), e]);
+
+  const resumenTableros = calcularResumenTableros(circuitos.map((c) => ({ categoriaEquipo: c.categoria_equipo, tipoCircuito: c.tipo_circuito })));
+  const resumenRacks = calcularResumenRacks(equipamientos.map((e) => ({ categoriaEquipo: e.categoria_equipo, cantidad: e.cantidad })));
   const resumenEquipos = calcularResumenEquipos(equipos.map((e) => ({ categoriaEquipo: e.categoria_equipo, cantidad: e.cantidad })));
   const totalEquipos = resumenTableros.total + resumenRacks.total + resumenEquipos.total;
 
@@ -146,6 +207,9 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
 
       <div className="card">
         <div className="section-label">Tableros en este sitio</div>
+        <div className="hint" style={{ margin: "0 0 10px" }}>
+          Tocá un tablero para ver sus circuitos/elementos — mismo detalle que el PDF, con la última lectura conocida.
+        </div>
         {tableros.length === 0 ? (
           <div className="empty-note">No hay tableros relevados en {ubicacion.sitio}.</div>
         ) : (
@@ -162,19 +226,77 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
             <div>
               {tableros.map((t) => {
                 const fecha = ultimaFechaTablero.get(t.id);
+                const tipoEvento = ultimaMedicionPorTablero.get(t.id)?.tipoEvento ?? "medicion";
+                const circuitosDelTablero = circuitosPorTablero.get(t.id) ?? [];
+                const mostrarCorriente = circuitosDelTablero.some((c) => categoriaLlevaAmp(c.categoria_equipo));
                 return (
-                  <div className="hist-item" key={t.id}>
-                    <div className="info">
-                      <div className="hist-main">
-                        <div className="hist-title">{t.denominacion}</div>
-                        <div className="hist-meta">
-                          {hayVariasPlantas ? `${labelPorUbicacionId.get(t.ubicacion_id)} · ` : ""}
-                          {labelSubsistemas(t.subsistemas)}
-                          {fecha ? ` · último relevamiento ${fmtFecha(fecha)}` : ""}
+                  <details className="detalle-item" key={t.id}>
+                    <summary>
+                      <div className="info">
+                        <div className="hist-main">
+                          <div className="hist-title">{t.denominacion}</div>
+                          <div className="hist-meta">
+                            {hayVariasPlantas ? `${labelPorUbicacionId.get(t.ubicacion_id)} · ` : ""}
+                            {labelSubsistemas(t.subsistemas)}
+                            {fecha ? ` · último relevamiento ${fmtFecha(fecha)}` : ""}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </div>
+                      <Icon name="chevron-right" size={15} className="detalle-chevron" />
+                    </summary>
+                    {circuitosDelTablero.length === 0 ? (
+                      <div className="empty-note" style={{ margin: "0 14px 14px" }}>
+                        Sin circuitos/elementos cargados.
+                      </div>
+                    ) : (
+                      <div className="detalle-table-wrap">
+                        <table className="detalle-table">
+                          <thead>
+                            <tr>
+                              <th>N°</th>
+                              <th>Circuito/Elemento</th>
+                              <th>Categoría</th>
+                              <th>Estado</th>
+                              {mostrarCorriente && (
+                                <>
+                                  <th style={{ textAlign: "right" }}>Nominal</th>
+                                  <th style={{ textAlign: "right" }}>F</th>
+                                  <th style={{ textAlign: "right" }}>R</th>
+                                  <th style={{ textAlign: "right" }}>S</th>
+                                  <th style={{ textAlign: "right" }}>T</th>
+                                </>
+                              )}
+                              <th>Comentario</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {circuitosDelTablero.map((c) => {
+                              const lectura = lecturaPorCircuito.get(c.id);
+                              const mideCorriente = itemMideCorriente(c.categoria_equipo, c.tipo_circuito, tipoEvento);
+                              return (
+                                <tr key={c.id}>
+                                  <td>{c.numero}</td>
+                                  <td>{c.texto}</td>
+                                  <td>{TABLERO_CATEGORIA_LABEL[c.categoria_equipo]}</td>
+                                  <td>{lectura?.estado || "—"}</td>
+                                  {mostrarCorriente && (
+                                    <>
+                                      <td style={{ textAlign: "right" }}>{c.amp_nominal || "—"}</td>
+                                      <td style={{ textAlign: "right" }}>{mideCorriente ? fmtCorriente(lectura?.corriente_f ?? null) : "—"}</td>
+                                      <td style={{ textAlign: "right" }}>{mideCorriente ? fmtCorriente(lectura?.corriente_r ?? null) : "—"}</td>
+                                      <td style={{ textAlign: "right" }}>{mideCorriente ? fmtCorriente(lectura?.corriente_s ?? null) : "—"}</td>
+                                      <td style={{ textAlign: "right" }}>{mideCorriente ? fmtCorriente(lectura?.corriente_t ?? null) : "—"}</td>
+                                    </>
+                                  )}
+                                  <td>{lectura?.comentario || "—"}</td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </details>
                 );
               })}
             </div>
@@ -184,6 +306,9 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
 
       <div className="card">
         <div className="section-label">Racks en este sitio</div>
+        <div className="hint" style={{ margin: "0 0 10px" }}>
+          Tocá un rack para ver su equipamiento — categoría, marca/modelo y posición U, con el último estado conocido.
+        </div>
         {racks.length === 0 ? (
           <div className="empty-note">No hay racks relevados en {ubicacion.sitio}.</div>
         ) : (
@@ -200,18 +325,61 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
             <div>
               {racks.map((r) => {
                 const fecha = ultimaFechaRack.get(r.id);
+                const equipamientosDelRack = equipamientosPorRack.get(r.id) ?? [];
                 return (
-                  <div className="hist-item" key={r.id}>
-                    <div className="info">
-                      <div className="hist-main">
-                        <div className="hist-title">{r.denominacion}</div>
-                        <div className="hist-meta">
-                          {hayVariasPlantas && `${labelPorUbicacionId.get(r.ubicacion_id)}`}
-                          {fecha ? `${hayVariasPlantas ? " · " : ""}último relevamiento ${fmtFecha(fecha)}` : ""}
+                  <details className="detalle-item" key={r.id}>
+                    <summary>
+                      <div className="info">
+                        <div className="hist-main">
+                          <div className="hist-title">{r.denominacion}</div>
+                          <div className="hist-meta">
+                            {hayVariasPlantas && `${labelPorUbicacionId.get(r.ubicacion_id)}`}
+                            {fecha ? `${hayVariasPlantas ? " · " : ""}último relevamiento ${fmtFecha(fecha)}` : ""}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </div>
+                      <Icon name="chevron-right" size={15} className="detalle-chevron" />
+                    </summary>
+                    {equipamientosDelRack.length === 0 ? (
+                      <div className="empty-note" style={{ margin: "0 14px 14px" }}>
+                        Sin equipamiento cargado.
+                      </div>
+                    ) : (
+                      <div className="detalle-table-wrap">
+                        <table className="detalle-table">
+                          <thead>
+                            <tr>
+                              <th>N°</th>
+                              <th>Categoría</th>
+                              <th>Equipo</th>
+                              <th>Marca/Modelo</th>
+                              <th>Posición U</th>
+                              <th style={{ textAlign: "right" }}>Cant.</th>
+                              <th>Estado</th>
+                              <th>Comentario</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {equipamientosDelRack.map((e) => {
+                              const lectura = lecturaPorEquipamiento.get(e.id);
+                              return (
+                                <tr key={e.id}>
+                                  <td>{e.numero}</td>
+                                  <td>{RACK_CATEGORIA_LABEL[e.categoria_equipo]}</td>
+                                  <td>{e.texto}</td>
+                                  <td>{e.marca_modelo || "—"}</td>
+                                  <td>{e.posicion_u || "—"}</td>
+                                  <td style={{ textAlign: "right" }}>{e.cantidad}</td>
+                                  <td>{lectura?.estado || "—"}</td>
+                                  <td>{lectura?.comentario || "—"}</td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </details>
                 );
               })}
             </div>
@@ -235,21 +403,27 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
               </div>
             )}
             <div>
-              {equipos.map((e) => (
-                <div className="hist-item" key={e.id}>
-                  <div className="info">
-                    <div className="hist-main">
-                      <div className="hist-title">{e.texto}</div>
-                      <div className="hist-meta">
-                        {hayVariasPlantas ? `${labelPorUbicacionId.get(e.ubicacion_id)} · ` : ""}
-                        {EQUIPO_CATEGORIA_LABEL[e.categoria_equipo]}
-                        {e.marca_modelo ? ` · ${e.marca_modelo}` : ""}
-                        {e.numero_serie ? ` · S/N ${e.numero_serie}` : ""}
+              {equipos.map((e) => {
+                const lectura = lecturaPorEquipo.get(e.id);
+                return (
+                  <div className="hist-item" key={e.id}>
+                    <div className="info">
+                      <div className="hist-main">
+                        <div className="hist-title">{e.texto}</div>
+                        <div className="hist-meta">
+                          {hayVariasPlantas ? `${labelPorUbicacionId.get(e.ubicacion_id)} · ` : ""}
+                          {EQUIPO_CATEGORIA_LABEL[e.categoria_equipo]}
+                          {e.marca_modelo ? ` · ${e.marca_modelo}` : ""}
+                          {e.numero_serie ? ` · S/N ${e.numero_serie}` : ""}
+                          {e.cantidad > 1 ? ` · x${e.cantidad}` : ""}
+                          {lectura?.estado ? ` · ${lectura.estado}` : ""}
+                          {lectura?.comentario ? ` · ${lectura.comentario}` : ""}
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </>
         )}

@@ -803,6 +803,66 @@ textarea {
 .hist-item.archived {
   opacity: 0.6;
 }
+
+/* Fila expandible (tableros/racks en el detalle de Sitio) — mismo look que
+   .hist-item, pero es un <details> con una tabla adentro en vez de un <div>. */
+.detalle-item {
+  background: var(--panel-2);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius);
+  margin-bottom: 8px;
+  overflow: hidden;
+}
+.detalle-item > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px;
+  cursor: pointer;
+  list-style: none;
+}
+.detalle-item > summary::-webkit-details-marker {
+  display: none;
+}
+.detalle-item[open] > summary {
+  border-bottom: 1px solid var(--border-soft);
+}
+.detalle-chevron {
+  flex-shrink: 0;
+  transition: transform 0.15s ease;
+}
+.detalle-item[open] .detalle-chevron {
+  transform: rotate(90deg);
+}
+.detalle-table-wrap {
+  overflow-x: auto;
+  padding: 10px 14px 14px;
+}
+.detalle-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.detalle-table th {
+  text-align: left;
+  color: var(--text-dim);
+  font-weight: 600;
+  font-size: 11px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border-soft);
+  white-space: nowrap;
+}
+.detalle-table td {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border-soft);
+  color: var(--text);
+  white-space: nowrap;
+}
+.detalle-table tr:last-child td {
+  border-bottom: none;
+}
 .hist-item .info {
   display: flex;
   align-items: center;
