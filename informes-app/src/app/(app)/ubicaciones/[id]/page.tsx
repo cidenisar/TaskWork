@@ -57,7 +57,7 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
     supabase.from("racks").select("id, denominacion, ubicacion_id").in("ubicacion_id", siblingIds).order("denominacion"),
     supabase
       .from("equipos")
-      .select("id, categoria_equipo, texto, marca_modelo, numero_serie, cantidad, consumo_estimado_w, ubicacion_id")
+      .select("id, categoria_equipo, texto, marca_modelo, numero_serie, etiqueta_ypf, cantidad, consumo_promedio_w, consumo_max_w, ubicacion_id")
       .in("ubicacion_id", siblingIds)
       .order("texto"),
     // RLS (informes_tecnicos_select_own/select_stats) ya limita esto a informes propios, o todos si sos Admin/Supervisor.
@@ -92,7 +92,7 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
     rackIds.length > 0
       ? supabase
           .from("rack_equipamientos")
-          .select("id, rack_id, numero, categoria_equipo, texto, marca_modelo, posicion_u, cantidad, consumo_estimado_w")
+          .select("id, rack_id, numero, categoria_equipo, texto, marca_modelo, posicion_u, etiqueta_ypf, cantidad, consumo_promedio_w, consumo_max_w")
           .in("rack_id", rackIds)
           .order("numero")
       : { data: [] },
@@ -362,8 +362,10 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
                               <th>Equipo</th>
                               <th>Marca/Modelo</th>
                               <th>Posición U</th>
+                              <th>Etiqueta YPF</th>
                               <th style={{ textAlign: "right" }}>Cant.</th>
-                              <th style={{ textAlign: "right" }}>Consumo est.</th>
+                              <th style={{ textAlign: "right" }}>Cons. prom.</th>
+                              <th style={{ textAlign: "right" }}>Cons. máx.</th>
                               <th>Estado</th>
                               <th>Comentario</th>
                             </tr>
@@ -378,8 +380,10 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
                                   <td>{e.texto}</td>
                                   <td>{e.marca_modelo || "—"}</td>
                                   <td>{e.posicion_u || "—"}</td>
+                                  <td>{e.etiqueta_ypf || "—"}</td>
                                   <td style={{ textAlign: "right" }}>{e.cantidad}</td>
-                                  <td style={{ textAlign: "right" }}>{e.consumo_estimado_w ? `~${e.consumo_estimado_w}W` : "—"}</td>
+                                  <td style={{ textAlign: "right" }}>{e.consumo_promedio_w ? `~${e.consumo_promedio_w}W` : "—"}</td>
+                                  <td style={{ textAlign: "right" }}>{e.consumo_max_w ? `~${e.consumo_max_w}W` : "—"}</td>
                                   <td>{lectura?.estado || "—"}</td>
                                   <td>{lectura?.comentario || "—"}</td>
                                 </tr>
@@ -417,29 +421,44 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
                 ))}
               </div>
             )}
-            <div>
-              {equipos.map((e) => {
-                const lectura = lecturaPorEquipo.get(e.id);
-                return (
-                  <div className="hist-item" key={e.id}>
-                    <div className="info">
-                      <div className="hist-main">
-                        <div className="hist-title">{e.texto}</div>
-                        <div className="hist-meta">
-                          {hayVariasPlantas ? `${labelPorUbicacionId.get(e.ubicacion_id)} · ` : ""}
-                          {EQUIPO_CATEGORIA_LABEL[e.categoria_equipo]}
-                          {e.marca_modelo ? ` · ${e.marca_modelo}` : ""}
-                          {e.numero_serie ? ` · S/N ${e.numero_serie}` : ""}
-                          {e.cantidad > 1 ? ` · x${e.cantidad}` : ""}
-                          {e.consumo_estimado_w ? ` · ~${e.consumo_estimado_w}W` : ""}
-                          {lectura?.estado ? ` · ${lectura.estado}` : ""}
-                          {lectura?.comentario ? ` · ${lectura.comentario}` : ""}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
+            <div className="detalle-table-wrap">
+              <table className="detalle-table">
+                <thead>
+                  <tr>
+                    <th>Equipo</th>
+                    {hayVariasPlantas && <th>Planta/Oficina</th>}
+                    <th>Categoría</th>
+                    <th>Marca/Modelo</th>
+                    <th>N° Serie</th>
+                    <th>Etiqueta YPF</th>
+                    <th style={{ textAlign: "right" }}>Cant.</th>
+                    <th style={{ textAlign: "right" }}>Cons. prom.</th>
+                    <th style={{ textAlign: "right" }}>Cons. máx.</th>
+                    <th>Estado</th>
+                    <th>Comentario</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {equipos.map((e) => {
+                    const lectura = lecturaPorEquipo.get(e.id);
+                    return (
+                      <tr key={e.id}>
+                        <td>{e.texto}</td>
+                        {hayVariasPlantas && <td>{labelPorUbicacionId.get(e.ubicacion_id)}</td>}
+                        <td>{EQUIPO_CATEGORIA_LABEL[e.categoria_equipo]}</td>
+                        <td>{e.marca_modelo || "—"}</td>
+                        <td>{e.numero_serie || "—"}</td>
+                        <td>{e.etiqueta_ypf || "—"}</td>
+                        <td style={{ textAlign: "right" }}>{e.cantidad}</td>
+                        <td style={{ textAlign: "right" }}>{e.consumo_promedio_w ? `~${e.consumo_promedio_w}W` : "—"}</td>
+                        <td style={{ textAlign: "right" }}>{e.consumo_max_w ? `~${e.consumo_max_w}W` : "—"}</td>
+                        <td>{lectura?.estado || "—"}</td>
+                        <td>{lectura?.comentario || "—"}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           </>
         )}

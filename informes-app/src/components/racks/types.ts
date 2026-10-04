@@ -48,13 +48,18 @@ export interface EquipamientoItem {
   marcaModelo: string;
   posicionU: string;
   cantidad: number;
+  /** Número de la etiqueta/chapa de inventario de YPF, si es legible — distinto del número de serie del fabricante. */
+  etiquetaYpf: string;
   /**
-   * Potencia típica ESTIMADA por IA en Watts a partir de la marca/modelo
+   * Consumo típico ESTIMADO por IA en Watts a partir de la marca/modelo
    * (nunca una medición real, a diferencia de la corriente de Tableros) —
-   * null si todavía no se estimó o la IA no reconoció el modelo con
-   * confianza suficiente.
+   * en uso normal (`consumoPromedioW`) y pico/máximo (`consumoMaxW`, que
+   * puede acercarse al vatiaje nominal de la fuente del equipo sin ser
+   * necesariamente el mismo número). Null si todavía no se estimó, o la
+   * IA no reconoció el modelo con confianza suficiente.
    */
-  consumoEstimadoW: number | null;
+  consumoPromedioW: number | null;
+  consumoMaxW: number | null;
   /**
    * Solo transitorio en el form (no se persiste): true cuando lo cargó la
    * lectura de foto con IA sin encontrar una etiqueta legible, así el

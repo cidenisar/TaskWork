@@ -197,6 +197,28 @@ se pudo estimar en el momento), conviene un backfill aparte — un pedido de
 texto (sin fotos, más barato) sobre lo que falta, disparado a demanda, no
 automático en cada carga de página.
 
+**Un solo número para "consumo/capacidad/rendimiento estimado" de un
+equipo casi siempre esconde una ambigüedad entre dos magnitudes
+distintas — pedir SIEMPRE un par (típico/promedio y pico/máximo), nunca
+uno solo.** Pasó en la práctica, no es hipotético: pedirle a una IA "el
+consumo estimado en Watts" de una notebook con marca/modelo identificado
+devolvió 65W — que resultó ser el vatiaje de la FUENTE/CARGADOR (lo
+máximo que esa fuente puede entregar), no lo que la notebook consume la
+mayoría del tiempo en uso normal (mucho menos). La confusión es casi
+inevitable con un solo campo, porque la especificación más fácil de
+encontrar de un equipo (la de su fuente/placa/nameplate) es casi siempre
+un límite/capacidad, no un consumo típico real. El prompt tiene que
+pedir los dos valores por separado y explicarle la diferencia
+("promedio = consumo real típico, nunca el vatiaje nominal de la fuente
+si es mayor; máximo = el pico bajo la carga más alta posible, que sí
+puede acercarse al vatiaje de la fuente pero no es automáticamente el
+mismo número — max siempre >= promedio"). Esto generaliza más allá de
+consumo eléctrico: cualquier "estimá X" sobre un producto real tiene
+casi siempre una lectura de nameplate/spec-sheet (un límite o capacidad)
+y una lectura de uso real (lo que pasa la mayoría del tiempo) — nombrar
+ambas explícitamente en el prompt evita que el modelo devuelva la
+primera que encuentra pensando que responde la pregunta.
+
 ## 6. Avisos push (web)
 
 **No usar Firebase Cloud Messaging para push web — ir directo al estándar

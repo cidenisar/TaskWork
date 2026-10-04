@@ -13,7 +13,7 @@ export default async function NuevoRelevamientoPage() {
     supabase.from("racks").select("id, denominacion, ubicacion_id").order("denominacion"),
     supabase
       .from("rack_equipamientos")
-      .select("id, rack_id, numero, categoria_equipo, texto, marca_modelo, posicion_u, cantidad, consumo_estimado_w")
+      .select("id, rack_id, numero, categoria_equipo, texto, marca_modelo, posicion_u, etiqueta_ypf, cantidad, consumo_promedio_w, consumo_max_w")
       .order("numero"),
     fetchTodasLasUbicaciones(supabase),
     supabase.from("catalogo_provincias").select("nombre").order("nombre"),
@@ -32,8 +32,10 @@ export default async function NuevoRelevamientoPage() {
       texto: e.texto,
       marcaModelo: e.marca_modelo ?? "",
       posicionU: e.posicion_u ?? "",
+      etiquetaYpf: e.etiqueta_ypf ?? "",
       cantidad: e.cantidad,
-      consumoEstimadoW: e.consumo_estimado_w,
+      consumoPromedioW: e.consumo_promedio_w,
+      consumoMaxW: e.consumo_max_w,
     });
     equipamientoPorRack.set(e.rack_id, lista);
   }

@@ -347,7 +347,11 @@ export type RackEquipamientoRow = {
   marca_modelo: string | null;
   posicion_u: string | null;
   cantidad: number;
+  /** @deprecated reemplazada por consumo_promedio_w/consumo_max_w (20261005050000) */
   consumo_estimado_w: number | null;
+  consumo_promedio_w: number | null;
+  consumo_max_w: number | null;
+  etiqueta_ypf: string | null;
   created_at: string;
 }
 
@@ -379,7 +383,11 @@ export type EquipoRow = {
   marca_modelo: string | null;
   numero_serie: string | null;
   cantidad: number;
+  /** @deprecated reemplazada por consumo_promedio_w/consumo_max_w (20261005050000) */
   consumo_estimado_w: number | null;
+  consumo_promedio_w: number | null;
+  consumo_max_w: number | null;
+  etiqueta_ypf: string | null;
   created_by: string | null;
   created_at: string;
 }

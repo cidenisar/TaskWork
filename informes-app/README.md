@@ -495,27 +495,47 @@ npm run dev
   (estado, corriente por fase, comentario), reusando la misma lógica de
   negocio que ya usa el PDF (`itemMideCorriente`, `categoriaLlevaAmp`) para
   decidir cuándo corresponde mostrar corriente — nada de esto es un dato
-  nuevo, ya estaba guardado, solo no se mostraba.
+  nuevo, ya estaba guardado, solo no se mostraba. Equipos Individuales
+  (que no tiene un "contenedor" como tablero/rack, es una lista plana) se
+  muestra directo como tabla, sin `<details>` — la primera versión lo
+  mostraba como texto concatenado en una sola línea, difícil de leer con
+  varias columnas de datos.
 - **Consumo estimado por IA en Racks y Equipos Individuales**
-  (migración `20261005040000_consumo_estimado_ia.sql`,
+  (migraciones `20261005040000_consumo_estimado_ia.sql` y
+  `20261005050000_consumo_promedio_max_y_etiqueta_ypf.sql`,
   `src/app/(app)/ubicaciones/actions.ts`): los Tableros de energía ya
   tienen consumo REAL medido con instrumento (corriente por fase en cada
   Medición) — pero el equipamiento de Racks y Equipos Individuales
   (routers, switches, UPS, rectificadores...) no se mide así. Para poder
   armar a futuro una estimación de consumo energético que cubra **todo**
-  el equipamiento de un sitio, no solo lo que tiene térmica, se agregó
-  `consumo_estimado_w` (nullable) a `rack_equipamientos` y `equipos`: la
-  misma IA que ya lee las fotos para identificar categoría/marca/modelo
-  ahora también devuelve su mejor estimación del consumo típico en Watts
-  de esa marca/modelo **por su conocimiento general del producto, no por
-  la foto** — null si no reconoce el modelo con confianza, nunca inventa
-  un número. El técnico puede corregirlo/completarlo a mano igual que el
-  resto de los campos. Para lo que ya estaba cargado antes de este campo
-  (o donde la IA no pudo estimar en su momento), un botón "Estimar consumo
-  de lo que falta" en la ficha de Sitio (visible solo para Administrador,
-  porque el `UPDATE` de `rack_equipamientos`/`equipos` es admin-only por
-  RLS — a propósito, para que un técnico no pueda editar equipamiento que
-  cargó otro) manda todo lo pendiente de ese sitio en un solo pedido de
-  texto a Claude (sin fotos) y completa lo que pueda. Siempre se muestra
-  marcado como **estimado** (`~123W`), nunca mezclado visualmente con una
-  medición real.
+  el equipamiento de un sitio, no solo lo que tiene térmica, se agregaron
+  `consumo_promedio_w`/`consumo_max_w` (nullable) a `rack_equipamientos` y
+  `equipos`: la misma IA que ya lee las fotos para identificar categoría/
+  marca/modelo ahora también devuelve su mejor estimación del consumo en
+  Watts de esa marca/modelo **por su conocimiento general del producto, no
+  por la foto** — en uso normal (promedio) y pico (máximo) por separado,
+  null en los dos si no reconoce el modelo con confianza, nunca inventa un
+  número. **Primera versión real (un solo campo "consumo estimado") dio un
+  resultado incorrecto al probarla**: para una notebook devolvió 65W, que
+  resultó ser el vatiaje de la FUENTE/CARGADOR (lo máximo que puede
+  entregar), no lo que la notebook consume en uso normal — confusión fácil
+  para cualquier estimación de este tipo, no específica de este caso. El
+  prompt ahora aclara explícitamente la diferencia y pide los dos números.
+  El técnico puede corregir/completar ambos a mano igual que el resto de
+  los campos. Para lo que ya estaba cargado antes de este campo (o donde
+  la IA no pudo estimar en su momento), un botón "Estimar consumo de lo
+  que falta" en la ficha de Sitio (visible solo para Administrador, porque
+  el `UPDATE` de `rack_equipamientos`/`equipos` es admin-only por RLS — a
+  propósito, para que un técnico no pueda editar equipamiento que cargó
+  otro) manda todo lo pendiente de ese sitio en un solo pedido de texto a
+  Claude (sin fotos) y completa lo que pueda. Siempre se muestra marcado
+  como **estimado** (`~123W`), nunca mezclado visualmente con una medición
+  real.
+- **Etiqueta de inventario de YPF, separada del número de serie**: se
+  venía leyendo mezclada dentro de "texto" (ej. "Notebook Lenovo con
+  etiqueta de inventario YPF 582432") en vez de en su propio campo —
+  mismo criterio que ya tenía `numero_serie`, que es del fabricante y es
+  un campo distinto. Se agregó `etiqueta_ypf` a `rack_equipamientos` y
+  `equipos`, y el prompt de lectura de fotos ahora la busca
+  específicamente, aclarando que no es ni la marca/modelo ni el número de
+  serie del fabricante.

@@ -31,8 +31,10 @@ const EQUIPO_NUEVO_BASE = {
   categoriaEquipo: "otro" as RackCategoriaEquipo,
   marcaModelo: "",
   posicionU: "",
+  etiquetaYpf: "",
   cantidad: 1,
-  consumoEstimadoW: null as number | null,
+  consumoPromedioW: null as number | null,
+  consumoMaxW: null as number | null,
 };
 
 export function NuevoRelevamientoForm({
@@ -167,8 +169,10 @@ export function NuevoRelevamientoForm({
         categoriaEquipo: RackCategoriaEquipo;
         marcaModelo: string;
         posicionU: string;
+        etiquetaYpf: string;
         identificado: boolean;
-        consumoEstimadoW: number | null;
+        consumoPromedioW: number | null;
+        consumoMaxW: number | null;
       }[] = data.equipos ?? [];
       if (detectados.length === 0) {
         setIaNote(
@@ -188,8 +192,10 @@ export function NuevoRelevamientoForm({
           texto: d.texto,
           marcaModelo: d.marcaModelo,
           posicionU: d.posicionU,
+          etiquetaYpf: d.etiquetaYpf,
           cantidad: 1,
-          consumoEstimadoW: d.consumoEstimadoW,
+          consumoPromedioW: d.consumoPromedioW,
+          consumoMaxW: d.consumoMaxW,
           revisar: d.identificado !== true,
         })),
       ]);
@@ -292,8 +298,10 @@ export function NuevoRelevamientoForm({
               texto: e.texto.trim(),
               marcaModelo: e.marcaModelo.trim(),
               posicionU: e.posicionU.trim(),
+              etiquetaYpf: e.etiquetaYpf.trim(),
               cantidad: e.cantidad,
-              consumoEstimadoW: e.consumoEstimadoW,
+              consumoPromedioW: e.consumoPromedioW,
+              consumoMaxW: e.consumoMaxW,
               estado: l.estado,
               comentario: l.comentario,
             };
@@ -632,6 +640,16 @@ export function NuevoRelevamientoForm({
                             disabled={submitting}
                           />
                         </div>
+                        <div className="field" style={{ marginBottom: 0, width: 110 }}>
+                          <label style={{ fontSize: 11 }}>Etiqueta YPF</label>
+                          <input
+                            type="text"
+                            placeholder="N° inventario"
+                            value={e.etiquetaYpf}
+                            onChange={(ev) => actualizarEquipo(i, { etiquetaYpf: ev.target.value })}
+                            disabled={submitting}
+                          />
+                        </div>
                         <div className="field" style={{ marginBottom: 0, width: 80 }}>
                           <label style={{ fontSize: 11 }}>Cantidad</label>
                           <input
@@ -643,13 +661,24 @@ export function NuevoRelevamientoForm({
                           />
                         </div>
                         <div className="field" style={{ marginBottom: 0, width: 100 }}>
-                          <label style={{ fontSize: 11 }}>Consumo est. (W)</label>
+                          <label style={{ fontSize: 11 }}>Consumo prom. (W)</label>
                           <input
                             type="number"
                             min={0}
                             placeholder="IA / manual"
-                            value={e.consumoEstimadoW ?? ""}
-                            onChange={(ev) => actualizarEquipo(i, { consumoEstimadoW: ev.target.value === "" ? null : Number(ev.target.value) })}
+                            value={e.consumoPromedioW ?? ""}
+                            onChange={(ev) => actualizarEquipo(i, { consumoPromedioW: ev.target.value === "" ? null : Number(ev.target.value) })}
+                            disabled={submitting}
+                          />
+                        </div>
+                        <div className="field" style={{ marginBottom: 0, width: 100 }}>
+                          <label style={{ fontSize: 11 }}>Consumo máx. (W)</label>
+                          <input
+                            type="number"
+                            min={0}
+                            placeholder="IA / manual"
+                            value={e.consumoMaxW ?? ""}
+                            onChange={(ev) => actualizarEquipo(i, { consumoMaxW: ev.target.value === "" ? null : Number(ev.target.value) })}
                             disabled={submitting}
                           />
                         </div>
@@ -663,8 +692,10 @@ export function NuevoRelevamientoForm({
                       {e.numero} — {e.texto} · {CATEGORIA_EQUIPO_LABEL[e.categoriaEquipo]}
                       {e.marcaModelo ? ` · ${e.marcaModelo}` : ""}
                       {e.posicionU ? ` · ${e.posicionU}` : ""}
+                      {e.etiquetaYpf ? ` · YPF ${e.etiquetaYpf}` : ""}
                       {e.cantidad > 1 ? ` · x${e.cantidad}` : ""}
-                      {e.consumoEstimadoW ? ` · ~${e.consumoEstimadoW}W` : ""}
+                      {e.consumoPromedioW ? ` · ~${e.consumoPromedioW}W prom.` : ""}
+                      {e.consumoMaxW ? ` · ~${e.consumoMaxW}W máx.` : ""}
                     </div>
                   )}
 

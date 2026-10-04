@@ -24,8 +24,10 @@ interface EquipoDetectado {
   categoriaEquipo: RackCategoriaEquipo;
   marcaModelo: string;
   posicionU: string;
+  etiquetaYpf: string;
   identificado: boolean;
-  consumoEstimadoW: number | null;
+  consumoPromedioW: number | null;
+  consumoMaxW: number | null;
 }
 
 const CATEGORIAS_TEXTO = CATEGORIA_EQUIPO_OPCIONES.map((c) => `"${c}" (${CATEGORIA_EQUIPO_LABEL[c]})`).join(", ");
@@ -100,10 +102,11 @@ export async function POST(req: NextRequest) {
         "solo dejá la lista vacía si la foto no muestra ningún rack o equipo reconocible.\n\n" +
         "Para cada equipo completá estos campos:\n" +
         '- "numero": posición secuencial empezando en 1 (de arriba hacia abajo del rack).\n' +
-        '- "texto": la etiqueta/nombre tal cual se lee si hay uno legible (impreso en el frente, escrito a mano o en cinta). Si NO hay ' +
-        "ninguna etiqueta legible, este campo es OBLIGATORIO igual: describí el equipo por lo que ves físicamente (tipo de gabinete, " +
-        "cantidad de puertos, LEDs, ranuras, tamaño en el rack, etc.). Nunca lo dejes vacío, y nunca inventes un nombre de equipo " +
-        'específico que no puedas justificar por lo que ves.\n' +
+        '- "texto": la etiqueta/nombre tal cual se lee si hay uno legible (impreso en el frente, escrito a mano o en cinta) — NUNCA el ' +
+        "número de una etiqueta de inventario de YPF, que va aparte en \"etiquetaYpf\". Si NO hay ninguna etiqueta/nombre legible " +
+        "(aparte de una de inventario), este campo es OBLIGATORIO igual: describí el equipo por lo que ves físicamente (tipo de " +
+        'gabinete, cantidad de puertos, LEDs, ranuras, tamaño en el rack, etc.). Nunca lo dejes vacío, y nunca inventes un nombre de ' +
+        'equipo específico que no puedas justificar por lo que ves.\n' +
         '- "identificado": true si "texto" viene de una etiqueta legible, false si es tu descripción visual.\n' +
         `- "categoriaEquipo": EXACTAMENTE una de estas cadenas, la que mejor describa el equipo por su forma/función: ${CATEGORIAS_TEXTO}. ` +
         'Usá "otro" solo si de verdad no encaja en ninguna.\n' +
@@ -111,17 +114,27 @@ export async function POST(req: NextRequest) {
         'Cadena vacía "" si no se ve o no es legible — no inventes ni adivines una marca/modelo que no puedas leer.\n' +
         '- "posicionU": la posición en el rack si se ve numeración de unidades (U) en el riel lateral (ej. "U12"). Cadena vacía "" si no ' +
         "hay numeración visible en la foto.\n" +
-        '- "consumoEstimadoW": SOLO si identificaste una marca/modelo específica en "marcaModelo" y la reconocés con confianza por tu ' +
-        "conocimiento general de ese producto (no por la foto) — tu mejor estimación del consumo eléctrico típico en Watts de ese " +
-        "equipo en operación normal (ej. un rectificador grande puede ser varios cientos de W, un switch chico unos 20-40W). Es una " +
-        "ESTIMACIÓN para planificación energética, no una medición — está bien dar un número aproximado si conocés el rango típico de " +
-        "ese modelo o de modelos muy similares de la misma familia/fabricante. Usá null si no viste marca/modelo legible, o si la " +
-        "marca/modelo no te resulta nada familiar — nunca inventes un número para un equipo que no podés justificar de ninguna forma.\n\n" +
-        "No inventes equipos que no estén en la foto, y no adivines una marca/modelo/posición que no puedas justificar por lo que ves — " +
-        'pero "texto" y "categoriaEquipo" son obligatorios en todos los casos, con tu mejor estimación visual si hace falta.\n\n' +
+        '- "etiquetaYpf": el número de una etiqueta/chapa de INVENTARIO DE YPF si hay una pegada en el equipo (suele ser un sticker o ' +
+        "chapa metálica con un código numérico, distinta de la chapa de serie del fabricante). Cadena vacía \"\" si no hay una etiqueta " +
+        "de inventario así, o no es legible — no la confundas con el número de serie del fabricante ni con marcaModelo.\n" +
+        '- "consumoPromedioW": SOLO si identificaste una marca/modelo específica en "marcaModelo" y la reconocés con confianza por tu ' +
+        "conocimiento general de ese producto (no por la foto) — tu mejor estimación de cuánto consume ESE EQUIPO en Watts en uso " +
+        "normal/típico (ej. un rectificador grande puede ser varios cientos de W en operación normal, un switch chico unos 20-40W). " +
+        "Importante: esto es el consumo REAL típico del equipo, NUNCA el vatiaje nominal de su fuente/cargador/power supply si ese " +
+        "número es mayor — una fuente de 65W es lo máximo que PUEDE entregar, no lo que el equipo consume la mayoría del tiempo.\n" +
+        '- "consumoMaxW": tu mejor estimación del consumo PICO/MÁXIMO de ese mismo equipo en Watts, bajo la carga más alta que pueda ' +
+        "darse en operación normal (ej. al arrancar, con todos los puertos/baterías/cargas conectadas a la vez). Este número sí puede " +
+        "acercarse al vatiaje nominal de la fuente del equipo, cuando el equipo puede llegar a exigirle casi toda su capacidad — pero " +
+        "no lo copies mecánicamente del vatiaje de la fuente sin pensarlo: tiene que ser siempre mayor o igual a consumoPromedioW.\n" +
+        'Para ambos campos de consumo: es una ESTIMACIÓN para planificación energética, no una medición — está bien dar un número ' +
+        "aproximado si conocés el rango típico de ese modelo o de modelos muy similares de la misma familia/fabricante. Usá null en " +
+        "los dos si no viste marca/modelo legible, o si la marca/modelo no te resulta nada familiar — nunca inventes un número para " +
+        "un equipo que no podés justificar de ninguna forma.\n\n" +
+        "No inventes equipos que no estén en la foto, y no adivines una marca/modelo/posición/etiqueta que no puedas justificar por lo " +
+        'que ves — pero "texto" y "categoriaEquipo" son obligatorios en todos los casos, con tu mejor estimación visual si hace falta.\n\n' +
         'Respondé ÚNICAMENTE con un JSON válido: un array de objetos {"numero": number, "texto": string, "categoriaEquipo": string, ' +
-        '"marcaModelo": string, "posicionU": string, "identificado": boolean, "consumoEstimadoW": number | null}, sin texto antes ni ' +
-        "después, sin bloque de código markdown.",
+        '"marcaModelo": string, "posicionU": string, "etiquetaYpf": string, "identificado": boolean, "consumoPromedioW": number | ' +
+        'null, "consumoMaxW": number | null}, sin texto antes ni después, sin bloque de código markdown.',
       messages: [
         {
           role: "user",
@@ -172,8 +185,10 @@ export async function POST(req: NextRequest) {
           categoriaEquipo: (categoriasValidas.has(e.categoriaEquipo) ? e.categoriaEquipo : "otro") as RackCategoriaEquipo,
           marcaModelo: typeof e.marcaModelo === "string" ? e.marcaModelo.trim().slice(0, 80) : "",
           posicionU: typeof e.posicionU === "string" ? e.posicionU.trim().slice(0, 20) : "",
+          etiquetaYpf: typeof e.etiquetaYpf === "string" ? e.etiquetaYpf.trim().slice(0, 40) : "",
           identificado: e.identificado === true,
-          consumoEstimadoW: Number.isFinite(e.consumoEstimadoW) && (e.consumoEstimadoW as number) > 0 ? (e.consumoEstimadoW as number) : null,
+          consumoPromedioW: Number.isFinite(e.consumoPromedioW) && (e.consumoPromedioW as number) > 0 ? (e.consumoPromedioW as number) : null,
+          consumoMaxW: Number.isFinite(e.consumoMaxW) && (e.consumoMaxW as number) > 0 ? (e.consumoMaxW as number) : null,
         })),
     });
   } catch (err) {

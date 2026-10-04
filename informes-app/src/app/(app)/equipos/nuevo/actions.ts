@@ -15,8 +15,10 @@ interface PayloadLectura {
   texto: string;
   marcaModelo: string;
   numeroSerie: string;
+  etiquetaYpf: string;
   cantidad: number;
-  consumoEstimadoW: number | null;
+  consumoPromedioW: number | null;
+  consumoMaxW: number | null;
   estado: string;
   comentario: string;
 }
@@ -90,8 +92,10 @@ export async function crearRelevamientoEquiposAction(formData: FormData): Promis
         texto: l.texto.trim(),
         marca_modelo: l.marcaModelo.trim() || null,
         numero_serie: l.numeroSerie.trim() || null,
+        etiqueta_ypf: l.etiquetaYpf.trim() || null,
         cantidad: Number.isFinite(l.cantidad) && l.cantidad > 0 ? l.cantidad : 1,
-        consumo_estimado_w: Number.isFinite(l.consumoEstimadoW) && (l.consumoEstimadoW as number) > 0 ? l.consumoEstimadoW : null,
+        consumo_promedio_w: Number.isFinite(l.consumoPromedioW) && (l.consumoPromedioW as number) > 0 ? l.consumoPromedioW : null,
+        consumo_max_w: Number.isFinite(l.consumoMaxW) && (l.consumoMaxW as number) > 0 ? l.consumoMaxW : null,
         created_by: profile.id,
       })
       .select("id")
