@@ -703,3 +703,14 @@ npm run dev
   de prueba" importa por las FK entre tablas (algunas son `RESTRICT`
   hacia su tabla "padre", no `CASCADE`) — documentado en el propio
   archivo.
+- **Bug: "ver PDF" en los Historiales en realidad descargaba el archivo**
+  (Informe Técnico, Rendición, Tableros, Racks, Equipos, Bajas): el botón
+  armaba un blob a partir de la URL firmada y lo "clickeaba" con un
+  `<a download>` — eso fuerza la descarga siempre, sin importar qué
+  diga el servidor, así que no había forma de solo mirar el PDF sin que
+  se fuera a la carpeta de Descargas. Ahora abre la URL firmada
+  directo en una pestaña nueva (`window.open`, mismo criterio que ya
+  usaban los botones de "ver foto"), y el visor de PDF nativo del
+  navegador lo muestra ahí — si alguien quiere además guardarlo, el
+  propio visor tiene su botón de descarga. La selección múltiple +
+  `.zip` de Informe Técnico no se tocó: esa sí necesita el blob real.

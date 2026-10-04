@@ -39,7 +39,7 @@ export function HistorialBajas({ bajas }: { bajas: HistorialBajaRow[] }) {
     );
   }, [bajas, query]);
 
-  async function verDescargarPdf(id: string, numeroGeneracion: string) {
+  async function verComprobante(id: string) {
     setBusyId(id);
     setNotice(null);
     const res = await obtenerUrlPdfBajaAction(id);
@@ -48,15 +48,7 @@ export function HistorialBajas({ bajas }: { bajas: HistorialBajaRow[] }) {
       setNotice(res.error || "No se pudo abrir el PDF.");
       return;
     }
-    const blob = await fetch(res.url).then((r) => r.blob());
-    const blobUrl = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = blobUrl;
-    a.download = res.filename || `${numeroGeneracion}.pdf`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(blobUrl);
+    window.open(res.url, "_blank", "noopener,noreferrer");
   }
 
   return (
@@ -99,11 +91,11 @@ export function HistorialBajas({ bajas }: { bajas: HistorialBajaRow[] }) {
                   <button
                     type="button"
                     className="icon-btn"
-                    title={b.pdfDisponible ? "Ver / descargar comprobante" : "Sin comprobante disponible"}
+                    title={b.pdfDisponible ? "Ver comprobante" : "Sin comprobante disponible"}
                     disabled={!b.pdfDisponible || busyId === b.id}
-                    onClick={() => verDescargarPdf(b.id, b.numeroGeneracion)}
+                    onClick={() => verComprobante(b.id)}
                   >
-                    {busyId === b.id ? "…" : <Icon name="download" size={15} />}
+                    {busyId === b.id ? "…" : <Icon name="eye" size={15} />}
                   </button>
                 </div>
               </div>

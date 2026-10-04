@@ -32,7 +32,7 @@ export function HistorialRendiciones({ rendiciones: rendicionesIniciales, esAdmi
 
   const filtered = useMemo(() => filtrarRendicionesPorConsulta(rendiciones, query), [rendiciones, query]);
 
-  async function verPdf(id: string, numeroGeneracion: string) {
+  async function verPdf(id: string) {
     setBusyId(id);
     setNotice(null);
     const res = await obtenerUrlPdfRendicionAction(id);
@@ -41,15 +41,7 @@ export function HistorialRendiciones({ rendiciones: rendicionesIniciales, esAdmi
       setNotice(res.error || "No se pudo abrir el PDF.");
       return;
     }
-    const blob = await fetch(res.url).then((r) => r.blob());
-    const blobUrl = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = blobUrl;
-    a.download = res.filename || `${numeroGeneracion}.pdf`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(blobUrl);
+    window.open(res.url, "_blank", "noopener,noreferrer");
   }
 
   async function eliminar(id: string, motivo: string) {
@@ -131,7 +123,7 @@ export function HistorialRendiciones({ rendiciones: rendicionesIniciales, esAdmi
                         className="icon-btn"
                         title={r.pdfDisponible ? "Ver PDF" : "Sin PDF disponible"}
                         disabled={!r.pdfDisponible || busyId === r.id}
-                        onClick={() => verPdf(r.id, r.numeroGeneracion)}
+                        onClick={() => verPdf(r.id)}
                       >
                         {busyId === r.id ? "…" : <Icon name="document" size={15} />}
                       </button>

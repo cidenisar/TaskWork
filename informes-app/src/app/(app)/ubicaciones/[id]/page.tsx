@@ -530,7 +530,7 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
                 </div>
                 <div className="hist-actions">
                   {b.pdf_url ? (
-                    <DescargarBajaBoton bajaId={b.id} numeroGeneracion={b.numero_generacion} />
+                    <DescargarBajaBoton bajaId={b.id} />
                   ) : (
                     <span className="hint">Sin comprobante</span>
                   )}

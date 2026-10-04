@@ -61,7 +61,7 @@ export function HistorialTableros({
     );
   }, [mantenimientos, query]);
 
-  async function verDescargarPdf(id: string, numeroGeneracion: string) {
+  async function verPdf(id: string) {
     setBusyId(id);
     setNotice(null);
     const res = await obtenerUrlPdfMedicionAction(id);
@@ -70,15 +70,7 @@ export function HistorialTableros({
       setNotice(res.error || "No se pudo abrir el PDF.");
       return;
     }
-    const blob = await fetch(res.url).then((r) => r.blob());
-    const blobUrl = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = blobUrl;
-    a.download = res.filename || `${numeroGeneracion}.pdf`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(blobUrl);
+    window.open(res.url, "_blank", "noopener,noreferrer");
   }
 
   async function verFoto(id: string) {
@@ -182,11 +174,11 @@ export function HistorialTableros({
                     <button
                       type="button"
                       className="icon-btn"
-                      title={m.pdfDisponible ? "Ver / descargar PDF" : "Sin PDF disponible"}
+                      title={m.pdfDisponible ? "Ver PDF" : "Sin PDF disponible"}
                       disabled={!m.pdfDisponible || busyId === m.id}
-                      onClick={() => verDescargarPdf(m.id, m.numeroGeneracion)}
+                      onClick={() => verPdf(m.id)}
                     >
-                      {busyId === m.id ? "…" : <Icon name="download" size={15} />}
+                      {busyId === m.id ? "…" : <Icon name="eye" size={15} />}
                     </button>
                     {esAdmin && (
                       <button

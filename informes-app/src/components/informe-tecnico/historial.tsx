@@ -41,7 +41,7 @@ export function HistorialInformes({ informes: informesIniciales, esAdmin }: { in
     });
   }
 
-  async function verDescargar(id: string, numeroGeneracion: string) {
+  async function verPdf(id: string) {
     setBusyId(id);
     setNotice(null);
     const res = await obtenerUrlPdfInformeAction(id);
@@ -50,15 +50,7 @@ export function HistorialInformes({ informes: informesIniciales, esAdmin }: { in
       setNotice(res.error || "No se pudo abrir el PDF.");
       return;
     }
-    const blob = await fetch(res.url).then((r) => r.blob());
-    const blobUrl = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = blobUrl;
-    a.download = res.filename || `${numeroGeneracion}.pdf`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(blobUrl);
+    window.open(res.url, "_blank", "noopener,noreferrer");
   }
 
   async function eliminar(id: string, titulo: string) {
@@ -194,11 +186,11 @@ export function HistorialInformes({ informes: informesIniciales, esAdmin }: { in
                   <button
                     type="button"
                     className="icon-btn"
-                    title={i.pdfDisponible ? "Ver / descargar PDF" : "Sin PDF disponible"}
+                    title={i.pdfDisponible ? "Ver PDF" : "Sin PDF disponible"}
                     disabled={!i.pdfDisponible || busyId === i.id}
-                    onClick={() => verDescargar(i.id, i.numeroGeneracion)}
+                    onClick={() => verPdf(i.id)}
                   >
-                    {busyId === i.id ? "…" : <Icon name="download" size={15} />}
+                    {busyId === i.id ? "…" : <Icon name="eye" size={15} />}
                   </button>
                   {esAdmin && (
                     <button
