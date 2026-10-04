@@ -296,15 +296,22 @@ npm run dev
   (por ejemplo un tablero y un rack, los dos en la sala "Luján 1") quedan
   bajo el mismo `ubicacion_id` en vez de fragmentarse en variantes de texto
   distintas ("Luján 1", "sala lujan", "Lujan I"...). La pestaña
-  **Ubicaciones** lista todas las Ubicaciones cargadas con la cantidad de
-  tableros/racks en cada una, y el detalle de una Ubicación agrega **todo**
-  el equipamiento relevado ahí — el resumen por categoría de Tableros
-  (térmicas, disyuntores, cámaras...) y de Racks (routers, switches,
-  UPS...) combinados, más la fecha del último relevamiento de cada
-  tablero/rack — sin importar qué técnico cargó cada uno (el estado de
-  `tableros`/`racks`/sus circuitos y equipamiento es visible para cualquier
-  usuario autenticado por RLS, igual que el resto de esos catálogos; la
-  fecha del último relevamiento respeta la misma RLS de
+  **Ubicaciones** (`src/components/ubicaciones/lista.tsx`) navega en 3
+  pasos — **Región → Provincia → Sitio**, igual jerarquía que la planilla
+  original — en vez de listar las ~1747 Ubicaciones del catálogo de una:
+  solo aparecen las que ya tienen algo relevado (al menos un tablero, rack
+  o equipo), filtrado server-side antes de mandarlas al cliente; el
+  catálogo completo sigue existiendo para elegir/crear al relevar, pero acá
+  sería puro ruido. Un buscador arriba de todo es el atajo — tipear ahí
+  busca en todo lo relevado de una, salteándose la navegación por niveles.
+  El detalle de una Ubicación agrega **todo** el equipamiento relevado ahí
+  — el resumen por categoría de Tableros (térmicas, disyuntores,
+  cámaras...), Racks (routers, switches, UPS...) y Equipos Individuales
+  (UPS, cámaras CCTV...) combinados, más la fecha del último relevamiento
+  de cada tablero/rack — sin importar qué técnico cargó cada uno (el
+  estado de `tableros`/`racks`/`equipos` y su equipamiento es visible para
+  cualquier usuario autenticado por RLS, igual que el resto de esos
+  catálogos; la fecha del último relevamiento respeta la misma RLS de
   Historial — visible si lo cargó el usuario actual o si es
   Admin/Supervisor). **Informe Técnico** y **Rendición de Gastos** usan el
   mismo picker (`UbicacionFields`, con `requerido={false}` porque ahí la

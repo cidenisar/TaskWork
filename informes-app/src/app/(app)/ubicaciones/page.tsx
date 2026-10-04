@@ -30,21 +30,27 @@ export default async function UbicacionesPage() {
     equiposPorUbicacion.set(e.ubicacion_id, (equiposPorUbicacion.get(e.ubicacion_id) ?? 0) + 1);
   }
 
-  const ubicaciones: UbicacionRow[] = (ubicacionesRes.data ?? []).map((u) => ({
-    id: u.id,
-    pais: u.pais,
-    region: u.region,
-    provincia: u.provincia,
-    localidad: u.localidad,
-    sitio: u.sitio,
-    planta: u.planta,
-    oficina: u.oficina,
-    lat: u.lat,
-    lng: u.lng,
-    cantTableros: tablerosPorUbicacion.get(u.id) ?? 0,
-    cantRacks: racksPorUbicacion.get(u.id) ?? 0,
-    cantEquipos: equiposPorUbicacion.get(u.id) ?? 0,
-  }));
+  // El catálogo trae ~1747 sitios precargados de toda Argentina (para elegir
+  // al relevar) — mostrarlos todos acá sería puro ruido. Esta pantalla es un
+  // mapa de "dónde ya relevamos algo", así que solo se listan las que tienen
+  // al menos un tablero/rack/equipo cargado.
+  const ubicaciones: UbicacionRow[] = (ubicacionesRes.data ?? [])
+    .map((u) => ({
+      id: u.id,
+      pais: u.pais,
+      region: u.region,
+      provincia: u.provincia,
+      localidad: u.localidad,
+      sitio: u.sitio,
+      planta: u.planta,
+      oficina: u.oficina,
+      lat: u.lat,
+      lng: u.lng,
+      cantTableros: tablerosPorUbicacion.get(u.id) ?? 0,
+      cantRacks: racksPorUbicacion.get(u.id) ?? 0,
+      cantEquipos: equiposPorUbicacion.get(u.id) ?? 0,
+    }))
+    .filter((u) => u.cantTableros > 0 || u.cantRacks > 0 || u.cantEquipos > 0);
 
   return <ListaUbicaciones ubicaciones={ubicaciones} />;
 }

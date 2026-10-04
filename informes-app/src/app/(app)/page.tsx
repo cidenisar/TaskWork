@@ -47,7 +47,7 @@ export default async function HomePage() {
           </div>
           <div className="module-title">Ubicaciones</div>
           <div className="module-sub">
-            Resumen por provincia, sector/oficina y sala — todo el equipamiento de tableros y racks de un mismo lugar
+            Navegá Región → Provincia → Sitio y mirá todo lo relevado en cada lugar — tableros, racks y equipos
           </div>
         </Link>
         <Link href="/estadisticas" className="module-card">
