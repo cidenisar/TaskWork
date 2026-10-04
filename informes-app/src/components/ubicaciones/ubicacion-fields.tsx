@@ -15,9 +15,11 @@ type ResolverGpsResponse =
   | { tipo: "geocoded"; provincia: string; localidad: string | null }
   | { tipo: "sin_datos" };
 
+const SIN_VALOR = ""; // agrupa filas sin planta/oficina cargada (null) bajo una sola clave
+
 /**
- * Selector de Ubicación (Provincia → Sitio → Planta/Oficina) reutilizado por
- * Tableros, Racks, Informe Técnico, Rendición de Gastos y Equipos —
+ * Selector de Ubicación (Provincia → Sitio → Planta → Oficina) reutilizado
+ * por Tableros, Racks, Informe Técnico, Rendición de Gastos y Equipos —
  * reemplaza el campo de texto libre "sitio" que tenía cada módulo por
  * separado. El botón "Usar mi ubicación" toma el GPS del dispositivo y:
  *  - si cae cerca de una Ubicación que algún otro técnico ya confirmó antes
@@ -29,12 +31,14 @@ type ResolverGpsResponse =
  * El técnico puede ignorar el GPS y elegir todo a mano igual. País y Región
  * nunca se tipean: Región se deriva de la Provincia.
  *
- * El paso Sitio → Planta/Oficina existe porque un solo sitio grande (ej. una
- * refinería) puede tener decenas de plantas en el catálogo — listarlas todas
- * juntas en un desplegable plano (como era antes) es imposible de recorrer
- * en el celular. Primero se elige el Sitio (lista corta), y solo si ESE
- * sitio tiene más de una Planta/Oficina cargada aparece un segundo
- * desplegable ya acotado a ese sitio; si tiene una sola, se elige sola.
+ * Cada nivel de la jerarquía (Sitio → Planta → Oficina) es su PROPIO paso,
+ * con su propio "+ Crear nuevo..." — un sitio grande (ej. una refinería)
+ * tiene varias Plantas (Comunicaciones, Puesto 1, Puesto 2...), y algunas de
+ * esas Plantas a su vez se dividen en Oficinas (Radio Luján 1, Sala de
+ * baterías...), pero la mayoría no — ahí el flujo termina en Planta sin
+ * pedir Oficina. Listar todo junto en un solo desplegable (como era antes)
+ * es imposible de recorrer en el celular para un sitio con decenas de
+ * plantas, así que cada paso solo muestra las opciones del nivel anterior.
  */
 export function UbicacionFields({
   ubicaciones,
@@ -77,16 +81,24 @@ export function UbicacionFields({
   const [gpsBusy, setGpsBusy] = useState(false);
   const [gpsError, setGpsError] = useState<string | null>(null);
   const [gpsAviso, setGpsAviso] = useState<string | null>(null);
-  // "" = sin elegir, "__new" = crear sitio nuevo, o el nombre del sitio elegido.
-  // Se inicializa en base al ubicacionId que venga de afuera (ej. un informe
-  // viejo que ya tenía una Ubicación elegida al entrar a editarlo) — a partir
-  // de ahí, cada lugar que cambia ubicacionId adentro de este componente
-  // actualiza sitioFiltro a mano, en vez de usar un efecto para sincronizarlo.
-  const [sitioFiltro, setSitioFiltro] = useState<string>(() => {
-    if (ubicacionId === "__new") return "__new";
+
+  // "" = sin elegir, "__new" = crear nuevo en ese nivel, o el valor elegido.
+  // Se inicializan en base al ubicacionId que venga de afuera (ej. un
+  // informe viejo que ya tenía una Ubicación elegida al entrar a editarlo) —
+  // a partir de ahí, cada lugar que cambia ubicacionId adentro de este
+  // componente actualiza estos 3 a mano, en vez de usar un efecto.
+  const estadoInicial = (campo: "sitio" | "planta" | "oficina") => {
+    if (ubicacionId === "__new") return campo === "sitio" ? "__new" : "";
     if (!ubicacionId) return "";
-    return ubicaciones.find((u) => u.id === ubicacionId)?.sitio ?? "";
-  });
+    const fila = ubicaciones.find((u) => u.id === ubicacionId);
+    if (!fila) return "";
+    if (campo === "sitio") return fila.sitio;
+    if (campo === "planta") return fila.planta ?? SIN_VALOR;
+    return fila.oficina ?? SIN_VALOR;
+  };
+  const [sitioEl, setSitioEl] = useState<string>(() => estadoInicial("sitio"));
+  const [plantaEl, setPlantaEl] = useState<string>(() => estadoInicial("planta"));
+  const [oficinaEl, setOficinaEl] = useState<string>(() => estadoInicial("oficina"));
 
   const ubicacionesDeLaProvincia = useMemo(
     () => ubicaciones.filter((u) => u.provincia === provinciaFiltro),
@@ -106,18 +118,103 @@ export function UbicacionFields({
   }, [ubicacionesDeLaProvincia]);
 
   const filasDelSitio = useMemo(
-    () => (sitioFiltro && sitioFiltro !== "__new" ? ubicacionesDeLaProvincia.filter((u) => u.sitio === sitioFiltro) : []),
-    [ubicacionesDeLaProvincia, sitioFiltro],
+    () => (sitioEl && sitioEl !== "__new" ? ubicacionesDeLaProvincia.filter((u) => u.sitio === sitioEl) : []),
+    [ubicacionesDeLaProvincia, sitioEl],
   );
 
+  const plantasDelSitio = useMemo(() => {
+    const vistas = new Set<string>();
+    const lista: string[] = [];
+    for (const u of filasDelSitio) {
+      const p = u.planta ?? SIN_VALOR;
+      if (!vistas.has(p)) {
+        vistas.add(p);
+        lista.push(p);
+      }
+    }
+    return lista.sort((a, b) => a.localeCompare(b));
+  }, [filasDelSitio]);
+
+  const filasDeLaPlanta = useMemo(
+    () => (plantaEl && plantaEl !== "__new" ? filasDelSitio.filter((u) => (u.planta ?? SIN_VALOR) === plantaEl) : []),
+    [filasDelSitio, plantaEl],
+  );
+
+  const oficinasDeLaPlanta = useMemo(() => {
+    const vistas = new Set<string>();
+    const lista: string[] = [];
+    for (const u of filasDeLaPlanta) {
+      const o = u.oficina ?? SIN_VALOR;
+      if (!vistas.has(o)) {
+        vistas.add(o);
+        lista.push(o);
+      }
+    }
+    return lista.sort((a, b) => a.localeCompare(b));
+  }, [filasDeLaPlanta]);
+
+  /** Precarga sitioNueva/localidadNueva (y plantaNueva si corresponde) desde una fila existente, para crear un nivel nuevo sin reescribir lo que ya se eligió. */
+  function precargarDesde(fila: Ubicacion | undefined, incluirPlanta: boolean) {
+    if (!fila) return;
+    onSitioNuevaChange(fila.sitio);
+    onLocalidadNuevaChange(fila.localidad ?? "");
+    if (incluirPlanta) onPlantaNuevaChange(fila.planta ?? "");
+  }
+
   function elegirSitio(s: string) {
-    setSitioFiltro(s);
+    setSitioEl(s);
+    setPlantaEl("");
+    setOficinaEl("");
     if (s === "__new") {
       onUbicacionIdChange("__new");
+      onSitioNuevaChange("");
+      onLocalidadNuevaChange("");
+      onPlantaNuevaChange("");
+      onOficinaNuevaChange("");
       return;
     }
     const filas = ubicacionesDeLaProvincia.filter((u) => u.sitio === s);
-    onUbicacionIdChange(filas.length === 1 ? filas[0].id : "");
+    const plantas = [...new Set(filas.map((u) => u.planta ?? SIN_VALOR))];
+    if (plantas.length === 1) {
+      elegirPlantaInterno(plantas[0], filas);
+    } else {
+      onUbicacionIdChange("");
+    }
+  }
+
+  function elegirPlanta(p: string) {
+    elegirPlantaInterno(p, filasDelSitio);
+  }
+
+  function elegirPlantaInterno(p: string, filasSitio: Ubicacion[]) {
+    setPlantaEl(p);
+    setOficinaEl("");
+    if (p === "__new") {
+      onUbicacionIdChange("__new");
+      precargarDesde(filasSitio[0], false);
+      onPlantaNuevaChange("");
+      onOficinaNuevaChange("");
+      return;
+    }
+    const filas = filasSitio.filter((u) => (u.planta ?? SIN_VALOR) === p);
+    const oficinas = [...new Set(filas.map((u) => u.oficina ?? SIN_VALOR))];
+    if (oficinas.length === 1) {
+      onUbicacionIdChange(filas[0].id);
+    } else {
+      onUbicacionIdChange("");
+    }
+  }
+
+  function elegirOficina(o: string) {
+    setOficinaEl(o);
+    if (o === "__new") {
+      onUbicacionIdChange("__new");
+      precargarDesde(filasDeLaPlanta[0], true);
+      onOficinaNuevaChange("");
+      return;
+    }
+    const fila = filasDeLaPlanta.find((u) => (u.oficina ?? SIN_VALOR) === o);
+    onUbicacionIdChange(fila ? fila.id : "");
   }
 
   async function usarMiUbicacion() {
@@ -160,11 +257,17 @@ export function UbicacionFields({
         onProvinciaFiltroChange(data.provincia);
         onUbicacionIdChange(data.ubicacionId);
         const fila = ubicaciones.find((u) => u.id === data.ubicacionId);
-        if (fila) setSitioFiltro(fila.sitio);
+        if (fila) {
+          setSitioEl(fila.sitio);
+          setPlantaEl(fila.planta ?? SIN_VALOR);
+          setOficinaEl(fila.oficina ?? SIN_VALOR);
+        }
         setGpsAviso(`📍 Detectamos "${data.label}" a ${data.distanciaM}m${precisionAviso}.`);
       } else if (data.tipo === "geocoded") {
         onProvinciaFiltroChange(data.provincia);
-        setSitioFiltro("__new");
+        setSitioEl("__new");
+        setPlantaEl("");
+        setOficinaEl("");
         onUbicacionIdChange("__new");
         onLocalidadNuevaChange(data.localidad ?? "");
         setGpsAviso(
@@ -202,7 +305,9 @@ export function UbicacionFields({
           value={provinciaFiltro}
           onChange={(e) => {
             onProvinciaFiltroChange(e.target.value);
-            setSitioFiltro("");
+            setSitioEl("");
+            setPlantaEl("");
+            setOficinaEl("");
             onUbicacionIdChange("");
           }}
           disabled={disabled}
@@ -220,7 +325,7 @@ export function UbicacionFields({
           <label>
             Sitio {requerido ? <span className="req">*</span> : <span className="opt">(opcional)</span>}
           </label>
-          <select value={sitioFiltro} onChange={(e) => elegirSitio(e.target.value)} disabled={disabled}>
+          <select value={sitioEl} onChange={(e) => elegirSitio(e.target.value)} disabled={disabled}>
             <option value="">Seleccionar sitio...</option>
             {sitiosDeLaProvincia.map((s) => (
               <option key={s} value={s}>
@@ -231,22 +336,85 @@ export function UbicacionFields({
           </select>
         </div>
       )}
-      {sitioFiltro && sitioFiltro !== "__new" && filasDelSitio.length > 1 && (
+      {sitioEl && sitioEl !== "__new" && plantasDelSitio.length > 1 && (
         <div className="field">
-          <label>
-            Planta / Oficina {requerido ? <span className="req">*</span> : <span className="opt">(opcional)</span>}
-          </label>
-          <select value={ubicacionId} onChange={(e) => onUbicacionIdChange(e.target.value)} disabled={disabled}>
-            <option value="">Seleccionar...</option>
-            {filasDelSitio.map((u) => (
-              <option key={u.id} value={u.id}>
-                {[u.oficina, u.planta].filter(Boolean).join(" · ") || "(sin planta/oficina especificada)"}
+          <label>Planta</label>
+          <select value={plantaEl} onChange={(e) => elegirPlanta(e.target.value)} disabled={disabled}>
+            <option value="">Seleccionar planta...</option>
+            {plantasDelSitio.map((p) => (
+              <option key={p || "__sin"} value={p}>
+                {p || "(sin planta especificada)"}
               </option>
             ))}
+            <option value="__new">+ Crear planta nueva...</option>
           </select>
         </div>
       )}
-      {ubicacionId === "__new" && (
+      {plantaEl === "__new" && (
+        <div className="grid2">
+          <div className="field">
+            <div className="hint" style={{ margin: 0 }}>
+              Sitio: {sitioNueva}
+            </div>
+          </div>
+          <div className="field">
+            <label>
+              Planta <span className="req">*</span>
+            </label>
+            <input
+              type="text"
+              placeholder="Ej: Edificio Comunicaciones"
+              value={plantaNueva}
+              onChange={(e) => onPlantaNuevaChange(e.target.value)}
+              disabled={disabled}
+            />
+          </div>
+          <div className="field">
+            <label>
+              Oficina <span className="opt">(opcional)</span>
+            </label>
+            <input
+              type="text"
+              placeholder="Ej: Sala de Radio"
+              value={oficinaNueva}
+              onChange={(e) => onOficinaNuevaChange(e.target.value)}
+              disabled={disabled}
+            />
+          </div>
+        </div>
+      )}
+      {plantaEl && plantaEl !== "__new" && oficinasDeLaPlanta.length > 1 && (
+        <div className="field">
+          <label>Oficina</label>
+          <select value={oficinaEl} onChange={(e) => elegirOficina(e.target.value)} disabled={disabled}>
+            <option value="">Seleccionar oficina...</option>
+            {oficinasDeLaPlanta.map((o) => (
+              <option key={o || "__sin"} value={o}>
+                {o || "(sin oficina especificada)"}
+              </option>
+            ))}
+            <option value="__new">+ Crear oficina nueva...</option>
+          </select>
+        </div>
+      )}
+      {oficinaEl === "__new" && (
+        <div className="field">
+          <div className="hint" style={{ margin: "0 0 6px" }}>
+            Sitio: {sitioNueva} · Planta: {plantaNueva}
+          </div>
+          <label>
+            Oficina <span className="req">*</span>
+          </label>
+          <input
+            type="text"
+            placeholder="Ej: Radio Luján 1"
+            value={oficinaNueva}
+            onChange={(e) => onOficinaNuevaChange(e.target.value)}
+            disabled={disabled}
+          />
+        </div>
+      )}
+      {sitioEl === "__new" && (
         <div className="grid2">
           <div className="field">
             <label>

@@ -276,15 +276,21 @@ npm run dev
   sugería la planilla fuente, a pedido del usuario se usó tal cual la
   columna "Región" de los datos). El formulario pide primero la Provincia
   para acotar el catálogo (se precargaron ~1747 sitios de la operación en
-  Argentina desde una planilla de la empresa), después el **Sitio**
-  (lista corta de nombres únicos de esa provincia), y recién si ese Sitio
-  tiene más de una Planta/Oficina cargada aparece un tercer select ya
-  acotado a ese Sitio — antes era un solo select plano con todas las
+  Argentina desde una planilla de la empresa), y de ahí **Sitio → Planta →
+  Oficina son 3 pasos separados**, cada uno con su propio "+ Crear
+  nuevo..." — un Sitio grande (ej. una refinería) tiene varias Plantas
+  (Comunicaciones, Puesto 1, Puesto 2...), y algunas de esas Plantas a su
+  vez se dividen en Oficinas (Radio Luján 1, Sala de baterías...), pero la
+  mayoría no — ahí el flujo termina en Planta sin pedir Oficina (un nivel
+  se salta solo si tiene una sola opción posible, sin hacer elegir algo que
+  no hace falta elegir). Antes era un solo select plano con todas las
   combinaciones Sitio+Planta+Oficina de la provincia juntas, que para una
   provincia con un complejo grande (ej. una refinería con ~80 plantas
   cargadas) se volvía un desplegable de cientos de opciones, imposible de
-  recorrer bien en el celular. Crear una Ubicación nueva sigue siendo
-  Localidad/Sitio/Planta/Oficina. El botón
+  recorrer bien en el celular. Crear un nivel nuevo dentro de un Sitio/
+  Planta existente (ej. una Oficina nueva en una Planta que ya estaba
+  cargada) solo pide el campo que falta — los niveles ya elegidos quedan
+  fijos, no se vuelven a escribir. El botón
   **"Usar mi ubicación"** (`src/app/api/ubicaciones/resolver-gps/route.ts`,
   `src/lib/geo.ts`) toma el GPS del dispositivo y: (1) si el punto cae a
   menos de 300m de una Ubicación que algún técnico ya confirmó antes (tiene
