@@ -9,6 +9,8 @@ export interface UbicacionRow extends Ubicacion {
   cantTableros: number;
   cantRacks: number;
   cantEquipos: number;
+  cantInformes: number;
+  cantRendiciones: number;
 }
 
 // Zonificación real de la operación (no alfabética) — el resto de las
@@ -107,6 +109,16 @@ export function ListaUbicaciones({ ubicaciones }: { ubicaciones: UbicacionRow[] 
           {u.cantEquipos > 0 && (
             <span className="chip">
               {u.cantEquipos} equipo{u.cantEquipos === 1 ? "" : "s"}
+            </span>
+          )}
+          {u.cantInformes > 0 && (
+            <span className="chip">
+              {u.cantInformes} informe{u.cantInformes === 1 ? "" : "s"}
+            </span>
+          )}
+          {u.cantRendiciones > 0 && (
+            <span className="chip">
+              {u.cantRendiciones} rendici{u.cantRendiciones === 1 ? "ón" : "ones"}
             </span>
           )}
           <Icon name="chevron-right" size={15} />

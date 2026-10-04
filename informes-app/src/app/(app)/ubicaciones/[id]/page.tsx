@@ -29,7 +29,7 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
     .single();
   if (!ubicacion) notFound();
 
-  const [tablerosRes, racksRes, equiposRes] = await Promise.all([
+  const [tablerosRes, racksRes, equiposRes, informesRes, rendicionesRes] = await Promise.all([
     supabase.from("tableros").select("id, denominacion, subsistemas").eq("ubicacion_id", id).order("denominacion"),
     supabase.from("racks").select("id, denominacion").eq("ubicacion_id", id).order("denominacion"),
     supabase
@@ -37,10 +37,24 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
       .select("id, categoria_equipo, texto, marca_modelo, numero_serie, cantidad")
       .eq("ubicacion_id", id)
       .order("texto"),
+    // RLS (informes_tecnicos_select_own/select_stats) ya limita esto a informes propios, o todos si sos Admin/Supervisor.
+    supabase
+      .from("informes_tecnicos")
+      .select("id, titulo, fecha, estado")
+      .eq("ubicacion_id", id)
+      .order("fecha", { ascending: false }),
+    // RLS (rendiciones_gastos_select_own/select_stats) ya limita esto a rendiciones propias, o todas si sos Admin/Supervisor.
+    supabase
+      .from("rendiciones_gastos")
+      .select("id, motivo, fecha, estado")
+      .eq("ubicacion_id", id)
+      .order("fecha", { ascending: false }),
   ]);
   const tableros = tablerosRes.data ?? [];
   const racks = racksRes.data ?? [];
   const equipos = equiposRes.data ?? [];
+  const informes = informesRes.data ?? [];
+  const rendiciones = rendicionesRes.data ?? [];
   const tableroIds = tableros.map((t) => t.id);
   const rackIds = racks.map((r) => r.id);
 
@@ -101,6 +115,14 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
         <div className="kpi-card">
           <div className="kpi-value">{totalEquipos}</div>
           <div className="kpi-label">EQUIPAMIENTO TOTAL</div>
+        </div>
+        <div className="kpi-card">
+          <div className="kpi-value">{informes.length}</div>
+          <div className="kpi-label">INFORMES TÉCNICOS</div>
+        </div>
+        <div className="kpi-card">
+          <div className="kpi-value">{rendiciones.length}</div>
+          <div className="kpi-label">RENDICIONES DE GASTOS</div>
         </div>
       </div>
 
@@ -207,6 +229,50 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
               ))}
             </div>
           </>
+        )}
+      </div>
+
+      <div className="card">
+        <div className="section-label">Informes Técnicos en esta ubicación</div>
+        {informes.length === 0 ? (
+          <div className="empty-note">No hay informes técnicos cargados en {labelUbicacion(ubicacion)}.</div>
+        ) : (
+          <div>
+            {informes.map((i) => (
+              <div className="hist-item" key={i.id}>
+                <div className="info">
+                  <div className="hist-main">
+                    <div className="hist-title">{i.titulo}</div>
+                    <div className="hist-meta">
+                      {fmtFecha(i.fecha)} · {i.estado === "generado" ? "Generado" : "Borrador"}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="card">
+        <div className="section-label">Rendiciones de Gastos en esta ubicación</div>
+        {rendiciones.length === 0 ? (
+          <div className="empty-note">No hay rendiciones de gastos cargadas en {labelUbicacion(ubicacion)}.</div>
+        ) : (
+          <div>
+            {rendiciones.map((r) => (
+              <div className="hist-item" key={r.id}>
+                <div className="info">
+                  <div className="hist-main">
+                    <div className="hist-title">{r.motivo}</div>
+                    <div className="hist-meta">
+                      {fmtFecha(r.fecha)} · {r.estado === "cerrada" ? "Cerrada" : "Abierta"}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
         )}
       </div>
     </div>
