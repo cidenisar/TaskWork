@@ -1,36 +1,37 @@
-import { Document, Page, Text, View } from "@react-pdf/renderer";
-import { commonStyles, KeyValueRow, PdfHeader, PdfFooter, formatFechaArg } from "./common";
+import { Document, Page, Text, View, StyleSheet } from "@react-pdf/renderer";
+import { BORDER, commonStyles, KeyValueRow, PdfHeader, PdfFooter, formatFechaArg } from "./common";
 
 /**
- * Constancia de entrega a depósito — equipo/material que vuelve al
- * depósito (nuevo sin usar, o usado pero funcional), distinto de una Baja
- * (que es roto/obsoleto/retirado para siempre). Un documento por entrega,
- * igual criterio que Bajas. Cubre los dos orígenes posibles: un equipo que
- * ya estaba cargado en un sitio, o material nunca registrado como
- * equipamiento (cables, repuestos, equipo nuevo sin instalar).
+ * Constancia de entrega a depósito — uno o varios materiales/equipos que
+ * vuelven al depósito (nuevo sin usar, o usado pero funcional), distinto
+ * de una Baja (que es roto/obsoleto/retirado para siempre). Un documento
+ * por entrega — si son varios materiales de la misma visita, van todos en
+ * la misma tabla con un solo N° de generación, igual criterio que el PDF
+ * de Equipos Individuales (una fila por ítem).
  */
 
+const styles = StyleSheet.create({
+  table: { border: `1pt solid ${BORDER}`, marginBottom: 4 },
+  headRow: { flexDirection: "row", backgroundColor: "#EDEFF2", borderBottom: `1pt solid ${BORDER}` },
+  row: { flexDirection: "row", borderBottom: `1pt solid ${BORDER}` },
+  rowLast: { flexDirection: "row" },
+  th: { fontSize: 7, fontFamily: "Helvetica-Bold", padding: 3.5 },
+  td: { fontSize: 7, padding: 3.5 },
+});
+
 const MOTIVO_LABEL: Record<string, string> = {
-  sobrante_obra: "Sobrante de obra (nunca se usó)",
-  reemplazo_funcional: "Reemplazo funcional (funciona, ya no se usa ahí)",
-  retorno_mantenimiento: "Retorno post-mantenimiento/reparación",
+  sobrante_obra: "Sobrante de obra",
+  reemplazo_funcional: "Reemplazo funcional",
+  retorno_mantenimiento: "Retorno post-mantenimiento",
   otro: "Otro",
 };
 
 const CONDICION_LABEL: Record<string, string> = {
-  nuevo: "Nuevo (sin usar)",
+  nuevo: "Nuevo",
   usado_funcional: "Usado — funciona",
 };
 
-export interface EntregaDepositoPdfProps {
-  numeroGeneracion: string;
-  region: string;
-  provincia: string;
-  localidad: string | null;
-  sitio: string;
-  planta: string | null;
-  oficina: string | null;
-  fecha: string;
+export interface EntregaDepositoPdfItem {
   tipoEquipoLabel: string | null;
   descripcion: string;
   categoria: string | null;
@@ -41,41 +42,34 @@ export interface EntregaDepositoPdfProps {
   condicion: string;
   motivo: string;
   comentario: string | null;
+}
+
+export interface EntregaDepositoPdfProps {
+  numeroGeneracion: string;
+  region: string;
+  provincia: string;
+  localidad: string | null;
+  sitio: string;
+  planta: string | null;
+  oficina: string | null;
+  fecha: string;
+  items: EntregaDepositoPdfItem[];
   logoBuffer: Buffer | null;
   appName: string;
   realizoNombre: string;
 }
 
+const W = { n: "5%", categoria: "14%", descripcion: "23%", marca: "15%", serie: "15%", cantidad: "6%", condicion: "11%", comentario: "11%" };
+
 export function EntregaDepositoPdf(props: EntregaDepositoPdfProps) {
-  const {
-    numeroGeneracion,
-    region,
-    provincia,
-    localidad,
-    sitio,
-    planta,
-    oficina,
-    fecha,
-    tipoEquipoLabel,
-    descripcion,
-    categoria,
-    marcaModelo,
-    numeroSerie,
-    etiquetaYpf,
-    cantidad,
-    condicion,
-    motivo,
-    comentario,
-    logoBuffer,
-    appName,
-    realizoNombre,
-  } = props;
+  const { numeroGeneracion, region, provincia, localidad, sitio, planta, oficina, fecha, items, logoBuffer, appName, realizoNombre } = props;
   const fechaLabel = formatFechaArg(fecha);
   const documentoLabel = "CONSTANCIA DE ENTREGA A DEPÓSITO";
   const documentoLinea = `Documento: ${sitio || "—"}-Público · Generado por ${appName}`;
+  const tituloMaterial = items.length === 1 ? items[0].descripcion : `${items.length} materiales/equipos`;
 
   return (
-    <Document title={`${numeroGeneracion} — Entrega a depósito ${descripcion}`}>
+    <Document title={`${numeroGeneracion} — Entrega a depósito ${tituloMaterial}`}>
       <Page size="A4" style={commonStyles.page} wrap>
         <PdfHeader
           documentoLabel={documentoLabel}
@@ -98,22 +92,36 @@ export function EntregaDepositoPdf(props: EntregaDepositoPdfProps) {
           <KeyValueRow k="Fecha:" v={fechaLabel} last />
         </View>
 
-        <Text style={commonStyles.sectionTitle}>Material / equipo entregado</Text>
-        <View style={commonStyles.kvTable}>
-          {tipoEquipoLabel && <KeyValueRow k="Tipo:" v={tipoEquipoLabel} />}
-          <KeyValueRow k="Descripción:" v={descripcion} />
-          <KeyValueRow k="Categoría:" v={categoria || "—"} />
-          <KeyValueRow k="Marca/Modelo:" v={marcaModelo || "—"} />
-          <KeyValueRow k="N° de Serie:" v={numeroSerie || "—"} />
-          <KeyValueRow k="Etiqueta YPF:" v={etiquetaYpf || "—"} />
-          <KeyValueRow k="Cantidad:" v={String(cantidad)} />
-          <KeyValueRow k="Condición:" v={CONDICION_LABEL[condicion] ?? condicion} last />
-        </View>
-
-        <Text style={commonStyles.sectionTitle}>Motivo de la entrega</Text>
-        <View style={commonStyles.kvTable}>
-          <KeyValueRow k="Motivo:" v={MOTIVO_LABEL[motivo] ?? motivo} />
-          <KeyValueRow k="Comentario:" v={comentario || "—"} last />
+        <Text style={commonStyles.sectionTitle}>Material / equipo entregado ({items.length})</Text>
+        <View style={styles.table}>
+          <View style={styles.headRow} fixed>
+            <Text style={[styles.th, { width: W.n }]}>N°</Text>
+            <Text style={[styles.th, { width: W.categoria }]}>Categoría</Text>
+            <Text style={[styles.th, { width: W.descripcion }]}>Descripción</Text>
+            <Text style={[styles.th, { width: W.marca }]}>Marca/Modelo</Text>
+            <Text style={[styles.th, { width: W.serie }]}>Serie / Etiq. YPF</Text>
+            <Text style={[styles.th, { width: W.cantidad, textAlign: "right" }]}>Cant.</Text>
+            <Text style={[styles.th, { width: W.condicion }]}>Condición</Text>
+            <Text style={[styles.th, { width: W.comentario }]}>Comentario</Text>
+          </View>
+          {items.map((it, i) => {
+            const serieYpf = [it.numeroSerie ? `S/N ${it.numeroSerie}` : null, it.etiquetaYpf ? `YPF ${it.etiquetaYpf}` : null]
+              .filter(Boolean)
+              .join(" · ");
+            const comentarioConMotivo = [MOTIVO_LABEL[it.motivo] ?? it.motivo, it.comentario].filter(Boolean).join(" — ");
+            return (
+              <View style={i === items.length - 1 ? styles.rowLast : styles.row} key={i} wrap={false}>
+                <Text style={[styles.td, { width: W.n }]}>{i + 1}</Text>
+                <Text style={[styles.td, { width: W.categoria }]}>{it.categoria || it.tipoEquipoLabel || "—"}</Text>
+                <Text style={[styles.td, { width: W.descripcion }]}>{it.descripcion}</Text>
+                <Text style={[styles.td, { width: W.marca }]}>{it.marcaModelo || "—"}</Text>
+                <Text style={[styles.td, { width: W.serie }]}>{serieYpf || "—"}</Text>
+                <Text style={[styles.td, { width: W.cantidad, textAlign: "right" }]}>{it.cantidad}</Text>
+                <Text style={[styles.td, { width: W.condicion }]}>{CONDICION_LABEL[it.condicion] ?? it.condicion}</Text>
+                <Text style={[styles.td, { width: W.comentario }]}>{comentarioConMotivo || "—"}</Text>
+              </View>
+            );
+          })}
         </View>
 
         <Text style={commonStyles.paragraph}>

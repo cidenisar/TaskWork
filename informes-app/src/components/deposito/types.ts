@@ -1,7 +1,37 @@
 import type { CondicionMaterial, MotivoEntregaDeposito, TipoEquipoBaja } from "@/lib/database.types";
 
-/** Máximo de fotos por lectura con IA en "Nueva Entrega" — mismo criterio que Equipos Individuales (varios ángulos del mismo ítem). */
-export const ENTREGA_FOTO_IA_MAX = 5;
+/**
+ * Máximo de fotos por carga con IA en "Nueva Entrega" — una entrega puede
+ * ahora tener VARIOS materiales distintos (no solo varios ángulos de uno),
+ * así que el máximo es más alto que un ítem único: cada foto puede ser un
+ * material diferente, o un ángulo más de uno ya detectado (la IA no lo
+ * duplica). Mismo criterio que Equipos Individuales, con más margen.
+ */
+export const ENTREGA_FOTO_IA_MAX = 10;
+
+export interface MaterialEntregaItem {
+  descripcion: string;
+  categoria: string;
+  marcaModelo: string;
+  numeroSerie: string;
+  etiquetaYpf: string;
+  cantidad: number;
+  condicion: CondicionMaterial;
+  motivo: MotivoEntregaDeposito;
+  comentario: string;
+  revisar: boolean;
+}
+
+export const MATERIAL_NUEVO_BASE: Omit<MaterialEntregaItem, "descripcion" | "revisar"> = {
+  categoria: "",
+  marcaModelo: "",
+  numeroSerie: "",
+  etiquetaYpf: "",
+  cantidad: 1,
+  condicion: "usado_funcional",
+  motivo: "sobrante_obra",
+  comentario: "",
+};
 
 export const MOTIVO_ENTREGA_OPCIONES: MotivoEntregaDeposito[] = [
   "sobrante_obra",

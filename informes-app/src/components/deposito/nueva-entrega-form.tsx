@@ -2,8 +2,16 @@
 
 import { useRef, useState } from "react";
 import { UbicacionFields, type GpsCapturado } from "@/components/ubicaciones/ubicacion-fields";
-import { entregarMaterialLibreAction } from "@/app/(app)/entregas-deposito/nueva/actions";
-import { MOTIVO_ENTREGA_OPCIONES, MOTIVO_ENTREGA_LABEL, CONDICION_OPCIONES, CONDICION_LABEL, ENTREGA_FOTO_IA_MAX } from "./types";
+import { entregarLoteADepositoAction } from "@/app/(app)/entregas-deposito/nueva/actions";
+import {
+  MOTIVO_ENTREGA_OPCIONES,
+  MOTIVO_ENTREGA_LABEL,
+  CONDICION_OPCIONES,
+  CONDICION_LABEL,
+  ENTREGA_FOTO_IA_MAX,
+  MATERIAL_NUEVO_BASE,
+  type MaterialEntregaItem,
+} from "./types";
 import { ErrorNote } from "@/components/notes";
 import { Icon } from "@/components/icon";
 import { resizeImageToJpeg } from "@/lib/image-resize";
@@ -15,55 +23,24 @@ function hoyISO(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-interface FormState {
-  provinciaFiltro: string;
-  ubicacionId: string;
-  localidadNueva: string;
-  sitioNueva: string;
-  plantaNueva: string;
-  oficinaNueva: string;
-  gps: GpsCapturado | null;
-  descripcion: string;
-  categoria: string;
-  marcaModelo: string;
-  numeroSerie: string;
-  etiquetaYpf: string;
-  cantidad: string;
-  condicion: CondicionMaterial;
-  motivo: MotivoEntregaDeposito;
-  comentario: string;
-  fecha: string;
-}
-
-const EMPTY_FORM: FormState = {
-  provinciaFiltro: "",
-  ubicacionId: "",
-  localidadNueva: "",
-  sitioNueva: "",
-  plantaNueva: "",
-  oficinaNueva: "",
-  gps: null,
-  descripcion: "",
-  categoria: "",
-  marcaModelo: "",
-  numeroSerie: "",
-  etiquetaYpf: "",
-  cantidad: "1",
-  condicion: "usado_funcional",
-  motivo: "sobrante_obra",
-  comentario: "",
-  fecha: hoyISO(),
-};
-
 /**
  * Entrega a depósito de material/equipo que nunca se registró como
  * equipamiento de un sitio (cables sueltos, repuestos, equipo nuevo sin
- * instalar) — por eso pide elegir/crear la Ubicación directo (mismo picker
- * de Informe Técnico/Rendición), en vez de partir de una fila ya cargada
- * como hace el botón "Entregar a depósito" de la ficha de Sitio.
+ * instalar). Una misma carga puede traer VARIOS materiales distintos de la
+ * misma visita — sacás fotos de todos juntos y la IA los separa en una
+ * lista (igual criterio que Equipos Individuales), revisás/corregís cada
+ * uno y generás un solo comprobante con todos adentro.
  */
 export function NuevaEntregaForm({ provincias, ubicaciones }: { provincias: string[]; ubicaciones: Ubicacion[] }) {
-  const [form, setForm] = useState<FormState>(EMPTY_FORM);
+  const [provinciaFiltro, setProvinciaFiltro] = useState("");
+  const [ubicacionId, setUbicacionId] = useState("");
+  const [localidadNueva, setLocalidadNueva] = useState("");
+  const [sitioNueva, setSitioNueva] = useState("");
+  const [plantaNueva, setPlantaNueva] = useState("");
+  const [oficinaNueva, setOficinaNueva] = useState("");
+  const [gps, setGps] = useState<GpsCapturado | null>(null);
+  const [fecha, setFecha] = useState(hoyISO);
+  const [materiales, setMateriales] = useState<MaterialEntregaItem[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [resultado, setResultado] = useState<{ numeroGeneracion: string } | null>(null);
@@ -73,8 +50,22 @@ export function NuevaEntregaForm({ provincias, ubicaciones }: { provincias: stri
   const fotoCameraInputRef = useRef<HTMLInputElement>(null);
   const fotoGaleriaInputRef = useRef<HTMLInputElement>(null);
 
-  function patch(p: Partial<FormState>) {
-    setForm((f) => ({ ...f, ...p }));
+  function elegirProvinciaFiltro(p: string) {
+    setProvinciaFiltro(p);
+    setLocalidadNueva("");
+    setSitioNueva("");
+    setPlantaNueva("");
+    setOficinaNueva("");
+  }
+
+  function elegirUbicacion(id: string) {
+    setUbicacionId(id);
+    if (id !== "__new") {
+      setLocalidadNueva("");
+      setSitioNueva("");
+      setPlantaNueva("");
+      setOficinaNueva("");
+    }
   }
 
   function agregarFotosIa(files: File[]) {
@@ -121,15 +112,15 @@ export function NuevaEntregaForm({ provincias, ubicaciones }: { provincias: stri
         setFotosIa(fallidas);
         return;
       }
-      const item: {
+      const detectados: {
         descripcion: string;
         categoriaLabel: string;
         marcaModelo: string;
         numeroSerie: string;
         etiquetaYpf: string;
         identificado: boolean;
-      } | null = data.item ?? null;
-      if (!item) {
+      }[] = data.items ?? [];
+      if (detectados.length === 0) {
         setIaNote(
           "No se detectó ningún material/equipo en las fotos — probá con otras o cargalo a mano." +
             (fallidas.length > 0 ? ` (${fallidas.length} foto${fallidas.length === 1 ? "" : "s"} no se pudo leer: ${primerError})` : ""),
@@ -137,18 +128,25 @@ export function NuevaEntregaForm({ provincias, ubicaciones }: { provincias: stri
         setFotosIa(fallidas);
         return;
       }
-      patch({
-        descripcion: item.descripcion,
-        categoria: item.categoriaLabel,
-        marcaModelo: item.marcaModelo,
-        numeroSerie: item.numeroSerie,
-        etiquetaYpf: item.etiquetaYpf,
-      });
+      setMateriales((prev) => [
+        ...prev,
+        ...detectados.map((d) => ({
+          ...MATERIAL_NUEVO_BASE,
+          descripcion: d.descripcion,
+          categoria: d.categoriaLabel,
+          marcaModelo: d.marcaModelo,
+          numeroSerie: d.numeroSerie,
+          etiquetaYpf: d.etiquetaYpf,
+          revisar: d.identificado !== true,
+        })),
+      ]);
+      const sinEtiqueta = detectados.filter((d) => d.identificado !== true).length;
       setIaNote(
-        (item.identificado
-          ? "Material identificado — revisá los datos"
-          : "La IA describió lo que vio, pero no hay etiqueta legible — revisá y corregí el nombre/categoría") +
-          ", y completá la cantidad a mano." +
+        `Se identificaron ${detectados.length} material${detectados.length === 1 ? "" : "es"} desde ${exitosas} foto${exitosas === 1 ? "" : "s"}` +
+          (sinEtiqueta > 0
+            ? ` — ${sinEtiqueta} sin etiqueta legible, marcados para revisar.`
+            : " — revisá la categoría/marca/serie antes de guardar.") +
+          " Completá la cantidad de cada uno a mano." +
           (fallidas.length > 0 ? ` (${fallidas.length} foto${fallidas.length === 1 ? "" : "s"} no se pudo leer: ${primerError})` : ""),
       );
       setFotosIa(fallidas);
@@ -160,46 +158,61 @@ export function NuevaEntregaForm({ provincias, ubicaciones }: { provincias: stri
     }
   }
 
+  function agregarMaterial() {
+    setMateriales((prev) => [...prev, { ...MATERIAL_NUEVO_BASE, descripcion: "", revisar: false }]);
+  }
+
+  function actualizarMaterial(i: number, patch: Partial<MaterialEntregaItem>) {
+    setMateriales((prev) => prev.map((m, idx) => (idx === i ? { ...m, ...patch } : m)));
+  }
+
+  function quitarMaterial(i: number) {
+    setMateriales((prev) => prev.filter((_, idx) => idx !== i));
+  }
+
   async function crear() {
-    if (!form.descripcion.trim()) {
-      setError("Describí qué material o equipo se entrega.");
-      return;
-    }
-    if (!form.ubicacionId) {
+    if (!ubicacionId) {
       setError("Elegí o creá el sitio desde el que vuelve el material.");
       return;
     }
-    const cantidad = Number(form.cantidad);
-    if (!cantidad || cantidad < 1) {
-      setError("La cantidad tiene que ser un número mayor a 0.");
+    if (ubicacionId === "__new" && (!provinciaFiltro.trim() || !sitioNueva.trim())) {
+      setError("Completá la provincia y el sitio de la ubicación nueva.");
+      return;
+    }
+    if (materiales.length === 0) {
+      setError("Agregá al menos un material.");
+      return;
+    }
+    if (materiales.some((m) => !m.descripcion.trim())) {
+      setError("Completá la descripción de todos los materiales cargados.");
+      return;
+    }
+    if (!fecha) {
+      setError("Falta la fecha.");
       return;
     }
 
     setSubmitting(true);
     setError(null);
-    const res = await entregarMaterialLibreAction({
-      ubicacionId: form.ubicacionId === "__new" ? null : form.ubicacionId,
+    const res = await entregarLoteADepositoAction({
+      ubicacionId: ubicacionId === "__new" ? null : ubicacionId,
       ubicacionNueva:
-        form.ubicacionId === "__new"
-          ? {
-              provincia: form.provinciaFiltro,
-              localidad: form.localidadNueva,
-              sitio: form.sitioNueva,
-              planta: form.plantaNueva,
-              oficina: form.oficinaNueva,
-            }
+        ubicacionId === "__new"
+          ? { provincia: provinciaFiltro, localidad: localidadNueva, sitio: sitioNueva, planta: plantaNueva, oficina: oficinaNueva }
           : null,
-      gps: form.gps,
-      descripcion: form.descripcion,
-      categoria: form.categoria,
-      marcaModelo: form.marcaModelo,
-      numeroSerie: form.numeroSerie,
-      etiquetaYpf: form.etiquetaYpf,
-      cantidad,
-      condicion: form.condicion,
-      motivo: form.motivo,
-      comentario: form.comentario,
-      fecha: form.fecha,
+      gps,
+      fecha,
+      materiales: materiales.map((m) => ({
+        descripcion: m.descripcion.trim(),
+        categoria: m.categoria.trim(),
+        marcaModelo: m.marcaModelo.trim(),
+        numeroSerie: m.numeroSerie.trim(),
+        etiquetaYpf: m.etiquetaYpf.trim(),
+        cantidad: m.cantidad,
+        condicion: m.condicion,
+        motivo: m.motivo,
+        comentario: m.comentario.trim(),
+      })),
     });
     setSubmitting(false);
     if (!res.success || !res.numeroGeneracion) {
@@ -207,7 +220,19 @@ export function NuevaEntregaForm({ provincias, ubicaciones }: { provincias: stri
       return;
     }
     setResultado({ numeroGeneracion: res.numeroGeneracion });
-    setForm(EMPTY_FORM);
+  }
+
+  function empezarOtra() {
+    setResultado(null);
+    setProvinciaFiltro("");
+    setUbicacionId("");
+    setLocalidadNueva("");
+    setSitioNueva("");
+    setPlantaNueva("");
+    setOficinaNueva("");
+    setGps(null);
+    setFecha(hoyISO());
+    setMateriales([]);
     setFotosIa([]);
     setIaNote(null);
   }
@@ -219,203 +244,263 @@ export function NuevaEntregaForm({ provincias, ubicaciones }: { provincias: stri
         <p>Material o equipo que vuelve al depósito sin haber estado cargado como equipamiento de un sitio</p>
       </div>
 
-      {resultado && (
-        <div className="banner" style={{ marginBottom: 16 }}>
-          Entrega registrada — comprobante <b>{resultado.numeroGeneracion}</b> generado. Lo encontrás en el{" "}
-          <b>Historial</b>.
-        </div>
-      )}
-
       <div className="card">
-        <div className="hint" style={{ margin: "0 0 12px" }}>
-          <Icon name="ai" size={13} /> Sacale hasta {ENTREGA_FOTO_IA_MAX} fotos (chapa de serie, vista general) y la IA completa
-          descripción, categoría, marca/modelo, N° de serie y etiqueta YPF — siempre revisá y corregí antes de guardar. La cantidad y
-          lo que no se identifique se completa a mano.
-        </div>
-        <input
-          ref={fotoCameraInputRef}
-          type="file"
-          accept="image/*"
-          capture="environment"
-          style={{ display: "none" }}
-          onChange={(e) => {
-            const files = Array.from(e.target.files ?? []);
-            e.target.value = "";
-            agregarFotosIa(files);
-          }}
-        />
-        <input
-          ref={fotoGaleriaInputRef}
-          type="file"
-          accept="image/*"
-          multiple
-          style={{ display: "none" }}
-          onChange={(e) => {
-            const files = Array.from(e.target.files ?? []);
-            e.target.value = "";
-            agregarFotosIa(files);
-          }}
-        />
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: fotosIa.length ? 8 : 12 }}>
-          <button
-            type="button"
-            className="ai-btn"
-            onClick={() => fotoCameraInputRef.current?.click()}
-            disabled={submitting || iaBusy || fotosIa.length >= ENTREGA_FOTO_IA_MAX}
-          >
-            <Icon name="camera" size={13} /> Sacar foto ({fotosIa.length}/{ENTREGA_FOTO_IA_MAX})
-          </button>
-          <button
-            type="button"
-            className="ai-btn"
-            onClick={() => fotoGaleriaInputRef.current?.click()}
-            disabled={submitting || iaBusy || fotosIa.length >= ENTREGA_FOTO_IA_MAX}
-          >
-            <Icon name="upload" size={13} /> Subir foto
-          </button>
-          {fotosIa.length > 0 && (
-            <button type="button" className="ai-btn" onClick={() => void leerFotosConIa()} disabled={submitting || iaBusy}>
-              <Icon name="ai" size={13} /> {iaBusy ? "Procesando..." : `Procesar ${fotosIa.length} foto${fotosIa.length === 1 ? "" : "s"} con IA`}
-            </button>
-          )}
-        </div>
-        {fotosIa.length > 0 && (
-          <div className="chip-row" style={{ marginTop: 0, marginBottom: 12 }}>
-            {fotosIa.map((f, i) => (
-              <span className="chip" key={i}>
-                Foto {i + 1}
-                <button type="button" onClick={() => quitarFotoIa(i)} disabled={iaBusy} aria-label={`Quitar foto ${i + 1}`}>
-                  <Icon name="x" size={11} />
-                </button>
-              </span>
-            ))}
-          </div>
-        )}
-        {iaNote && (
-          <div className="ai-note" style={{ marginBottom: 12 }}>
-            <span>{iaNote}</span>
-          </div>
-        )}
-
-        <div className="field">
-          <label>
-            Descripción del material/equipo <span className="req">*</span>
-          </label>
-          <input
-            type="text"
-            placeholder="Ej: 3 conectores RJ45 sobrantes, UPS nueva sin instalar..."
-            value={form.descripcion}
-            onChange={(e) => patch({ descripcion: e.target.value })}
-            required
-          />
-        </div>
-
-        <div className="grid2">
-          <div className="field">
-            <label>
-              Categoría <span className="opt">(opcional)</span>
-            </label>
-            <input type="text" placeholder="Ej: Cables y conectores" value={form.categoria} onChange={(e) => patch({ categoria: e.target.value })} />
-          </div>
-          <div className="field">
-            <label>
-              Cantidad <span className="req">*</span>
-            </label>
-            <input type="number" min={1} step={1} value={form.cantidad} onChange={(e) => patch({ cantidad: e.target.value })} required />
-          </div>
-        </div>
-
-        <div className="grid2">
-          <div className="field">
-            <label>
-              Marca/Modelo <span className="opt">(opcional)</span>
-            </label>
-            <input type="text" value={form.marcaModelo} onChange={(e) => patch({ marcaModelo: e.target.value })} />
-          </div>
-          <div className="field">
-            <label>
-              N° de Serie <span className="opt">(opcional)</span>
-            </label>
-            <input type="text" value={form.numeroSerie} onChange={(e) => patch({ numeroSerie: e.target.value })} />
-          </div>
-        </div>
-
-        <div className="field">
-          <label>
-            Etiqueta YPF <span className="opt">(opcional)</span>
-          </label>
-          <input type="text" value={form.etiquetaYpf} onChange={(e) => patch({ etiquetaYpf: e.target.value })} />
-        </div>
-
-        <div className="section-label" style={{ marginTop: 4 }}>
-          Sitio desde el que vuelve <span className="req">*</span>
-        </div>
+        <div className="section-label">Sitio desde el que vuelve</div>
         <UbicacionFields
           ubicaciones={ubicaciones}
           provincias={provincias}
-          provinciaFiltro={form.provinciaFiltro}
-          onProvinciaFiltroChange={(p) =>
-            patch({ provinciaFiltro: p, ubicacionId: "", localidadNueva: "", sitioNueva: "", plantaNueva: "", oficinaNueva: "" })
-          }
-          ubicacionId={form.ubicacionId}
-          onUbicacionIdChange={(id) =>
-            patch(id === "__new" ? { ubicacionId: id } : { ubicacionId: id, localidadNueva: "", sitioNueva: "", plantaNueva: "", oficinaNueva: "" })
-          }
-          localidadNueva={form.localidadNueva}
-          onLocalidadNuevaChange={(v) => patch({ localidadNueva: v })}
-          sitioNueva={form.sitioNueva}
-          onSitioNuevaChange={(v) => patch({ sitioNueva: v })}
-          plantaNueva={form.plantaNueva}
-          onPlantaNuevaChange={(v) => patch({ plantaNueva: v })}
-          oficinaNueva={form.oficinaNueva}
-          onOficinaNuevaChange={(v) => patch({ oficinaNueva: v })}
-          onGpsCapturado={(gps) => patch({ gps })}
+          provinciaFiltro={provinciaFiltro}
+          onProvinciaFiltroChange={elegirProvinciaFiltro}
+          ubicacionId={ubicacionId}
+          onUbicacionIdChange={elegirUbicacion}
+          localidadNueva={localidadNueva}
+          onLocalidadNuevaChange={setLocalidadNueva}
+          sitioNueva={sitioNueva}
+          onSitioNuevaChange={setSitioNueva}
+          plantaNueva={plantaNueva}
+          onPlantaNuevaChange={setPlantaNueva}
+          oficinaNueva={oficinaNueva}
+          onOficinaNuevaChange={setOficinaNueva}
+          onGpsCapturado={setGps}
+          disabled={submitting}
         />
+      </div>
 
-        <div className="grid2">
-          <div className="field">
-            <label>Condición</label>
-            <select value={form.condicion} onChange={(e) => patch({ condicion: e.target.value as CondicionMaterial })}>
-              {CONDICION_OPCIONES.map((c) => (
-                <option key={c} value={c}>
-                  {CONDICION_LABEL[c]}
-                </option>
+      {ubicacionId && (
+        <div className="card">
+          <div className="field" style={{ marginBottom: 0 }}>
+            <label>
+              Fecha <span className="req">*</span>
+            </label>
+            <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} disabled={submitting} style={{ maxWidth: 220 }} />
+          </div>
+        </div>
+      )}
+
+      {ubicacionId && (
+        <div className="card">
+          <div className="section-label">Materiales</div>
+          <div className="hint" style={{ margin: "-4px 0 12px" }}>
+            <Icon name="ai" size={13} /> Sacale hasta {ENTREGA_FOTO_IA_MAX} fotos a los materiales/equipos (chapa de serie, vista
+            general) y la IA identifica qué son y combina todo en una lista sin repetir — podés sacar fotos de varios materiales
+            distintos de una sola vez. Siempre revisá antes de guardar, y completá la cantidad a mano.
+          </div>
+          <input
+            ref={fotoCameraInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            style={{ display: "none" }}
+            onChange={(e) => {
+              const files = Array.from(e.target.files ?? []);
+              e.target.value = "";
+              agregarFotosIa(files);
+            }}
+          />
+          <input
+            ref={fotoGaleriaInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            style={{ display: "none" }}
+            onChange={(e) => {
+              const files = Array.from(e.target.files ?? []);
+              e.target.value = "";
+              agregarFotosIa(files);
+            }}
+          />
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: fotosIa.length ? 8 : 12 }}>
+            <button
+              type="button"
+              className="ai-btn"
+              onClick={() => fotoCameraInputRef.current?.click()}
+              disabled={submitting || iaBusy || fotosIa.length >= ENTREGA_FOTO_IA_MAX}
+            >
+              <Icon name="camera" size={13} /> Sacar foto ({fotosIa.length}/{ENTREGA_FOTO_IA_MAX})
+            </button>
+            <button
+              type="button"
+              className="ai-btn"
+              onClick={() => fotoGaleriaInputRef.current?.click()}
+              disabled={submitting || iaBusy || fotosIa.length >= ENTREGA_FOTO_IA_MAX}
+            >
+              <Icon name="upload" size={13} /> Subir foto
+            </button>
+            {fotosIa.length > 0 && (
+              <button type="button" className="ai-btn" onClick={() => void leerFotosConIa()} disabled={submitting || iaBusy}>
+                <Icon name="ai" size={13} /> {iaBusy ? "Procesando..." : `Procesar ${fotosIa.length} foto${fotosIa.length === 1 ? "" : "s"} con IA`}
+              </button>
+            )}
+          </div>
+          {fotosIa.length > 0 && (
+            <div className="chip-row" style={{ marginTop: 0, marginBottom: 12 }}>
+              {fotosIa.map((f, i) => (
+                <span className="chip" key={i}>
+                  Foto {i + 1}
+                  <button type="button" onClick={() => quitarFotoIa(i)} disabled={iaBusy} aria-label={`Quitar foto ${i + 1}`}>
+                    <Icon name="x" size={11} />
+                  </button>
+                </span>
               ))}
-            </select>
-          </div>
-          <div className="field">
-            <label>Fecha</label>
-            <input type="date" value={form.fecha} onChange={(e) => patch({ fecha: e.target.value })} />
-          </div>
-        </div>
+            </div>
+          )}
+          {iaNote && (
+            <div className="ai-note" style={{ marginBottom: 12 }}>
+              <span>{iaNote}</span>
+            </div>
+          )}
 
-        <div className="field">
-          <label>Motivo</label>
-          <select value={form.motivo} onChange={(e) => patch({ motivo: e.target.value as MotivoEntregaDeposito })}>
-            {MOTIVO_ENTREGA_OPCIONES.map((m) => (
-              <option key={m} value={m}>
-                {MOTIVO_ENTREGA_LABEL[m]}
-              </option>
+          {materiales.length === 0 && <div className="empty-note">Todavía no hay materiales cargados.</div>}
+          <div className="item-list" style={{ marginTop: materiales.length ? 0 : 12 }}>
+            {materiales.map((m, i) => (
+              <div className="list-item" key={i} style={{ flexDirection: "column", alignItems: "stretch", gap: 8 }}>
+                {m.revisar && (
+                  <div className="hint" style={{ color: "var(--warn)", margin: 0 }}>
+                    <Icon name="warning" size={12} /> Sin etiqueta legible en la foto — revisá y corregí lo que no coincida.
+                  </div>
+                )}
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-end" }}>
+                  <div className="field" style={{ marginBottom: 0, flex: 1, minWidth: 160 }}>
+                    <label style={{ fontSize: 11 }}>Descripción</label>
+                    <input
+                      type="text"
+                      placeholder="Ej: UPS nueva sin instalar"
+                      value={m.descripcion}
+                      onChange={(e) => actualizarMaterial(i, { descripcion: e.target.value, revisar: false })}
+                      disabled={submitting}
+                    />
+                  </div>
+                  <div className="field" style={{ marginBottom: 0, width: 150 }}>
+                    <label style={{ fontSize: 11 }}>Categoría</label>
+                    <input
+                      type="text"
+                      placeholder="Opcional"
+                      value={m.categoria}
+                      onChange={(e) => actualizarMaterial(i, { categoria: e.target.value })}
+                      disabled={submitting}
+                    />
+                  </div>
+                  <div className="field" style={{ marginBottom: 0, width: 80 }}>
+                    <label style={{ fontSize: 11 }}>Cantidad</label>
+                    <input
+                      type="number"
+                      min={1}
+                      value={m.cantidad}
+                      onChange={(e) => actualizarMaterial(i, { cantidad: Math.max(1, Number(e.target.value) || 1) })}
+                      disabled={submitting}
+                    />
+                  </div>
+                  <button type="button" className="remove-btn" onClick={() => quitarMaterial(i)} disabled={submitting}>
+                    <Icon name="x" size={12} />
+                  </button>
+                </div>
+
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-end" }}>
+                  <div className="field" style={{ marginBottom: 0, width: 150 }}>
+                    <label style={{ fontSize: 11 }}>Marca/Modelo</label>
+                    <input
+                      type="text"
+                      placeholder="Opcional"
+                      value={m.marcaModelo}
+                      onChange={(e) => actualizarMaterial(i, { marcaModelo: e.target.value })}
+                      disabled={submitting}
+                    />
+                  </div>
+                  <div className="field" style={{ marginBottom: 0, width: 150 }}>
+                    <label style={{ fontSize: 11 }}>N° de Serie</label>
+                    <input
+                      type="text"
+                      placeholder="Opcional"
+                      value={m.numeroSerie}
+                      onChange={(e) => actualizarMaterial(i, { numeroSerie: e.target.value })}
+                      disabled={submitting}
+                    />
+                  </div>
+                  <div className="field" style={{ marginBottom: 0, width: 110 }}>
+                    <label style={{ fontSize: 11 }}>Etiqueta YPF</label>
+                    <input
+                      type="text"
+                      placeholder="N° inventario"
+                      value={m.etiquetaYpf}
+                      onChange={(e) => actualizarMaterial(i, { etiquetaYpf: e.target.value })}
+                      disabled={submitting}
+                    />
+                  </div>
+                  <div className="field" style={{ marginBottom: 0, width: 160 }}>
+                    <label style={{ fontSize: 11 }}>Condición</label>
+                    <select
+                      value={m.condicion}
+                      onChange={(e) => actualizarMaterial(i, { condicion: e.target.value as CondicionMaterial })}
+                      disabled={submitting}
+                    >
+                      {CONDICION_OPCIONES.map((c) => (
+                        <option key={c} value={c}>
+                          {CONDICION_LABEL[c]}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-end" }}>
+                  <div className="field" style={{ marginBottom: 0, width: 220 }}>
+                    <label style={{ fontSize: 11 }}>Motivo</label>
+                    <select
+                      value={m.motivo}
+                      onChange={(e) => actualizarMaterial(i, { motivo: e.target.value as MotivoEntregaDeposito })}
+                      disabled={submitting}
+                    >
+                      {MOTIVO_ENTREGA_OPCIONES.map((o) => (
+                        <option key={o} value={o}>
+                          {MOTIVO_ENTREGA_LABEL[o]}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="field" style={{ marginBottom: 0, flex: 1, minWidth: 160 }}>
+                    <label style={{ fontSize: 11 }}>Comentario</label>
+                    <input
+                      type="text"
+                      placeholder="Opcional"
+                      value={m.comentario}
+                      onChange={(e) => actualizarMaterial(i, { comentario: e.target.value })}
+                      disabled={submitting}
+                    />
+                  </div>
+                </div>
+              </div>
             ))}
-          </select>
+          </div>
+          <button type="button" className="btn btn-secondary btn-sm" onClick={agregarMaterial} disabled={submitting} style={{ marginTop: 10 }}>
+            <Icon name="plus" size={13} /> Agregar material manual
+          </button>
         </div>
+      )}
 
-        <div className="field">
-          <label>
-            Comentario <span className="opt">(opcional)</span>
-          </label>
-          <textarea value={form.comentario} onChange={(e) => patch({ comentario: e.target.value })} rows={2} />
+      {error && <ErrorNote>{error}</ErrorNote>}
+
+      {resultado && (
+        <div className="banner" style={{ marginBottom: 16 }}>
+          Entrega registrada — comprobante <b>{resultado.numeroGeneracion}</b> generado con {materiales.length} material
+          {materiales.length === 1 ? "" : "es"}. Lo encontrás en el <b>Historial</b>.
         </div>
+      )}
 
-        {error && <ErrorNote>{error}</ErrorNote>}
-
+      {resultado ? (
+        <div className="footer-nav">
+          <span />
+          <button type="button" className="btn btn-primary" onClick={empezarOtra}>
+            + Cargar otra entrega
+          </button>
+        </div>
+      ) : (
         <div className="footer-nav">
           <span />
           <button type="button" className="btn btn-primary" onClick={crear} disabled={submitting}>
             {submitting ? "Generando..." : "Registrar entrega"}
           </button>
         </div>
-      </div>
+      )}
     </div>
   );
 }

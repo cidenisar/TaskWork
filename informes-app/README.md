@@ -756,22 +756,32 @@ npm run dev
   un `ubicacion_id`, también aparecen juntos en la nueva sección
   "Entregado a depósito desde este sitio" de la ficha de cada Sitio, sin
   necesitar lógica separada para distinguirlos ahí.
-- **Lectura con IA en "Nueva Entrega a Depósito"**
+- **"Nueva Entrega a Depósito" pasó a aceptar varios materiales por carga,
+  con lectura con IA igual que Equipos Individuales**
   (`src/app/api/entregas-deposito/leer-foto/route.ts`,
-  `ENTREGA_FOTO_IA_MAX` en `src/components/deposito/types.ts`): mismo
-  patrón de foto → Claude Vision → autocompletar que ya usan Tableros/
-  Racks/Equipos Individuales, aplicado al formulario de material libre.
-  Reusa las mismas categorías de equipamiento que Equipos Individuales
-  (`CATEGORIA_EQUIPO_OPCIONES`/`CATEGORIA_EQUIPO_LABEL` — es el mismo
-  universo de cosas, solo que acá puede no estar registrado como
-  equipamiento de ningún sitio) para completar descripción, categoría,
-  marca/modelo, N° de serie y etiqueta YPF. A diferencia de Equipos
-  Individuales (que detecta una LISTA de equipos distintos por foto),
-  acá el formulario es de un solo ítem por entrega — el endpoint
-  devuelve un único objeto, no un array — y **nunca** completa la
-  cantidad: varias unidades idénticas (ej. "3 conectores sobrantes") se
-  describen como un solo ítem y la cantidad siempre se carga a mano,
-  igual que cualquier dato que la IA no pueda leer con certeza. El
-  consumo en Watts tampoco aplica acá (a diferencia de Equipos
-  Individuales) — un material en depósito no está instalado, no tiene
-  sentido estimarle consumo.
+  `ENTREGA_FOTO_IA_MAX` en `src/components/deposito/types.ts`, migración
+  `20261005090000_entregas_deposito_lote.sql`): la primera versión de este
+  formulario era de un solo material por entrega — quedó corto en cuanto
+  se probó con una devolución real de varios materiales distintos de la
+  misma visita (5 fotos no alcanzan si cada una es algo diferente, no solo
+  ángulos de lo mismo). Ahora es el mismo patrón que Equipos Individuales:
+  sacás hasta `ENTREGA_FOTO_IA_MAX` (10) fotos de todo junto, la IA separa
+  cada material físico distinto en una lista (reusando las categorías de
+  Equipos Individuales — es el mismo universo de cosas, solo que acá puede
+  no estar registrado como equipamiento de ningún sitio) completando
+  descripción, categoría, marca/modelo, N° de serie y etiqueta YPF — nunca
+  la cantidad, eso se carga a mano para cada material, igual que cualquier
+  dato que la IA no pueda leer con certeza (tampoco estima consumo: un
+  material en depósito no está instalado). Se pueden agregar más
+  materiales a mano con "+ Agregar material manual", y la carga genera
+  **un solo comprobante** con todos los materiales en una tabla (como el
+  PDF de Equipos Individuales), no uno por material. Cada material sigue
+  siendo su propia fila en `entregas_deposito` (para que el resto de la
+  app — Historial, ficha de Sitio — no necesite tratamiento especial),
+  pero ahora comparten el mismo `numero_generacion` y el mismo `pdf_url`:
+  la migración relaja el `UNIQUE` de `numero_generacion` a un índice
+  normal, y la unicidad real se chequea en la aplicación (`SELECT` antes
+  de insertar, con reintento) en vez de depender de la constraint — mismo
+  criterio que ya usa el resolver de Ubicaciones ante una colisión. El
+  flujo de "equipo ya cargado en un sitio" (botón en la ficha de Sitio,
+  una fila = una entrega con su propio número) no se tocó.
