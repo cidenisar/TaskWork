@@ -107,6 +107,15 @@ const MODULOS: Seccion[] = [
     ],
   },
   {
+    titulo: "Relevamiento de Equipos — Torres de Comunicaciones",
+    acceso: "todos",
+    resumen: "Para torres de comunicaciones y el equipamiento montado en ellas (antenas, radioenlaces, baliza, pararrayos, feeder).",
+    pasos: [
+      "Nuevo Relevamiento: elegí el Sitio y cargá el equipamiento de la torre (a mano o con fotos + IA) — anotá la altura aproximada de cada equipo si la conocés.",
+      "Historial: buscá relevamientos anteriores de cualquier torre.",
+    ],
+  },
+  {
     titulo: "Relevamiento de Equipos — Equipos Individuales",
     acceso: "todos",
     resumen:

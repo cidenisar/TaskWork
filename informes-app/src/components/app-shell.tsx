@@ -34,6 +34,7 @@ interface ModuleConfig {
 const RELEVAMIENTO_GROUP: GroupOption[] = [
   { href: "/tableros/nuevo", label: "Tableros" },
   { href: "/racks/nuevo", label: "Comunicaciones" },
+  { href: "/torres-comunicacion/nuevo", label: "Torres de Comunicaciones" },
   { href: "/equipos/nuevo", label: "Equipos Individuales" },
 ];
 
@@ -73,6 +74,15 @@ const NAV_CONFIG: Record<string, ModuleConfig> = {
     tabs: [
       { href: "/racks/nuevo", label: "Nuevo Relevamiento" },
       { href: "/racks/historial", label: "Historial" },
+    ],
+  },
+  "torres-comunicacion": {
+    brand: "Relevamiento de Equipos",
+    backHref: "/relevamiento",
+    group: RELEVAMIENTO_GROUP,
+    tabs: [
+      { href: "/torres-comunicacion/nuevo", label: "Nuevo Relevamiento" },
+      { href: "/torres-comunicacion/historial", label: "Historial" },
     ],
   },
   equipos: {

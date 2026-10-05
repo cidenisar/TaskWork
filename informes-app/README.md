@@ -935,3 +935,42 @@ npm run dev
   por IA (son solo registro, como ya era antes) — distinto de las fotos
   de identificación de equipamiento (`RACK_FOTO_IA_MAX` = 7), que sí se
   mandan a `/api/racks/leer-foto` pero nunca se guardan.
+
+- **Módulo nuevo: Relevamiento de Torres de Comunicaciones.** Mismo patrón
+  que Racks (alta al vuelo de la torre, equipamiento cargado una vez y
+  releveado en cada visita, fotos + IA, historial con PDF) pero para lo
+  montado en una torre física (antena, radioenlace/microonda, antena
+  celular/trunking, baliza de obstrucción, pararrayos, cableado/feeder) en
+  vez de un rack de sala técnica — la posición de cada equipo se registra
+  como altura aproximada en metros (texto libre, ej. "24m") en vez de una
+  posición "U", y el consumo estimado por IA solo aplica a equipamiento
+  ACTIVO (radioenlaces/baliza) — para antenas/pararrayos/cableado
+  (pasivos) la IA siempre devuelve null, explícito en el prompt de
+  `/api/torres-comunicacion/leer-foto`.
+  **Nombrado `torre_comunicacion` (no simplemente `torre`) a propósito:**
+  la app ya usaba "torre" para la cuadrilla/turno de un técnico
+  (`profiles.torre`, `catalogo_torres`, usado en Informe Técnico y
+  Rendición de Gastos) — dos conceptos físicos sin relación que comparten
+  la palabra en español. Tablas (`torres_comunicacion`,
+  `torre_comunicacion_equipamientos`, `torre_comunicacion_relevamientos`,
+  `torre_comunicacion_relevamiento_lecturas`), tipo
+  (`TorreComunicacionCategoriaEquipo`) y ruta (`/torres-comunicacion/...`,
+  `src/components/torres-comunicacion/`) califican el nombre en todos
+  lados para que nadie confunda las dos cosas leyendo el código — ver
+  CRITERIOS_Y_IDEAS.md para la regla general que salió de esto.
+  Fotos generales en array desde el día 1
+  (`torre_comunicacion_relevamientos.fotos_generales_urls text[]`, hasta
+  `TORRE_FOTO_GENERAL_MAX` = 4) — no hubo que repetir la migración
+  simple→array que sí hizo falta en Racks/Informe Técnico/Entregas a
+  Depósito, porque la lección ya estaba aprendida antes de escribir la
+  tabla.
+  **Alcance de esta primera versión, a propósito acotado:** el nuevo
+  `torre_comunicacion_equipamiento` NO está todavía integrado en Bajas de
+  Equipamiento, Entregas a Depósito ni en la ficha de Sitio (que sí
+  incluyen Tableros/Racks/Equipos Individuales) — eso implicaría sumar
+  `torre_comunicacion` a `TipoEquipoBaja` y tocar varios flujos
+  compartidos de esos dos módulos. Se dejó afuera deliberadamente para la
+  primera entrega (el pedido era "dar de alta una torre y relevar su
+  equipamiento", no esas integraciones) — es un buen candidato de
+  incremento siguiente si hace falta, mismo criterio que Racks/Equipos
+  Individuales fueron creciendo en incrementos separados.

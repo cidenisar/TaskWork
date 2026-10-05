@@ -43,6 +43,14 @@ export type RackCategoriaEquipo =
   | "multiplexor"
   | "pdu_regleta"
   | "otro";
+export type TorreComunicacionCategoriaEquipo =
+  | "antena"
+  | "radioenlace"
+  | "antena_celular"
+  | "baliza"
+  | "pararrayos"
+  | "cableado_feeder"
+  | "otro";
 export type EquipoCategoria =
   | "ups"
   | "banco_baterias"
@@ -389,6 +397,51 @@ export type RackRelevamientoLecturaRow = {
   comentario: string | null;
 }
 
+export type TorreComunicacionRow = {
+  id: string;
+  denominacion: string;
+  ubicacion_id: string;
+  created_by: string | null;
+  created_at: string;
+}
+
+export type TorreComunicacionEquipamientoRow = {
+  id: string;
+  torre_id: string;
+  numero: number;
+  categoria_equipo: TorreComunicacionCategoriaEquipo;
+  texto: string;
+  marca_modelo: string | null;
+  /** Altura en la torre, texto libre (ej. "24m") — no siempre se puede medir con precisión en el momento. */
+  altura_m: string | null;
+  etiqueta_ypf: string | null;
+  cantidad: number;
+  consumo_promedio_w: number | null;
+  consumo_max_w: number | null;
+  estado: EstadoEquipamiento;
+  created_at: string;
+}
+
+export type TorreComunicacionRelevamientoRow = {
+  id: string;
+  torre_id: string;
+  numero_generacion: string;
+  fecha: string;
+  created_by: string;
+  pdf_url: string | null;
+  pdf_generado_at: string | null;
+  fotos_generales_urls: string[] | null;
+  created_at: string;
+}
+
+export type TorreComunicacionRelevamientoLecturaRow = {
+  id: string;
+  relevamiento_id: string;
+  equipamiento_id: string;
+  estado: string | null;
+  comentario: string | null;
+}
+
 export type EquipoRow = {
   id: string;
   ubicacion_id: string;
@@ -645,6 +698,29 @@ export interface Database {
         RackRelevamientoLecturaRow,
         Partial<RackRelevamientoLecturaRow> & Pick<RackRelevamientoLecturaRow, "relevamiento_id" | "equipamiento_id">,
         Partial<RackRelevamientoLecturaRow>
+      >;
+      torres_comunicacion: Tbl<
+        TorreComunicacionRow,
+        Partial<TorreComunicacionRow> & Pick<TorreComunicacionRow, "denominacion" | "ubicacion_id">,
+        Partial<TorreComunicacionRow>
+      >;
+      torre_comunicacion_equipamientos: Tbl<
+        TorreComunicacionEquipamientoRow,
+        Partial<TorreComunicacionEquipamientoRow> &
+          Pick<TorreComunicacionEquipamientoRow, "torre_id" | "numero" | "categoria_equipo" | "texto">,
+        Partial<TorreComunicacionEquipamientoRow>
+      >;
+      torre_comunicacion_relevamientos: Tbl<
+        TorreComunicacionRelevamientoRow,
+        Partial<TorreComunicacionRelevamientoRow> &
+          Pick<TorreComunicacionRelevamientoRow, "torre_id" | "numero_generacion" | "fecha" | "created_by">,
+        Partial<TorreComunicacionRelevamientoRow>
+      >;
+      torre_comunicacion_relevamiento_lecturas: Tbl<
+        TorreComunicacionRelevamientoLecturaRow,
+        Partial<TorreComunicacionRelevamientoLecturaRow> &
+          Pick<TorreComunicacionRelevamientoLecturaRow, "relevamiento_id" | "equipamiento_id">,
+        Partial<TorreComunicacionRelevamientoLecturaRow>
       >;
       equipos: Tbl<
         EquipoRow,

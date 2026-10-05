@@ -53,6 +53,14 @@ const ICON_PATHS: Record<string, React.ReactNode> = {
       <circle cx="15" cy="17" r="0.6" fill="currentColor" stroke="none" />
     </>
   ),
+  "torre-comunicacion": (
+    <>
+      <path d="M12 2v20" />
+      <path d="M12 2 6 20M12 2l6 18" />
+      <path d="M8.3 12h7.4M9.5 8h5" />
+      <circle cx="12" cy="4" r="1" fill="currentColor" stroke="none" />
+    </>
+  ),
   ubicaciones: (
     <>
       <path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21Z" />

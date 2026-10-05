@@ -348,6 +348,32 @@ realmente una entidad distinta, o es el mismo patrón de carga con una
 fuente más para el ítem?" — si es lo segundo, extender el picker/origen
 del módulo existente es mucho más barato que levantar uno en paralelo.
 
+**Cuando la entidad nueva SÍ es un contenedor con estructura interna
+propia, el módulo aparte es la decisión correcta — pero si el nombre
+natural de esa entidad ya significa otra cosa en la app, hay que
+desambiguarlo en el código, no solo confiar en el contexto.** Pasó en
+Informes con "Torres de Comunicaciones" (antenas/radioenlaces montados en
+una torre física): el patrón correcto era un módulo propio mirando
+Racks (alta de la torre + equipamiento + relevamiento por visita, mismo
+criterio que la sección de arriba sobre contenedores con estructura
+propia). Pero la app ya usaba la palabra "torre" para un concepto
+completamente distinto y preexistente (la cuadrilla/turno de un técnico
+— `profiles.torre`, `catalogo_torres`, usado en Informe Técnico y
+Rendición de Gastos). Nombrar la tabla/tipo nuevo simplemente `torres`
+hubiera sido ambiguo para cualquiera que lea el código después (¿cuál
+"torre" es esta?) aunque en la UI el usuario nunca se confunda por el
+contexto. Se resolvió calificando el nombre en TODO el código del
+concepto nuevo (tablas `torres_comunicacion`/
+`torre_comunicacion_equipamientos`/etc., tipo
+`TorreComunicacionCategoriaEquipo`, ruta `/torres-comunicacion/...`) en
+vez de dejar que conviviera un `torres` ambiguo con el `catalogo_torres`
+ya existente. Regla general: antes de nombrar una entidad nueva, buscar
+si la palabra obvia ya está tomada en el dominio de la app (grep del
+término) — si lo está para un concepto no relacionado, calificar el
+nombre nuevo explícitamente desde la primera migración, aunque quede un
+poco más largo; es mucho más barato que renombrar después de que el
+nombre ambiguo se haya esparcido por tablas, tipos y rutas.
+
 **Seguimiento real del ítem de arriba, misma sesión:** el "módulo nuevo"
 que se armó esa vez (un standalone "Instalación", con remito + devolución
 automática — ver más abajo la sección de IA leyendo documentos) resultó
