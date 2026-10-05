@@ -106,6 +106,10 @@ const NAV_CONFIG: Record<string, ModuleConfig> = {
       { href: "/configuracion", label: "Configuración", gated: true },
     ],
   },
+  ayuda: {
+    brand: "Ayuda",
+    tabs: [],
+  },
 };
 
 function moduleKeyFor(pathname: string): string | null {
@@ -164,6 +168,9 @@ export function AppShell({ profile, children }: { profile: Profile; children: Re
           <span className="role-pill">{ROL_LABEL[profile.rol]}</span>
         </div>
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          <Link href="/ayuda" className="signout" style={{ textDecoration: "none" }}>
+            <Icon name="lightbulb" size={13} /> Ayuda
+          </Link>
           <Link href="/cuenta" className="signout" style={{ textDecoration: "none" }}>
             Mi cuenta
           </Link>

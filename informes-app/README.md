@@ -835,3 +835,15 @@ npm run dev
   ya existente en el sitio nuevo (estructura de contenedor que Tableros/
   Racks no tienen pensada para este flujo) — queda afuera a propósito en
   vez de forzar un diseño a medias.
+- **Nueva sección "Ayuda" (`/ayuda`) para que un técnico nuevo aprenda la
+  app sin que nadie se lo explique en persona** (`src/components/ayuda/view.tsx`,
+  link permanente en la `sessionbar` de `src/components/app-shell.tsx`, al
+  lado de "Mi cuenta"): contenido estático en español, un `<details>` nativo
+  por sección (sin JS/estado — se abre y cierra solo con el navegador), con
+  dos grupos: "Patrones que vas a ver en varios módulos" (elegir/crear Sitio
+  + GPS, fotos con IA, "Ver PDF" y el N° de generación — explicados una sola
+  vez en vez de repetirlos módulo por módulo) y "Módulos de la app" (uno por
+  cada ítem del menú, con los pasos para usarlo y una badge de qué rol lo
+  puede ver). Las secciones de Admin/Supervisor se muestran igual a un
+  Técnico (con su badge de acceso) para que entienda qué hace el resto del
+  equipo, no se ocultan.
