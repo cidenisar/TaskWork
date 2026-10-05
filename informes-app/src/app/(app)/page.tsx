@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { requireProfile } from "@/lib/auth";
-import { puedeVerEstadisticas, puedeVerConfiguracion, puedeGestionarBajas } from "@/lib/types";
+import { puedeVerEstadisticas, puedeVerConfiguracion, puedeGestionarBajas, puedeGestionarDeposito } from "@/lib/types";
 import { ModuleIcon } from "@/components/module-icon";
 import { Icon } from "@/components/icon";
 
@@ -9,6 +9,7 @@ export default async function HomePage() {
   const statsLocked = !puedeVerEstadisticas(profile.rol);
   const configLocked = !puedeVerConfiguracion(profile.rol);
   const bajasLocked = !puedeGestionarBajas(profile.rol);
+  const depositoLocked = !puedeGestionarDeposito(profile.rol);
 
   return (
     <div>
@@ -60,6 +61,17 @@ export default async function HomePage() {
           </div>
           <div className="module-sub">
             Dar de baja equipamiento por rotura, ampliación u obsolescencia y generar el comprobante para depósito
+          </div>
+        </Link>
+        <Link href="/entregas-deposito/nueva" className="module-card">
+          <div className="module-ico">
+            <ModuleIcon name="deposito" />
+          </div>
+          <div className="module-title">
+            Entregas a Depósito {depositoLocked && <span className="lock"><Icon name="lock" size={12} /></span>}
+          </div>
+          <div className="module-sub">
+            Material o equipo (nuevo o usado-funcional) que vuelve al depósito — con comprobante de constancia
           </div>
         </Link>
         <Link href="/estadisticas" className="module-card">

@@ -714,3 +714,45 @@ npm run dev
   navegador lo muestra ahí — si alguien quiere además guardarlo, el
   propio visor tiene su botón de descarga. La selección múltiple +
   `.zip` de Informe Técnico no se tocó: esa sí necesita el blob real.
+- **Entregas a Depósito** (nuevo módulo, solo Administrador/Supervisor —
+  `puedeGestionarDeposito` en `src/lib/types.ts`, hermano de "Bajas de
+  Equipamiento" —, migración `20261005080000_entregas_deposito.sql`,
+  `src/components/deposito/`, `src/app/(app)/entregas-deposito/`): una
+  Baja es equipo roto/obsoleto que se retira para siempre — pero hacía
+  falta algo distinto para equipo o material que **vuelve** al depósito
+  (nuevo sin usar, o usado pero todavía funciona) y necesita una
+  constancia. Dos orígenes posibles para una misma entrega:
+  - **Equipo ya cargado en un sitio** (tablero-circuito, rack-equipamiento
+    o equipo individual): mismo botón-modal que "Dar de baja"
+    (`EntregarADepositoButton`, ícono `truck` al lado del ícono `box` de
+    Bajas, en cada fila de las 3 tablas de la ficha de Sitio) — al
+    confirmar, el equipo pasa a `estado = 'en_deposito'` (un tercer valor
+    agregado al mismo `estado` que ya usan Bajas, junto a `'activo'`/
+    `'baja'`) y desaparece de las listas activas igual que una Baja,
+    pero con su propio motivo (sobrante de obra / reemplazo funcional —
+    todavía sirve, no está roto / retorno post-mantenimiento / otro) y
+    condición (nuevo / usado-funcional) en vez de rotura/obsolescencia.
+    El resolvedor de los 3 tipos de equipo (`resolverEquipo`,
+    `TABLA_POR_TIPO`) se extrajo a `src/lib/equipamiento/resolver-equipo.ts`
+    para compartirlo entre `darDeBajaAction` y la acción nueva
+    `entregarEquipoADepositoAction` en vez de duplicarlo.
+  - **Material que nunca se registró como equipamiento de un sitio**
+    (cables sueltos, repuestos, equipo nuevo sin instalar): no hay fila
+    de tablero/rack/equipo que tocar, así que tiene su propia pantalla
+    — `/entregas-deposito/nueva` ("Nueva Entrega", tab propio del
+    módulo) — con el mismo picker de Ubicación (Provincia→Sitio→Planta→
+    Oficina, con alta al vuelo y GPS) que ya usan Informe Técnico y
+    Rendición de Gastos, más los campos del material (descripción,
+    categoría, marca/modelo, cantidad, condición, motivo). Como no toca
+    ninguna tabla de equipamiento admin-only, esta acción no necesita
+    Service Role — corre con la sesión normal del usuario, apoyada en
+    la policy de INSERT/UPDATE de `entregas_deposito` (que sí exige
+    Admin/Supervisor).
+
+  Los dos orígenes comparten la misma tabla (`entregas_deposito`, con
+  `origen` como discriminante), el mismo PDF ("Constancia de entrega a
+  depósito", un documento por entrega, igual criterio que Bajas) y el
+  mismo Historial (`/entregas-deposito/historial`) — y, al tener ambos
+  un `ubicacion_id`, también aparecen juntos en la nueva sección
+  "Entregado a depósito desde este sitio" de la ficha de cada Sitio, sin
+  necesitar lógica separada para distinguirlos ahí.

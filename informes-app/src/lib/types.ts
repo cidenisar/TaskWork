@@ -31,6 +31,11 @@ export function puedeGestionarBajas(rol: Rol): boolean {
   return rol === "admin" || rol === "supervisor";
 }
 
+/** Entregar material/equipo a depósito es la misma clase de decisión operativa que una Baja — mismo gate. */
+export function puedeGestionarDeposito(rol: Rol): boolean {
+  return rol === "admin" || rol === "supervisor";
+}
+
 export interface Tecnico {
   nombre: string;
   torre: string;

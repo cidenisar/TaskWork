@@ -52,7 +52,10 @@ export type EquipoCategoria =
   | "telefonia"
   | "climatizacion"
   | "otro";
-export type EstadoEquipamiento = "activo" | "baja";
+export type EstadoEquipamiento = "activo" | "baja" | "en_deposito";
+export type OrigenEntregaDeposito = "equipo_existente" | "material_libre";
+export type CondicionMaterial = "nuevo" | "usado_funcional";
+export type MotivoEntregaDeposito = "sobrante_obra" | "reemplazo_funcional" | "retorno_mantenimiento" | "otro";
 export type MotivoBaja = "rotura" | "ampliacion" | "obsolescencia" | "otro";
 export type TipoEquipoBaja = "tablero_circuito" | "rack_equipamiento" | "equipo_individual";
 
@@ -439,6 +442,29 @@ export type BajaEquipamientoRow = {
   created_at: string;
 }
 
+export type EntregaDepositoRow = {
+  id: string;
+  numero_generacion: string;
+  origen: OrigenEntregaDeposito;
+  tipo_equipo: TipoEquipoBaja | null;
+  equipo_id: string | null;
+  descripcion: string;
+  categoria: string | null;
+  marca_modelo: string | null;
+  numero_serie: string | null;
+  etiqueta_ypf: string | null;
+  cantidad: number;
+  condicion: CondicionMaterial;
+  motivo: MotivoEntregaDeposito;
+  comentario: string | null;
+  ubicacion_id: string;
+  fecha: string;
+  created_by: string;
+  pdf_url: string | null;
+  pdf_generado_at: string | null;
+  created_at: string;
+}
+
 export type ClientErrorRow = {
   id: string;
   user_id: string | null;
@@ -613,6 +639,12 @@ export interface Database {
         Partial<BajaEquipamientoRow> &
           Pick<BajaEquipamientoRow, "numero_generacion" | "tipo_equipo" | "equipo_id" | "equipo_texto" | "equipo_categoria" | "ubicacion_id" | "motivo" | "fecha" | "created_by">,
         Partial<BajaEquipamientoRow>
+      >;
+      entregas_deposito: Tbl<
+        EntregaDepositoRow,
+        Partial<EntregaDepositoRow> &
+          Pick<EntregaDepositoRow, "numero_generacion" | "origen" | "descripcion" | "condicion" | "motivo" | "ubicacion_id" | "fecha" | "created_by">,
+        Partial<EntregaDepositoRow>
       >;
     };
     Views: Record<string, never>;

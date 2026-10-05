@@ -92,6 +92,13 @@ const NAV_CONFIG: Record<string, ModuleConfig> = {
     brand: "Bajas de Equipamiento",
     tabs: [{ href: "/bajas/historial", label: "Historial" }],
   },
+  "entregas-deposito": {
+    brand: "Entregas a Depósito",
+    tabs: [
+      { href: "/entregas-deposito/nueva", label: "Nueva Entrega" },
+      { href: "/entregas-deposito/historial", label: "Historial" },
+    ],
+  },
   estadisticas: {
     brand: "Estadísticas",
     tabs: [

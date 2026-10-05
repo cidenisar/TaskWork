@@ -51,6 +51,21 @@ server-side a "lo que ya tiene algo cargado encima" antes de mandarlo al
 cliente evita una lista enorme que es puro ruido para esa pantalla en
 particular.
 
+**Una misma entidad con dos orígenes posibles (uno ya existente en el
+sistema, otro en texto libre) comparte tabla y PDF, no una lógica
+separada por cada uno.** Pasó con "Entregas a Depósito" (Informes):
+podía ser un equipo que ya estaba cargado en un sitio, o material que
+nunca se registró (cables sueltos, repuestos). En vez de dos tablas o
+dos flujos paralelos, una sola tabla con una columna `origen` como
+discriminante (`equipo_existente` | `material_libre`), donde las
+columnas que no aplican a un origen quedan `null` — así ambos comparten
+el mismo número de generación, el mismo PDF, el mismo Historial y
+cualquier filtro por sitio (ej. `ubicacion_id`), sin if/else repetido en
+cada pantalla que los lista. El picker/resolver de "elegí uno existente
+o creá uno nuevo" que ya exista en el proyecto (en este caso el de
+Ubicación, con alta al vuelo) se reusa tal cual para el origen "libre",
+en vez de construir un formulario de alta paralelo.
+
 ## 2. Consultas a Supabase/Postgres
 
 **Nunca traer una tabla completa sin paginar.** Supabase/PostgREST corta en

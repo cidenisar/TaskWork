@@ -4,15 +4,17 @@ import Anthropic from "@anthropic-ai/sdk";
 import { revalidatePath } from "next/cache";
 import { requireProfile } from "@/lib/auth";
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
-import { puedeGestionarBajas } from "@/lib/types";
+import { puedeGestionarBajas, puedeGestionarDeposito } from "@/lib/types";
 import { CATEGORIA_EQUIPO_LABEL as RACK_CATEGORIA_LABEL } from "@/components/racks/types";
 import { CATEGORIA_EQUIPO_LABEL as EQUIPO_CATEGORIA_LABEL } from "@/components/equipos/types";
-import { CATEGORIA_EQUIPO_LABEL as TABLERO_CATEGORIA_LABEL } from "@/components/tableros/types";
 import { TIPO_EQUIPO_BAJA_LABEL } from "@/components/bajas/types";
+import { TIPO_EQUIPO_LABEL as TIPO_EQUIPO_DEPOSITO_LABEL } from "@/components/deposito/types";
 import { nuevoNumeroGeneracionBaja } from "@/lib/bajas/numero-generacion";
-import { renderBajaPdf } from "@/lib/pdf/render";
-import { buildBajaFilename } from "@/lib/pdf/filename";
-import type { MotivoBaja, TipoEquipoBaja } from "@/lib/database.types";
+import { nuevoNumeroGeneracionEntrega } from "@/lib/deposito/numero-generacion";
+import { renderBajaPdf, renderEntregaDepositoPdf } from "@/lib/pdf/render";
+import { buildBajaFilename, buildEntregaDepositoFilename } from "@/lib/pdf/filename";
+import { resolverEquipo, TABLA_POR_TIPO } from "@/lib/equipamiento/resolver-equipo";
+import type { MotivoBaja, MotivoEntregaDeposito, CondicionMaterial, TipoEquipoBaja } from "@/lib/database.types";
 
 export interface EstimarConsumoResult {
   success: boolean;
@@ -180,89 +182,6 @@ export interface DarDeBajaResult {
   numeroGeneracion?: string;
 }
 
-interface EquipoResuelto {
-  texto: string;
-  categoriaLabel: string;
-  marcaModelo: string | null;
-  numeroSerie: string | null;
-  etiquetaYpf: string | null;
-  ubicacionId: string;
-  estadoActual: string;
-}
-
-/**
- * Los 3 tipos de equipamiento viven en tablas distintas, con columnas
- * distintas (ej. tablero_circuitos no tiene marca/modelo ni serie) y
- * `ubicacion_id` resuelto distinto (directo en `equipos`, vía
- * `racks`/`tableros` en los otros dos) — se normaliza una sola vez acá para
- * que el resto de la action sea genérico.
- */
-async function resolverEquipo(
-  service: ReturnType<typeof createServiceRoleClient>,
-  tipoEquipo: TipoEquipoBaja,
-  equipoId: string,
-): Promise<EquipoResuelto | null> {
-  if (tipoEquipo === "tablero_circuito") {
-    const { data: circuito } = await service
-      .from("tablero_circuitos")
-      .select("texto, categoria_equipo, estado, tablero_id")
-      .eq("id", equipoId)
-      .single();
-    if (!circuito) return null;
-    const { data: tablero } = await service.from("tableros").select("ubicacion_id").eq("id", circuito.tablero_id).single();
-    if (!tablero) return null;
-    return {
-      texto: circuito.texto,
-      categoriaLabel: TABLERO_CATEGORIA_LABEL[circuito.categoria_equipo],
-      marcaModelo: null,
-      numeroSerie: null,
-      etiquetaYpf: null,
-      ubicacionId: tablero.ubicacion_id,
-      estadoActual: circuito.estado,
-    };
-  }
-  if (tipoEquipo === "rack_equipamiento") {
-    const { data: item } = await service
-      .from("rack_equipamientos")
-      .select("texto, categoria_equipo, marca_modelo, etiqueta_ypf, estado, rack_id")
-      .eq("id", equipoId)
-      .single();
-    if (!item) return null;
-    const { data: rack } = await service.from("racks").select("ubicacion_id").eq("id", item.rack_id).single();
-    if (!rack) return null;
-    return {
-      texto: item.texto,
-      categoriaLabel: RACK_CATEGORIA_LABEL[item.categoria_equipo],
-      marcaModelo: item.marca_modelo,
-      numeroSerie: null,
-      etiquetaYpf: item.etiqueta_ypf,
-      ubicacionId: rack.ubicacion_id,
-      estadoActual: item.estado,
-    };
-  }
-  const { data: item } = await service
-    .from("equipos")
-    .select("texto, categoria_equipo, marca_modelo, numero_serie, etiqueta_ypf, estado, ubicacion_id")
-    .eq("id", equipoId)
-    .single();
-  if (!item) return null;
-  return {
-    texto: item.texto,
-    categoriaLabel: EQUIPO_CATEGORIA_LABEL[item.categoria_equipo],
-    marcaModelo: item.marca_modelo,
-    numeroSerie: item.numero_serie,
-    etiquetaYpf: item.etiqueta_ypf,
-    ubicacionId: item.ubicacion_id,
-    estadoActual: item.estado,
-  };
-}
-
-const TABLA_POR_TIPO: Record<TipoEquipoBaja, "tablero_circuitos" | "rack_equipamientos" | "equipos"> = {
-  tablero_circuito: "tablero_circuitos",
-  rack_equipamiento: "rack_equipamientos",
-  equipo_individual: "equipos",
-};
-
 /**
  * Dar de baja un equipo: lo saca del equipamiento activo del sitio
  * (`estado = 'baja'`, nunca se borra la fila) y genera un comprobante en
@@ -383,4 +302,141 @@ export async function darDeBajaAction(payload: DarDeBajaPayload): Promise<DarDeB
 
   revalidatePath("/ubicaciones/[id]", "page");
   return { success: true, bajaId, numeroGeneracion };
+}
+
+export interface EntregarEquipoADepositoPayload {
+  tipoEquipo: TipoEquipoBaja;
+  equipoId: string;
+  condicion: CondicionMaterial;
+  motivo: MotivoEntregaDeposito;
+  comentario: string;
+  fecha: string;
+}
+
+export interface EntregarADepositoResult {
+  success: boolean;
+  error?: string;
+  entregaId?: string;
+  numeroGeneracion?: string;
+}
+
+/**
+ * Entregar a depósito un equipo que YA estaba cargado en un sitio (no es
+ * una Baja: el equipo vuelve nuevo/usado-funcional, no roto/obsoleto) —
+ * mismo mecanismo de "estado" (`en_deposito` en vez de `baja`) y mismo
+ * criterio de Service Role que darDeBajaAction, por la misma razón: ni
+ * Supervisor pasa el UPDATE de rack_equipamientos/equipos por RLS directo.
+ */
+export async function entregarEquipoADepositoAction(payload: EntregarEquipoADepositoPayload): Promise<EntregarADepositoResult> {
+  const profile = await requireProfile();
+  if (!puedeGestionarDeposito(profile.rol)) {
+    return { success: false, error: "Solo un Administrador o Supervisor puede entregar equipamiento a depósito." };
+  }
+  if (!payload.fecha) return { success: false, error: "Falta la fecha." };
+
+  let service: ReturnType<typeof createServiceRoleClient>;
+  try {
+    service = createServiceRoleClient();
+  } catch {
+    return {
+      success: false,
+      error: "Falta configurar SUPABASE_SERVICE_ROLE_KEY en el servidor — sin esa variable no se puede entregar a depósito.",
+    };
+  }
+
+  const equipo = await resolverEquipo(service, payload.tipoEquipo, payload.equipoId);
+  if (!equipo) return { success: false, error: "No se encontró el equipo." };
+  if (equipo.estadoActual !== "activo") return { success: false, error: "Este equipo ya no está activo en el sitio." };
+
+  const { data: ubicacion } = await service
+    .from("ubicaciones")
+    .select("region, provincia, localidad, sitio, planta, oficina")
+    .eq("id", equipo.ubicacionId)
+    .single();
+  if (!ubicacion) return { success: false, error: "No se encontró la ubicación del equipo." };
+
+  let numeroGeneracion = nuevoNumeroGeneracionEntrega();
+  let entregaId: string | null = null;
+  for (let attempt = 0; attempt < 5 && !entregaId; attempt++) {
+    const { data, error } = await service
+      .from("entregas_deposito")
+      .insert({
+        numero_generacion: numeroGeneracion,
+        origen: "equipo_existente",
+        tipo_equipo: payload.tipoEquipo,
+        equipo_id: payload.equipoId,
+        descripcion: equipo.texto,
+        categoria: equipo.categoriaLabel,
+        marca_modelo: equipo.marcaModelo,
+        numero_serie: equipo.numeroSerie,
+        etiqueta_ypf: equipo.etiquetaYpf,
+        cantidad: 1,
+        condicion: payload.condicion,
+        motivo: payload.motivo,
+        comentario: payload.comentario.trim() || null,
+        ubicacion_id: equipo.ubicacionId,
+        fecha: payload.fecha,
+        created_by: profile.id,
+      })
+      .select("id")
+      .single();
+    if (error) {
+      if (error.code === "23505") {
+        numeroGeneracion = nuevoNumeroGeneracionEntrega();
+        continue;
+      }
+      return { success: false, error: `No se pudo registrar la entrega: ${error.message}` };
+    }
+    entregaId = data!.id;
+  }
+  if (!entregaId) return { success: false, error: "No se pudo asignar un número de generación único. Probá de nuevo." };
+
+  await service.from(TABLA_POR_TIPO[payload.tipoEquipo]).update({ estado: "en_deposito" }).eq("id", payload.equipoId);
+
+  const { data: config } = await service.from("config_general").select("logo_empresa_url").eq("id", 1).single();
+  let logoBuffer: Buffer | null = null;
+  if (config?.logo_empresa_url) {
+    try {
+      const res = await fetch(config.logo_empresa_url);
+      if (res.ok) logoBuffer = Buffer.from(await res.arrayBuffer());
+    } catch {
+      // seguimos sin logo antes que fallar la generación del PDF
+    }
+  }
+
+  const pdfBuffer = await renderEntregaDepositoPdf({
+    numeroGeneracion,
+    region: ubicacion.region,
+    provincia: ubicacion.provincia,
+    localidad: ubicacion.localidad,
+    sitio: ubicacion.sitio,
+    planta: ubicacion.planta,
+    oficina: ubicacion.oficina,
+    fecha: payload.fecha,
+    tipoEquipoLabel: TIPO_EQUIPO_DEPOSITO_LABEL[payload.tipoEquipo],
+    descripcion: equipo.texto,
+    categoria: equipo.categoriaLabel,
+    marcaModelo: equipo.marcaModelo,
+    numeroSerie: equipo.numeroSerie,
+    etiquetaYpf: equipo.etiquetaYpf,
+    cantidad: 1,
+    condicion: payload.condicion,
+    motivo: payload.motivo,
+    comentario: payload.comentario.trim() || null,
+    logoBuffer,
+    appName: "Informe Técnico App",
+    realizoNombre: profile.nombreCompleto,
+  });
+
+  const pdfFilename = buildEntregaDepositoFilename({ numeroGeneracion, descripcion: equipo.texto, sitio: ubicacion.sitio });
+  const pdfPath = `${profile.id}/entregas-deposito/${entregaId}/${pdfFilename}`;
+  const { error: pdfUpErr } = await service.storage
+    .from("informes-pdf")
+    .upload(pdfPath, pdfBuffer, { contentType: "application/pdf", upsert: true });
+  if (!pdfUpErr) {
+    await service.from("entregas_deposito").update({ pdf_url: pdfPath, pdf_generado_at: new Date().toISOString() }).eq("id", entregaId);
+  }
+
+  revalidatePath("/ubicaciones/[id]", "page");
+  return { success: true, entregaId, numeroGeneracion };
 }

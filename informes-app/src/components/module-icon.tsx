@@ -79,6 +79,14 @@ const ICON_PATHS: Record<string, React.ReactNode> = {
       <path d="M12 13v8" />
     </>
   ),
+  deposito: (
+    <>
+      <rect x="2.5" y="8" width="11" height="8" rx="1.2" />
+      <path d="M13.5 11h3.3l3.2 3v2H20" />
+      <circle cx="6.5" cy="17.3" r="1.6" />
+      <circle cx="16" cy="17.3" r="1.6" />
+    </>
+  ),
 };
 
 /**

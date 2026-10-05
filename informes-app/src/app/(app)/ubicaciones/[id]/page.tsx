@@ -14,10 +14,13 @@ import { calcularResumenEquipamiento as calcularResumenRacks, CATEGORIA_EQUIPO_L
 import { calcularResumenEquipos, CATEGORIA_EQUIPO_LABEL as EQUIPO_CATEGORIA_LABEL } from "@/components/equipos/types";
 import { EstimarConsumoButton } from "@/components/ubicaciones/estimar-consumo-button";
 import { estimarConsumoRacksAction, estimarConsumoEquiposAction } from "../actions";
-import { puedeGestionarBajas } from "@/lib/types";
+import { puedeGestionarBajas, puedeGestionarDeposito } from "@/lib/types";
 import { DarDeBajaButton } from "@/components/bajas/dar-de-baja-button";
 import { DescargarBajaBoton } from "@/components/bajas/descargar-boton";
 import { MOTIVO_BAJA_LABEL, TIPO_EQUIPO_BAJA_LABEL } from "@/components/bajas/types";
+import { EntregarADepositoButton } from "@/components/deposito/entregar-boton";
+import { VerComprobanteEntregaBoton } from "@/components/deposito/ver-comprobante-boton";
+import { MOTIVO_ENTREGA_LABEL, CONDICION_LABEL, TIPO_EQUIPO_LABEL as TIPO_EQUIPO_DEPOSITO_LABEL } from "@/components/deposito/types";
 
 function fmtFecha(fecha: string) {
   const [y, m, d] = fecha.split("-");
@@ -81,9 +84,10 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
   ]);
   const tableros = tablerosRes.data ?? [];
   const racks = racksRes.data ?? [];
-  // Un equipo dado de baja ya no es equipamiento activo del sitio — se muestra
-  // aparte, en la sección "dado de baja" (que lee bajas_equipamiento, no esta lista).
-  const equipos = (equiposRes.data ?? []).filter((e) => e.estado !== "baja");
+  // Un equipo dado de baja o entregado a depósito ya no es equipamiento
+  // activo del sitio — se muestra aparte, en sus propias secciones (que leen
+  // bajas_equipamiento/entregas_deposito, no esta lista).
+  const equipos = (equiposRes.data ?? []).filter((e) => e.estado === "activo");
   const informes = informesRes.data ?? [];
   const rendiciones = rendicionesRes.data ?? [];
   const tableroIds = tableros.map((t) => t.id);
@@ -121,8 +125,8 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
     supabase.from("equipo_relevamientos").select("id, ubicacion_id, fecha").in("ubicacion_id", siblingIds).order("fecha", { ascending: false }),
   ]);
 
-  const circuitos = (circuitosRes.data ?? []).filter((c) => c.estado !== "baja");
-  const equipamientos = (equipamientosRes.data ?? []).filter((e) => e.estado !== "baja");
+  const circuitos = (circuitosRes.data ?? []).filter((c) => c.estado === "activo");
+  const equipamientos = (equipamientosRes.data ?? []).filter((e) => e.estado === "activo");
 
   const ultimaFechaTablero = new Map<string, string>();
   const ultimaMedicionPorTablero = new Map<string, { id: string; tipoEvento: "medicion" | "relevamiento" }>();
@@ -189,6 +193,20 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
         .order("fecha", { ascending: false })
     : { data: [] };
   const bajas = bajasData ?? [];
+
+  const puedeDeposito = puedeGestionarDeposito(profile.rol);
+  // entregas_deposito también guarda su propia "foto" al momento de la
+  // entrega — mismo criterio que bajas_equipamiento, no hace falta cruzar
+  // con las tablas de origen. Cubre los dos orígenes (equipo ya cargado o
+  // material libre) porque ambos quedan con el mismo ubicacion_id.
+  const { data: entregasData } = puedeDeposito
+    ? await supabase
+        .from("entregas_deposito")
+        .select("id, numero_generacion, origen, tipo_equipo, descripcion, categoria, cantidad, condicion, motivo, comentario, fecha, pdf_url")
+        .in("ubicacion_id", siblingIds)
+        .order("fecha", { ascending: false })
+    : { data: [] };
+  const entregas = entregasData ?? [];
 
   return (
     <div>
@@ -292,7 +310,7 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
                                 </>
                               )}
                               <th>Comentario</th>
-                              {puedeBajas && <th />}
+                              {(puedeBajas || puedeDeposito) && <th />}
                             </tr>
                           </thead>
                           <tbody>
@@ -315,9 +333,14 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
                                     </>
                                   )}
                                   <td>{lectura?.comentario || "—"}</td>
-                                  {puedeBajas && (
+                                  {(puedeBajas || puedeDeposito) && (
                                     <td>
-                                      <DarDeBajaButton tipoEquipo="tablero_circuito" equipoId={c.id} equipoTexto={c.texto} />
+                                      <div style={{ display: "flex", gap: 6 }}>
+                                        {puedeBajas && <DarDeBajaButton tipoEquipo="tablero_circuito" equipoId={c.id} equipoTexto={c.texto} />}
+                                        {puedeDeposito && (
+                                          <EntregarADepositoButton tipoEquipo="tablero_circuito" equipoId={c.id} equipoTexto={c.texto} />
+                                        )}
+                                      </div>
                                     </td>
                                   )}
                                 </tr>
@@ -397,7 +420,7 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
                               <th style={{ textAlign: "right" }}>Cons. máx.</th>
                               <th>Estado</th>
                               <th>Comentario</th>
-                              {puedeBajas && <th />}
+                              {(puedeBajas || puedeDeposito) && <th />}
                             </tr>
                           </thead>
                           <tbody>
@@ -416,9 +439,14 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
                                   <td style={{ textAlign: "right" }}>{e.consumo_max_w ? `~${e.consumo_max_w}W` : "—"}</td>
                                   <td>{lectura?.estado || "—"}</td>
                                   <td>{lectura?.comentario || "—"}</td>
-                                  {puedeBajas && (
+                                  {(puedeBajas || puedeDeposito) && (
                                     <td>
-                                      <DarDeBajaButton tipoEquipo="rack_equipamiento" equipoId={e.id} equipoTexto={e.texto} />
+                                      <div style={{ display: "flex", gap: 6 }}>
+                                        {puedeBajas && <DarDeBajaButton tipoEquipo="rack_equipamiento" equipoId={e.id} equipoTexto={e.texto} />}
+                                        {puedeDeposito && (
+                                          <EntregarADepositoButton tipoEquipo="rack_equipamiento" equipoId={e.id} equipoTexto={e.texto} />
+                                        )}
+                                      </div>
                                     </td>
                                   )}
                                 </tr>
@@ -471,7 +499,7 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
                     <th style={{ textAlign: "right" }}>Cons. máx.</th>
                     <th>Estado</th>
                     <th>Comentario</th>
-                    {puedeBajas && <th />}
+                    {(puedeBajas || puedeDeposito) && <th />}
                   </tr>
                 </thead>
                 <tbody>
@@ -490,9 +518,14 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
                         <td style={{ textAlign: "right" }}>{e.consumo_max_w ? `~${e.consumo_max_w}W` : "—"}</td>
                         <td>{lectura?.estado || "—"}</td>
                         <td>{lectura?.comentario || "—"}</td>
-                        {puedeBajas && (
+                        {(puedeBajas || puedeDeposito) && (
                           <td>
-                            <DarDeBajaButton tipoEquipo="equipo_individual" equipoId={e.id} equipoTexto={e.texto} />
+                            <div style={{ display: "flex", gap: 6 }}>
+                              {puedeBajas && <DarDeBajaButton tipoEquipo="equipo_individual" equipoId={e.id} equipoTexto={e.texto} />}
+                              {puedeDeposito && (
+                                <EntregarADepositoButton tipoEquipo="equipo_individual" equipoId={e.id} equipoTexto={e.texto} />
+                              )}
+                            </div>
                           </td>
                         )}
                       </tr>
@@ -534,6 +567,39 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
                   ) : (
                     <span className="hint">Sin comprobante</span>
                   )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {puedeDeposito && entregas.length > 0 && (
+        <div className="card">
+          <div className="section-label">Entregado a depósito desde este sitio</div>
+          <div className="hint" style={{ margin: "0 0 10px" }}>
+            Material/equipo (nuevo o usado-funcional) devuelto al depósito — comprobante de constancia.
+          </div>
+          <div className="list-grid">
+            {entregas.map((en) => (
+              <div className="hist-item" key={en.id}>
+                <div className="info">
+                  <div className="hist-main">
+                    <div className="hist-title">{en.descripcion}</div>
+                    <div className="hist-meta">
+                      {en.numero_generacion} · {en.tipo_equipo ? TIPO_EQUIPO_DEPOSITO_LABEL[en.tipo_equipo] : "Material libre"}
+                      {en.categoria ? ` (${en.categoria})` : ""} · {CONDICION_LABEL[en.condicion]} · x{en.cantidad} ·{" "}
+                      {MOTIVO_ENTREGA_LABEL[en.motivo]} · {fmtFecha(en.fecha)}
+                    </div>
+                    {en.comentario && (
+                      <div className="hist-meta" style={{ marginTop: 4 }}>
+                        {en.comentario}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div className="hist-actions">
+                  {en.pdf_url ? <VerComprobanteEntregaBoton entregaId={en.id} /> : <span className="hint">Sin comprobante</span>}
                 </div>
               </div>
             ))}
