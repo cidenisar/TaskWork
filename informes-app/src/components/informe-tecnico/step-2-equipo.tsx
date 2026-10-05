@@ -12,8 +12,8 @@ export interface MaterialesStepProps {
   tieneUbicacion: boolean;
   materiales: MaterialInformeItem[];
   setMateriales: Dispatch<SetStateAction<MaterialInformeItem[]>>;
-  remitoFoto: File | null;
-  setRemitoFoto: Dispatch<SetStateAction<File | null>>;
+  remitoFotos: File[];
+  setRemitoFotos: Dispatch<SetStateAction<File[]>>;
   remitoNumero: string;
   setRemitoNumero: Dispatch<SetStateAction<string>>;
   remitoItems: RemitoItem[];
@@ -175,8 +175,8 @@ export function Step2Equipo({
               <MaterialesSection
                 materiales={materialesProps.materiales}
                 setMateriales={materialesProps.setMateriales}
-                remitoFoto={materialesProps.remitoFoto}
-                setRemitoFoto={materialesProps.setRemitoFoto}
+                remitoFotos={materialesProps.remitoFotos}
+                setRemitoFotos={materialesProps.setRemitoFotos}
                 remitoNumero={materialesProps.remitoNumero}
                 setRemitoNumero={materialesProps.setRemitoNumero}
                 remitoItems={materialesProps.remitoItems}

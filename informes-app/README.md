@@ -897,3 +897,16 @@ npm run dev
   Supabase en esta sesión (diagnosticado: sin locks reales, parece la
   herramienta) — pendiente de borrarlas a mano o cuando la herramienta
   ande: `drop table public.instalaciones; drop table public._ping_test;`.
+  **La foto del remito pasó de ser una sola a admitir hasta
+  `REMITO_FOTO_MAX` (3, `materiales-types.ts`)** — el remito puede traer
+  varias páginas, o convenir reintentar una que salió borrosa, mismo
+  criterio que las "fotos de evidencia" de Entregas a Depósito. Columna
+  `informes_tecnicos.remito_fotos_urls text[]` (reemplaza a
+  `remito_foto_url`, que quedó huérfana en la base por el mismo problema de
+  `DROP COLUMN` colgándose — pendiente: `alter table
+  public.informes_tecnicos drop column remito_foto_url;`). Todas las fotos
+  se mandan juntas en una sola lectura a `/api/informe-tecnico/leer-remito`
+  (campo `fotos`, plural) — el prompt le aclara a la IA que puede ser el
+  mismo remito repetido en varias páginas/intentos, para que combine todo
+  en una lista sin duplicar líneas. El PDF las renderiza en grilla
+  (`commonStyles.photoGrid`/`photoCell`), igual que las fotos de evidencia.

@@ -368,16 +368,19 @@ export async function crearInformeTecnicoAction(formData: FormData): Promise<Cre
   // service-role — cualquier técnico puede cargar materiales en su propio
   // informe, la devolución es un efecto mecánico de eso, no una decisión
   // operativa nueva (mismo criterio que Bajas/"traer de depósito").
-  let remitoFotoBuffer: Buffer | null = null;
-  let remitoFotoPath: string | null = null;
-  const remitoFoto = formData.get("remitoFoto");
-  if (remitoFoto instanceof File) {
-    remitoFotoBuffer = Buffer.from(await remitoFoto.arrayBuffer());
-    const path = `${profile.id}/${informeId}/remito.jpg`;
+  const remitoFotoBuffers: Buffer[] = [];
+  const remitoFotoPaths: string[] = [];
+  const remitoFotosRecibidas = formData.getAll("remitoFoto").filter((f): f is File => f instanceof File);
+  for (let i = 0; i < remitoFotosRecibidas.length; i++) {
+    const buffer = Buffer.from(await remitoFotosRecibidas[i].arrayBuffer());
+    const path = `${profile.id}/${informeId}/remito-${i + 1}.jpg`;
     const { error: fotoUpErr } = await supabase.storage
       .from("informe-fotos")
-      .upload(path, remitoFotoBuffer, { contentType: "image/jpeg", upsert: true });
-    if (!fotoUpErr) remitoFotoPath = path;
+      .upload(path, buffer, { contentType: "image/jpeg", upsert: true });
+    if (!fotoUpErr) {
+      remitoFotoBuffers.push(buffer);
+      remitoFotoPaths.push(path);
+    }
   }
 
   const sobrantes = payload.remitoItems.filter((r) => r.cantidadSobrante > 0);
@@ -425,11 +428,11 @@ export async function crearInformeTecnicoAction(formData: FormData): Promise<Cre
     }
   }
 
-  if (remitoFotoPath || payload.remitoNumero || entregaDepositoNumeroGeneracion) {
+  if (remitoFotoPaths.length > 0 || payload.remitoNumero || entregaDepositoNumeroGeneracion) {
     await supabase
       .from("informes_tecnicos")
       .update({
-        remito_foto_url: remitoFotoPath,
+        remito_fotos_urls: remitoFotoPaths.length > 0 ? remitoFotoPaths : null,
         remito_numero: payload.remitoNumero,
         entrega_deposito_numero_generacion: entregaDepositoNumeroGeneracion,
       })
@@ -484,7 +487,7 @@ export async function crearInformeTecnicoAction(formData: FormData): Promise<Cre
     materiales: materialesPdf,
     remitoNumero: payload.remitoNumero,
     remitoItems: payload.remitoItems,
-    remitoFotoBuffer,
+    remitoFotoBuffers,
     entregaDepositoNumeroGeneracion,
     logoBuffer,
     appName: "Informe Técnico App",

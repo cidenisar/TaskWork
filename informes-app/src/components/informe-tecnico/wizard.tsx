@@ -39,7 +39,7 @@ export function InformeTecnicoWizard({
   const [vehiculos, setVehiculos] = useState<Vehiculo[]>([]);
   const [imagenes, setImagenes] = useState<ImagenInforme[]>([]);
   const [materiales, setMateriales] = useState<MaterialInformeItem[]>([]);
-  const [remitoFoto, setRemitoFoto] = useState<File | null>(null);
+  const [remitoFotos, setRemitoFotos] = useState<File[]>([]);
   const [remitoNumero, setRemitoNumero] = useState("");
   const [remitoItems, setRemitoItems] = useState<RemitoItem[]>([]);
   const [selectedEmails, setSelectedEmails] = useState<Set<string>>(
@@ -131,8 +131,8 @@ export function InformeTecnicoWizard({
         }),
       );
       imagenes.forEach((img, i) => fd.append(`imagen_${i}`, img.blob, `foto-${i}.jpg`));
-      if (remitoFoto) {
-        const jpeg = await resizeImageToJpeg(remitoFoto);
+      for (const foto of remitoFotos) {
+        const jpeg = await resizeImageToJpeg(foto);
         fd.append("remitoFoto", jpeg, "remito.jpg");
       }
 
@@ -178,8 +178,8 @@ export function InformeTecnicoWizard({
             tieneUbicacion: Boolean(form.ubicacionId),
             materiales,
             setMateriales,
-            remitoFoto,
-            setRemitoFoto,
+            remitoFotos,
+            setRemitoFotos,
             remitoNumero,
             setRemitoNumero,
             remitoItems,

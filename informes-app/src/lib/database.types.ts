@@ -175,7 +175,7 @@ export type InformeTecnicoRow = {
   created_by: string;
   created_at: string;
   estado: EstadoInforme;
-  remito_foto_url: string | null;
+  remito_fotos_urls: string[] | null;
   remito_numero: string | null;
   entrega_deposito_numero_generacion: string | null;
 }

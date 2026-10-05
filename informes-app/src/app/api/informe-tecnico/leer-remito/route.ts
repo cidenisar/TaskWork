@@ -2,15 +2,19 @@ import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { REMITO_FOTO_MAX } from "@/components/informe-tecnico/materiales-types";
 
 /**
- * Lee UNA foto del remito en papel que entrega el depósito (distinto de
- * leer-foto de materiales: acá no se identifica un objeto físico, se lee
- * una lista/tabla — impresa o manuscrita) y devuelve el N° de remito (si es
- * legible) más cada línea con su descripción y cantidad. Es la lista
- * "esperada" para la sección Materiales de Informe Técnico — el técnico la
- * revisa, y lo que no termine usado/instalado queda como sobrante para la
- * devolución automática a depósito.
+ * Lee hasta REMITO_FOTO_MAX fotos del remito en papel que entrega el
+ * depósito (distinto de leer-foto de materiales: acá no se identifica un
+ * objeto físico, se lee una lista/tabla — impresa o manuscrita) y devuelve
+ * el N° de remito (si es legible) más cada línea con su descripción y
+ * cantidad. Pueden ser varias fotos del MISMO remito (varias páginas, o un
+ * reintento de una que salió borrosa) — se combinan en una sola lectura
+ * para no duplicar líneas. Es la lista "esperada" para la sección
+ * Materiales de Informe Técnico — el técnico la revisa, y lo que no
+ * termine usado/instalado queda como sobrante para la devolución
+ * automática a depósito.
  */
 
 interface LineaDetectada {
@@ -46,13 +50,25 @@ export async function POST(req: NextRequest) {
   }
 
   const formData = await req.formData();
-  const file = formData.get("foto");
-  if (!(file instanceof File)) {
-    return NextResponse.json({ error: "Falta la foto del remito." }, { status: 400 });
+  const files = formData.getAll("fotos").filter((f): f is File => f instanceof File);
+  if (files.length === 0) {
+    return NextResponse.json({ error: "Falta al menos una foto del remito." }, { status: 400 });
+  }
+  if (files.length > REMITO_FOTO_MAX) {
+    return NextResponse.json({ error: `Máximo ${REMITO_FOTO_MAX} fotos por remito.` }, { status: 400 });
   }
 
-  const base64 = Buffer.from(await file.arrayBuffer()).toString("base64");
-  const mediaType = (file.type === "image/png" ? "image/png" : "image/jpeg") as "image/png" | "image/jpeg";
+  const imagenes = await Promise.all(
+    files.map(async (file) => ({
+      base64: Buffer.from(await file.arrayBuffer()).toString("base64"),
+      mediaType: (file.type === "image/png" ? "image/png" : "image/jpeg") as "image/png" | "image/jpeg",
+    })),
+  );
+  const contextoFotos =
+    imagenes.length > 1
+      ? ` Te paso ${imagenes.length} fotos del MISMO remito — pueden ser páginas distintas, o un reintento de una que salió ` +
+        "borrosa/incompleta: combiná todo en una sola lista, sin duplicar una línea que aparezca en más de una foto."
+      : "";
 
   try {
     const client = new Anthropic();
@@ -63,7 +79,7 @@ export async function POST(req: NextRequest) {
       system:
         "Sos un asistente que ayuda a un técnico a cargar el remito en papel que le entregó el depósito junto con los materiales " +
         "que retiró (impreso o escrito a mano, a veces con mala letra o mala foto). Tu trabajo es transcribir la lista de materiales " +
-        "del remito — NO identificar objetos en una foto de equipamiento, acá hay texto/una tabla para leer.\n\n" +
+        `del remito — NO identificar objetos en una foto de equipamiento, acá hay texto/una tabla para leer.${contextoFotos}\n\n` +
         'Devolvé "remitoNumero": el número del remito si está impreso o escrito en algún lugar del documento (ej. "0001-00004521"), ' +
         'o null si no lo encontrás o no es legible con certeza — no inventes un número.\n\n' +
         'Devolvé "items": un array con cada línea de material/producto de la lista, cada uno con:\n' +
@@ -79,8 +95,14 @@ export async function POST(req: NextRequest) {
         {
           role: "user",
           content: [
-            { type: "image" as const, source: { type: "base64" as const, media_type: mediaType, data: base64 } },
-            { type: "text", text: "Transcribime este remito." },
+            ...imagenes.map((img) => ({
+              type: "image" as const,
+              source: { type: "base64" as const, media_type: img.mediaType, data: img.base64 },
+            })),
+            {
+              type: "text",
+              text: imagenes.length > 1 ? `Transcribime este remito combinando estas ${imagenes.length} fotos.` : "Transcribime este remito.",
+            },
           ],
         },
       ],

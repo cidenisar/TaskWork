@@ -78,7 +78,7 @@ export async function actualizarInformeTecnicoAction(
   // si no es el dueño, esto devuelve null y cortamos acá.
   const { data: informeActual, error: fetchErr } = await supabase
     .from("informes_tecnicos")
-    .select("numero_generacion, provincia, ubicacion, remito_foto_url, remito_numero, entrega_deposito_numero_generacion")
+    .select("numero_generacion, provincia, ubicacion, remito_fotos_urls, remito_numero, entrega_deposito_numero_generacion")
     .eq("id", informeId)
     .single();
   if (fetchErr || !informeActual) {
@@ -229,10 +229,10 @@ export async function actualizarInformeTecnicoAction(
     comentario: m.comentario,
   }));
 
-  let remitoFotoBuffer: Buffer | null = null;
-  if (informeActual.remito_foto_url) {
-    const { data: blob } = await supabase.storage.from("informe-fotos").download(informeActual.remito_foto_url);
-    if (blob) remitoFotoBuffer = Buffer.from(await blob.arrayBuffer());
+  const remitoFotoBuffers: Buffer[] = [];
+  for (const path of informeActual.remito_fotos_urls ?? []) {
+    const { data: blob } = await supabase.storage.from("informe-fotos").download(path);
+    if (blob) remitoFotoBuffers.push(Buffer.from(await blob.arrayBuffer()));
   }
 
   const { data: config } = await supabase.from("config_general").select("logo_empresa_url").eq("id", 1).single();
@@ -282,7 +282,7 @@ export async function actualizarInformeTecnicoAction(
     // de alta (arriba) y la referencia a la devolución si la hubo sí
     // persisten y se mantienen.
     remitoItems: [],
-    remitoFotoBuffer,
+    remitoFotoBuffers,
     entregaDepositoNumeroGeneracion: informeActual.entrega_deposito_numero_generacion,
     logoBuffer,
     appName: "Informe Técnico App",

@@ -76,7 +76,7 @@ export interface InformePdfProps {
   materiales: InformePdfMaterial[];
   remitoNumero: string | null;
   remitoItems: InformePdfRemitoItem[];
-  remitoFotoBuffer: Buffer | null;
+  remitoFotoBuffers: Buffer[] | null;
   entregaDepositoNumeroGeneracion: string | null;
   logoBuffer: Buffer | null;
   appName: string;
@@ -103,7 +103,7 @@ export function InformeTecnicoPdf(props: InformePdfProps) {
     materiales,
     remitoNumero,
     remitoItems,
-    remitoFotoBuffer,
+    remitoFotoBuffers,
     entregaDepositoNumeroGeneracion,
     logoBuffer,
     appName,
@@ -193,11 +193,15 @@ export function InformeTecnicoPdf(props: InformePdfProps) {
           </>
         )}
 
-        {remitoFotoBuffer && (
+        {remitoFotoBuffers && remitoFotoBuffers.length > 0 && (
           <>
             <Text style={commonStyles.sectionTitle}>Remito{remitoNumero ? ` — N° ${remitoNumero}` : ""}</Text>
-            <View style={{ marginBottom: 6 }}>
-              <Image src={remitoFotoBuffer} style={commonStyles.photo} />
+            <View style={commonStyles.photoGrid}>
+              {remitoFotoBuffers.map((buf, i) => (
+                <View style={commonStyles.photoCell} key={i} wrap={false}>
+                  <Image src={buf} style={commonStyles.photo} />
+                </View>
+              ))}
             </View>
           </>
         )}

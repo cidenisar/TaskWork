@@ -3,6 +3,9 @@ import type { EquipoCategoria } from "@/lib/database.types";
 /** Fotos de materiales/equipos que se mandan juntas a la IA en una sola lectura (mismo criterio que Equipos Individuales). */
 export const MATERIAL_FOTO_IA_MAX = 10;
 
+/** Fotos del remito (puede tener varias páginas, o convenir reintentar una que salió borrosa) — se mandan todas juntas a la IA en una sola lectura. */
+export const REMITO_FOTO_MAX = 3;
+
 export interface MaterialInformeItem {
   categoriaEquipo: EquipoCategoria;
   descripcion: string;

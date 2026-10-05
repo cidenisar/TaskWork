@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
+import { useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { Icon } from "@/components/icon";
 import { resizeImageToJpeg } from "@/lib/image-resize";
 import { reportarErrorCliente } from "@/lib/client-error-report";
@@ -8,6 +8,7 @@ import { CATEGORIA_EQUIPO_OPCIONES, CATEGORIA_EQUIPO_LABEL } from "@/components/
 import {
   MATERIAL_FOTO_IA_MAX,
   MATERIAL_INFORME_BASE,
+  REMITO_FOTO_MAX,
   type MaterialInformeItem,
   type RemitoItem,
 } from "./materiales-types";
@@ -26,8 +27,8 @@ import type { EquipoCategoria } from "@/lib/database.types";
 export function MaterialesSection({
   materiales,
   setMateriales,
-  remitoFoto,
-  setRemitoFoto,
+  remitoFotos,
+  setRemitoFotos,
   remitoNumero,
   setRemitoNumero,
   remitoItems,
@@ -36,8 +37,8 @@ export function MaterialesSection({
 }: {
   materiales: MaterialInformeItem[];
   setMateriales: Dispatch<SetStateAction<MaterialInformeItem[]>>;
-  remitoFoto: File | null;
-  setRemitoFoto: Dispatch<SetStateAction<File | null>>;
+  remitoFotos: File[];
+  setRemitoFotos: Dispatch<SetStateAction<File[]>>;
   remitoNumero: string;
   setRemitoNumero: Dispatch<SetStateAction<string>>;
   remitoItems: RemitoItem[];
@@ -54,12 +55,6 @@ export function MaterialesSection({
   const [remitoNote, setRemitoNote] = useState<string | null>(null);
   const remitoCameraInputRef = useRef<HTMLInputElement>(null);
   const remitoGaleriaInputRef = useRef<HTMLInputElement>(null);
-  const remitoFotoPreview = useMemo(() => (remitoFoto ? URL.createObjectURL(remitoFoto) : null), [remitoFoto]);
-  useEffect(() => {
-    return () => {
-      if (remitoFotoPreview) URL.revokeObjectURL(remitoFotoPreview);
-    };
-  }, [remitoFotoPreview]);
 
   function agregarFotosIa(files: File[]) {
     if (files.length === 0) return;
@@ -167,23 +162,54 @@ export function MaterialesSection({
     setMateriales((prev) => prev.filter((_, idx) => idx !== i));
   }
 
+  function agregarFotosRemito(files: File[]) {
+    if (files.length === 0) return;
+    setRemitoNote(null);
+    setRemitoFotos((prev) => {
+      const disponibles = REMITO_FOTO_MAX - prev.length;
+      if (disponibles <= 0) return prev;
+      return [...prev, ...files.slice(0, disponibles)];
+    });
+  }
+
+  function quitarFotoRemito(i: number) {
+    setRemitoFotos((prev) => prev.filter((_, idx) => idx !== i));
+  }
+
   async function leerRemitoConIa() {
-    if (!remitoFoto) return;
+    if (remitoFotos.length === 0) return;
     setRemitoBusy(true);
     setRemitoNote(null);
+    const fallidas: File[] = [];
+    let primerError: string | null = null;
     try {
-      const jpeg = await resizeImageToJpeg(remitoFoto);
       const fd = new FormData();
-      fd.append("foto", jpeg, "remito.jpg");
+      for (const f of remitoFotos) {
+        try {
+          const jpeg = await resizeImageToJpeg(f);
+          fd.append("fotos", jpeg, "remito.jpg");
+        } catch (err) {
+          fallidas.push(f);
+          const msg = err instanceof Error ? err.message : `No se pudo leer "${f.name}".`;
+          if (!primerError) primerError = msg;
+        }
+      }
+      const exitosas = remitoFotos.length - fallidas.length;
+      if (exitosas === 0) {
+        setRemitoNote(primerError || "No se pudo leer ninguna de las fotos.");
+        return;
+      }
       const res = await fetch("/api/informe-tecnico/leer-remito", { method: "POST", body: fd });
       const data = await res.json();
       if (!res.ok) {
         setRemitoNote(data.error || "No se pudo leer el remito.");
+        setRemitoFotos(fallidas);
         return;
       }
       const detectados: { descripcion: string; cantidad: number }[] = data.items ?? [];
       if (detectados.length === 0) {
         setRemitoNote(data.error || "No se detectó ninguna línea en el remito — cargala a mano.");
+        setRemitoFotos(fallidas);
         return;
       }
       if (data.remitoNumero) setRemitoNumero(data.remitoNumero);
@@ -191,7 +217,11 @@ export function MaterialesSection({
         ...prev,
         ...detectados.map((d) => ({ descripcion: d.descripcion, cantidadEsperada: d.cantidad, cantidadSobrante: 0 })),
       ]);
-      setRemitoNote(`Se leyeron ${detectados.length} línea${detectados.length === 1 ? "" : "s"} del remito — revisalas antes de guardar.`);
+      setRemitoNote(
+        `Se leyeron ${detectados.length} línea${detectados.length === 1 ? "" : "s"} del remito desde ${exitosas} foto${exitosas === 1 ? "" : "s"} — revisalas antes de guardar.` +
+          (fallidas.length > 0 ? ` (${fallidas.length} foto${fallidas.length === 1 ? "" : "s"} no se pudo leer: ${primerError})` : ""),
+      );
+      setRemitoFotos(fallidas);
     } catch (err) {
       setRemitoNote("No se pudo leer el remito.");
       reportarErrorCliente(err instanceof Error ? err.message : "Error leyendo remito con IA", "leer-remito-informe");
@@ -219,8 +249,9 @@ export function MaterialesSection({
       <div className="card">
         <div className="section-label">Remito (opcional)</div>
         <div className="hint" style={{ margin: "-4px 0 12px" }}>
-          <Icon name="ai" size={13} /> Si retiraste el material de depósito con un remito en papel, sacale una foto — la IA lee la
-          lista y cantidades. Después ajustá la cantidad sobrante de lo que no terminó usado/instalado.
+          <Icon name="ai" size={13} /> Si retiraste el material de depósito con un remito en papel, sacale hasta {REMITO_FOTO_MAX}{" "}
+          fotos (por ejemplo si tiene varias páginas, o para reintentar una que salió borrosa) — la IA combina todo en una sola
+          lista de materiales y cantidades. Después ajustá la cantidad sobrante de lo que no terminó usado/instalado.
         </div>
         <input
           ref={remitoCameraInputRef}
@@ -229,49 +260,58 @@ export function MaterialesSection({
           capture="environment"
           style={{ display: "none" }}
           onChange={(e) => {
-            const file = e.target.files?.[0] ?? null;
+            const files = Array.from(e.target.files ?? []);
             e.target.value = "";
-            if (file) setRemitoFoto(file);
+            agregarFotosRemito(files);
           }}
         />
         <input
           ref={remitoGaleriaInputRef}
           type="file"
           accept="image/*"
+          multiple
           style={{ display: "none" }}
           onChange={(e) => {
-            const file = e.target.files?.[0] ?? null;
+            const files = Array.from(e.target.files ?? []);
             e.target.value = "";
-            if (file) setRemitoFoto(file);
+            agregarFotosRemito(files);
           }}
         />
-        <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 12, flexWrap: "wrap" }}>
-          {remitoFoto && remitoFotoPreview ? (
-            <>
-              {/* eslint-disable-next-line @next/next/no-img-element -- preview local, no vale la pena next/image acá */}
-              <img
-                src={remitoFotoPreview}
-                alt=""
-                style={{ width: 64, height: 64, objectFit: "cover", borderRadius: 8, border: "1px solid var(--field-border)" }}
-              />
-              <button type="button" className="btn btn-secondary btn-sm" onClick={() => setRemitoFoto(null)} disabled={disabled || remitoBusy}>
-                <Icon name="x" size={12} /> Quitar
-              </button>
-              <button type="button" className="ai-btn" onClick={() => void leerRemitoConIa()} disabled={disabled || remitoBusy}>
-                <Icon name="ai" size={13} /> {remitoBusy ? "Leyendo..." : "Leer remito con IA"}
-              </button>
-            </>
-          ) : (
-            <>
-              <button type="button" className="ai-btn" onClick={() => remitoCameraInputRef.current?.click()} disabled={disabled}>
-                <Icon name="camera" size={13} /> Sacar foto
-              </button>
-              <button type="button" className="ai-btn" onClick={() => remitoGaleriaInputRef.current?.click()} disabled={disabled}>
-                <Icon name="upload" size={13} /> Subir foto
-              </button>
-            </>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: remitoFotos.length ? 8 : 12 }}>
+          <button
+            type="button"
+            className="ai-btn"
+            onClick={() => remitoCameraInputRef.current?.click()}
+            disabled={disabled || remitoBusy || remitoFotos.length >= REMITO_FOTO_MAX}
+          >
+            <Icon name="camera" size={13} /> Sacar foto ({remitoFotos.length}/{REMITO_FOTO_MAX})
+          </button>
+          <button
+            type="button"
+            className="ai-btn"
+            onClick={() => remitoGaleriaInputRef.current?.click()}
+            disabled={disabled || remitoBusy || remitoFotos.length >= REMITO_FOTO_MAX}
+          >
+            <Icon name="upload" size={13} /> Subir foto
+          </button>
+          {remitoFotos.length > 0 && (
+            <button type="button" className="ai-btn" onClick={() => void leerRemitoConIa()} disabled={disabled || remitoBusy}>
+              <Icon name="ai" size={13} /> {remitoBusy ? "Leyendo..." : `Leer ${remitoFotos.length} foto${remitoFotos.length === 1 ? "" : "s"} con IA`}
+            </button>
           )}
         </div>
+        {remitoFotos.length > 0 && (
+          <div className="chip-row" style={{ marginTop: 0, marginBottom: 12 }}>
+            {remitoFotos.map((f, i) => (
+              <span className="chip" key={i}>
+                Foto {i + 1}
+                <button type="button" onClick={() => quitarFotoRemito(i)} disabled={remitoBusy} aria-label={`Quitar foto ${i + 1}`}>
+                  <Icon name="x" size={11} />
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
         {remitoNote && (
           <div className="ai-note" style={{ marginBottom: 12 }}>
             <span>{remitoNote}</span>
