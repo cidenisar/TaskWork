@@ -118,6 +118,29 @@ silencio. Puede pasar desapercibido durante meses si nada en la UI compara
 SELECT, INSERT, UPDATE y DELETE (los que apliquen) definidos desde el
 principio.
 
+**Este bug exacto (falta la policy de UPDATE en una tabla de
+"relevamiento") ya se había encontrado y arreglado una vez en este mismo
+proyecto — y volvió a aparecer en un módulo nuevo por copiar la migración
+de CREACIÓN original de otro módulo en vez de revisar el esquema vivo.**
+Pasó con "Torres de Comunicaciones" (Informes): se construyó mirando
+Racks, pero copiando el `create table rack_relevamientos` + sus policies
+tal como estaban en la migración original de Racks — que en su momento
+SÍ tenía este mismo bug, arreglado después en una migración de fix
+aparte (`..._fix_relevamiento_update_rls.sql`) que agregó la policy de
+UPDATE faltante a Tableros/Racks/Equipos. Esa migración de fix nunca se
+leyó al mirar "cómo está armado Racks", así que el módulo nuevo heredó el
+bug ya resuelto en el que se estaba inspirando. Síntoma real: el técnico
+cargó un relevamiento, el PDF y las fotos SÍ se subieron a Storage, pero
+la fila de la base nunca se enteró (UPDATE con 0 filas afectadas, sin
+error) — en el historial quedó como "Solo registro", sin poder ver ni
+PDF ni fotos, y hubo que recuperarlo con el mismo backfill manual que la
+vez anterior. Regla general: al construir un módulo nuevo mirando uno
+existente como referencia, no alcanza con leer SU MIGRACIÓN DE CREACIÓN
+— hay que revisar TODAS las migraciones posteriores que lo tocaron (o,
+más simple, listar el esquema/policies vivos de la tabla de referencia
+vía la herramienta de Supabase) para no reintroducir un bug que ya se
+había pagado una vez.
+
 **`upsert()` necesita policy de SELECT, aunque el diseño diga que nunca se
 lee esa tabla desde el cliente.** Un `upsert(..., { onConflict: "x" })` se
 traduce a `INSERT ... ON CONFLICT DO UPDATE`, y Postgres con RLS activado

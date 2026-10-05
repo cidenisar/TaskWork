@@ -1,0 +1,22 @@
+-- A torre_comunicacion_relevamientos le faltaba la policy de UPDATE para
+-- "created_by = auth.uid()" (tenía SELECT e INSERT, pero no UPDATE) — el
+-- mismo bug ya corregido para tablero_mediciones/rack_relevamientos/
+-- equipo_relevamientos en 20261005010000_fix_relevamiento_update_rls.sql,
+-- repetido acá por no haber mirado esa migración de fix al construir
+-- Torres de Comunicaciones (se copió la migración ORIGINAL de Racks, que
+-- en su momento también tenía este bug, en vez del esquema vivo ya
+-- parchado). Sin esta policy, los .update({pdf_url, ...}) y
+-- .update({fotos_generales_urls, ...}) que corren después de subir el
+-- archivo a Storage se ejecutaban sin error pero afectaban 0 filas (RLS
+-- deniega en silencio) — el PDF/fotos quedaban subidos a Storage pero el
+-- registro en la base nunca se enteraba, y el historial mostraba "Solo
+-- registro" sin poder ver ni PDF ni fotos.
+--
+-- El único relevamiento afectado (TOC-2026-9395, creado antes de este fix)
+-- se recuperó en el mismo momento con un backfill de datos (no
+-- versionado como migración, igual criterio que el fix original): el
+-- PDF y las 3 fotos generales ya estaban subidos en Storage bajo
+-- {userId}/torres-comunicacion/{id}/..., solo no estaban enlazados en la
+-- fila.
+create policy "torre_comunicacion_relevamientos_update_own" on public.torre_comunicacion_relevamientos
+  for update using (created_by = (select auth.uid()));

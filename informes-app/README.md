@@ -974,3 +974,14 @@ npm run dev
   equipamiento", no esas integraciones) — es un buen candidato de
   incremento siguiente si hace falta, mismo criterio que Racks/Equipos
   Individuales fueron creciendo en incrementos separados.
+  **Fix post-deploy:** a `torre_comunicacion_relevamientos` le faltaba la
+  policy de UPDATE (`created_by = auth.uid()`) — mismo bug ya resuelto
+  para Tableros/Racks/Equipos en `20261005010000_fix_relevamiento_update_
+  rls.sql`, reintroducido acá por haber copiado la migración de CREACIÓN
+  original de Racks en vez de su esquema ya parchado (ver
+  CRITERIOS_Y_IDEAS.md). Sin la policy, el PDF y las fotos generales se
+  subían bien a Storage pero la fila nunca se enteraba (UPDATE con 0
+  filas, sin error) — el historial quedaba en "Solo registro". Arreglado
+  en `20261005160000_torre_comunicacion_relevamientos_update_rls.sql` +
+  backfill manual del único relevamiento afectado (TOC-2026-9395, el PDF/
+  fotos ya estaban en Storage, solo se linkearon).
