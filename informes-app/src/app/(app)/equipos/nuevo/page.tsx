@@ -3,9 +3,10 @@ import { createClient } from "@/lib/supabase/server";
 import { NuevoRelevamientoEquiposForm } from "@/components/equipos/nuevo-relevamiento-form";
 import type { EquipoItem } from "@/components/equipos/types";
 import { fetchTodasLasUbicaciones } from "@/lib/ubicaciones/fetch-todas";
+import { puedeGestionarDeposito } from "@/lib/types";
 
 export default async function NuevoRelevamientoEquiposPage() {
-  await requireProfile();
+  const profile = await requireProfile();
   const supabase = await createClient();
 
   const [equiposRes, ubicaciones, provinciasRes] = await Promise.all([
@@ -44,6 +45,7 @@ export default async function NuevoRelevamientoEquiposPage() {
         ubicaciones={ubicaciones}
         provincias={provincias}
         equiposExistentesPorUbicacion={equiposExistentesPorUbicacion}
+        puedeDeposito={puedeGestionarDeposito(profile.rol)}
       />
     </div>
   );

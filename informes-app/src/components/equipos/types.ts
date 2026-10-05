@@ -54,6 +54,13 @@ export interface EquipoItem {
    * verificarlo/corregirlo antes de guardar.
    */
   revisar?: boolean;
+  /**
+   * Solo transitorio en el form (no se persiste como tal): true cuando este
+   * equipo se trajo desde depósito para instalarlo acá — la acción de
+   * guardado lo reactiva (estado vuelve a 'activo') y lo reubica en el
+   * sitio de esta instalación, en vez de solo registrar una lectura.
+   */
+  desdeDeposito?: boolean;
 }
 
 /** Resumen del equipamiento relevado — se muestra en pantalla mientras se carga y se imprime en el PDF. */

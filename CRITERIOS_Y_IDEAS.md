@@ -277,6 +277,24 @@ y una lectura de uso real (lo que pasa la mayoría del tiempo) — nombrar
 ambas explícitamente en el prompt evita que el modelo devuelva la
 primera que encuentra pensando que responde la pregunta.
 
+**Antes de armar un módulo nuevo para un pedido que "suena" distinto, revisar
+si ya existe uno con el mismo patrón de uso — puede que solo le falte una
+forma más de conseguir el ítem.** Pasó en Informes: el pedido era un
+"informe de instalación" (fotos + IA + lista con número de serie, para
+dejar constancia de qué se instaló) — sonaba a un módulo nuevo, paralelo a
+"Entregas a Depósito". Pero el módulo "Equipos Individuales" YA tenía
+exactamente ese patrón (fotos + IA + lista + alta de equipo en un sitio);
+lo único que faltaba era una tercera forma de poblar un ítem de la lista
+—además de "nuevo" y "ya existente en este sitio"— que fuera "viene de
+depósito de cualquier sitio", y que al guardar, en vez de crear una fila
+nueva, reactive (estado) y reubique (ubicación) la fila que ya existía.
+Construir el módulo paralelo hubiera duplicado la UI de fotos/IA/lista, el
+PDF y el Historial enteros para ganar solamente ese tercer origen. La
+pregunta a hacerse antes de diseñar un módulo nuevo: "¿el pedido es
+realmente una entidad distinta, o es el mismo patrón de carga con una
+fuente más para el ítem?" — si es lo segundo, extender el picker/origen
+del módulo existente es mucho más barato que levantar uno en paralelo.
+
 ## 6. Avisos push (web)
 
 **No usar Firebase Cloud Messaging para push web — ir directo al estándar

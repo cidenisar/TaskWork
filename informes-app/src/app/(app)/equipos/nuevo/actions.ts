@@ -1,12 +1,14 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { requireProfile } from "@/lib/auth";
 import { nuevoNumeroGeneracionEquipo } from "@/lib/equipos/numero-generacion";
 import { renderEquipoPdf } from "@/lib/pdf/render";
 import { buildEquipoFilename } from "@/lib/pdf/filename";
 import { resolverUbicacionId, tagGpsSiFalta, type PayloadUbicacionNueva, type PayloadGps } from "@/lib/ubicaciones/resolver";
 import { calcularResumenEquipos } from "@/components/equipos/types";
+import { puedeGestionarDeposito } from "@/lib/types";
+import { labelUbicacion } from "@/components/ubicaciones/types";
 import type { EquipoCategoria } from "@/lib/database.types";
 
 interface PayloadLectura {
@@ -21,6 +23,8 @@ interface PayloadLectura {
   consumoMaxW: number | null;
   estado: string;
   comentario: string;
+  /** true si este equipo se trajo desde depósito para instalarlo acá — ver más abajo. */
+  desdeDeposito?: boolean;
 }
 
 export interface CrearRelevamientoEquiposPayload {
@@ -60,6 +64,9 @@ export async function crearRelevamientoEquiposAction(formData: FormData): Promis
   if (!payload.fecha) {
     return { success: false, error: "Falta la fecha." };
   }
+  if (payload.lecturas.some((l) => l.desdeDeposito) && !puedeGestionarDeposito(profile.rol)) {
+    return { success: false, error: "Solo un Administrador o Supervisor puede instalar equipo que viene de depósito." };
+  }
 
   const supabase = await createClient();
 
@@ -78,8 +85,39 @@ export async function crearRelevamientoEquiposAction(formData: FormData): Promis
   await tagGpsSiFalta(supabase, ubicacionId, payload.gps, profile.id);
 
   // Equipo nuevo (equipoId null) se da de alta ahora — igual criterio que Racks/Tableros.
+  // Equipo "desde depósito" (equipoId existente + desdeDeposito): es el mismo equipo que
+  // salió con Entregas a Depósito — se reactiva (estado vuelve a 'activo') y se reubica
+  // en el sitio de esta instalación, cerrando el círculo. equipos.UPDATE es admin-only por
+  // RLS, así que esto necesita service-role (el rol ya se validó arriba).
+  let service: ReturnType<typeof createServiceRoleClient> | null = null;
   const equipoIdPorIndice: (string | null)[] = [];
   for (const l of payload.lecturas) {
+    if (l.equipoId && l.desdeDeposito) {
+      if (!service) {
+        try {
+          service = createServiceRoleClient();
+        } catch {
+          return {
+            success: false,
+            error: "Falta configurar SUPABASE_SERVICE_ROLE_KEY en el servidor — sin esa variable no se puede instalar equipo desde depósito.",
+          };
+        }
+      }
+      const { data: reinstalado, error: reinstalarErr } = await service
+        .from("equipos")
+        .update({ estado: "activo", ubicacion_id: ubicacionId })
+        .eq("id", l.equipoId)
+        .eq("estado", "en_deposito")
+        .select("id");
+      if (reinstalarErr || !reinstalado || reinstalado.length === 0) {
+        return {
+          success: false,
+          error: `No se pudo reinstalar "${l.texto}": ${reinstalarErr?.message ?? "ya no está en depósito (puede que otro técnico ya lo haya instalado)."}`,
+        };
+      }
+      equipoIdPorIndice.push(l.equipoId);
+      continue;
+    }
     if (l.equipoId) {
       equipoIdPorIndice.push(l.equipoId);
       continue;
@@ -138,7 +176,7 @@ export async function crearRelevamientoEquiposAction(formData: FormData): Promis
       relevamiento_id: relevamientoId!,
       equipo_id: equipoIdPorIndice[i]!,
       estado: l.estado || null,
-      comentario: l.comentario.trim() || null,
+      comentario: l.comentario.trim() || (l.desdeDeposito ? "Reinstalado desde depósito." : null),
     })),
   );
   if (lecturasErr) {
@@ -215,4 +253,67 @@ export async function crearRelevamientoEquiposAction(formData: FormData): Promis
   }
 
   return { success: true, relevamientoId: relevamientoId!, numeroGeneracion, pdfUrl };
+}
+
+export interface EquipoEnDepositoResultado {
+  id: string;
+  categoriaEquipo: EquipoCategoria;
+  texto: string;
+  marcaModelo: string;
+  numeroSerie: string;
+  etiquetaYpf: string;
+  cantidad: number;
+  consumoPromedioW: number | null;
+  consumoMaxW: number | null;
+  ubicacionLabel: string;
+}
+
+/**
+ * Busca equipo en estado='en_deposito' (de cualquier sitio) para instalarlo
+ * acá — cierra el círculo con Entregas a Depósito. Solo Admin/Supervisor
+ * (mismo gate que el resto de las acciones de depósito); la lectura en sí
+ * no necesita service-role porque `equipos_select` ya es abierta a
+ * cualquier autenticado.
+ */
+export async function buscarEquiposEnDepositoAction(query: string): Promise<EquipoEnDepositoResultado[]> {
+  const profile = await requireProfile();
+  if (!puedeGestionarDeposito(profile.rol)) return [];
+  const supabase = await createClient();
+
+  let builder = supabase
+    .from("equipos")
+    .select("id, categoria_equipo, texto, marca_modelo, numero_serie, etiqueta_ypf, cantidad, consumo_promedio_w, consumo_max_w, ubicacion_id")
+    .eq("estado", "en_deposito")
+    .order("texto")
+    .limit(25);
+  const q = query.trim();
+  if (q) {
+    const like = `%${q}%`;
+    builder = builder.or(`texto.ilike.${like},marca_modelo.ilike.${like},numero_serie.ilike.${like},etiqueta_ypf.ilike.${like}`);
+  }
+  const { data } = await builder;
+  if (!data || data.length === 0) return [];
+
+  const ubicacionIds = [...new Set(data.map((d) => d.ubicacion_id))];
+  const { data: ubicacionesData } = await supabase
+    .from("ubicaciones")
+    .select("id, pais, region, provincia, localidad, sitio, planta, oficina, lat, lng")
+    .in("id", ubicacionIds);
+  const ubicacionesPorId = new Map((ubicacionesData ?? []).map((u) => [u.id, u]));
+
+  return data.map((d) => {
+    const ubicacion = ubicacionesPorId.get(d.ubicacion_id);
+    return {
+      id: d.id,
+      categoriaEquipo: d.categoria_equipo,
+      texto: d.texto,
+      marcaModelo: d.marca_modelo ?? "",
+      numeroSerie: d.numero_serie ?? "",
+      etiquetaYpf: d.etiqueta_ypf ?? "",
+      cantidad: d.cantidad,
+      consumoPromedioW: d.consumo_promedio_w,
+      consumoMaxW: d.consumo_max_w,
+      ubicacionLabel: ubicacion ? labelUbicacion(ubicacion) : "—",
+    };
+  });
 }

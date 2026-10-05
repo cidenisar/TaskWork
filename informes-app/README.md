@@ -802,3 +802,36 @@ npm run dev
   momento del click — mismo patrón que el resto de la app). El flujo de
   "equipo ya cargado en un sitio" no pide estas fotos (sigue siendo un
   modal rápido con motivo/condición).
+- **"Equipos Individuales → Nueva" ahora puede instalar equipo que estaba
+  en depósito, cerrando el círculo con Entregas a Depósito — sin crear un
+  módulo nuevo** (`buscarEquiposEnDepositoAction`/`EquipoItem.desdeDeposito`
+  en `src/app/(app)/equipos/nuevo/actions.ts` y
+  `src/components/equipos/nuevo-relevamiento-form.tsx`): pedido del
+  usuario — "lo mismo que Entregas a Depósito, pero para instalar, igual
+  que ya veníamos haciendo con fotos + IA + lista con número de serie".
+  En vez de armar un módulo "Informe de Instalación" en paralelo (con su
+  propia tabla, historial y PDF), se extendió el flujo que YA tenía
+  exactamente ese patrón — "Equipos Individuales → Nueva" ya sacaba fotos,
+  identificaba con IA y armaba una lista con número de serie para dar de
+  alta equipo en un sitio; lo único que le faltaba era poder traer un
+  equipo que no es nuevo, sino que está `estado='en_deposito'` en
+  cualquier otro sitio. Ahora, para Administrador/Supervisor
+  (`puedeGestionarDeposito`, mismo gate que el resto de depósito), hay una
+  sección "Traer equipo desde depósito" con buscador (por nombre, marca,
+  serie o etiqueta YPF, sin importar el sitio de origen) — al agregar un
+  resultado y guardar el relevamiento, ese equipo se reactiva
+  (`estado='activo'`) y se reubica (`ubicacion_id`) en el sitio de esta
+  instalación, con un `UPDATE` condicionado a `estado='en_deposito'` (si
+  otro técnico ya lo instaló mientras tanto, falla con un mensaje claro en
+  vez de pisarlo en silencio) vía service-role (mismo motivo que Bajas:
+  `equipos` UPDATE es admin-only por RLS, Supervisor necesita bypassearlo
+  puntualmente). Material que se instala directo, sin haber pasado nunca
+  por depósito, sigue siendo simplemente "Agregar equipo manual" o una
+  lectura con IA normal — ya daba de alta un equipo nuevo en el sitio,
+  que es exactamente lo que hace falta. **Alcance de esta vuelta:** solo
+  cubre `equipos` (equipamiento suelto) — un `tablero_circuito` o
+  `rack_equipamiento` que esté en depósito todavía no se puede reinstalar
+  desde ninguna pantalla, porque requeriría elegir un tablero/rack destino
+  ya existente en el sitio nuevo (estructura de contenedor que Tableros/
+  Racks no tienen pensada para este flujo) — queda afuera a propósito en
+  vez de forzar un diseño a medias.

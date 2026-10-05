@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { crearRelevamientoEquiposAction } from "@/app/(app)/equipos/nuevo/actions";
+import { crearRelevamientoEquiposAction, buscarEquiposEnDepositoAction, type EquipoEnDepositoResultado } from "@/app/(app)/equipos/nuevo/actions";
 import { reportarErrorCliente } from "@/lib/client-error-report";
 import { resizeImageToJpeg } from "@/lib/image-resize";
 import { ErrorNote, SuccessNote } from "@/components/notes";
@@ -40,10 +40,12 @@ export function NuevoRelevamientoEquiposForm({
   ubicaciones,
   provincias,
   equiposExistentesPorUbicacion,
+  puedeDeposito,
 }: {
   ubicaciones: Ubicacion[];
   provincias: string[];
   equiposExistentesPorUbicacion: Record<string, EquipoItem[]>;
+  puedeDeposito: boolean;
 }) {
   const [provinciaFiltro, setProvinciaFiltro] = useState("");
   const [ubicacionId, setUbicacionId] = useState<string>(""); // "" = sin elegir, "__new" = crear
@@ -72,6 +74,10 @@ export function NuevoRelevamientoEquiposForm({
       if (fotoGeneralPreview) URL.revokeObjectURL(fotoGeneralPreview);
     };
   }, [fotoGeneralPreview]);
+  const [depositoQuery, setDepositoQuery] = useState("");
+  const [depositoResultados, setDepositoResultados] = useState<EquipoEnDepositoResultado[]>([]);
+  const [depositoBusy, setDepositoBusy] = useState(false);
+  const [depositoNote, setDepositoNote] = useState<string | null>(null);
 
   const resumen = useMemo(() => calcularResumenEquipos(equipos), [equipos]);
 
@@ -192,6 +198,41 @@ export function NuevoRelevamientoEquiposForm({
     }
   }
 
+  async function buscarEnDeposito() {
+    setDepositoBusy(true);
+    setDepositoNote(null);
+    try {
+      const res = await buscarEquiposEnDepositoAction(depositoQuery);
+      setDepositoResultados(res);
+      if (res.length === 0) setDepositoNote("No se encontró equipo en depósito con esa búsqueda.");
+    } catch (err) {
+      setDepositoNote("No se pudo buscar en depósito.");
+      reportarErrorCliente(err instanceof Error ? err.message : "Error buscando equipo en depósito", "buscar-equipo-deposito");
+    } finally {
+      setDepositoBusy(false);
+    }
+  }
+
+  function agregarDesdeDeposito(item: EquipoEnDepositoResultado) {
+    if (equipos.some((e) => e.id === item.id)) return;
+    setEquipos((prev) => [
+      ...prev,
+      {
+        id: item.id,
+        categoriaEquipo: item.categoriaEquipo,
+        texto: item.texto,
+        marcaModelo: item.marcaModelo,
+        numeroSerie: item.numeroSerie,
+        etiquetaYpf: item.etiquetaYpf,
+        cantidad: item.cantidad,
+        consumoPromedioW: item.consumoPromedioW,
+        consumoMaxW: item.consumoMaxW,
+        desdeDeposito: true,
+      },
+    ]);
+    setDepositoResultados((prev) => prev.filter((d) => d.id !== item.id));
+  }
+
   function agregarEquipo() {
     setEquipos((prev) => [...prev, { id: null, texto: "", ...EQUIPO_NUEVO_BASE }]);
   }
@@ -268,6 +309,7 @@ export function NuevoRelevamientoEquiposForm({
               consumoMaxW: e.consumoMaxW,
               estado: l.estado,
               comentario: l.comentario,
+              desdeDeposito: e.desdeDeposito ?? false,
             };
           }),
         }),
@@ -290,6 +332,9 @@ export function NuevoRelevamientoEquiposForm({
       }
       setSuccess({ relevamientoId: res.relevamientoId!, numeroGeneracion: res.numeroGeneracion!, pdfUrl: res.pdfUrl ?? null });
       setFotoGeneral(null);
+      setDepositoResultados([]);
+      setDepositoQuery("");
+      setDepositoNote(null);
     } catch (err) {
       const mensaje = err instanceof Error ? err.message : "Ocurrió un error inesperado guardando el relevamiento.";
       setError(mensaje);
@@ -480,6 +525,53 @@ export function NuevoRelevamientoEquiposForm({
             </div>
           )}
 
+          {puedeDeposito && (
+            <div style={{ border: "1.5px solid var(--field-border)", borderRadius: 8, padding: 12, marginBottom: 14 }}>
+              <div className="hint" style={{ margin: "0 0 8px" }}>
+                <Icon name="truck" size={13} /> ¿Instalás algo que estaba en depósito? Buscalo y agregalo — al guardar queda reactivado
+                y reubicado acá, cerrando el círculo con Entregas a Depósito.
+              </div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <input
+                  type="text"
+                  placeholder="Buscá por nombre, marca, serie o etiqueta YPF..."
+                  value={depositoQuery}
+                  onChange={(e) => setDepositoQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      void buscarEnDeposito();
+                    }
+                  }}
+                  disabled={submitting || depositoBusy}
+                  style={{ flex: 1, minWidth: 200 }}
+                />
+                <button type="button" className="btn btn-secondary btn-sm" onClick={() => void buscarEnDeposito()} disabled={submitting || depositoBusy}>
+                  <Icon name="search" size={13} /> {depositoBusy ? "Buscando..." : "Buscar en depósito"}
+                </button>
+              </div>
+              {depositoNote && <div className="hint" style={{ color: "var(--warn)", margin: "8px 0 0" }}>{depositoNote}</div>}
+              {depositoResultados.length > 0 && (
+                <div className="item-list" style={{ marginTop: 10 }}>
+                  {depositoResultados.map((d) => (
+                    <div className="list-item" key={d.id} style={{ alignItems: "center" }}>
+                      <div className="item-name">
+                        {CATEGORIA_EQUIPO_LABEL[d.categoriaEquipo]} — {d.texto}
+                        {d.marcaModelo ? ` · ${d.marcaModelo}` : ""}
+                        {d.numeroSerie ? ` · S/N ${d.numeroSerie}` : ""}
+                        {d.etiquetaYpf ? ` · YPF ${d.etiquetaYpf}` : ""}
+                        <div className="hist-meta">Depósito desde: {d.ubicacionLabel}</div>
+                      </div>
+                      <button type="button" className="btn btn-secondary btn-sm" onClick={() => agregarDesdeDeposito(d)} disabled={submitting}>
+                        <Icon name="plus" size={13} /> Agregar
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           {equipos.length > 0 && (
             <div
               style={{
@@ -612,14 +704,26 @@ export function NuevoRelevamientoEquiposForm({
                       </div>
                     </div>
                   ) : (
-                    <div className="item-name">
-                      {CATEGORIA_EQUIPO_LABEL[e.categoriaEquipo]} — {e.texto}
-                      {e.marcaModelo ? ` · ${e.marcaModelo}` : ""}
-                      {e.numeroSerie ? ` · S/N ${e.numeroSerie}` : ""}
-                      {e.etiquetaYpf ? ` · YPF ${e.etiquetaYpf}` : ""}
-                      {e.cantidad > 1 ? ` · x${e.cantidad}` : ""}
-                      {e.consumoPromedioW ? ` · ~${e.consumoPromedioW}W prom.` : ""}
-                      {e.consumoMaxW ? ` · ~${e.consumoMaxW}W máx.` : ""}
+                    <div className="item-name" style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                      <span>
+                        {CATEGORIA_EQUIPO_LABEL[e.categoriaEquipo]} — {e.texto}
+                        {e.marcaModelo ? ` · ${e.marcaModelo}` : ""}
+                        {e.numeroSerie ? ` · S/N ${e.numeroSerie}` : ""}
+                        {e.etiquetaYpf ? ` · YPF ${e.etiquetaYpf}` : ""}
+                        {e.cantidad > 1 ? ` · x${e.cantidad}` : ""}
+                        {e.consumoPromedioW ? ` · ~${e.consumoPromedioW}W prom.` : ""}
+                        {e.consumoMaxW ? ` · ~${e.consumoMaxW}W máx.` : ""}
+                      </span>
+                      {e.desdeDeposito && (
+                        <>
+                          <span className="chip">
+                            <Icon name="truck" size={11} /> Desde depósito
+                          </span>
+                          <button type="button" className="remove-btn" onClick={() => quitarEquipo(i)} disabled={submitting}>
+                            <Icon name="x" size={12} />
+                          </button>
+                        </>
+                      )}
                     </div>
                   )}
 
