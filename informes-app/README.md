@@ -756,3 +756,22 @@ npm run dev
   un `ubicacion_id`, también aparecen juntos en la nueva sección
   "Entregado a depósito desde este sitio" de la ficha de cada Sitio, sin
   necesitar lógica separada para distinguirlos ahí.
+- **Lectura con IA en "Nueva Entrega a Depósito"**
+  (`src/app/api/entregas-deposito/leer-foto/route.ts`,
+  `ENTREGA_FOTO_IA_MAX` en `src/components/deposito/types.ts`): mismo
+  patrón de foto → Claude Vision → autocompletar que ya usan Tableros/
+  Racks/Equipos Individuales, aplicado al formulario de material libre.
+  Reusa las mismas categorías de equipamiento que Equipos Individuales
+  (`CATEGORIA_EQUIPO_OPCIONES`/`CATEGORIA_EQUIPO_LABEL` — es el mismo
+  universo de cosas, solo que acá puede no estar registrado como
+  equipamiento de ningún sitio) para completar descripción, categoría,
+  marca/modelo, N° de serie y etiqueta YPF. A diferencia de Equipos
+  Individuales (que detecta una LISTA de equipos distintos por foto),
+  acá el formulario es de un solo ítem por entrega — el endpoint
+  devuelve un único objeto, no un array — y **nunca** completa la
+  cantidad: varias unidades idénticas (ej. "3 conectores sobrantes") se
+  describen como un solo ítem y la cantidad siempre se carga a mano,
+  igual que cualquier dato que la IA no pueda leer con certeza. El
+  consumo en Watts tampoco aplica acá (a diferencia de Equipos
+  Individuales) — un material en depósito no está instalado, no tiene
+  sentido estimarle consumo.

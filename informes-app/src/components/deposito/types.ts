@@ -1,5 +1,8 @@
 import type { CondicionMaterial, MotivoEntregaDeposito, TipoEquipoBaja } from "@/lib/database.types";
 
+/** Máximo de fotos por lectura con IA en "Nueva Entrega" — mismo criterio que Equipos Individuales (varios ángulos del mismo ítem). */
+export const ENTREGA_FOTO_IA_MAX = 5;
+
 export const MOTIVO_ENTREGA_OPCIONES: MotivoEntregaDeposito[] = [
   "sobrante_obra",
   "reemplazo_funcional",

@@ -1,10 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { UbicacionFields, type GpsCapturado } from "@/components/ubicaciones/ubicacion-fields";
 import { entregarMaterialLibreAction } from "@/app/(app)/entregas-deposito/nueva/actions";
-import { MOTIVO_ENTREGA_OPCIONES, MOTIVO_ENTREGA_LABEL, CONDICION_OPCIONES, CONDICION_LABEL } from "./types";
+import { MOTIVO_ENTREGA_OPCIONES, MOTIVO_ENTREGA_LABEL, CONDICION_OPCIONES, CONDICION_LABEL, ENTREGA_FOTO_IA_MAX } from "./types";
 import { ErrorNote } from "@/components/notes";
+import { Icon } from "@/components/icon";
+import { resizeImageToJpeg } from "@/lib/image-resize";
+import { reportarErrorCliente } from "@/lib/client-error-report";
 import type { Ubicacion } from "@/components/ubicaciones/types";
 import type { CondicionMaterial, MotivoEntregaDeposito } from "@/lib/database.types";
 
@@ -64,9 +67,97 @@ export function NuevaEntregaForm({ provincias, ubicaciones }: { provincias: stri
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [resultado, setResultado] = useState<{ numeroGeneracion: string } | null>(null);
+  const [fotosIa, setFotosIa] = useState<File[]>([]);
+  const [iaBusy, setIaBusy] = useState(false);
+  const [iaNote, setIaNote] = useState<string | null>(null);
+  const fotoCameraInputRef = useRef<HTMLInputElement>(null);
+  const fotoGaleriaInputRef = useRef<HTMLInputElement>(null);
 
   function patch(p: Partial<FormState>) {
     setForm((f) => ({ ...f, ...p }));
+  }
+
+  function agregarFotosIa(files: File[]) {
+    if (files.length === 0) return;
+    setIaNote(null);
+    setFotosIa((prev) => {
+      const disponibles = ENTREGA_FOTO_IA_MAX - prev.length;
+      if (disponibles <= 0) return prev;
+      return [...prev, ...files.slice(0, disponibles)];
+    });
+  }
+
+  function quitarFotoIa(i: number) {
+    setFotosIa((prev) => prev.filter((_, idx) => idx !== i));
+  }
+
+  async function leerFotosConIa() {
+    if (fotosIa.length === 0) return;
+    setIaBusy(true);
+    setIaNote(null);
+    const fallidas: File[] = [];
+    let primerError: string | null = null;
+    try {
+      const fd = new FormData();
+      for (const f of fotosIa) {
+        try {
+          const jpeg = await resizeImageToJpeg(f);
+          fd.append("fotos", jpeg, "entrega.jpg");
+        } catch (err) {
+          fallidas.push(f);
+          const msg = err instanceof Error ? err.message : `No se pudo leer "${f.name}".`;
+          if (!primerError) primerError = msg;
+        }
+      }
+      const exitosas = fotosIa.length - fallidas.length;
+      if (exitosas === 0) {
+        setIaNote(primerError || "No se pudo leer ninguna de las fotos.");
+        return;
+      }
+      const res = await fetch("/api/entregas-deposito/leer-foto", { method: "POST", body: fd });
+      const data = await res.json();
+      if (!res.ok) {
+        setIaNote(data.error || "No se pudo leer las fotos.");
+        setFotosIa(fallidas);
+        return;
+      }
+      const item: {
+        descripcion: string;
+        categoriaLabel: string;
+        marcaModelo: string;
+        numeroSerie: string;
+        etiquetaYpf: string;
+        identificado: boolean;
+      } | null = data.item ?? null;
+      if (!item) {
+        setIaNote(
+          "No se detectó ningún material/equipo en las fotos — probá con otras o cargalo a mano." +
+            (fallidas.length > 0 ? ` (${fallidas.length} foto${fallidas.length === 1 ? "" : "s"} no se pudo leer: ${primerError})` : ""),
+        );
+        setFotosIa(fallidas);
+        return;
+      }
+      patch({
+        descripcion: item.descripcion,
+        categoria: item.categoriaLabel,
+        marcaModelo: item.marcaModelo,
+        numeroSerie: item.numeroSerie,
+        etiquetaYpf: item.etiquetaYpf,
+      });
+      setIaNote(
+        (item.identificado
+          ? "Material identificado — revisá los datos"
+          : "La IA describió lo que vio, pero no hay etiqueta legible — revisá y corregí el nombre/categoría") +
+          ", y completá la cantidad a mano." +
+          (fallidas.length > 0 ? ` (${fallidas.length} foto${fallidas.length === 1 ? "" : "s"} no se pudo leer: ${primerError})` : ""),
+      );
+      setFotosIa(fallidas);
+    } catch (err) {
+      setIaNote("No se pudo leer las fotos.");
+      reportarErrorCliente(err instanceof Error ? err.message : "Error leyendo fotos de entrega a depósito con IA", "leer-foto-entrega-deposito");
+    } finally {
+      setIaBusy(false);
+    }
   }
 
   async function crear() {
@@ -117,6 +208,8 @@ export function NuevaEntregaForm({ provincias, ubicaciones }: { provincias: stri
     }
     setResultado({ numeroGeneracion: res.numeroGeneracion });
     setForm(EMPTY_FORM);
+    setFotosIa([]);
+    setIaNote(null);
   }
 
   return (
@@ -134,6 +227,76 @@ export function NuevaEntregaForm({ provincias, ubicaciones }: { provincias: stri
       )}
 
       <div className="card">
+        <div className="hint" style={{ margin: "0 0 12px" }}>
+          <Icon name="ai" size={13} /> Sacale hasta {ENTREGA_FOTO_IA_MAX} fotos (chapa de serie, vista general) y la IA completa
+          descripción, categoría, marca/modelo, N° de serie y etiqueta YPF — siempre revisá y corregí antes de guardar. La cantidad y
+          lo que no se identifique se completa a mano.
+        </div>
+        <input
+          ref={fotoCameraInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          style={{ display: "none" }}
+          onChange={(e) => {
+            const files = Array.from(e.target.files ?? []);
+            e.target.value = "";
+            agregarFotosIa(files);
+          }}
+        />
+        <input
+          ref={fotoGaleriaInputRef}
+          type="file"
+          accept="image/*"
+          multiple
+          style={{ display: "none" }}
+          onChange={(e) => {
+            const files = Array.from(e.target.files ?? []);
+            e.target.value = "";
+            agregarFotosIa(files);
+          }}
+        />
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: fotosIa.length ? 8 : 12 }}>
+          <button
+            type="button"
+            className="ai-btn"
+            onClick={() => fotoCameraInputRef.current?.click()}
+            disabled={submitting || iaBusy || fotosIa.length >= ENTREGA_FOTO_IA_MAX}
+          >
+            <Icon name="camera" size={13} /> Sacar foto ({fotosIa.length}/{ENTREGA_FOTO_IA_MAX})
+          </button>
+          <button
+            type="button"
+            className="ai-btn"
+            onClick={() => fotoGaleriaInputRef.current?.click()}
+            disabled={submitting || iaBusy || fotosIa.length >= ENTREGA_FOTO_IA_MAX}
+          >
+            <Icon name="upload" size={13} /> Subir foto
+          </button>
+          {fotosIa.length > 0 && (
+            <button type="button" className="ai-btn" onClick={() => void leerFotosConIa()} disabled={submitting || iaBusy}>
+              <Icon name="ai" size={13} /> {iaBusy ? "Procesando..." : `Procesar ${fotosIa.length} foto${fotosIa.length === 1 ? "" : "s"} con IA`}
+            </button>
+          )}
+        </div>
+        {fotosIa.length > 0 && (
+          <div className="chip-row" style={{ marginTop: 0, marginBottom: 12 }}>
+            {fotosIa.map((f, i) => (
+              <span className="chip" key={i}>
+                Foto {i + 1}
+                <button type="button" onClick={() => quitarFotoIa(i)} disabled={iaBusy} aria-label={`Quitar foto ${i + 1}`}>
+                  <Icon name="x" size={11} />
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+        {iaNote && (
+          <div className="ai-note" style={{ marginBottom: 12 }}>
+            <span>{iaNote}</span>
+          </div>
+        )}
+
         <div className="field">
           <label>
             Descripción del material/equipo <span className="req">*</span>
