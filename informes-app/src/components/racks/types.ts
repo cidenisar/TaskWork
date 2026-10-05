@@ -1,7 +1,13 @@
 import type { RackCategoriaEquipo } from "@/lib/database.types";
 
-/** Máximo de fotos que se pueden mandar juntas a la lectura con IA de un rack (distintos ángulos/secciones del mismo rack). */
-export const RACK_FOTO_IA_MAX = 7;
+/**
+ * Máximo de fotos que se pueden mandar juntas a la lectura con IA de un
+ * rack (distintos ángulos/secciones del mismo rack). Un rack con mucho
+ * equipamiento necesita fotos de frente Y de atrás (las etiquetas/puertos
+ * no se ven todos desde un solo lado) — 7 se quedaba corto para esos
+ * casos y la IA perdía equipos.
+ */
+export const RACK_FOTO_IA_MAX = 14;
 
 /** Fotos generales del rack que quedan como registro (delantera, trasera, otros ángulos de detalle) — no se procesan con IA. */
 export const RACK_FOTO_GENERAL_MAX = 4;

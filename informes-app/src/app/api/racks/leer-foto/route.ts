@@ -82,18 +82,20 @@ export async function POST(req: NextRequest) {
 
   const contextoFotos =
     imagenes.length > 1
-      ? ` Te paso ${imagenes.length} fotos del MISMO rack (pueden ser ángulos distintos, secciones distintas si el rack es alto, o un ` +
-        "close-up de una etiqueta que en otra foto se ve borrosa) — combinalas en una sola lista de equipamiento: si el mismo equipo " +
-        "físico aparece en más de una foto, contalo una sola vez (usá la foto donde se vea más claro para completar texto/marca/" +
-        "posición), y numerá de forma correlativa el conjunto combinado, no cada foto por separado."
+      ? ` Te paso ${imagenes.length} fotos del MISMO rack (pueden ser ángulos distintos, secciones distintas si el rack es alto, fotos ` +
+        "de FRENTE y de ATRÁS del mismo rack — el cableado/los puertos solo se ven desde atrás, así que un equipo puede aparecer en ambos " +
+        "lados —, o un close-up de una etiqueta que en otra foto se ve borrosa) — combinalas en una sola lista de equipamiento: si el " +
+        "mismo equipo físico aparece en más de una foto (incluyendo su vista de frente y la de atrás), contalo una sola vez (usá la foto " +
+        "donde se vea más claro para completar texto/marca/posición), y numerá de forma correlativa el conjunto combinado, no cada foto " +
+        "por separado."
       : "";
 
   try {
     const client = new Anthropic();
     const response = await client.messages.create({
       model: "claude-opus-5",
-      max_tokens: 8192,
-      output_config: { effort: "medium" },
+      max_tokens: 16000,
+      output_config: { effort: "high" },
       system:
         "Sos un asistente que ayuda a un técnico de campo a relevar el equipamiento instalado en un rack de una sala técnica, shelter o " +
         `sitio (routers, switches, servidores, rectificadores, UPS, baterías, ODF, patch panels, radios/enlaces, etc.).${contextoFotos}\n\n` +

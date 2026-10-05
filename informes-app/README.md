@@ -985,3 +985,18 @@ npm run dev
   en `20261005160000_torre_comunicacion_relevamientos_update_rls.sql` +
   backfill manual del único relevamiento afectado (TOC-2026-9395, el PDF/
   fotos ya estaban en Storage, solo se linkearon).
+
+- **Racks/Torres: tope de fotos para IA subido de 7 a 14 (el doble).** Un
+  rack/torre con mucho equipamiento necesita fotos de frente Y de atrás
+  (las etiquetas, puertos y cableado no se ven todos desde un solo lado)
+  — con 7 fotos la IA se quedaba corta y perdía equipos. Subido
+  `RACK_FOTO_IA_MAX`/`TORRE_FOTO_IA_MAX` a 14 en
+  `components/{racks,torres-comunicacion}/types.ts`, con el hint del
+  formulario mencionando explícitamente sacar de ambos lados. En
+  `/api/racks/leer-foto` y `/api/torres-comunicacion/leer-foto`: el
+  prompt le aclara a la IA que el mismo equipo puede aparecer en su foto
+  de frente Y en la de atrás y no hay que contarlo dos veces; `max_tokens`
+  subido de 8192 a 16000 (el doble de fotos puede implicar el doble de
+  equipamiento detectado en una sola respuesta) y `output_config.effort`
+  de `"medium"` a `"high"` (se le pidió explícitamente más precisión,
+  dado que la detección venía fallando).

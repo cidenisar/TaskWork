@@ -498,9 +498,9 @@ export function NuevoRelevamientoForm({
         <div className="card">
           <div className="section-label">Equipamiento</div>
           <div className="hint" style={{ margin: "-4px 0 12px" }}>
-            <Icon name="ai" size={13} /> Sacale hasta {RACK_FOTO_IA_MAX} fotos al rack (distintos ángulos o secciones) y la IA combina
-            todas para armar la lista de equipamiento sin repetir — clasifica categoría y marca/modelo, pero siempre revisala y corregí lo
-            que haga falta antes de guardar.
+            <Icon name="ai" size={13} /> Sacale hasta {RACK_FOTO_IA_MAX} fotos al rack — si tiene mucho equipamiento, sacá de frente Y de
+            atrás (las etiquetas y puertos no se ven todos desde un solo lado) — y la IA combina todas para armar la lista de equipamiento
+            sin repetir — clasifica categoría y marca/modelo, pero siempre revisala y corregí lo que haga falta antes de guardar.
           </div>
           <input
             ref={fotoCameraInputRef}

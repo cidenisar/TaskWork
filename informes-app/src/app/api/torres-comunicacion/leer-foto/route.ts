@@ -78,18 +78,18 @@ export async function POST(req: NextRequest) {
 
   const contextoFotos =
     imagenes.length > 1
-      ? ` Te paso ${imagenes.length} fotos de la MISMA torre (pueden ser ángulos distintos, alturas distintas, o un close-up de una ` +
-        "etiqueta que en otra foto se ve borrosa) — combinalas en una sola lista de equipamiento: si el mismo equipo físico aparece en " +
-        "más de una foto, contalo una sola vez (usá la foto donde se vea más claro para completar texto/marca/altura), y numerá de " +
-        "forma correlativa el conjunto combinado, no cada foto por separado."
+      ? ` Te paso ${imagenes.length} fotos de la MISMA torre (pueden ser ángulos distintos, alturas distintas, fotos tomadas desde ` +
+        "lados opuestos de la torre, o un close-up de una etiqueta que en otra foto se ve borrosa) — combinalas en una sola lista de " +
+        "equipamiento: si el mismo equipo físico aparece en más de una foto, contalo una sola vez (usá la foto donde se vea más claro " +
+        "para completar texto/marca/altura), y numerá de forma correlativa el conjunto combinado, no cada foto por separado."
       : "";
 
   try {
     const client = new Anthropic();
     const response = await client.messages.create({
       model: "claude-opus-5",
-      max_tokens: 8192,
-      output_config: { effort: "medium" },
+      max_tokens: 16000,
+      output_config: { effort: "high" },
       system:
         "Sos un asistente que ayuda a un técnico de campo a relevar el equipamiento montado en una torre de comunicaciones (antenas, " +
         `radioenlaces/microondas, antenas celulares/trunking, balizas de obstrucción, pararrayos, cableado/feeder, etc.).${contextoFotos}\n\n` +

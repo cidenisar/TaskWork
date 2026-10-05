@@ -1,7 +1,12 @@
 import type { TorreComunicacionCategoriaEquipo } from "@/lib/database.types";
 
-/** Máximo de fotos que se pueden mandar juntas a la lectura con IA de una torre (distintos ángulos/secciones del mismo equipamiento). */
-export const TORRE_FOTO_IA_MAX = 7;
+/**
+ * Máximo de fotos que se pueden mandar juntas a la lectura con IA de una
+ * torre (distintos ángulos/alturas del mismo equipamiento). Igual criterio
+ * que Racks: con mucho equipamiento montado hace falta más de un ángulo
+ * por elemento para no perder detecciones.
+ */
+export const TORRE_FOTO_IA_MAX = 14;
 
 /** Fotos generales de la torre que quedan como registro (distintos ángulos/alturas de detalle) — no se procesan con IA. */
 export const TORRE_FOTO_GENERAL_MAX = 4;
