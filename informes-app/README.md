@@ -847,3 +847,44 @@ npm run dev
   puede ver). Las secciones de Admin/Supervisor se muestran igual a un
   Técnico (con su badge de acceso) para que entienda qué hace el resto del
   equipo, no se ocultan.
+- **Nuevo módulo "Instalación" (`/instalacion/nueva`,
+  `/instalacion/historial`, abierto a cualquier rol): materiales instalados
+  en un Sitio a partir de un remito de depósito en papel, con devolución
+  automática de sobrantes** (migración `20261005110000_instalaciones.sql`,
+  `src/app/api/instalacion/leer-remito/route.ts`,
+  `src/app/(app)/instalacion/`, `src/components/instalacion/`): pedido del
+  usuario — en depósito les entregan un remito en papel al retirar
+  material, y quería que el informe de instalación, además de las fotos
+  que muestran los componentes instalados, lea ese remito y detalle todos
+  los materiales, devolviendo a depósito lo que sobra. Dos listas
+  independientes en el mismo formulario: "Materiales instalados" (mismo
+  patrón de fotos + IA que Entregas a Depósito — de hecho reusa el mismo
+  endpoint `/api/entregas-deposito/leer-foto`, es el mismo universo de
+  cosas) y "Remito" (una foto del papel, leída por una IA nueva que
+  transcribe una TABLA en vez de identificar objetos físicos — N° de
+  remito si es legible, y cada línea con descripción + cantidad). El
+  técnico ajusta la "cantidad sobrante" de cada línea del remito que no
+  terminó instalada (arranca en 0); al guardar, una fila por material
+  instalado va a la tabla nueva `instalaciones` (mismo criterio de lote
+  que Entregas a Depósito: todas comparten `numero_generacion`/`pdf_url`/
+  foto del remito, índice normal en vez de UNIQUE desde el arranque —
+  esta vez sin necesitar la migración en dos pasos que sí hizo falta la
+  primera vez en Entregas a Depósito, aplicando esa lección directo), y si
+  hay sobrantes, se genera sola una Entrega a Depósito con
+  `motivo='sobrante_obra'` y un comentario que referencia el N° de
+  instalación — el técnico nunca tiene que ir a cargarlo aparte. La lógica
+  de "generar un lote de Entregas a Depósito" se extrajo a
+  `crearEntregaDepositoLote` (`src/lib/deposito/crear-lote.ts`), compartida
+  entre la acción pública de Entregas a Depósito y esta devolución
+  automática — evita duplicar el render del PDF y el manejo de colisión
+  del número de generación.
+  **Decisión de rol importante:** a diferencia de Bajas/Entregas a
+  Depósito (Admin/Supervisor únicamente, porque son decisiones operativas),
+  Instalación está abierta a cualquier técnico — es el trabajo de campo
+  normal de quien tiene el remito en la mano. Pero `entregas_deposito` SÍ
+  sigue siendo admin/supervisor-only por RLS, así que el paso de la
+  devolución automática usa `createServiceRoleClient()` para ese técnico
+  puntual — la policy de la tabla no se afloja, la excepción vive en
+  código, auditada, solo para este flujo (mismo criterio ya usado en
+  Bajas y en "traer equipo desde depósito"). La ficha de cada Sitio
+  también muestra una sección "Instalado en este sitio", sin gate de rol.

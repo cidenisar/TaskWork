@@ -148,6 +148,25 @@ sigue siendo la barrera general (admin-only para ediciones libres), y el
 gate de aplicación es la excepción puntual y auditada para una acción
 específica — no al revés.
 
+El mismo criterio generaliza a un caso más sutil: cuando una acción de
+menor privilegio dispara, como EFECTO SECUNDARIO automático, la misma
+escritura que ya existe como una acción pública gateada a un rol mayor.
+Pasó en Informes con "Instalación" (abierta a cualquier técnico) cuyo
+sobrante de un remito genera sola una fila en `entregas_deposito` (tabla
+admin/supervisor-only por RLS, con su propia Server Action pública
+gateada a ese rol). La solución NO es llamar a la Server Action pública
+desde adentro (heredaría su gate y rechazaría al técnico) ni aflojar la
+policy de la tabla — es extraer la lógica de "crear la fila(s) + el PDF"
+a una función de librería compartida que recibe el cliente de Supabase
+como parámetro (normal o service-role, a elección de quien la llama), y
+que cada chamada decida: la acción pública la llama con el cliente normal
+(ya validó el rol mayor antes), el efecto secundario la llama con
+service-role (validó en código que esto es un efecto secundario legítimo
+de una acción de menor privilegio, no un acceso directo a la tabla). Así
+no se duplica el render del PDF ni el manejo de colisión del número de
+generación, y cada camino de entrada mantiene su propio control de
+acceso sin heredar el del otro.
+
 **Diagnosticar RLS con los logs reales y reproduciendo la consulta exacta —
 nunca a ciegas.** `edge_logs`/API logs (qué pedido llegó, con qué código) y
 los logs de Postgres (el error real, a veces con el SQL completo) resuelven
@@ -238,6 +257,22 @@ después es ampliar un enum, no crear tabla+migración+formulario nuevos.
 Reservar un módulo propio solo cuando la entidad es realmente un
 **contenedor** con estructura interna distinta (ej. un tablero con sus
 circuitos) — ahí sí se justifica.
+
+**"Identificar un objeto físico en una foto" y "transcribir una lista/tabla
+de un documento en papel" son dos prompts distintos — no reusar el mismo
+para los dos.** Pasó en Informes con el módulo "Instalación": además de
+fotos de los equipos instalados (igual prompt que ya existía, "¿qué es
+esto que veo?"), el usuario quería leer el remito en papel que entrega
+depósito (a veces manuscrito) para sacar una lista de materiales y
+cantidades esperadas. Usar el prompt de "identificar equipamiento" para
+eso da resultados raros — el modelo intenta clasificar el PAPEL como si
+fuera un objeto, en vez de leer su contenido como texto. El prompt para
+un documento tiene que decirlo explícito ("no estás identificando un
+objeto físico, estás transcribiendo una lista/tabla"), pedir los campos
+tal cual se leen (nunca reinterpretar o resumir), y devolver null/omitir
+una línea que no se entienda en vez de inventarla — mismo criterio de "no
+inventar" que el resto de los prompts de esta app, aplicado a texto en
+vez de a identificación visual.
 
 **Una IA que identifica un objeto real por foto puede, en el mismo
 pedido, estimar algo que no se ve en la imagen (consumo típico, vida

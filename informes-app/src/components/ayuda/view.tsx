@@ -149,6 +149,19 @@ const MODULOS: Seccion[] = [
     tip: "Lo que entregás acá podés después \"traerlo\" de vuelta desde Equipos Individuales → Nuevo Relevamiento, para instalarlo en otro Sitio (o el mismo).",
   },
   {
+    titulo: "Instalación",
+    acceso: "todos",
+    resumen:
+      "Para registrar qué instalaste en un Sitio a partir de un remito en papel del depósito — y devolver solo, sin pasar por otro módulo, lo que sobró.",
+    pasos: [
+      "Sacale una foto al remito que te dio depósito — la IA lee la lista de materiales y cantidades (revisala y corregila si hace falta).",
+      "Sacá fotos de lo que efectivamente instalaste (cámaras, domos, UPS, tableros, lo que sea) — la IA arma la lista con marca, modelo y N° de serie.",
+      "Para cada línea del remito que no se usó completa, ajustá la cantidad sobrante.",
+      "Al guardar se genera el comprobante de instalación — y si quedó algo sobrante, se genera SOLA la devolución a depósito correspondiente.",
+    ],
+    tip: "No hace falta ir después a Entregas a Depósito a cargar lo que sobró — queda hecho automáticamente al guardar la instalación.",
+  },
+  {
     titulo: "Estadísticas",
     acceso: "supervisor",
     resumen: "Resumen y analítica de toda la actividad cargada en la app.",

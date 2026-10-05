@@ -74,6 +74,15 @@ export default async function HomePage() {
             Material o equipo (nuevo o usado-funcional) que vuelve al depósito — con comprobante de constancia
           </div>
         </Link>
+        <Link href="/instalacion/nueva" className="module-card">
+          <div className="module-ico">
+            <ModuleIcon name="instalacion" />
+          </div>
+          <div className="module-title">Instalación</div>
+          <div className="module-sub">
+            Materiales instalados a partir de un remito de depósito — lo que sobra se devuelve solo
+          </div>
+        </Link>
         <Link href="/estadisticas" className="module-card">
           <div className="module-ico">
             <ModuleIcon name="estadisticas" />

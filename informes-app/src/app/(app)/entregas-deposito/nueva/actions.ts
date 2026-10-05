@@ -5,29 +5,14 @@ import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { puedeGestionarDeposito } from "@/lib/types";
 import { resolverUbicacionId, tagGpsSiFalta, type PayloadUbicacionNueva, type PayloadGps } from "@/lib/ubicaciones/resolver";
-import { nuevoNumeroGeneracionEntrega } from "@/lib/deposito/numero-generacion";
-import { renderEntregaDepositoPdf } from "@/lib/pdf/render";
-import { buildEntregaDepositoFilename } from "@/lib/pdf/filename";
-import type { CondicionMaterial, MotivoEntregaDeposito } from "@/lib/database.types";
-
-interface PayloadMaterial {
-  descripcion: string;
-  categoria: string;
-  marcaModelo: string;
-  numeroSerie: string;
-  etiquetaYpf: string;
-  cantidad: number;
-  condicion: CondicionMaterial;
-  motivo: MotivoEntregaDeposito;
-  comentario: string;
-}
+import { crearEntregaDepositoLote, type MaterialLoteDeposito } from "@/lib/deposito/crear-lote";
 
 export interface EntregarLoteADepositoPayload {
   ubicacionId: string | null;
   ubicacionNueva: PayloadUbicacionNueva | null;
   gps: PayloadGps | null;
   fecha: string;
-  materiales: PayloadMaterial[];
+  materiales: MaterialLoteDeposito[];
 }
 
 export interface EntregarLoteADepositoResult {
@@ -48,10 +33,10 @@ export interface EntregarLoteADepositoResult {
  * visita (ej. sacando fotos de todos juntos) — cada material queda como
  * su propia fila en `entregas_deposito`, pero todas comparten un solo
  * N° de generación y un solo PDF (una tabla con todos los materiales),
- * igual criterio que el relevamiento de Equipos Individuales. Por eso el
- * número se verifica con un SELECT antes de insertar (reintento ante
- * colisión) en vez de depender de una constraint UNIQUE: varias filas
- * necesitan compartir el mismo valor a propósito.
+ * igual criterio que el relevamiento de Equipos Individuales. La lógica
+ * de generar el número/insertar/subir el PDF vive en
+ * `crearEntregaDepositoLote` — también la usa la devolución automática de
+ * sobrantes de Instalación.
  */
 export async function entregarLoteADepositoAction(formData: FormData): Promise<EntregarLoteADepositoResult> {
   const raw = formData.get("payload");
@@ -94,121 +79,20 @@ export async function entregarLoteADepositoAction(formData: FormData): Promise<E
     .single();
   if (!ubicacion) return { success: false, error: "No se encontró la ubicación elegida." };
 
-  // N° de generación único (DEP-{año}-{4 dígitos}), verificado con SELECT
-  // porque esta vez TODAS las filas del lote lo van a compartir — no se
-  // puede usar el truco de "insertar y reintentar ante 23505" como en el
-  // resto de la app, al no haber más una constraint UNIQUE de por medio.
-  let numeroGeneracion = nuevoNumeroGeneracionEntrega();
-  for (let intento = 0; intento < 5; intento++) {
-    const { data: existente } = await supabase
-      .from("entregas_deposito")
-      .select("id")
-      .eq("numero_generacion", numeroGeneracion)
-      .limit(1)
-      .maybeSingle();
-    if (!existente) break;
-    numeroGeneracion = nuevoNumeroGeneracionEntrega();
-  }
+  const fotosEvidenciaBuffers = await Promise.all(fotosEvidencia.slice(0, 2).map(async (f) => Buffer.from(await f.arrayBuffer())));
 
-  const { data: filasInsertadas, error: insertError } = await supabase
-    .from("entregas_deposito")
-    .insert(
-      payload.materiales.map((m) => ({
-        numero_generacion: numeroGeneracion,
-        origen: "material_libre" as const,
-        descripcion: m.descripcion.trim(),
-        categoria: m.categoria.trim() || null,
-        marca_modelo: m.marcaModelo.trim() || null,
-        numero_serie: m.numeroSerie.trim() || null,
-        etiqueta_ypf: m.etiquetaYpf.trim() || null,
-        cantidad: m.cantidad || 1,
-        condicion: m.condicion,
-        motivo: m.motivo,
-        comentario: m.comentario.trim() || null,
-        ubicacion_id: ubicacionResuelta.id,
-        fecha: payload.fecha,
-        created_by: profile.id,
-      })),
-    )
-    .select("id");
-  if (insertError || !filasInsertadas || filasInsertadas.length === 0) {
-    return { success: false, error: `No se pudo registrar la entrega: ${insertError?.message ?? "error desconocido"}` };
-  }
-  const idsInsertados = filasInsertadas.map((f) => f.id);
-
-  // Fotos de evidencia (vista general, no las de identificación por IA):
-  // se suben al bucket de fotos, se imprimen en el PDF, y el path queda
-  // compartido en todas las filas del lote — mismo criterio que pdf_url.
-  const fotosEvidenciaBuffers: Buffer[] = [];
-  const fotosEvidenciaPaths: string[] = [];
-  for (const [i, foto] of fotosEvidencia.slice(0, 2).entries()) {
-    const buf = Buffer.from(await foto.arrayBuffer());
-    const fotoPath = `${profile.id}/entregas-deposito/${numeroGeneracion}/evidencia-${i + 1}.jpg`;
-    const { error: fotoUpErr } = await supabase.storage
-      .from("informe-fotos")
-      .upload(fotoPath, buf, { contentType: "image/jpeg", upsert: true });
-    if (!fotoUpErr) {
-      fotosEvidenciaBuffers.push(buf);
-      fotosEvidenciaPaths.push(fotoPath);
-    }
-  }
-
-  const { data: config } = await supabase.from("config_general").select("logo_empresa_url").eq("id", 1).single();
-  let logoBuffer: Buffer | null = null;
-  if (config?.logo_empresa_url) {
-    try {
-      const res = await fetch(config.logo_empresa_url);
-      if (res.ok) logoBuffer = Buffer.from(await res.arrayBuffer());
-    } catch {
-      // seguimos sin logo antes que fallar la generación del PDF
-    }
-  }
-
-  const pdfBuffer = await renderEntregaDepositoPdf({
-    numeroGeneracion,
-    region: ubicacion.region,
-    provincia: ubicacion.provincia,
-    localidad: ubicacion.localidad,
-    sitio: ubicacion.sitio,
-    planta: ubicacion.planta,
-    oficina: ubicacion.oficina,
+  const resultado = await crearEntregaDepositoLote({
+    supabase,
+    ubicacionId: ubicacionResuelta.id,
+    ubicacion,
     fecha: payload.fecha,
-    items: payload.materiales.map((m) => ({
-      tipoEquipoLabel: null,
-      descripcion: m.descripcion.trim(),
-      categoria: m.categoria.trim() || null,
-      marcaModelo: m.marcaModelo.trim() || null,
-      numeroSerie: m.numeroSerie.trim() || null,
-      etiquetaYpf: m.etiquetaYpf.trim() || null,
-      cantidad: m.cantidad || 1,
-      condicion: m.condicion,
-      motivo: m.motivo,
-      comentario: m.comentario.trim() || null,
-    })),
-    fotosEvidenciaBuffers: fotosEvidenciaBuffers.length > 0 ? fotosEvidenciaBuffers : null,
-    logoBuffer,
-    appName: "Informe Técnico App",
+    materiales: payload.materiales,
+    createdBy: profile.id,
     realizoNombre: profile.nombreCompleto,
+    fotosEvidencia: fotosEvidenciaBuffers,
   });
-
-  const detalleArchivo =
-    payload.materiales.length === 1 ? payload.materiales[0].descripcion : `${payload.materiales.length}-materiales`;
-  const pdfFilename = buildEntregaDepositoFilename({ numeroGeneracion, descripcion: detalleArchivo, sitio: ubicacion.sitio });
-  const pdfPath = `${profile.id}/entregas-deposito/${numeroGeneracion}/${pdfFilename}`;
-  const { error: pdfUpErr } = await supabase.storage
-    .from("informes-pdf")
-    .upload(pdfPath, pdfBuffer, { contentType: "application/pdf", upsert: true });
-  if (!pdfUpErr) {
-    await supabase
-      .from("entregas_deposito")
-      .update({
-        pdf_url: pdfPath,
-        pdf_generado_at: new Date().toISOString(),
-        fotos_evidencia_urls: fotosEvidenciaPaths.length > 0 ? fotosEvidenciaPaths : null,
-      })
-      .in("id", idsInsertados);
-  }
+  if (!resultado.success) return resultado;
 
   revalidatePath("/entregas-deposito/historial");
-  return { success: true, numeroGeneracion };
+  return resultado;
 }
