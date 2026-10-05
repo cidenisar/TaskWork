@@ -785,3 +785,20 @@ npm run dev
   criterio que ya usa el resolver de Ubicaciones ante una colisión. El
   flujo de "equipo ya cargado en un sitio" (botón en la ficha de Sitio,
   una fila = una entrega con su propio número) no se tocó.
+- **"Nueva Entrega a Depósito" ahora acepta 1-2 fotos de evidencia (vista
+  general), guardadas y visibles — distintas de las fotos de IA, que se
+  descartan** (migración `20261005100000_entregas_deposito_fotos_evidencia.sql`,
+  `ENTREGA_FOTOS_EVIDENCIA_MAX` en `src/components/deposito/types.ts`): las
+  fotos que se sacan para identificar materiales con IA se procesan y se
+  tiran — nunca quedó una vista de lo que realmente se entregó. Esta es una
+  sección separada en el formulario, igual criterio que la "Foto general"
+  de Tableros/Racks/Equipos Individuales pero con un tope de 2 en vez de 1:
+  se suben al bucket `informe-fotos`, se imprimen en el PDF del comprobante
+  (sección "Fotos de evidencia") y quedan en la columna nueva
+  `fotos_evidencia_urls` (un array de paths), compartida entre todas las
+  filas de un mismo lote — mismo criterio que `pdf_url`/`numero_generacion`.
+  El Historial tiene un botón "Ver fotos de evidencia" aparte de "Ver
+  comprobante" (abre cada foto en una pestaña nueva, URL firmada al
+  momento del click — mismo patrón que el resto de la app). El flujo de
+  "equipo ya cargado en un sitio" no pide estas fotos (sigue siendo un
+  modal rápido con motivo/condición).

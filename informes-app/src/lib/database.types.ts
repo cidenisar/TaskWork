@@ -462,6 +462,7 @@ export type EntregaDepositoRow = {
   created_by: string;
   pdf_url: string | null;
   pdf_generado_at: string | null;
+  fotos_evidencia_urls: string[] | null;
   created_at: string;
 }
 

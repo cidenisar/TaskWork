@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { UbicacionFields, type GpsCapturado } from "@/components/ubicaciones/ubicacion-fields";
 import { entregarLoteADepositoAction } from "@/app/(app)/entregas-deposito/nueva/actions";
 import {
@@ -9,6 +9,7 @@ import {
   CONDICION_OPCIONES,
   CONDICION_LABEL,
   ENTREGA_FOTO_IA_MAX,
+  ENTREGA_FOTOS_EVIDENCIA_MAX,
   MATERIAL_NUEVO_BASE,
   type MaterialEntregaItem,
 } from "./types";
@@ -49,6 +50,13 @@ export function NuevaEntregaForm({ provincias, ubicaciones }: { provincias: stri
   const [iaNote, setIaNote] = useState<string | null>(null);
   const fotoCameraInputRef = useRef<HTMLInputElement>(null);
   const fotoGaleriaInputRef = useRef<HTMLInputElement>(null);
+  const [fotosEvidencia, setFotosEvidencia] = useState<File[]>([]);
+  const fotoEvidenciaCameraInputRef = useRef<HTMLInputElement>(null);
+  const fotoEvidenciaGaleriaInputRef = useRef<HTMLInputElement>(null);
+  const fotosEvidenciaPreviews = useMemo(() => fotosEvidencia.map((f) => URL.createObjectURL(f)), [fotosEvidencia]);
+  useEffect(() => {
+    return () => fotosEvidenciaPreviews.forEach((url) => URL.revokeObjectURL(url));
+  }, [fotosEvidenciaPreviews]);
 
   function elegirProvinciaFiltro(p: string) {
     setProvinciaFiltro(p);
@@ -80,6 +88,19 @@ export function NuevaEntregaForm({ provincias, ubicaciones }: { provincias: stri
 
   function quitarFotoIa(i: number) {
     setFotosIa((prev) => prev.filter((_, idx) => idx !== i));
+  }
+
+  function agregarFotosEvidencia(files: File[]) {
+    if (files.length === 0) return;
+    setFotosEvidencia((prev) => {
+      const disponibles = ENTREGA_FOTOS_EVIDENCIA_MAX - prev.length;
+      if (disponibles <= 0) return prev;
+      return [...prev, ...files.slice(0, disponibles)];
+    });
+  }
+
+  function quitarFotoEvidencia(i: number) {
+    setFotosEvidencia((prev) => prev.filter((_, idx) => idx !== i));
   }
 
   async function leerFotosConIa() {
@@ -194,32 +215,48 @@ export function NuevaEntregaForm({ provincias, ubicaciones }: { provincias: stri
 
     setSubmitting(true);
     setError(null);
-    const res = await entregarLoteADepositoAction({
-      ubicacionId: ubicacionId === "__new" ? null : ubicacionId,
-      ubicacionNueva:
-        ubicacionId === "__new"
-          ? { provincia: provinciaFiltro, localidad: localidadNueva, sitio: sitioNueva, planta: plantaNueva, oficina: oficinaNueva }
-          : null,
-      gps,
-      fecha,
-      materiales: materiales.map((m) => ({
-        descripcion: m.descripcion.trim(),
-        categoria: m.categoria.trim(),
-        marcaModelo: m.marcaModelo.trim(),
-        numeroSerie: m.numeroSerie.trim(),
-        etiquetaYpf: m.etiquetaYpf.trim(),
-        cantidad: m.cantidad,
-        condicion: m.condicion,
-        motivo: m.motivo,
-        comentario: m.comentario.trim(),
-      })),
-    });
-    setSubmitting(false);
-    if (!res.success || !res.numeroGeneracion) {
-      setError(res.error || "No se pudo registrar la entrega.");
-      return;
+    try {
+      const fd = new FormData();
+      fd.append(
+        "payload",
+        JSON.stringify({
+          ubicacionId: ubicacionId === "__new" ? null : ubicacionId,
+          ubicacionNueva:
+            ubicacionId === "__new"
+              ? { provincia: provinciaFiltro, localidad: localidadNueva, sitio: sitioNueva, planta: plantaNueva, oficina: oficinaNueva }
+              : null,
+          gps,
+          fecha,
+          materiales: materiales.map((m) => ({
+            descripcion: m.descripcion.trim(),
+            categoria: m.categoria.trim(),
+            marcaModelo: m.marcaModelo.trim(),
+            numeroSerie: m.numeroSerie.trim(),
+            etiquetaYpf: m.etiquetaYpf.trim(),
+            cantidad: m.cantidad,
+            condicion: m.condicion,
+            motivo: m.motivo,
+            comentario: m.comentario.trim(),
+          })),
+        }),
+      );
+      for (const foto of fotosEvidencia) {
+        const jpeg = await resizeImageToJpeg(foto);
+        fd.append("fotosEvidencia", jpeg, "evidencia.jpg");
+      }
+      const res = await entregarLoteADepositoAction(fd);
+      if (!res.success || !res.numeroGeneracion) {
+        setError(res.error || "No se pudo registrar la entrega.");
+        return;
+      }
+      setResultado({ numeroGeneracion: res.numeroGeneracion });
+    } catch (err) {
+      const mensaje = err instanceof Error ? err.message : "No se pudo leer alguna de las fotos de evidencia.";
+      setError(mensaje);
+      reportarErrorCliente(mensaje, "crear-entrega-deposito-lote");
+    } finally {
+      setSubmitting(false);
     }
-    setResultado({ numeroGeneracion: res.numeroGeneracion });
   }
 
   function empezarOtra() {
@@ -235,6 +272,7 @@ export function NuevaEntregaForm({ provincias, ubicaciones }: { provincias: stri
     setMateriales([]);
     setFotosIa([]);
     setIaNote(null);
+    setFotosEvidencia([]);
   }
 
   return (
@@ -474,6 +512,81 @@ export function NuevaEntregaForm({ provincias, ubicaciones }: { provincias: stri
           <button type="button" className="btn btn-secondary btn-sm" onClick={agregarMaterial} disabled={submitting} style={{ marginTop: 10 }}>
             <Icon name="plus" size={13} /> Agregar material manual
           </button>
+        </div>
+      )}
+
+      {ubicacionId && (
+        <div className="card">
+          <div className="field" style={{ marginBottom: 0 }}>
+            <label>
+              Foto(s) de evidencia <span className="opt">(opcional, hasta {ENTREGA_FOTOS_EVIDENCIA_MAX})</span>
+            </label>
+            <div className="hint" style={{ margin: "-2px 0 8px" }}>
+              Una vista general de lo que se entrega — queda guardada y se imprime en el comprobante. Distinta de las
+              fotos de arriba: esas se usan para identificar y no se guardan.
+            </div>
+            <input
+              ref={fotoEvidenciaCameraInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              style={{ display: "none" }}
+              onChange={(e) => {
+                const files = Array.from(e.target.files ?? []);
+                e.target.value = "";
+                agregarFotosEvidencia(files);
+              }}
+            />
+            <input
+              ref={fotoEvidenciaGaleriaInputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              style={{ display: "none" }}
+              onChange={(e) => {
+                const files = Array.from(e.target.files ?? []);
+                e.target.value = "";
+                agregarFotosEvidencia(files);
+              }}
+            />
+            {fotosEvidencia.length > 0 && (
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
+                {fotosEvidencia.map((f, i) => (
+                  <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+                    {/* eslint-disable-next-line @next/next/no-img-element -- preview local, no vale la pena next/image acá */}
+                    <img
+                      src={fotosEvidenciaPreviews[i]}
+                      alt=""
+                      style={{ width: 64, height: 64, objectFit: "cover", borderRadius: 8, border: "1px solid var(--field-border)" }}
+                    />
+                    <button type="button" className="btn btn-secondary btn-sm" onClick={() => quitarFotoEvidencia(i)} disabled={submitting}>
+                      <Icon name="x" size={12} /> Quitar
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            {fotosEvidencia.length < ENTREGA_FOTOS_EVIDENCIA_MAX && (
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <button
+                  type="button"
+                  className="ai-btn"
+                  onClick={() => fotoEvidenciaCameraInputRef.current?.click()}
+                  disabled={submitting}
+                >
+                  <Icon name="camera" size={13} /> Sacar foto
+                </button>
+                <button
+                  type="button"
+                  className="ai-btn"
+                  onClick={() => fotoEvidenciaGaleriaInputRef.current?.click()}
+                  disabled={submitting}
+                >
+                  <Icon name="upload" size={13} /> Subir foto
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       )}
 

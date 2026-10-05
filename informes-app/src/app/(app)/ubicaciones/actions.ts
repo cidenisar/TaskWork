@@ -427,6 +427,7 @@ export async function entregarEquipoADepositoAction(payload: EntregarEquipoADepo
         comentario: payload.comentario.trim() || null,
       },
     ],
+    fotosEvidenciaBuffers: null,
     logoBuffer,
     appName: "Informe Técnico App",
     realizoNombre: profile.nombreCompleto,

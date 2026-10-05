@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { obtenerUrlPdfEntregaAction } from "@/app/(app)/entregas-deposito/historial/actions";
+import { obtenerUrlPdfEntregaAction, obtenerUrlsFotosEvidenciaEntregaAction } from "@/app/(app)/entregas-deposito/historial/actions";
 import { Icon } from "@/components/icon";
 import { MOTIVO_ENTREGA_LABEL, CONDICION_LABEL, TIPO_EQUIPO_LABEL } from "./types";
 import type { CondicionMaterial, MotivoEntregaDeposito, OrigenEntregaDeposito, TipoEquipoBaja } from "@/lib/database.types";
@@ -20,6 +20,7 @@ export interface HistorialEntregaRow {
   fecha: string;
   ubicacionLabel: string;
   pdfDisponible: boolean;
+  fotosDisponibles: boolean;
 }
 
 function fmtFecha(fecha: string) {
@@ -52,6 +53,18 @@ export function HistorialEntregas({ entregas }: { entregas: HistorialEntregaRow[
       return;
     }
     window.open(res.url, "_blank", "noopener,noreferrer");
+  }
+
+  async function verFotos(id: string) {
+    setBusyId(id);
+    setNotice(null);
+    const res = await obtenerUrlsFotosEvidenciaEntregaAction(id);
+    setBusyId(null);
+    if (res.urls.length === 0) {
+      setNotice(res.error || "No se pudieron abrir las fotos.");
+      return;
+    }
+    res.urls.forEach((url) => window.open(url, "_blank", "noopener,noreferrer"));
   }
 
   return (
@@ -92,6 +105,15 @@ export function HistorialEntregas({ entregas }: { entregas: HistorialEntregaRow[
                   </div>
                 </div>
                 <div className="hist-actions">
+                  <button
+                    type="button"
+                    className="icon-btn"
+                    title={e.fotosDisponibles ? "Ver fotos de evidencia" : "Sin fotos de evidencia"}
+                    disabled={!e.fotosDisponibles || busyId === e.id}
+                    onClick={() => verFotos(e.id)}
+                  >
+                    {busyId === e.id ? "…" : <Icon name="camera" size={15} />}
+                  </button>
                   <button
                     type="button"
                     className="icon-btn"

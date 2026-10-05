@@ -1,4 +1,4 @@
-import { Document, Page, Text, View, StyleSheet } from "@react-pdf/renderer";
+import { Document, Page, Text, View, Image, StyleSheet } from "@react-pdf/renderer";
 import { BORDER, commonStyles, KeyValueRow, PdfHeader, PdfFooter, formatFechaArg } from "./common";
 
 /**
@@ -54,6 +54,7 @@ export interface EntregaDepositoPdfProps {
   oficina: string | null;
   fecha: string;
   items: EntregaDepositoPdfItem[];
+  fotosEvidenciaBuffers: Buffer[] | null;
   logoBuffer: Buffer | null;
   appName: string;
   realizoNombre: string;
@@ -62,7 +63,21 @@ export interface EntregaDepositoPdfProps {
 const W = { n: "5%", categoria: "14%", descripcion: "23%", marca: "15%", serie: "15%", cantidad: "6%", condicion: "11%", comentario: "11%" };
 
 export function EntregaDepositoPdf(props: EntregaDepositoPdfProps) {
-  const { numeroGeneracion, region, provincia, localidad, sitio, planta, oficina, fecha, items, logoBuffer, appName, realizoNombre } = props;
+  const {
+    numeroGeneracion,
+    region,
+    provincia,
+    localidad,
+    sitio,
+    planta,
+    oficina,
+    fecha,
+    items,
+    fotosEvidenciaBuffers,
+    logoBuffer,
+    appName,
+    realizoNombre,
+  } = props;
   const fechaLabel = formatFechaArg(fecha);
   const documentoLabel = "CONSTANCIA DE ENTREGA A DEPÓSITO";
   const documentoLinea = `Documento: ${sitio || "—"}-Público · Generado por ${appName}`;
@@ -123,6 +138,19 @@ export function EntregaDepositoPdf(props: EntregaDepositoPdfProps) {
             );
           })}
         </View>
+
+        {fotosEvidenciaBuffers && fotosEvidenciaBuffers.length > 0 && (
+          <>
+            <Text style={commonStyles.sectionTitle}>Fotos de evidencia</Text>
+            <View style={commonStyles.photoGrid}>
+              {fotosEvidenciaBuffers.map((buf, i) => (
+                <View style={commonStyles.photoCell} key={i}>
+                  <Image src={buf} style={commonStyles.photo} />
+                </View>
+              ))}
+            </View>
+          </>
+        )}
 
         <Text style={commonStyles.paragraph}>
           Este material/equipo vuelve al depósito — este comprobante se entrega junto con el material físico como

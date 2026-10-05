@@ -20,7 +20,9 @@ export default async function HistorialEntregasDepositoPage() {
   // RLS (entregas_deposito_select) ya limita esto a Admin/Supervisor.
   const { data: entregasData } = await supabase
     .from("entregas_deposito")
-    .select("id, numero_generacion, origen, tipo_equipo, descripcion, categoria, cantidad, condicion, motivo, comentario, fecha, ubicacion_id, pdf_url")
+    .select(
+      "id, numero_generacion, origen, tipo_equipo, descripcion, categoria, cantidad, condicion, motivo, comentario, fecha, ubicacion_id, pdf_url, fotos_evidencia_urls",
+    )
     .order("fecha", { ascending: false });
 
   const ubicacionIds = [...new Set((entregasData ?? []).map((e) => e.ubicacion_id))];
@@ -49,6 +51,7 @@ export default async function HistorialEntregasDepositoPage() {
       fecha: e.fecha,
       ubicacionLabel: ubicacion ? labelUbicacion(ubicacion) : "—",
       pdfDisponible: Boolean(e.pdf_url),
+      fotosDisponibles: Boolean(e.fotos_evidencia_urls && e.fotos_evidencia_urls.length > 0),
     };
   });
 

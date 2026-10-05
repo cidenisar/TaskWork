@@ -53,7 +53,19 @@ export interface EntregarLoteADepositoResult {
  * colisión) en vez de depender de una constraint UNIQUE: varias filas
  * necesitan compartir el mismo valor a propósito.
  */
-export async function entregarLoteADepositoAction(payload: EntregarLoteADepositoPayload): Promise<EntregarLoteADepositoResult> {
+export async function entregarLoteADepositoAction(formData: FormData): Promise<EntregarLoteADepositoResult> {
+  const raw = formData.get("payload");
+  if (typeof raw !== "string") {
+    return { success: false, error: "Faltan datos de la entrega." };
+  }
+  let payload: EntregarLoteADepositoPayload;
+  try {
+    payload = JSON.parse(raw);
+  } catch {
+    return { success: false, error: "Faltan datos de la entrega." };
+  }
+  const fotosEvidencia = formData.getAll("fotosEvidencia").filter((f): f is File => f instanceof File);
+
   const profile = await requireProfile();
   if (!puedeGestionarDeposito(profile.rol)) {
     return { success: false, error: "Solo un Administrador o Supervisor puede entregar material a depósito." };
@@ -124,6 +136,23 @@ export async function entregarLoteADepositoAction(payload: EntregarLoteADeposito
   }
   const idsInsertados = filasInsertadas.map((f) => f.id);
 
+  // Fotos de evidencia (vista general, no las de identificación por IA):
+  // se suben al bucket de fotos, se imprimen en el PDF, y el path queda
+  // compartido en todas las filas del lote — mismo criterio que pdf_url.
+  const fotosEvidenciaBuffers: Buffer[] = [];
+  const fotosEvidenciaPaths: string[] = [];
+  for (const [i, foto] of fotosEvidencia.slice(0, 2).entries()) {
+    const buf = Buffer.from(await foto.arrayBuffer());
+    const fotoPath = `${profile.id}/entregas-deposito/${numeroGeneracion}/evidencia-${i + 1}.jpg`;
+    const { error: fotoUpErr } = await supabase.storage
+      .from("informe-fotos")
+      .upload(fotoPath, buf, { contentType: "image/jpeg", upsert: true });
+    if (!fotoUpErr) {
+      fotosEvidenciaBuffers.push(buf);
+      fotosEvidenciaPaths.push(fotoPath);
+    }
+  }
+
   const { data: config } = await supabase.from("config_general").select("logo_empresa_url").eq("id", 1).single();
   let logoBuffer: Buffer | null = null;
   if (config?.logo_empresa_url) {
@@ -156,6 +185,7 @@ export async function entregarLoteADepositoAction(payload: EntregarLoteADeposito
       motivo: m.motivo,
       comentario: m.comentario.trim() || null,
     })),
+    fotosEvidenciaBuffers: fotosEvidenciaBuffers.length > 0 ? fotosEvidenciaBuffers : null,
     logoBuffer,
     appName: "Informe Técnico App",
     realizoNombre: profile.nombreCompleto,
@@ -171,7 +201,11 @@ export async function entregarLoteADepositoAction(payload: EntregarLoteADeposito
   if (!pdfUpErr) {
     await supabase
       .from("entregas_deposito")
-      .update({ pdf_url: pdfPath, pdf_generado_at: new Date().toISOString() })
+      .update({
+        pdf_url: pdfPath,
+        pdf_generado_at: new Date().toISOString(),
+        fotos_evidencia_urls: fotosEvidenciaPaths.length > 0 ? fotosEvidenciaPaths : null,
+      })
       .in("id", idsInsertados);
   }
 

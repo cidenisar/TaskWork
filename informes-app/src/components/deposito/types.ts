@@ -9,6 +9,15 @@ import type { CondicionMaterial, MotivoEntregaDeposito, TipoEquipoBaja } from "@
  */
 export const ENTREGA_FOTO_IA_MAX = 10;
 
+/**
+ * Fotos de evidencia (vista general del material, no para identificar con
+ * IA) que quedan guardadas junto con la entrega y se imprimen en el PDF del
+ * comprobante — distintas de las fotos de arriba, que se procesan y se
+ * descartan. Tope bajo a propósito: es una foto de contexto, no un
+ * relevamiento fotográfico exhaustivo.
+ */
+export const ENTREGA_FOTOS_EVIDENCIA_MAX = 2;
+
 export interface MaterialEntregaItem {
   descripcion: string;
   categoria: string;
