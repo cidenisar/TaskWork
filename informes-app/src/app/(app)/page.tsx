@@ -1,12 +1,13 @@
 import Link from "next/link";
 import { requireProfile } from "@/lib/auth";
-import { puedeVerEstadisticas, puedeVerConfiguracion, puedeGestionarBajas, puedeGestionarDeposito } from "@/lib/types";
+import { puedeVerEstadisticas, puedeVerConfiguracion, puedeGestionarBajas, puedeGestionarDeposito, puedeVerPanel } from "@/lib/types";
 import { ModuleIcon } from "@/components/module-icon";
 import { Icon } from "@/components/icon";
 
 export default async function HomePage() {
   const profile = await requireProfile();
   const statsLocked = !puedeVerEstadisticas(profile.rol);
+  const panelLocked = !puedeVerPanel(profile.rol);
   const configLocked = !puedeVerConfiguracion(profile.rol);
   const bajasLocked = !puedeGestionarBajas(profile.rol);
   const depositoLocked = !puedeGestionarDeposito(profile.rol);
@@ -73,6 +74,15 @@ export default async function HomePage() {
           <div className="module-sub">
             Material o equipo (nuevo o usado-funcional) que vuelve al depósito — con comprobante de constancia
           </div>
+        </Link>
+        <Link href="/panel" className="module-card">
+          <div className="module-ico">
+            <ModuleIcon name="panel" />
+          </div>
+          <div className="module-title">
+            Panel de Supervisión {panelLocked && <span className="lock"><Icon name="lock" size={12} /></span>}
+          </div>
+          <div className="module-sub">Vista general de sitios, equipamiento y vencimientos — pensado para pantalla grande</div>
         </Link>
         <Link href="/estadisticas" className="module-card">
           <div className="module-ico">

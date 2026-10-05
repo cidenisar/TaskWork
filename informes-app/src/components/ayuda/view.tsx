@@ -160,6 +160,17 @@ const MODULOS: Seccion[] = [
     tip: "Lo que entregás acá podés después \"traerlo\" de vuelta desde Equipos Individuales → Nuevo Relevamiento, para instalarlo en otro Sitio (o el mismo).",
   },
   {
+    titulo: "Panel de Supervisión",
+    acceso: "supervisor",
+    resumen:
+      "Vista general de sitios, equipamiento y vencimientos — pensada para pantalla grande (notebook/PC), no para el celular del técnico en el campo.",
+    pasos: [
+      "Sitios con equipamiento: cuánto hay cargado por sitio y por módulo (Tableros/Racks/Torres/Equipos Individuales) — buscá por sitio o provincia.",
+      "Vencimientos: DNI y licencia de conducir de los técnicos, tarjeta verde y RTO de los vehículos — muestra lo ya vencido y lo que vence en los próximos 60 días.",
+      "Es un resumen ejecutivo, no reemplaza el Historial de cada módulo ni la ficha de Sitio (que sí muestran el detalle fila por fila).",
+    ],
+  },
+  {
     titulo: "Estadísticas",
     acceso: "supervisor",
     resumen: "Resumen y analítica de toda la actividad cargada en la app.",

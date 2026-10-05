@@ -1,0 +1,234 @@
+/*
+ * Panel de Supervisión — pensado para pantalla grande (notebook/PC), no
+ * para el celular del técnico en el campo. A propósito tiene un shell
+ * distinto del resto de la app (sidebar fija + grilla densa en vez de
+ * tarjetas apiladas a 800px) — reusa las variables y los componentes ya
+ * existentes (--bg/--panel/--accent, .card, .kpi-grid, .bar-row,
+ * .venc-badge, .detalle-table, .search-box) para quedar en la misma
+ * identidad visual, pero con una estructura de página propia.
+ */
+
+.panel-shell {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  min-height: 100vh;
+  background: var(--bg);
+}
+
+.panel-sidebar {
+  background: var(--panel);
+  border-right: 1px solid var(--border);
+  padding: 20px 14px;
+  display: flex;
+  flex-direction: column;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+}
+
+.panel-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 8px 20px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--border-soft);
+}
+.panel-brand-ico {
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  background: var(--accent-grad);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: #fff;
+}
+.panel-brand-title {
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+.panel-brand-sub {
+  font-size: 10.5px;
+  color: var(--text-faint);
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.panel-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.panel-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border-radius: var(--radius);
+  color: var(--text-dim);
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 600;
+}
+.panel-nav-item:hover {
+  background: var(--panel-2);
+  color: var(--text);
+}
+.panel-nav-item.active {
+  background: var(--panel-2);
+  color: var(--text);
+}
+.panel-nav-item.active .panel-nav-dot {
+  background: var(--accent);
+}
+.panel-nav-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--text-faint);
+  flex-shrink: 0;
+}
+
+.panel-sidebar-footer {
+  margin-top: auto;
+  padding-top: 14px;
+  border-top: 1px solid var(--border-soft);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.panel-main {
+  padding: 26px 32px 60px;
+  min-width: 0;
+}
+
+.panel-topbar {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 22px;
+  flex-wrap: wrap;
+}
+.panel-topbar h1 {
+  font-size: 20px;
+  font-weight: 800;
+  margin: 0 0 3px;
+}
+.panel-topbar p {
+  font-size: 13px;
+  color: var(--text-dim);
+  margin: 0;
+}
+.panel-topbar-meta {
+  font-size: 12px;
+  color: var(--text-faint);
+  text-align: right;
+}
+
+.panel-grid-2 {
+  display: grid;
+  grid-template-columns: 1.3fr 1fr;
+  gap: 18px;
+  align-items: start;
+}
+
+.panel-card-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.panel-card-title h2 {
+  font-size: 13.5px;
+  font-weight: 700;
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--text-dim);
+}
+.panel-card-count {
+  font-size: 11px;
+  color: var(--text-faint);
+  font-weight: 600;
+}
+
+.panel-venc-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border-soft);
+  font-size: 12.5px;
+}
+.panel-venc-row:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+.panel-venc-info {
+  min-width: 0;
+}
+.panel-venc-nombre {
+  font-weight: 700;
+  color: var(--text);
+}
+.panel-venc-tipo {
+  color: var(--text-faint);
+  font-size: 11.5px;
+}
+.panel-venc-dias {
+  flex-shrink: 0;
+  text-align: right;
+  white-space: nowrap;
+}
+
+@media (max-width: 1100px) {
+  .panel-grid-2 {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 860px) {
+  .panel-shell {
+    grid-template-columns: 1fr;
+  }
+  .panel-sidebar {
+    position: static;
+    height: auto;
+    flex-direction: row;
+    align-items: center;
+    overflow-x: auto;
+    padding: 12px 14px;
+  }
+  .panel-brand {
+    border-bottom: none;
+    border-right: 1px solid var(--border-soft);
+    padding: 0 14px 0 2px;
+    margin-bottom: 0;
+    flex-shrink: 0;
+  }
+  .panel-nav {
+    flex-direction: row;
+    padding-left: 10px;
+  }
+  .panel-nav-item {
+    white-space: nowrap;
+  }
+  .panel-sidebar-footer {
+    margin-top: 0;
+    margin-left: auto;
+    padding-top: 0;
+    border-top: none;
+    flex-shrink: 0;
+  }
+  .panel-main {
+    padding: 18px 16px 50px;
+  }
+}

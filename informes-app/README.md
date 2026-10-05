@@ -1000,3 +1000,43 @@ npm run dev
   equipamiento detectado en una sola respuesta) y `output_config.effort`
   de `"medium"` a `"high"` (se le pidió explícitamente más precisión,
   dado que la detección venía fallando).
+
+- **Módulo nuevo: Panel de Supervisión (`/panel`).** El usuario pidió una
+  experiencia separada "para supervisión" — pantalla grande (notebook/PC),
+  distinta del celular del técnico en el campo — con sitios+equipamiento,
+  estadísticas y vencimientos de un vistazo. Primera entrega (vista
+  general): a propósito es una sección nueva en el MISMO repo/deploy (no
+  un proyecto aparte) para reusar auth/RLS/datos ya existentes, pero con
+  shell propio — `src/app/panel/layout.tsx` NO usa `<AppShell>` (el shell
+  mobile-first de 800px del resto de la app): sidebar fija + grilla densa,
+  gateado a Admin/Supervisor (`requireAdminOrSupervisor()` en
+  `lib/auth.ts`, mismo gate que Estadísticas vía `puedeVerPanel` en
+  `lib/types.ts`). CSS propio en `src/app/panel/panel.css` (shell/sidebar/
+  grid — lo genuinamente nuevo), pero reusa a propósito los componentes y
+  variables de color YA existentes para quedar en la misma identidad
+  visual: `.card`/`.kpi-grid`/`.kpi-card` (Estadísticas), `BarList`
+  (`components/estadisticas/bar-list.tsx`), `.detalle-table`/`.venc-badge`
+  (ya existían en `wireframe-ui.css` sin usarse para esto). Sin estas
+  reusas hubiera sido un sistema de diseño paralelo completo — "visualmente
+  distinto" acá significa layout/densidad de información nuevos, no una
+  paleta/tipografía nueva de cero.
+  `src/lib/panel/overview.ts` (`getPanelOverview`) agrega, en una sola
+  carga: equipamiento activo por sitio y por módulo (sumando `cantidad`
+  donde existe esa columna, cada fila de `tablero_circuitos` cuenta 1 —
+  mismo criterio que `calcularResumenEquipamiento*` de cada módulo) —
+  filtra a sitios con `total > 0` (catálogo completo ≠ pantalla de
+  actividad, mismo criterio que el resto de la app—, y vencimientos: DNI/
+  licencia de conducir de técnicos activos (`profiles`) + tarjeta verde/
+  RTO de vehículos (`catalogo_vehiculos`) — campos que YA se cargaban
+  (Mi Cuenta, Configuración → Vehículos) pero no tenían ningún lugar que
+  los agregara/alertara; ventana de 60 días o ya vencido para considerarlo
+  relevante. Validado corriendo el equivalente en SQL directo contra la
+  base real (Supabase) antes de dar por buena la agregación — con datos
+  reales que disparan los dos niveles de urgencia (vencido y próximo).
+  **Pendiente de esta primera entrega:** no se pudo verificar visualmente
+  en un navegador logueado como Admin/Supervisor (sin credenciales de
+  prueba en este entorno) — sí se validó que compila/tipa/lintea limpio y
+  que la agregación de datos es correcta contra la base real; falta la
+  revisión visual humana. El "Programador de mantenimientos" (pedido
+  original del usuario) queda para un incremento siguiente, mismo
+  criterio de entrega incremental que el resto de los módulos.

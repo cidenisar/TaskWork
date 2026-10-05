@@ -53,6 +53,12 @@ const ICON_PATHS: Record<string, React.ReactNode> = {
       <circle cx="15" cy="17" r="0.6" fill="currentColor" stroke="none" />
     </>
   ),
+  panel: (
+    <>
+      <rect x="3.5" y="4" width="17" height="12" rx="1.5" />
+      <path d="M8.5 20h7M12 16v4" />
+    </>
+  ),
   "torre-comunicacion": (
     <>
       <path d="M12 2v20" />

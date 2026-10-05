@@ -59,3 +59,10 @@ export async function requireAdmin(): Promise<Profile> {
   if (profile.rol !== "admin") redirect("/");
   return profile;
 }
+
+/** Redirige a "/" si el usuario no es Administrador ni Supervisor — mismo gate que Estadísticas. */
+export async function requireAdminOrSupervisor(): Promise<Profile> {
+  const profile = await requireProfile();
+  if (profile.rol !== "admin" && profile.rol !== "supervisor") redirect("/");
+  return profile;
+}
