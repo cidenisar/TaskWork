@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import {
-  obtenerUrlFotoGeneralRackAction,
+  obtenerUrlsFotosGeneralesRackAction,
   obtenerUrlPdfRelevamientoAction,
   eliminarRelevamientoRackAction,
 } from "@/app/(app)/racks/historial/actions";
@@ -15,7 +15,7 @@ export interface HistorialRelevamientoRow {
   denominacion: string;
   ubicacionLabel: string;
   pdfDisponible: boolean;
-  fotoDisponible: boolean;
+  fotosDisponibles: boolean;
 }
 
 function fmtFecha(fecha: string) {
@@ -47,16 +47,16 @@ export function HistorialRacks({ relevamientos: relevamientosIniciales, esAdmin 
     window.open(res.url, "_blank", "noopener,noreferrer");
   }
 
-  async function verFoto(id: string) {
+  async function verFotos(id: string) {
     setBusyId(id);
     setNotice(null);
-    const res = await obtenerUrlFotoGeneralRackAction(id);
+    const res = await obtenerUrlsFotosGeneralesRackAction(id);
     setBusyId(null);
-    if (!res.url) {
-      setNotice(res.error || "No se pudo abrir la foto.");
+    if (res.urls.length === 0) {
+      setNotice(res.error || "No se pudieron abrir las fotos.");
       return;
     }
-    window.open(res.url, "_blank", "noopener,noreferrer");
+    res.urls.forEach((url) => window.open(url, "_blank", "noopener,noreferrer"));
   }
 
   async function eliminar(id: string, denominacion: string) {
@@ -116,9 +116,9 @@ export function HistorialRacks({ relevamientos: relevamientosIniciales, esAdmin 
                   <button
                     type="button"
                     className="icon-btn"
-                    title={r.fotoDisponible ? "Ver foto general" : "Sin foto general"}
-                    disabled={!r.fotoDisponible || busyId === r.id}
-                    onClick={() => verFoto(r.id)}
+                    title={r.fotosDisponibles ? "Ver fotos generales" : "Sin fotos generales"}
+                    disabled={!r.fotosDisponibles || busyId === r.id}
+                    onClick={() => verFotos(r.id)}
                   >
                     {busyId === r.id ? "…" : <Icon name="camera" size={15} />}
                   </button>

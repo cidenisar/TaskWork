@@ -910,3 +910,28 @@ npm run dev
   mismo remito repetido en varias páginas/intentos, para que combine todo
   en una lista sin duplicar líneas. El PDF las renderiza en grilla
   (`commonStyles.photoGrid`/`photoCell`), igual que las fotos de evidencia.
+
+- **Racks: "bocas disponibles" por equipo + fotos generales en plural.**
+  Dos ajustes de detalle sobre Relevamiento de Equipamiento
+  (`src/components/racks/`). (1) Cada equipo del rack suma un campo manual
+  "Bocas disponibles" (`rack_equipamientos.bocas_disponibles`, nullable) —
+  deliberadamente NO lo intenta inferir la IA desde la foto (un puerto
+  puede estar parcialmente tapado o no distinguirse cuál está realmente
+  libre): se completa a mano al dar de alta el equipo, igual criterio que
+  posición (U) o etiqueta YPF — no se edita en visitas posteriores porque
+  no hay pantalla de edición de equipamiento ya creado. (2) La "foto
+  general" del rack (antes una sola) pasa a admitir hasta
+  `RACK_FOTO_GENERAL_MAX` (4, `components/racks/types.ts`) — el técnico
+  quería sacar delantera y trasera del rack para más detalle. Mismo
+  patrón que el remito de Informe Técnico: columna
+  `rack_relevamientos.fotos_generales_urls text[]` (reemplaza a
+  `foto_general_url`, huérfana por el mismo problema de `DROP COLUMN`
+  colgándose — pendiente: `alter table public.rack_relevamientos drop
+  column foto_general_url;`), acción de Historial renombrada a
+  `obtenerUrlsFotosGeneralesRackAction` (devuelve `urls: string[]`, abre
+  cada una en una pestaña — mismo patrón que
+  `obtenerUrlsFotosEvidenciaEntregaAction` de Entregas a Depósito), y PDF
+  en grilla (`commonStyles.photoGrid`/`photoCell`). Estas fotos NO pasan
+  por IA (son solo registro, como ya era antes) — distinto de las fotos
+  de identificación de equipamiento (`RACK_FOTO_IA_MAX` = 7), que sí se
+  mandan a `/api/racks/leer-foto` pero nunca se guardan.

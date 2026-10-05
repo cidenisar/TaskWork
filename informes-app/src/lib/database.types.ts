@@ -363,6 +363,8 @@ export type RackEquipamientoRow = {
   consumo_promedio_w: number | null;
   consumo_max_w: number | null;
   etiqueta_ypf: string | null;
+  /** Puertos/bocas libres del equipo — manual, se completa al dar de alta. */
+  bocas_disponibles: number | null;
   estado: EstadoEquipamiento;
   created_at: string;
 }
@@ -375,7 +377,7 @@ export type RackRelevamientoRow = {
   created_by: string;
   pdf_url: string | null;
   pdf_generado_at: string | null;
-  foto_general_url: string | null;
+  fotos_generales_urls: string[] | null;
   created_at: string;
 }
 

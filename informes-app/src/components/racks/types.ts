@@ -3,6 +3,9 @@ import type { RackCategoriaEquipo } from "@/lib/database.types";
 /** Máximo de fotos que se pueden mandar juntas a la lectura con IA de un rack (distintos ángulos/secciones del mismo rack). */
 export const RACK_FOTO_IA_MAX = 7;
 
+/** Fotos generales del rack que quedan como registro (delantera, trasera, otros ángulos de detalle) — no se procesan con IA. */
+export const RACK_FOTO_GENERAL_MAX = 4;
+
 export const CATEGORIA_EQUIPO_OPCIONES: RackCategoriaEquipo[] = [
   "router",
   "switch",
@@ -50,6 +53,8 @@ export interface EquipamientoItem {
   cantidad: number;
   /** Número de la etiqueta/chapa de inventario de YPF, si es legible — distinto del número de serie del fabricante. */
   etiquetaYpf: string;
+  /** Puertos/bocas libres del equipo — manual (la IA no lo infiere con confianza desde una foto), se completa al dar de alta. */
+  bocasDisponibles: number | null;
   /**
    * Consumo típico ESTIMADO por IA en Watts a partir de la marca/modelo
    * (nunca una medición real, a diferencia de la corriente de Tableros) —

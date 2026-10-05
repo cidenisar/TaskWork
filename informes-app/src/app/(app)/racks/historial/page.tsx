@@ -11,7 +11,7 @@ export default async function HistorialRacksPage() {
   // RLS (rack_relevamientos_select_own) ya limita esto a lo propio, o a todo si sos Admin/Supervisor.
   const { data: relevamientosData } = await supabase
     .from("rack_relevamientos")
-    .select("id, numero_generacion, fecha, pdf_url, foto_general_url, rack_id")
+    .select("id, numero_generacion, fecha, pdf_url, fotos_generales_urls, rack_id")
     .order("fecha", { ascending: false });
 
   const rackIds = [...new Set((relevamientosData ?? []).map((r) => r.rack_id))];
@@ -34,7 +34,7 @@ export default async function HistorialRacksPage() {
         denominacion: rack.denominacion,
         ubicacionLabel: labelUbicacion(ubicacion),
         pdfDisponible: !!r.pdf_url,
-        fotoDisponible: !!r.foto_general_url,
+        fotosDisponibles: (r.fotos_generales_urls?.length ?? 0) > 0,
       };
     })
     .filter((r): r is HistorialRelevamientoRow => r !== null);
