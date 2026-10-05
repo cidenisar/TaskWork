@@ -99,13 +99,6 @@ const NAV_CONFIG: Record<string, ModuleConfig> = {
       { href: "/entregas-deposito/historial", label: "Historial" },
     ],
   },
-  instalacion: {
-    brand: "Instalación",
-    tabs: [
-      { href: "/instalacion/nueva", label: "Nueva Instalación" },
-      { href: "/instalacion/historial", label: "Historial" },
-    ],
-  },
   estadisticas: {
     brand: "Estadísticas",
     tabs: [

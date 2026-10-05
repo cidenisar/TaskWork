@@ -8,8 +8,9 @@ import { createClient } from "@/lib/supabase/server";
  * leer-foto de materiales: acá no se identifica un objeto físico, se lee
  * una lista/tabla — impresa o manuscrita) y devuelve el N° de remito (si es
  * legible) más cada línea con su descripción y cantidad. Es la lista
- * "esperada" — el técnico la revisa, y lo que no termine instalado queda
- * como sobrante para la devolución automática a depósito.
+ * "esperada" para la sección Materiales de Informe Técnico — el técnico la
+ * revisa, y lo que no termine usado/instalado queda como sobrante para la
+ * devolución automática a depósito.
  */
 
 interface LineaDetectada {
@@ -27,7 +28,7 @@ async function logDiagnostico(
   try {
     await supabase.from("client_errores").insert({
       user_id: userId,
-      contexto: "leer-remito-instalacion-ia",
+      contexto: "leer-remito-informe-tecnico-ia",
       mensaje: mensaje.slice(0, 2000),
       stack: extra ? extra.slice(0, 4000) : null,
     });

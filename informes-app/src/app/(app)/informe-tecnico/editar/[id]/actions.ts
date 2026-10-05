@@ -5,6 +5,7 @@ import { requireProfile } from "@/lib/auth";
 import { renderInformeTecnicoPdf } from "@/lib/pdf/render";
 import { buildInformeTecnicoFilename } from "@/lib/pdf/filename";
 import { resolverUbicacionId, tagGpsSiFalta, type PayloadGps } from "@/lib/ubicaciones/resolver";
+import { CATEGORIA_EQUIPO_LABEL } from "@/components/equipos/types";
 
 interface PayloadTecnico {
   nombre: string;
@@ -77,7 +78,7 @@ export async function actualizarInformeTecnicoAction(
   // si no es el dueño, esto devuelve null y cortamos acá.
   const { data: informeActual, error: fetchErr } = await supabase
     .from("informes_tecnicos")
-    .select("numero_generacion, provincia, ubicacion")
+    .select("numero_generacion, provincia, ubicacion, remito_foto_url, remito_numero, entrega_deposito_numero_generacion")
     .eq("id", informeId)
     .single();
   if (fetchErr || !informeActual) {
@@ -210,6 +211,30 @@ export async function actualizarInformeTecnicoAction(
     });
   }
 
+  // Materiales/remito: "las fotos quedan como están" también acá — no hay
+  // UI para editar la lista en esta pantalla, solo se vuelven a traer para
+  // que la regeneración del PDF no pierda esa sección si el informe ya
+  // tenía materiales cargados.
+  const { data: materialesRows } = await supabase
+    .from("informe_materiales")
+    .select("categoria_equipo, descripcion, marca_modelo, numero_serie, etiqueta_ypf, cantidad, comentario")
+    .eq("informe_id", informeId);
+  const materialesPdf = (materialesRows ?? []).map((m) => ({
+    categoriaLabel: CATEGORIA_EQUIPO_LABEL[m.categoria_equipo],
+    descripcion: m.descripcion,
+    marcaModelo: m.marca_modelo,
+    numeroSerie: m.numero_serie,
+    etiquetaYpf: m.etiqueta_ypf,
+    cantidad: m.cantidad,
+    comentario: m.comentario,
+  }));
+
+  let remitoFotoBuffer: Buffer | null = null;
+  if (informeActual.remito_foto_url) {
+    const { data: blob } = await supabase.storage.from("informe-fotos").download(informeActual.remito_foto_url);
+    if (blob) remitoFotoBuffer = Buffer.from(await blob.arrayBuffer());
+  }
+
   const { data: config } = await supabase.from("config_general").select("logo_empresa_url").eq("id", 1).single();
   let logoBuffer: Buffer | null = null;
   if (config?.logo_empresa_url) {
@@ -249,6 +274,16 @@ export async function actualizarInformeTecnicoAction(
       marcaModelo: v.marcaModelo?.trim() || null,
     })),
     imagenes: imagenesPdf,
+    materiales: materialesPdf,
+    remitoNumero: informeActual.remito_numero,
+    // Las líneas del remito (esperado/sobrante) son transitorias — solo se
+    // usan para calcular la devolución al momento de guardar, no quedan
+    // persistidas — así que no se pueden reconstruir acá. El material dado
+    // de alta (arriba) y la referencia a la devolución si la hubo sí
+    // persisten y se mantienen.
+    remitoItems: [],
+    remitoFotoBuffer,
+    entregaDepositoNumeroGeneracion: informeActual.entrega_deposito_numero_generacion,
     logoBuffer,
     appName: "Informe Técnico App",
     realizoNombre: profile.nombreCompleto,

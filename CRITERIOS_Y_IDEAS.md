@@ -90,6 +90,24 @@ la app por esto si la pantalla ya se refresca sola en algún momento
 razonable (foco, poll, etc.); alcanza con saberlo para no perder tiempo
 buscando un bug que no está en la política.
 
+**Si `apply_migration`/`execute_sql` de las herramientas de Supabase se
+cuelgan (timeout) específicamente en un `DROP TABLE`, mientras que
+`CREATE TABLE`/`ALTER TABLE` en el mismo momento andan bien — no es un
+lock real, probablemente es la herramienta.** Pasó en Informes: un `DROP
+TABLE` se colgó 3 veces seguidas (con una tabla real y con una de prueba
+creada al toque para descartar que fuera algo propio de esa tabla en
+particular), mientras que crear la tabla de prueba y aplicar el resto de
+la migración (ALTER + CREATE TABLE + policies) anduvo normal. Antes de
+asumir "hay un lock" — confirmarlo de verdad con
+`select * from pg_locks where relation = 'public.mi_tabla'::regclass;` y
+`pg_stat_activity` (queries activas, no solo "idle") — si ninguna de las
+dos muestra nada bloqueando, es la herramienta, no la base. Salida
+pragmática: sacar el `DROP TABLE` de la migración, dejar la tabla
+huérfana (documentada en un comentario, sin RLS floja ni datos reales) y
+resolver el drop más tarde a mano o cuando la herramienta ande — no vale
+la pena perder más de 2-3 reintentos en un DDL que ya se demostró
+reproducible.
+
 ## 3. RLS (seguridad por fila)
 
 **Toda tabla con `.update()` desde el cliente necesita su policy de UPDATE
@@ -329,6 +347,26 @@ pregunta a hacerse antes de diseñar un módulo nuevo: "¿el pedido es
 realmente una entidad distinta, o es el mismo patrón de carga con una
 fuente más para el ítem?" — si es lo segundo, extender el picker/origen
 del módulo existente es mucho más barato que levantar uno en paralelo.
+
+**Seguimiento real del ítem de arriba, misma sesión:** el "módulo nuevo"
+que se armó esa vez (un standalone "Instalación", con remito + devolución
+automática — ver más abajo la sección de IA leyendo documentos) resultó
+ser TAMBIÉN una duplicación, una vez que el usuario lo probó de verdad:
+"Informe Técnico" ya era el lugar donde se documentaba cualquier visita
+de trabajo (técnicos, vehículos, fotos), e Instalación terminó siendo un
+segundo formulario para la MISMA visita. La corrección fue la misma
+lógica que el ítem de arriba, aplicada un nivel más arriba: en vez de un
+módulo aparte, una sección opcional ("+ Agregar materiales/equipos")
+DENTRO de Informe Técnico — reusando los mismos componentes de fotos+IA
++ remito que ya se habían escrito, solo cambiando dónde viven. Lección
+más general: la pregunta "¿esto es una entidad distinta o el mismo
+patrón con una fuente más?" no se responde una sola vez al diseñar — el
+uso real (no la intuición de diseño) es la prueba final, y vale la pena
+quedarse abierto a que la respuesta cambie apenas alguien lo prueba con
+un caso real, aunque eso signifique deshacer una decisión de hace pocas
+horas. Construir el módulo paralelo la primera vez no fue un error en
+sí — era la mejor decisión con la información de ese momento — pero
+tampoco hay que aferrarse a ella cuando el uso real dice otra cosa.
 
 ## 6. Avisos push (web)
 

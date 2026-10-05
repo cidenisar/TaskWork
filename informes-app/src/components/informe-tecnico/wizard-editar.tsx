@@ -116,8 +116,8 @@ export function EditarInformeTecnicoWizard({
   return (
     <div>
       <div className="hint" style={{ marginBottom: 12 }}>
-        Editando {numeroGeneracion} — las fotos ya cargadas ({cantidadFotos}) no se tocan acá; si hay que
-        cambiar una foto, hay que rehacer el informe.
+        Editando {numeroGeneracion} — las fotos ya cargadas ({cantidadFotos}) y los materiales/equipos (si los hay) no se tocan
+        acá; si hay que cambiarlos, hay que rehacer el informe.
       </div>
       <Stepper steps={STEPS} current={step} />
 
@@ -129,6 +129,7 @@ export function EditarInformeTecnicoWizard({
           vehiculos={vehiculos}
           setVehiculos={setVehiculos}
           catalogos={catalogos}
+          materialesProps={null}
         />
       )}
       {step === 3 && (

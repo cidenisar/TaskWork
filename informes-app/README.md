@@ -847,44 +847,53 @@ npm run dev
   puede ver). Las secciones de Admin/Supervisor se muestran igual a un
   Técnico (con su badge de acceso) para que entienda qué hace el resto del
   equipo, no se ocultan.
-- **Nuevo módulo "Instalación" (`/instalacion/nueva`,
-  `/instalacion/historial`, abierto a cualquier rol): materiales instalados
-  en un Sitio a partir de un remito de depósito en papel, con devolución
-  automática de sobrantes** (migración `20261005110000_instalaciones.sql`,
-  `src/app/api/instalacion/leer-remito/route.ts`,
-  `src/app/(app)/instalacion/`, `src/components/instalacion/`): pedido del
-  usuario — en depósito les entregan un remito en papel al retirar
-  material, y quería que el informe de instalación, además de las fotos
-  que muestran los componentes instalados, lea ese remito y detalle todos
-  los materiales, devolviendo a depósito lo que sobra. Dos listas
-  independientes en el mismo formulario: "Materiales instalados" (mismo
-  patrón de fotos + IA que Entregas a Depósito — de hecho reusa el mismo
-  endpoint `/api/entregas-deposito/leer-foto`, es el mismo universo de
-  cosas) y "Remito" (una foto del papel, leída por una IA nueva que
-  transcribe una TABLA en vez de identificar objetos físicos — N° de
-  remito si es legible, y cada línea con descripción + cantidad). El
+- **El módulo standalone "Instalación" (recién agregado) se reemplazó por
+  una sección "Materiales/equipos" DENTRO de Informe Técnico — el usuario
+  probó el flujo y notó que cargar una Instalación Y, aparte, un Informe
+  Técnico para la misma visita era redundante, y que "materiales usados"
+  no es exclusivo de una instalación (una reparación con repuestos
+  también aplica).** Informe Técnico (`src/components/informe-tecnico/`)
+  gana un botón opcional "+ Agregar materiales/equipos" en el paso
+  "Técnicos y Recursos" (`step-2-equipo.tsx`, visible solo si ya se eligió
+  una Ubicación en el paso 1) que despliega `materiales-section.tsx`: dos
+  listas independientes con fotos + IA — "Materiales/equipos usados"
+  (reusa `/api/equipos/leer-foto`, el mismo universo que Equipos
+  Individuales — categoría, marca/modelo, N° de serie, y hasta estimación
+  de consumo cuando reconoce el modelo) y "Remito" (una foto del papel del
+  depósito, leída por `/api/informe-tecnico/leer-remito` — una IA que
+  transcribe una TABLA, no identifica objetos físicos; devuelve N° de
+  remito si es legible y cada línea con descripción + cantidad). El
   técnico ajusta la "cantidad sobrante" de cada línea del remito que no
-  terminó instalada (arranca en 0); al guardar, una fila por material
-  instalado va a la tabla nueva `instalaciones` (mismo criterio de lote
-  que Entregas a Depósito: todas comparten `numero_generacion`/`pdf_url`/
-  foto del remito, índice normal en vez de UNIQUE desde el arranque —
-  esta vez sin necesitar la migración en dos pasos que sí hizo falta la
-  primera vez en Entregas a Depósito, aplicando esa lección directo), y si
-  hay sobrantes, se genera sola una Entrega a Depósito con
-  `motivo='sobrante_obra'` y un comentario que referencia el N° de
-  instalación — el técnico nunca tiene que ir a cargarlo aparte. La lógica
-  de "generar un lote de Entregas a Depósito" se extrajo a
-  `crearEntregaDepositoLote` (`src/lib/deposito/crear-lote.ts`), compartida
-  entre la acción pública de Entregas a Depósito y esta devolución
-  automática — evita duplicar el render del PDF y el manejo de colisión
-  del número de generación.
-  **Decisión de rol importante:** a diferencia de Bajas/Entregas a
-  Depósito (Admin/Supervisor únicamente, porque son decisiones operativas),
-  Instalación está abierta a cualquier técnico — es el trabajo de campo
-  normal de quien tiene el remito en la mano. Pero `entregas_deposito` SÍ
-  sigue siendo admin/supervisor-only por RLS, así que el paso de la
-  devolución automática usa `createServiceRoleClient()` para ese técnico
-  puntual — la policy de la tabla no se afloja, la excepción vive en
-  código, auditada, solo para este flujo (mismo criterio ya usado en
-  Bajas y en "traer equipo desde depósito"). La ficha de cada Sitio
-  también muestra una sección "Instalado en este sitio", sin gate de rol.
+  terminó usada (arranca en 0).
+  Al guardar el informe: cada material se da de alta como una fila REAL en
+  `equipos` (`estado='activo'`, en la Ubicación del informe — no solo un
+  registro de constancia) y queda vinculado vía la tabla nueva
+  `informe_materiales` (child de `informes_tecnicos`, mismo patrón que
+  `informe_imagenes`/`informe_tecnicos_asignados`); si hay sobrantes, se
+  genera sola una Entrega a Depósito (`motivo='sobrante_obra'`,
+  `condicion='nuevo'`, comentario con el N° del informe y del remito) —
+  nunca hay que ir a cargarla aparte. La lógica de "generar un lote de
+  Entregas a Depósito" sigue viviendo en `crearEntregaDepositoLote`
+  (`src/lib/deposito/crear-lote.ts`, extraída en la vuelta anterior),
+  reusada acá tal cual.
+  **Decisión de rol:** Informe Técnico (y por lo tanto esta sección) sigue
+  abierto a cualquier rol — es el trabajo de campo normal de un técnico,
+  no una decisión operativa como Bajas/Entregas a Depósito manuales. Como
+  `entregas_deposito` sí sigue siendo admin/supervisor-only por RLS, el
+  paso de la devolución automática usa `createServiceRoleClient()` para
+  ese técnico puntual — la policy de la tabla no se afloja, la excepción
+  vive en código, auditada, solo para este flujo (mismo criterio que
+  Bajas y "traer equipo desde depósito" en Equipos Individuales).
+  La pantalla de "Editar" un informe no permite tocar los materiales ya
+  cargados (mismo criterio que las fotos: "si hay que cambiarlos, hay que
+  rehacer el informe") — sí los vuelve a traer para no perderlos al
+  regenerar el PDF, salvo la tabla de líneas del remito en sí (esperado/
+  sobrante), que es transitoria y no se persiste — solo persisten el
+  material ya dado de alta, la foto/N° del remito y la referencia a la
+  devolución generada.
+  La tabla `instalaciones` (del módulo standalone recién reemplazado) y
+  una tabla `_ping_test` de diagnóstico quedaron huérfanas en la base — el
+  `DROP TABLE` específico se colgó repetidas veces vía las herramientas de
+  Supabase en esta sesión (diagnosticado: sin locks reales, parece la
+  herramienta) — pendiente de borrarlas a mano o cuando la herramienta
+  ande: `drop table public.instalaciones; drop table public._ping_test;`.

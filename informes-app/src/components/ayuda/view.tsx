@@ -67,13 +67,15 @@ const MODULOS: Seccion[] = [
     titulo: "Informe Técnico",
     acceso: "todos",
     resumen:
-      "El informe \"para cualquier cosa\" — úsalo cuando el trabajo no entra en ninguno de los módulos específicos de abajo (una instalación, una visita de mantenimiento general, lo que sea).",
+      "El informe \"para cualquier cosa\" — úsalo cuando el trabajo no entra en ninguno de los módulos específicos de abajo (una instalación, una reparación, una visita de mantenimiento general, lo que sea).",
     pasos: [
       "Nuevo Informe: completá el asunto, cliente y proyecto.",
       "Sumá los técnicos y vehículos que participaron.",
+      "Si el trabajo usó materiales o equipos (una instalación, una reparación con repuestos, lo que sea), tocá \"+ Agregar materiales/equipos\" en el paso \"Técnicos y Recursos\" — ahí podés sacarle una foto al remito de depósito (la IA arma la lista esperada) y fotos de lo que efectivamente usaste/instalaste (la IA identifica cada uno). Cada material queda dado de alta como equipo real en el Sitio, y si algo del remito sobró, se genera sola la devolución a depósito — todo en el mismo informe, sin cargar nada aparte.",
       "Cargá las fotos que documenten el trabajo.",
       "Revisá todo en el último paso antes de generar el PDF.",
     ],
+    tip: "No hace falta elegir entre \"cargar una instalación\" o \"cargar un informe\" — son la misma carga. La sección de materiales es opcional: si el trabajo no usó nada, simplemente no la tocás.",
   },
   {
     titulo: "Rendición de Gastos",
@@ -147,19 +149,6 @@ const MODULOS: Seccion[] = [
       "Elegí el motivo (sobrante de obra, reemplazo funcional, retorno post-mantenimiento, u otro).",
     ],
     tip: "Lo que entregás acá podés después \"traerlo\" de vuelta desde Equipos Individuales → Nuevo Relevamiento, para instalarlo en otro Sitio (o el mismo).",
-  },
-  {
-    titulo: "Instalación",
-    acceso: "todos",
-    resumen:
-      "Para registrar qué instalaste en un Sitio a partir de un remito en papel del depósito — y devolver solo, sin pasar por otro módulo, lo que sobró.",
-    pasos: [
-      "Sacale una foto al remito que te dio depósito — la IA lee la lista de materiales y cantidades (revisala y corregila si hace falta).",
-      "Sacá fotos de lo que efectivamente instalaste (cámaras, domos, UPS, tableros, lo que sea) — la IA arma la lista con marca, modelo y N° de serie.",
-      "Para cada línea del remito que no se usó completa, ajustá la cantidad sobrante.",
-      "Al guardar se genera el comprobante de instalación — y si quedó algo sobrante, se genera SOLA la devolución a depósito correspondiente.",
-    ],
-    tip: "No hace falta ir después a Entregas a Depósito a cargar lo que sobró — queda hecho automáticamente al guardar la instalación.",
   },
   {
     titulo: "Estadísticas",

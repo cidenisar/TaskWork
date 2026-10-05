@@ -175,6 +175,9 @@ export type InformeTecnicoRow = {
   created_by: string;
   created_at: string;
   estado: EstadoInforme;
+  remito_foto_url: string | null;
+  remito_numero: string | null;
+  entrega_deposito_numero_generacion: string | null;
 }
 
 export type InformeTecnicoAsignadoRow = {
@@ -466,24 +469,19 @@ export type EntregaDepositoRow = {
   created_at: string;
 }
 
-export type InstalacionRow = {
+export type InformeMaterialRow = {
   id: string;
-  numero_generacion: string;
-  ubicacion_id: string;
-  fecha: string;
+  informe_id: string;
+  categoria_equipo: EquipoCategoria;
   descripcion: string;
-  categoria: string | null;
   marca_modelo: string | null;
   numero_serie: string | null;
   etiqueta_ypf: string | null;
   cantidad: number;
+  consumo_promedio_w: number | null;
+  consumo_max_w: number | null;
   comentario: string | null;
-  remito_foto_url: string | null;
-  remito_numero: string | null;
-  entrega_deposito_numero_generacion: string | null;
-  created_by: string;
-  pdf_url: string | null;
-  pdf_generado_at: string | null;
+  equipo_id: string | null;
   created_at: string;
 }
 
@@ -568,6 +566,11 @@ export interface Database {
         InformeImagenRow,
         Partial<InformeImagenRow> & Pick<InformeImagenRow, "informe_id" | "url" | "tomada_en" | "orden">,
         Partial<InformeImagenRow>
+      >;
+      informe_materiales: Tbl<
+        InformeMaterialRow,
+        Partial<InformeMaterialRow> & Pick<InformeMaterialRow, "informe_id" | "categoria_equipo" | "descripcion">,
+        Partial<InformeMaterialRow>
       >;
       rendiciones_gastos: Tbl<
         RendicionGastosRow,
@@ -667,11 +670,6 @@ export interface Database {
         Partial<EntregaDepositoRow> &
           Pick<EntregaDepositoRow, "numero_generacion" | "origen" | "descripcion" | "condicion" | "motivo" | "ubicacion_id" | "fecha" | "created_by">,
         Partial<EntregaDepositoRow>
-      >;
-      instalaciones: Tbl<
-        InstalacionRow,
-        Partial<InstalacionRow> & Pick<InstalacionRow, "numero_generacion" | "descripcion" | "ubicacion_id" | "fecha" | "created_by">,
-        Partial<InstalacionRow>
       >;
     };
     Views: Record<string, never>;

@@ -36,7 +36,7 @@ export interface EntregarLoteADepositoResult {
  * igual criterio que el relevamiento de Equipos Individuales. La lógica
  * de generar el número/insertar/subir el PDF vive en
  * `crearEntregaDepositoLote` — también la usa la devolución automática de
- * sobrantes de Instalación.
+ * sobrantes de materiales en Informe Técnico (ver materiales-section.tsx).
  */
 export async function entregarLoteADepositoAction(formData: FormData): Promise<EntregarLoteADepositoResult> {
   const raw = formData.get("payload");

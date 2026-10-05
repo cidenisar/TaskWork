@@ -21,7 +21,6 @@ import { MOTIVO_BAJA_LABEL, TIPO_EQUIPO_BAJA_LABEL } from "@/components/bajas/ty
 import { EntregarADepositoButton } from "@/components/deposito/entregar-boton";
 import { VerComprobanteEntregaBoton } from "@/components/deposito/ver-comprobante-boton";
 import { MOTIVO_ENTREGA_LABEL, CONDICION_LABEL, TIPO_EQUIPO_LABEL as TIPO_EQUIPO_DEPOSITO_LABEL } from "@/components/deposito/types";
-import { VerComprobanteInstalacionBoton } from "@/components/instalacion/ver-comprobante-boton";
 
 function fmtFecha(fecha: string) {
   const [y, m, d] = fecha.split("-");
@@ -208,15 +207,6 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
         .order("fecha", { ascending: false })
     : { data: [] };
   const entregas = entregasData ?? [];
-
-  // instalaciones es abierta a cualquier autenticado (no es una decisión
-  // operativa como Bajas/Entregas a Depósito) — se muestra siempre, sin gate de rol.
-  const { data: instalacionesData } = await supabase
-    .from("instalaciones")
-    .select("id, numero_generacion, descripcion, categoria, cantidad, comentario, fecha, remito_numero, entrega_deposito_numero_generacion, pdf_url")
-    .in("ubicacion_id", siblingIds)
-    .order("fecha", { ascending: false });
-  const instalaciones = instalacionesData ?? [];
 
   return (
     <div>
@@ -610,44 +600,6 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
                 </div>
                 <div className="hist-actions">
                   {en.pdf_url ? <VerComprobanteEntregaBoton entregaId={en.id} /> : <span className="hint">Sin comprobante</span>}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {instalaciones.length > 0 && (
-        <div className="card">
-          <div className="section-label">Instalado en este sitio</div>
-          <div className="hint" style={{ margin: "0 0 10px" }}>
-            Materiales instalados a partir de un remito de depósito.
-          </div>
-          <div className="list-grid">
-            {instalaciones.map((ins) => (
-              <div className="hist-item" key={ins.id}>
-                <div className="info">
-                  <div className="hist-main">
-                    <div className="hist-title">{ins.descripcion}</div>
-                    <div className="hist-meta">
-                      {ins.numero_generacion}
-                      {ins.categoria ? ` · ${ins.categoria}` : ""} · x{ins.cantidad} · {fmtFecha(ins.fecha)}
-                      {ins.remito_numero ? ` · Remito ${ins.remito_numero}` : ""}
-                    </div>
-                    {ins.entrega_deposito_numero_generacion && (
-                      <div className="hist-meta" style={{ marginTop: 4 }}>
-                        Devolución de sobrantes: {ins.entrega_deposito_numero_generacion}
-                      </div>
-                    )}
-                    {ins.comentario && (
-                      <div className="hist-meta" style={{ marginTop: 4 }}>
-                        {ins.comentario}
-                      </div>
-                    )}
-                  </div>
-                </div>
-                <div className="hist-actions">
-                  {ins.pdf_url ? <VerComprobanteInstalacionBoton instalacionId={ins.id} /> : <span className="hint">Sin comprobante</span>}
                 </div>
               </div>
             ))}
