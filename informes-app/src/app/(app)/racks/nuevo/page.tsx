@@ -14,7 +14,7 @@ export default async function NuevoRelevamientoPage() {
     supabase
       .from("rack_equipamientos")
       .select(
-        "id, rack_id, numero, categoria_equipo, texto, marca_modelo, posicion_u, etiqueta_ypf, cantidad, consumo_promedio_w, consumo_max_w, bocas_disponibles",
+        "id, rack_id, numero, categoria_equipo, texto, marca_modelo, posicion_u, etiqueta_ypf, numero_serie, cantidad, consumo_promedio_w, consumo_max_w, bocas_disponibles",
       )
       .eq("estado", "activo")
       .order("numero"),
@@ -36,6 +36,7 @@ export default async function NuevoRelevamientoPage() {
       marcaModelo: e.marca_modelo ?? "",
       posicionU: e.posicion_u ?? "",
       etiquetaYpf: e.etiqueta_ypf ?? "",
+      numeroSerie: e.numero_serie ?? "",
       cantidad: e.cantidad,
       consumoPromedioW: e.consumo_promedio_w,
       consumoMaxW: e.consumo_max_w,

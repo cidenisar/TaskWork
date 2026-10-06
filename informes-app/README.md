@@ -1156,3 +1156,37 @@ un import roto en otro componente. Se restauró el archivo original con
 `git checkout` y se movieron las funciones nuevas a
 `mantenimiento-intervalos.ts`. Ver CRITERIOS_Y_IDEAS.md para la lección
 general que salió de esto.
+
+- **Racks: N° de serie de fábrica + escaneo puntual de un solo campo con
+  la cámara.** Dos ajustes sobre Relevamiento de Equipamiento
+  (`src/components/racks/`), a pedido de uso real en campo. (1) Cada
+  equipo del rack suma un campo nuevo `numeroSerie`
+  (`rack_equipamientos.numero_serie`, nullable) — el N° de serie que
+  imprime el FABRICANTE, distinto de `etiquetaYpf` (la chapa de
+  inventario de YPF, que ya existía). La lectura general con IA
+  (`/api/racks/leer-foto`) ahora intenta los dos por separado, con el
+  mismo criterio que el resto de los campos: vacío si no es legible,
+  nunca inventado. (2) Cuando la lectura general no lo capturó (foto
+  borrosa, ángulo malo, etiqueta tapada en ese momento), cada fila de
+  equipo nuevo tiene un botón de cámara chico al lado de "Etiqueta YPF" y
+  de "N° de serie" que saca UNA foto de cerca de esa etiqueta puntual y
+  completa solo ese campo. En vez de sumar una librería de OCR genérica
+  (Tesseract y similares andan mal con etiquetas chicas/reflejos/fuentes
+  industriales), se reusa el mismo motor que ya usa toda la app — Claude
+  Vision — en un endpoint nuevo y liviano
+  (`/api/racks/leer-campo`, `effort: "low"`, un solo campo pedido en el
+  prompt) en vez de reenviar la foto a la lectura general de 14 fotos.
+  Patrón general para el próximo proyecto que use lectura de fotos con
+  IA: cuando haga falta completar UN campo puntual que la lectura
+  "general" no agarró, conviene un endpoint chico y enfocado con el mismo
+  proveedor, no una librería de OCR aparte ni reusar el endpoint grande
+  (más lento y con un prompt que no es para esto).
+  **Alcance, a propósito**: por ahora solo en Racks (donde surgió el
+  pedido) — no se tocó Torres ni Equipos Individuales, que comparten el
+  patrón de etiqueta YPF pero no se confirmó que necesiten lo mismo
+  todavía; se replica fácil si hace falta, ver `leer-campo/route.ts`. Se
+  mantiene la opción de subir foto desde galería además de la cámara en
+  todos los relevamientos (no se sacó, a pedido explícito) — la cámara
+  directa sigue siendo la opción recomendada (entre otras cosas porque de
+  paso evita el problema de fotos HEIC de iPhone al elegir de la
+  galería), pero la galería queda como alternativa.

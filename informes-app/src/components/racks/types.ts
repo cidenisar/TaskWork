@@ -59,6 +59,8 @@ export interface EquipamientoItem {
   cantidad: number;
   /** Número de la etiqueta/chapa de inventario de YPF, si es legible — distinto del número de serie del fabricante. */
   etiquetaYpf: string;
+  /** N° de serie de fábrica (impreso por el fabricante), distinto de etiquetaYpf. */
+  numeroSerie: string;
   /** Puertos/bocas libres del equipo — manual (la IA no lo infiere con confianza desde una foto), se completa al dar de alta. */
   bocasDisponibles: number | null;
   /**

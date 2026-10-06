@@ -33,6 +33,7 @@ const EQUIPO_NUEVO_BASE = {
   marcaModelo: "",
   posicionU: "",
   etiquetaYpf: "",
+  numeroSerie: "",
   cantidad: 1,
   consumoPromedioW: null as number | null,
   consumoMaxW: null as number | null,
@@ -71,6 +72,9 @@ export function NuevoRelevamientoForm({
   const [fotosGenerales, setFotosGenerales] = useState<File[]>([]);
   const fotoGeneralCameraInputRef = useRef<HTMLInputElement>(null);
   const fotoGeneralGaleriaInputRef = useRef<HTMLInputElement>(null);
+  const escanearInputRef = useRef<HTMLInputElement>(null);
+  const [escaneando, setEscaneando] = useState<{ index: number; campo: "etiquetaYpf" | "numeroSerie" } | null>(null);
+  const [escaneandoBusy, setEscaneandoBusy] = useState(false);
 
   function agregarFotosGenerales(files: File[]) {
     if (files.length === 0) return;
@@ -179,6 +183,7 @@ export function NuevoRelevamientoForm({
         marcaModelo: string;
         posicionU: string;
         etiquetaYpf: string;
+        numeroSerie: string;
         identificado: boolean;
         consumoPromedioW: number | null;
         consumoMaxW: number | null;
@@ -202,6 +207,7 @@ export function NuevoRelevamientoForm({
           marcaModelo: d.marcaModelo,
           posicionU: d.posicionU,
           etiquetaYpf: d.etiquetaYpf,
+          numeroSerie: d.numeroSerie,
           cantidad: 1,
           consumoPromedioW: d.consumoPromedioW,
           consumoMaxW: d.consumoMaxW,
@@ -223,6 +229,43 @@ export function NuevoRelevamientoForm({
       reportarErrorCliente(err instanceof Error ? err.message : "Error leyendo fotos de rack con IA", "leer-foto-rack");
     } finally {
       setIaBusy(false);
+    }
+  }
+
+  const CAMPO_LABEL: Record<"etiquetaYpf" | "numeroSerie", string> = { etiquetaYpf: "la etiqueta YPF", numeroSerie: "el N° de serie" };
+
+  function iniciarEscaneo(index: number, campo: "etiquetaYpf" | "numeroSerie") {
+    setError(null);
+    setEscaneando({ index, campo });
+    escanearInputRef.current?.click();
+  }
+
+  async function onFotoEscaneada(file: File) {
+    const objetivo = escaneando;
+    if (!objetivo) return;
+    setEscaneandoBusy(true);
+    try {
+      const jpeg = await resizeImageToJpeg(file);
+      const fd = new FormData();
+      fd.append("foto", jpeg, "campo.jpg");
+      fd.append("campo", objetivo.campo);
+      const res = await fetch("/api/racks/leer-campo", { method: "POST", body: fd });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || "No se pudo leer la foto.");
+        return;
+      }
+      if (!data.valor) {
+        setError(`No se pudo leer ${CAMPO_LABEL[objetivo.campo]} en esa foto — probá de más cerca o con mejor luz.`);
+        return;
+      }
+      actualizarEquipo(objetivo.index, { [objetivo.campo]: data.valor } as Partial<EquipamientoItem>);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo leer la foto.");
+      reportarErrorCliente(err instanceof Error ? err.message : "Error escaneando campo de rack con IA", "leer-campo-rack");
+    } finally {
+      setEscaneandoBusy(false);
+      setEscaneando(null);
     }
   }
 
@@ -309,6 +352,7 @@ export function NuevoRelevamientoForm({
               marcaModelo: e.marcaModelo.trim(),
               posicionU: e.posicionU.trim(),
               etiquetaYpf: e.etiquetaYpf.trim(),
+              numeroSerie: e.numeroSerie.trim(),
               cantidad: e.cantidad,
               consumoPromedioW: e.consumoPromedioW,
               consumoMaxW: e.consumoMaxW,
@@ -526,6 +570,18 @@ export function NuevoRelevamientoForm({
               agregarFotosIa(files);
             }}
           />
+          <input
+            ref={escanearInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            style={{ display: "none" }}
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              e.target.value = "";
+              if (file) void onFotoEscaneada(file);
+            }}
+          />
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: fotosIa.length ? 8 : 12 }}>
             <button
               type="button"
@@ -661,15 +717,59 @@ export function NuevoRelevamientoForm({
                             disabled={submitting}
                           />
                         </div>
-                        <div className="field" style={{ marginBottom: 0, width: 110 }}>
+                        <div className="field" style={{ marginBottom: 0, width: 150 }}>
                           <label style={{ fontSize: 11 }}>Etiqueta YPF</label>
-                          <input
-                            type="text"
-                            placeholder="N° inventario"
-                            value={e.etiquetaYpf}
-                            onChange={(ev) => actualizarEquipo(i, { etiquetaYpf: ev.target.value })}
-                            disabled={submitting}
-                          />
+                          <div style={{ display: "flex", gap: 4 }}>
+                            <input
+                              type="text"
+                              placeholder="N° inventario"
+                              value={e.etiquetaYpf}
+                              onChange={(ev) => actualizarEquipo(i, { etiquetaYpf: ev.target.value })}
+                              disabled={submitting}
+                            />
+                            <button
+                              type="button"
+                              className="ai-btn"
+                              style={{ padding: "0 8px" }}
+                              onClick={() => iniciarEscaneo(i, "etiquetaYpf")}
+                              disabled={submitting || escaneandoBusy}
+                              aria-label="Escanear etiqueta YPF con la cámara"
+                              title="Escanear con la cámara"
+                            >
+                              {escaneandoBusy && escaneando?.index === i && escaneando.campo === "etiquetaYpf" ? (
+                                "..."
+                              ) : (
+                                <Icon name="camera" size={12} />
+                              )}
+                            </button>
+                          </div>
+                        </div>
+                        <div className="field" style={{ marginBottom: 0, width: 150 }}>
+                          <label style={{ fontSize: 11 }}>N° de serie</label>
+                          <div style={{ display: "flex", gap: 4 }}>
+                            <input
+                              type="text"
+                              placeholder="De fábrica"
+                              value={e.numeroSerie}
+                              onChange={(ev) => actualizarEquipo(i, { numeroSerie: ev.target.value })}
+                              disabled={submitting}
+                            />
+                            <button
+                              type="button"
+                              className="ai-btn"
+                              style={{ padding: "0 8px" }}
+                              onClick={() => iniciarEscaneo(i, "numeroSerie")}
+                              disabled={submitting || escaneandoBusy}
+                              aria-label="Escanear N° de serie con la cámara"
+                              title="Escanear con la cámara"
+                            >
+                              {escaneandoBusy && escaneando?.index === i && escaneando.campo === "numeroSerie" ? (
+                                "..."
+                              ) : (
+                                <Icon name="camera" size={12} />
+                              )}
+                            </button>
+                          </div>
                         </div>
                         <div className="field" style={{ marginBottom: 0, width: 80 }}>
                           <label style={{ fontSize: 11 }}>Cantidad</label>
@@ -727,6 +827,7 @@ export function NuevoRelevamientoForm({
                       {e.marcaModelo ? ` · ${e.marcaModelo}` : ""}
                       {e.posicionU ? ` · ${e.posicionU}` : ""}
                       {e.etiquetaYpf ? ` · YPF ${e.etiquetaYpf}` : ""}
+                      {e.numeroSerie ? ` · S/N ${e.numeroSerie}` : ""}
                       {e.cantidad > 1 ? ` · x${e.cantidad}` : ""}
                       {e.consumoPromedioW ? ` · ~${e.consumoPromedioW}W prom.` : ""}
                       {e.consumoMaxW ? ` · ~${e.consumoMaxW}W máx.` : ""}

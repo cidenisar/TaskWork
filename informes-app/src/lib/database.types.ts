@@ -371,6 +371,8 @@ export type RackEquipamientoRow = {
   consumo_promedio_w: number | null;
   consumo_max_w: number | null;
   etiqueta_ypf: string | null;
+  /** N° de serie de fábrica, distinto de etiqueta_ypf (chapa de inventario de YPF). */
+  numero_serie: string | null;
   /** Puertos/bocas libres del equipo — manual, se completa al dar de alta. */
   bocas_disponibles: number | null;
   estado: EstadoEquipamiento;

@@ -25,6 +25,7 @@ interface EquipoDetectado {
   marcaModelo: string;
   posicionU: string;
   etiquetaYpf: string;
+  numeroSerie: string;
   identificado: boolean;
   consumoPromedioW: number | null;
   consumoMaxW: number | null;
@@ -119,6 +120,10 @@ export async function POST(req: NextRequest) {
         '- "etiquetaYpf": el número de una etiqueta/chapa de INVENTARIO DE YPF si hay una pegada en el equipo (suele ser un sticker o ' +
         "chapa metálica con un código numérico, distinta de la chapa de serie del fabricante). Cadena vacía \"\" si no hay una etiqueta " +
         "de inventario así, o no es legible — no la confundas con el número de serie del fabricante ni con marcaModelo.\n" +
+        '- "numeroSerie": el N° DE SERIE DE FÁBRICA del equipo (el que imprime el FABRICANTE en su etiqueta, ej. "S/N: ABC123456" o ' +
+        '"Serial Number"), si se ve y es legible en la foto — distinto de "etiquetaYpf" (esa es la chapa de inventario de YPF, no la de ' +
+        'fábrica). Cadena vacía "" si no se ve ninguna etiqueta de fábrica, o el número no es legible — no lo adivines ni lo confundas ' +
+        'con etiquetaYpf ni con marcaModelo.\n' +
         '- "consumoPromedioW": SOLO si identificaste una marca/modelo específica en "marcaModelo" y la reconocés con confianza por tu ' +
         "conocimiento general de ese producto (no por la foto) — tu mejor estimación de cuánto consume ESE EQUIPO en Watts en uso " +
         "normal/típico (ej. un rectificador grande puede ser varios cientos de W en operación normal, un switch chico unos 20-40W). " +
@@ -135,8 +140,8 @@ export async function POST(req: NextRequest) {
         "No inventes equipos que no estén en la foto, y no adivines una marca/modelo/posición/etiqueta que no puedas justificar por lo " +
         'que ves — pero "texto" y "categoriaEquipo" son obligatorios en todos los casos, con tu mejor estimación visual si hace falta.\n\n' +
         'Respondé ÚNICAMENTE con un JSON válido: un array de objetos {"numero": number, "texto": string, "categoriaEquipo": string, ' +
-        '"marcaModelo": string, "posicionU": string, "etiquetaYpf": string, "identificado": boolean, "consumoPromedioW": number | ' +
-        'null, "consumoMaxW": number | null}, sin texto antes ni después, sin bloque de código markdown.',
+        '"marcaModelo": string, "posicionU": string, "etiquetaYpf": string, "numeroSerie": string, "identificado": boolean, ' +
+        '"consumoPromedioW": number | null, "consumoMaxW": number | null}, sin texto antes ni después, sin bloque de código markdown.',
       messages: [
         {
           role: "user",
@@ -188,6 +193,7 @@ export async function POST(req: NextRequest) {
           marcaModelo: typeof e.marcaModelo === "string" ? e.marcaModelo.trim().slice(0, 80) : "",
           posicionU: typeof e.posicionU === "string" ? e.posicionU.trim().slice(0, 20) : "",
           etiquetaYpf: typeof e.etiquetaYpf === "string" ? e.etiquetaYpf.trim().slice(0, 40) : "",
+          numeroSerie: typeof e.numeroSerie === "string" ? e.numeroSerie.trim().slice(0, 60) : "",
           identificado: e.identificado === true,
           consumoPromedioW: Number.isFinite(e.consumoPromedioW) && (e.consumoPromedioW as number) > 0 ? (e.consumoPromedioW as number) : null,
           consumoMaxW: Number.isFinite(e.consumoMaxW) && (e.consumoMaxW as number) > 0 ? (e.consumoMaxW as number) : null,

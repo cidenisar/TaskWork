@@ -17,6 +17,7 @@ interface PayloadLectura {
   marcaModelo: string;
   posicionU: string;
   etiquetaYpf: string;
+  numeroSerie: string;
   cantidad: number;
   consumoPromedioW: number | null;
   consumoMaxW: number | null;
@@ -129,6 +130,7 @@ export async function crearRelevamientoRackAction(formData: FormData): Promise<C
         marca_modelo: l.marcaModelo.trim() || null,
         posicion_u: l.posicionU.trim() || null,
         etiqueta_ypf: l.etiquetaYpf.trim() || null,
+        numero_serie: l.numeroSerie.trim() || null,
         cantidad: Number.isFinite(l.cantidad) && l.cantidad > 0 ? l.cantidad : 1,
         consumo_promedio_w: Number.isFinite(l.consumoPromedioW) && (l.consumoPromedioW as number) > 0 ? l.consumoPromedioW : null,
         consumo_max_w: Number.isFinite(l.consumoMaxW) && (l.consumoMaxW as number) > 0 ? l.consumoMaxW : null,
