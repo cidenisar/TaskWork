@@ -29,6 +29,7 @@ export default async function ConfiguracionPage() {
     categoriasRes,
     vehiculosRes,
     servicesRes,
+    intervalosMantenimientoRes,
     auditRes,
     erroresRes,
   ] = await Promise.all([
@@ -51,6 +52,7 @@ export default async function ConfiguracionPage() {
       .select("id, patente, marca_modelo, vencimiento_tarjeta_verde, vencimiento_rto, kilometraje_actual")
       .order("patente"),
     supabase.from("vehiculo_services").select("id, vehiculo_id, fecha, kilometraje, descripcion").order("fecha", { ascending: false }),
+    supabase.from("mantenimiento_intervalos").select("id, tipo_equipo, categoria, frecuencia_dias").order("tipo_equipo"),
     supabase.from("audit_log").select("id, actor_nombre, actor_rol, accion, created_at").order("created_at", { ascending: false }).limit(100),
     supabase
       .from("client_errores")
@@ -97,6 +99,12 @@ export default async function ConfiguracionPage() {
             fecha: s.fecha,
             kilometraje: Number(s.kilometraje),
             descripcion: s.descripcion,
+          })),
+          intervalosMantenimiento: (intervalosMantenimientoRes.data ?? []).map((i) => ({
+            id: i.id,
+            tipoEquipo: i.tipo_equipo,
+            categoria: i.categoria,
+            frecuenciaDias: i.frecuencia_dias,
           })),
         },
         umbralAviso: configRes.data?.umbral_aviso_historial ?? "20",

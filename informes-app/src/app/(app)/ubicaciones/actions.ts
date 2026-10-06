@@ -445,3 +445,58 @@ export async function entregarEquipoADepositoAction(payload: EntregarEquipoADepo
   revalidatePath("/ubicaciones/[id]", "page");
   return { success: true, entregaId, numeroGeneracion };
 }
+
+export interface RegistrarMantenimientoResult {
+  success: boolean;
+  error?: string;
+}
+
+/**
+ * Registrar un mantenimiento realizado (Racks/Equipos Individuales — ver
+ * `lib/mantenimiento/types.ts` para por qué Tableros/Torres no entran
+ * acá) es trabajo de campo normal, no una decisión operativa como Bajas/
+ * Entregas a Depósito — abierto a cualquier técnico, sin gate de rol.
+ */
+export async function registrarMantenimientoAction(formData: FormData): Promise<RegistrarMantenimientoResult> {
+  const profile = await requireProfile();
+
+  const raw = formData.get("payload");
+  if (typeof raw !== "string") return { success: false, error: "Faltan datos del mantenimiento." };
+  let payload: { tipoEquipo: TipoEquipoBaja; equipoId: string; fecha: string; descripcion: string };
+  try {
+    payload = JSON.parse(raw);
+  } catch {
+    return { success: false, error: "Faltan datos del mantenimiento." };
+  }
+  if (!payload.tipoEquipo || !payload.equipoId || !payload.fecha) {
+    return { success: false, error: "Faltan datos del mantenimiento." };
+  }
+
+  const supabase = await createClient();
+  const { data: mantenimiento, error } = await supabase
+    .from("mantenimientos_equipamiento")
+    .insert({
+      tipo_equipo: payload.tipoEquipo,
+      equipo_id: payload.equipoId,
+      fecha: payload.fecha,
+      descripcion: payload.descripcion.trim() || null,
+      created_by: profile.id,
+    })
+    .select("id")
+    .single();
+  if (error || !mantenimiento) {
+    return { success: false, error: error?.message || "No se pudo registrar el mantenimiento." };
+  }
+
+  const foto = formData.get("foto");
+  if (foto instanceof File && foto.size > 0) {
+    const buffer = Buffer.from(await foto.arrayBuffer());
+    const path = `${profile.id}/mantenimientos/${mantenimiento.id}.jpg`;
+    const { error: upErr } = await supabase.storage.from("informe-fotos").upload(path, buffer, { contentType: "image/jpeg", upsert: true });
+    if (!upErr) await supabase.from("mantenimientos_equipamiento").update({ foto_url: path }).eq("id", mantenimiento.id);
+  }
+
+  revalidatePath("/ubicaciones/[id]", "page");
+  revalidatePath("/panel/mantenimientos");
+  return { success: true };
+}

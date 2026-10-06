@@ -1085,3 +1085,74 @@ npm run dev
   tocar `.kpi-grid`, que comparte CSS con Estadísticas). Validado con el
   equivalente en SQL directo contra la base real antes de confirmar la
   agregación.
+
+- **Módulo nuevo: Plan de Mantenimiento (PDM).** A pedido del usuario:
+  intervalos configurables por categoría de equipo + aviso de cuándo toca
+  el próximo mantenimiento, con pronóstico de lluvia para decidir si
+  conviene programar la visita.
+  **Alcance, a propósito acotado a Racks y Equipos Individuales — NI
+  Tableros NI Torres de Comunicaciones:**
+  - Tableros queda afuera porque YA tenía su propio sistema de
+    mantenimiento (`tablero_mantenimientos`, con fecha de próxima visita
+    cargada a mano por el técnico en `/tableros/mantenimiento`, ya
+    existía de antes en la app) — este descubrimiento se hizo a mitad de
+    la construcción (ver CRITERIOS_Y_IDEAS.md) y recortó el alcance
+    original para no duplicar una feature que ya funcionaba.
+  - Torres de Comunicaciones queda afuera por el mismo motivo ya
+    documentado para Bajas/Entregas a Depósito: todavía no tiene su
+    propia sección en la ficha de Sitio.
+  **Piezas:**
+  - Reusa a propósito el tipo `TipoEquipoBaja` (ya compartido por Bajas
+    de Equipamiento y Entregas a Depósito) en `mantenimiento_intervalos`
+    y `mantenimientos_equipamiento` en vez de un enum nuevo — mismo
+    "a cuál tabla de equipamiento apunta esto" de siempre.
+    `lib/mantenimiento/types.ts` tiene el resto de la lógica compartida
+    (`categoriasDeTipoEquipo`, `calcularEstadoMantenimiento` — mismo
+    criterio de "nunca se guarda un próximo vencimiento, se recalcula al
+    vuelo" que "próximo service" de Vehículos).
+  - **Configuración → Mantenimiento** (nuevo tab en
+    `catalogos-card.tsx`): Admin define, por tipo de equipo + categoría,
+    cada cuántos días corresponde el mantenimiento
+    (`mantenimiento-intervalos.ts` — nombrado así, no `mantenimiento.ts`,
+    para no pisar el archivo de acciones ya existente de "vaciar datos de
+    prueba").
+  - **Ficha de Sitio**: botón "Registrar mantenimiento" (ícono llave)
+    en cada fila de Rack/Equipo Individual, SIN gate de rol (es trabajo
+    de campo normal, no una decisión operativa como Bajas/Entregas) —
+    mismo patrón modal self-contained que `DarDeBajaButton`/
+    `EntregarADepositoButton`, con fecha + descripción + foto opcional.
+  - **Panel → Mantenimientos** (`/panel/mantenimientos`): cruza los
+    intervalos configurados con el último mantenimiento registrado de
+    cada equipo para mostrar vencido/próximo/nunca, ordenado por
+    urgencia. Si no hay NINGÚN intervalo configurado todavía, la pantalla
+    queda vacía a propósito (no tiene sentido avisar sin una regla) con
+    un link directo a Configuración.
+  - **Clima**: para los ítems vencidos/próximos/nunca con el sitio
+    georreferenciado, un pedido batcheado a Open-Meteo (gratuita, sin API
+    key, `lib/panel/clima.ts`) trae la probabilidad de precipitación de
+    los próximos 3 días — si supera 60% en algún día, se muestra un aviso
+    "lluvia prevista, evaluá reprogramar". A propósito NO se le pidió
+    esto a la IA: sin acceso a internet en este flujo terminaría
+    inventando el clima, y una regla simple sobre números reales es más
+    rápida/confiable que pedirle a un modelo que "interprete" un
+    pronóstico estructurado. Si el pedido a Open-Meteo falla (sin
+    internet, API caída), se degrada en silencio — la pantalla sigue
+    funcionando sin el dato de clima, nunca rompe la página.
+    **No se pudo probar en vivo desde este entorno**: la política de red
+    de esta sesión de Claude Code bloquea `api.open-meteo.com`
+    (`CONNECT tunnel failed, 403` — política de la organización) — mismo
+    tipo de limitación ya conocida en este proyecto para los endpoints de
+    IA (tampoco se pueden probar en vivo desde acá). Debería funcionar
+    normal desplegado en Vercel, que tiene su propia salida a internet
+    sin esa restricción — pendiente de confirmación real en producción.
+
+**Error real cometido durante la construcción (y cómo se corrigió):** al
+escribir el primer archivo de acciones de Configuración para este
+feature, se usó el nombre "obvio" `actions/mantenimiento.ts` SIN revisar
+antes si ya existía algo ahí — y sí existía: la acción
+`vaciarDatosPruebaAction` (limpieza de datos de prueba, feature sin
+relación). Quedó parcialmente sobreescrita hasta que `tsc` lo detectó por
+un import roto en otro componente. Se restauró el archivo original con
+`git checkout` y se movieron las funciones nuevas a
+`mantenimiento-intervalos.ts`. Ver CRITERIOS_Y_IDEAS.md para la lección
+general que salió de esto.

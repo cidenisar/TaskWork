@@ -524,6 +524,27 @@ export type EntregaDepositoRow = {
   created_at: string;
 }
 
+export type MantenimientoIntervaloRow = {
+  id: string;
+  tipo_equipo: TipoEquipoBaja;
+  /** Valor crudo del enum de categoría del tipo_equipo correspondiente (TableroCategoriaEquipo/RackCategoriaEquipo/EquipoCategoria). */
+  categoria: string;
+  frecuencia_dias: number;
+  created_by: string | null;
+  created_at: string;
+}
+
+export type MantenimientoEquipamientoRow = {
+  id: string;
+  tipo_equipo: TipoEquipoBaja;
+  equipo_id: string;
+  fecha: string;
+  descripcion: string | null;
+  foto_url: string | null;
+  created_by: string;
+  created_at: string;
+}
+
 export type InformeMaterialRow = {
   id: string;
   informe_id: string;
@@ -748,6 +769,17 @@ export interface Database {
         Partial<EntregaDepositoRow> &
           Pick<EntregaDepositoRow, "numero_generacion" | "origen" | "descripcion" | "condicion" | "motivo" | "ubicacion_id" | "fecha" | "created_by">,
         Partial<EntregaDepositoRow>
+      >;
+      mantenimiento_intervalos: Tbl<
+        MantenimientoIntervaloRow,
+        Partial<MantenimientoIntervaloRow> & Pick<MantenimientoIntervaloRow, "tipo_equipo" | "categoria" | "frecuencia_dias">,
+        Partial<MantenimientoIntervaloRow>
+      >;
+      mantenimientos_equipamiento: Tbl<
+        MantenimientoEquipamientoRow,
+        Partial<MantenimientoEquipamientoRow> &
+          Pick<MantenimientoEquipamientoRow, "tipo_equipo" | "equipo_id" | "fecha" | "created_by">,
+        Partial<MantenimientoEquipamientoRow>
       >;
     };
     Views: Record<string, never>;

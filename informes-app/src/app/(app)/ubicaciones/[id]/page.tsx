@@ -21,6 +21,7 @@ import { MOTIVO_BAJA_LABEL, TIPO_EQUIPO_BAJA_LABEL } from "@/components/bajas/ty
 import { EntregarADepositoButton } from "@/components/deposito/entregar-boton";
 import { VerComprobanteEntregaBoton } from "@/components/deposito/ver-comprobante-boton";
 import { MOTIVO_ENTREGA_LABEL, CONDICION_LABEL, TIPO_EQUIPO_LABEL as TIPO_EQUIPO_DEPOSITO_LABEL } from "@/components/deposito/types";
+import { RegistrarMantenimientoButton } from "@/components/mantenimiento/registrar-mantenimiento-button";
 
 function fmtFecha(fecha: string) {
   const [y, m, d] = fecha.split("-");
@@ -420,7 +421,7 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
                               <th style={{ textAlign: "right" }}>Cons. máx.</th>
                               <th>Estado</th>
                               <th>Comentario</th>
-                              {(puedeBajas || puedeDeposito) && <th />}
+                              <th />
                             </tr>
                           </thead>
                           <tbody>
@@ -439,16 +440,15 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
                                   <td style={{ textAlign: "right" }}>{e.consumo_max_w ? `~${e.consumo_max_w}W` : "—"}</td>
                                   <td>{lectura?.estado || "—"}</td>
                                   <td>{lectura?.comentario || "—"}</td>
-                                  {(puedeBajas || puedeDeposito) && (
-                                    <td>
-                                      <div style={{ display: "flex", gap: 6 }}>
-                                        {puedeBajas && <DarDeBajaButton tipoEquipo="rack_equipamiento" equipoId={e.id} equipoTexto={e.texto} />}
-                                        {puedeDeposito && (
-                                          <EntregarADepositoButton tipoEquipo="rack_equipamiento" equipoId={e.id} equipoTexto={e.texto} />
-                                        )}
-                                      </div>
-                                    </td>
-                                  )}
+                                  <td>
+                                    <div style={{ display: "flex", gap: 6 }}>
+                                      <RegistrarMantenimientoButton tipoEquipo="rack_equipamiento" equipoId={e.id} equipoTexto={e.texto} />
+                                      {puedeBajas && <DarDeBajaButton tipoEquipo="rack_equipamiento" equipoId={e.id} equipoTexto={e.texto} />}
+                                      {puedeDeposito && (
+                                        <EntregarADepositoButton tipoEquipo="rack_equipamiento" equipoId={e.id} equipoTexto={e.texto} />
+                                      )}
+                                    </div>
+                                  </td>
                                 </tr>
                               );
                             })}
@@ -499,7 +499,7 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
                     <th style={{ textAlign: "right" }}>Cons. máx.</th>
                     <th>Estado</th>
                     <th>Comentario</th>
-                    {(puedeBajas || puedeDeposito) && <th />}
+                    <th />
                   </tr>
                 </thead>
                 <tbody>
@@ -518,16 +518,15 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
                         <td style={{ textAlign: "right" }}>{e.consumo_max_w ? `~${e.consumo_max_w}W` : "—"}</td>
                         <td>{lectura?.estado || "—"}</td>
                         <td>{lectura?.comentario || "—"}</td>
-                        {(puedeBajas || puedeDeposito) && (
-                          <td>
-                            <div style={{ display: "flex", gap: 6 }}>
-                              {puedeBajas && <DarDeBajaButton tipoEquipo="equipo_individual" equipoId={e.id} equipoTexto={e.texto} />}
-                              {puedeDeposito && (
-                                <EntregarADepositoButton tipoEquipo="equipo_individual" equipoId={e.id} equipoTexto={e.texto} />
-                              )}
-                            </div>
-                          </td>
-                        )}
+                        <td>
+                          <div style={{ display: "flex", gap: 6 }}>
+                            <RegistrarMantenimientoButton tipoEquipo="equipo_individual" equipoId={e.id} equipoTexto={e.texto} />
+                            {puedeBajas && <DarDeBajaButton tipoEquipo="equipo_individual" equipoId={e.id} equipoTexto={e.texto} />}
+                            {puedeDeposito && (
+                              <EntregarADepositoButton tipoEquipo="equipo_individual" equipoId={e.id} equipoTexto={e.texto} />
+                            )}
+                          </div>
+                        </td>
                       </tr>
                     );
                   })}

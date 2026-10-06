@@ -472,6 +472,29 @@ código que decide cuándo llamar al envío?".
 
 ## 8. Proceso de debugging general
 
+- **Antes de escribir un archivo nuevo con un nombre "obvio" (el que
+  cualquiera elegiría para esa feature), revisar si ya existe uno con esa
+  ruta exacta — y si existe, LEERLO antes de escribir, nunca asumir que
+  está vacío o que es el que uno se imagina.** Pasó en Informes: al armar
+  un Plan de Mantenimiento nuevo (cross-módulo, para Racks/Equipos), se
+  escribió un archivo de acciones en
+  `configuracion/actions/mantenimiento.ts` sin revisar antes — ese
+  nombre YA estaba tomado por una feature completamente distinta y sin
+  relación ("vaciar datos de prueba", pensada como limpieza general de la
+  app antes de ir a producción), que quedó parcialmente borrada en el
+  momento. El error se notó recién por el `tsc` tirando un import roto en
+  otro componente — de no haber corrido el type-check, el archivo viejo
+  habría quedado perdido en silencio. Se corrigió restaurando el original
+  con `git checkout` y moviendo las funciones nuevas a un archivo con
+  nombre más específico (`mantenimiento-intervalos.ts`) en vez de
+  pelearse por el nombre genérico. Lección: "mantenimiento" (como antes
+  "torre") es una palabra que esta app ya usa para dos conceptos sin
+  relación — la regla general sigue siendo la misma que para nombrar una
+  tabla nueva (ver sección de Torres de Comunicaciones): antes de
+  escribir, listar el directorio/grepear el nombre candidato, y si ya
+  existe algo con ese nombre, LEERLO primero (la herramienta de escritura
+  puede no avisar si el archivo ya estaba trackeado por git y el diff
+  parcialmente se superpone).
 - **Un comentario que describe una intención no significa que esté
   implementada.** Un campo/columna puede tener un comentario correcto
   sobre para qué sirve (ej. "para que una unidad en el taller no se
