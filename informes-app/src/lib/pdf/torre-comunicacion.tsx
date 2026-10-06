@@ -1,7 +1,7 @@
 import { Document, Page, Text, View, Image, StyleSheet } from "@react-pdf/renderer";
 import { BORDER, commonStyles, KeyValueRow, PdfHeader, PdfFooter, formatFechaArg } from "./common";
-import { CATEGORIA_EQUIPO_LABEL, type ResumenEquipamientoTorre } from "@/components/torres-comunicacion/types";
-import type { TorreComunicacionCategoriaEquipo } from "@/lib/database.types";
+import { CATEGORIA_EQUIPO_LABEL, TIPO_TORRE_LABEL, type ResumenEquipamientoTorre } from "@/components/torres-comunicacion/types";
+import type { TorreComunicacionCategoriaEquipo, TorreTipo } from "@/lib/database.types";
 
 /**
  * Relevamiento de Torres de Comunicaciones — inventario de lo montado en
@@ -45,6 +45,9 @@ export interface TorreComunicacionPdfProps {
   logoBuffer: Buffer | null;
   appName: string;
   realizoNombre: string;
+  tipoTorre: TorreTipo | null;
+  tramosContados: number | null;
+  alturaEstimadaM: number | null;
 }
 
 const W = { n: "5%", categoria: "16%", equipo: "24%", marca: "17%", altura: "9%", cantidad: "7%", estado: "10%", comentario: "12%" };
@@ -66,8 +69,15 @@ export function TorreComunicacionPdf(props: TorreComunicacionPdfProps) {
     logoBuffer,
     appName,
     realizoNombre,
+    tipoTorre,
+    tramosContados,
+    alturaEstimadaM,
   } = props;
   const fechaLabel = formatFechaArg(fecha);
+  const alturaEstimadaLabel =
+    alturaEstimadaM != null
+      ? `~${alturaEstimadaM}m estimada${tipoTorre ? ` (${TIPO_TORRE_LABEL[tipoTorre]}${tramosContados ? `, ${tramosContados} tramos` : ""})` : ""}`
+      : null;
   const documentoLabel = "RELEVAMIENTO DE TORRE DE COMUNICACIONES";
   const documentoLinea = `Documento: ${sitio || "—"}-Público · Generado por ${appName}`;
 
@@ -89,6 +99,7 @@ export function TorreComunicacionPdf(props: TorreComunicacionPdfProps) {
         <View style={commonStyles.kvTable}>
           <KeyValueRow k="N° de Generación:" v={numeroGeneracion} />
           <KeyValueRow k="Torre:" v={denominacion} />
+          {alturaEstimadaLabel && <KeyValueRow k="Altura:" v={alturaEstimadaLabel} />}
           <KeyValueRow k="Sitio:" v={sitio} />
           {planta && <KeyValueRow k="Planta:" v={planta} />}
           {oficina && <KeyValueRow k="Oficina:" v={oficina} />}

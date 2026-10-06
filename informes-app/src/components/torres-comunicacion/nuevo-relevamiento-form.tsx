@@ -10,17 +10,30 @@ import { VerPdfLink } from "@/components/ver-pdf-link";
 import { obtenerUrlPdfRelevamientoAction } from "@/app/(app)/torres-comunicacion/historial/actions";
 import { UbicacionFields, type GpsCapturado } from "@/components/ubicaciones/ubicacion-fields";
 import type { Ubicacion } from "@/components/ubicaciones/types";
-import type { TorreComunicacionCategoriaEquipo } from "@/lib/database.types";
+import type { TorreComunicacionCategoriaEquipo, TorreTipo } from "@/lib/database.types";
 import {
   TORRE_FOTO_IA_MAX,
   TORRE_FOTO_GENERAL_MAX,
   CATEGORIA_EQUIPO_OPCIONES,
   CATEGORIA_EQUIPO_LABEL,
   ESTADO_OPCIONES,
+  TIPO_TORRE_OPCIONES,
+  TIPO_TORRE_LABEL,
   calcularResumenEquipamientoTorre,
   type EquipamientoTorreItem,
   type TorreConEquipamiento,
 } from "./types";
+
+function recalcularAlturaEstimada(
+  tipo: TorreTipo | null,
+  tramos: number | null,
+  largosTramoM: Partial<Record<TorreTipo, number>>,
+): number | null {
+  if (!tipo || tipo === "otro" || tramos == null) return null;
+  const largo = largosTramoM[tipo];
+  if (!largo) return null;
+  return Math.round(tramos * largo * 10) / 10;
+}
 
 interface LecturaState {
   estado: string;
@@ -42,10 +55,12 @@ export function NuevoRelevamientoForm({
   torres,
   ubicaciones,
   provincias,
+  largosTramoM,
 }: {
   torres: TorreConEquipamiento[];
   ubicaciones: Ubicacion[];
   provincias: string[];
+  largosTramoM: Partial<Record<TorreTipo, number>>;
 }) {
   const [provinciaFiltro, setProvinciaFiltro] = useState("");
   const [ubicacionId, setUbicacionId] = useState<string>(""); // "" = sin elegir, "__new" = crear
@@ -56,6 +71,10 @@ export function NuevoRelevamientoForm({
   const [gps, setGps] = useState<GpsCapturado | null>(null);
   const [torreId, setTorreId] = useState<string>(""); // "" = sin elegir, "__new" = crear
   const [denominacionNueva, setDenominacionNueva] = useState("");
+  const [tipoTorreNueva, setTipoTorreNueva] = useState<TorreTipo | null>(null);
+  const [tramosContadosNueva, setTramosContadosNueva] = useState<number | null>(null);
+  const [alturaEstimadaMNueva, setAlturaEstimadaMNueva] = useState<number | null>(null);
+  const [tramosConfiableNueva, setTramosConfiableNueva] = useState(true);
   const [fecha, setFecha] = useState(() => new Date().toISOString().slice(0, 10));
   const [equipamiento, setEquipamiento] = useState<EquipamientoTorreItem[]>([]);
   const [lecturas, setLecturas] = useState<Record<number, LecturaState>>({});
@@ -91,6 +110,8 @@ export function NuevoRelevamientoForm({
     return torres.filter((t) => t.ubicacionId === ubicacionId);
   }, [torres, ubicacionId]);
 
+  const torreActual = useMemo(() => torres.find((t) => t.id === torreId), [torres, torreId]);
+
   function elegirProvinciaFiltro(provincia: string) {
     setProvinciaFiltro(provincia);
     setLocalidadNueva("");
@@ -104,6 +125,10 @@ export function NuevoRelevamientoForm({
     setSuccess(null);
     setTorreId("");
     setDenominacionNueva("");
+    setTipoTorreNueva(null);
+    setTramosContadosNueva(null);
+    setAlturaEstimadaMNueva(null);
+    setTramosConfiableNueva(true);
     setEquipamiento([]);
     setLecturas({});
     if (id !== "__new") {
@@ -182,6 +207,13 @@ export function NuevoRelevamientoForm({
         consumoPromedioW: number | null;
         consumoMaxW: number | null;
       }[] = data.equipos ?? [];
+      const torreDetectada: { tipoTorre: TorreTipo; tramosContados: number | null; tramosConfiable: boolean } | undefined = data.torre;
+      if (torreId === "__new" && torreDetectada) {
+        setTipoTorreNueva(torreDetectada.tipoTorre);
+        setTramosContadosNueva(torreDetectada.tramosContados);
+        setTramosConfiableNueva(torreDetectada.tramosConfiable);
+        setAlturaEstimadaMNueva(recalcularAlturaEstimada(torreDetectada.tipoTorre, torreDetectada.tramosContados, largosTramoM));
+      }
       if (detectados.length === 0) {
         setIaNote(
           "No se detectó ningún equipo en las fotos — probá con otras o cargalos a mano." +
@@ -222,6 +254,18 @@ export function NuevoRelevamientoForm({
     } finally {
       setIaBusy(false);
     }
+  }
+
+  function onTipoTorreChange(v: string) {
+    const tipo = (v || null) as TorreTipo | null;
+    setTipoTorreNueva(tipo);
+    setAlturaEstimadaMNueva(recalcularAlturaEstimada(tipo, tramosContadosNueva, largosTramoM));
+  }
+
+  function onTramosContadosChange(v: string) {
+    const tramos = v === "" ? null : Math.max(0, Math.round(Number(v)) || 0);
+    setTramosContadosNueva(tramos);
+    setAlturaEstimadaMNueva(recalcularAlturaEstimada(tipoTorreNueva, tramos, largosTramoM));
   }
 
   function agregarEquipo() {
@@ -296,6 +340,9 @@ export function NuevoRelevamientoForm({
               : null,
           gps,
           denominacionNueva,
+          tipoTorreNueva,
+          tramosContadosNueva,
+          alturaEstimadaMNueva,
           fecha,
           lecturas: equipamiento.map((e, i) => {
             const l = lecturas[i] ?? LECTURA_VACIA;
@@ -354,6 +401,10 @@ export function NuevoRelevamientoForm({
     setGps(null);
     setTorreId("");
     setDenominacionNueva("");
+    setTipoTorreNueva(null);
+    setTramosContadosNueva(null);
+    setAlturaEstimadaMNueva(null);
+    setTramosConfiableNueva(true);
     setEquipamiento([]);
     setLecturas({});
     setFotosGenerales([]);
@@ -404,20 +455,84 @@ export function NuevoRelevamientoForm({
               ))}
               <option value="__new">+ Crear torre nueva...</option>
             </select>
+            {torreId && torreId !== "__new" && torreActual?.alturaEstimadaM != null && (
+              <div className="hint" style={{ margin: "6px 0 0" }}>
+                Altura estimada cargada al dar de alta la torre: ~{torreActual.alturaEstimadaM}m
+                {torreActual.tipoTorre ? ` (${TIPO_TORRE_LABEL[torreActual.tipoTorre]}${torreActual.tramosContados ? `, ${torreActual.tramosContados} tramos` : ""})` : ""}
+                — todavía no se puede editar después del alta.
+              </div>
+            )}
           </div>
           {torreId === "__new" && (
-            <div className="field">
-              <label>
-                Denominación <span className="req">*</span>
-              </label>
-              <input
-                type="text"
-                placeholder="Ej: Torre Principal"
-                value={denominacionNueva}
-                onChange={(e) => setDenominacionNueva(e.target.value)}
-                disabled={submitting}
-              />
-            </div>
+            <>
+              <div className="field">
+                <label>
+                  Denominación <span className="req">*</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ej: Torre Principal"
+                  value={denominacionNueva}
+                  onChange={(e) => setDenominacionNueva(e.target.value)}
+                  disabled={submitting}
+                />
+              </div>
+              <div className="field">
+                <label>
+                  Altura estimada de la torre <span className="opt">(opcional)</span>
+                </label>
+                <div className="hint" style={{ margin: "-2px 0 8px" }}>
+                  Se completa solo al procesar las fotos del equipamiento con IA (clasifica el tipo de torre y cuenta tramos visibles) —
+                  es una ESTIMACIÓN, nunca una medición exacta, revisá y corregí antes de guardar.
+                </div>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-end" }}>
+                  <div className="field" style={{ marginBottom: 0, width: 210 }}>
+                    <label style={{ fontSize: 11 }}>Tipo de torre</label>
+                    <select value={tipoTorreNueva ?? ""} onChange={(e) => onTipoTorreChange(e.target.value)} disabled={submitting}>
+                      <option value="">Sin clasificar</option>
+                      {TIPO_TORRE_OPCIONES.map((t) => (
+                        <option key={t} value={t}>
+                          {TIPO_TORRE_LABEL[t]}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="field" style={{ marginBottom: 0, width: 120 }}>
+                    <label style={{ fontSize: 11 }}>Tramos contados</label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={tramosContadosNueva ?? ""}
+                      onChange={(e) => onTramosContadosChange(e.target.value)}
+                      disabled={submitting}
+                    />
+                  </div>
+                  <div className="field" style={{ marginBottom: 0, width: 140 }}>
+                    <label style={{ fontSize: 11 }}>Altura estimada (m)</label>
+                    <input
+                      type="number"
+                      min={0}
+                      step="0.1"
+                      value={alturaEstimadaMNueva ?? ""}
+                      onChange={(e) => setAlturaEstimadaMNueva(e.target.value === "" ? null : Number(e.target.value))}
+                      disabled={submitting}
+                    />
+                  </div>
+                </div>
+                {tipoTorreNueva && tipoTorreNueva !== "otro" && !largosTramoM[tipoTorreNueva] && (
+                  <div className="hint" style={{ color: "var(--warn)" }}>
+                    <Icon name="warning" size={12} /> No hay largo de tramo configurado para este tipo — configuralo en Configuración →
+                    Catálogos → &ldquo;Torres Comunic. (tramos)&rdquo; para que la altura se calcule sola.
+                  </div>
+                )}
+                {tramosContadosNueva != null && !tramosConfiableNueva && (
+                  <div className="hint" style={{ color: "var(--warn)" }}>
+                    <Icon name="warning" size={12} /> La IA no está segura del conteo completo de tramos (foto parcial o con partes
+                    tapadas) — revisá el número antes de guardar.
+                  </div>
+                )}
+              </div>
+            </>
           )}
           <div className="field" style={{ marginTop: 16 }}>
             <label>

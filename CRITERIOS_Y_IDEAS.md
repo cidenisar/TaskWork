@@ -90,6 +90,26 @@ la app por esto si la pantalla ya se refresca sola en algún momento
 razonable (foco, poll, etc.); alcanza con saberlo para no perder tiempo
 buscando un bug que no está en la política.
 
+**Una tabla de catálogo nueva necesita su propia columna `id` (uuid) como
+PK aunque tenga una clave natural obvia (un enum, un código) — no uses la
+clave natural como PK directa si en el proyecto hay algún helper genérico
+que asuma `id` en toda tabla.** Pasó en Informes: se creó
+`torre_tipo_largos` con `tipo_torre` (un enum de 4 valores) como primary
+key directa — parecía más simple, sin un `id` "de más". Rompió
+`tsc` en un helper totalmente aparte
+(`lib/admin/eliminar-registro.ts`, que borra cualquier fila por `id` para
+limpiar datos de prueba) porque ese helper tipa `tabla: keyof
+Database["Tables"]` y asume que **todas** las tablas tienen `id` — al
+faltarle a una, TypeScript angosta el tipo del argumento de `.eq()` a
+`never` para la unión completa. La corrección fue agregar `id uuid
+primary key default gen_random_uuid()` + `unique(tipo_torre)`, igual
+patrón que ya usaba `mantenimiento_intervalos` (`id` + `unique
+(tipo_equipo, categoria)`) — que resultó ser la convención real del
+proyecto, no cada tabla improvisando su propia PK. Antes de diseñarle una
+PK natural a una tabla nueva, revisar qué convención ya siguen las tablas
+similares (¿tienen `id` + `unique` en la clave natural, o la clave natural
+es la PK?) y copiarla, en vez de optimizar por "menos una columna".
+
 **Si `apply_migration`/`execute_sql` de las herramientas de Supabase se
 cuelgan (timeout) específicamente en un `DROP TABLE`, mientras que
 `CREATE TABLE`/`ALTER TABLE` en el mismo momento andan bien — no es un
@@ -352,6 +372,29 @@ casi siempre una lectura de nameplate/spec-sheet (un límite o capacidad)
 y una lectura de uso real (lo que pasa la mayoría del tiempo) — nombrar
 ambas explícitamente en el prompt evita que el modelo devuelva la
 primera que encuentra pensando que responde la pregunta.
+
+**Para estimar una magnitud física que no se puede medir directo de una
+sola foto (altura, distancia, lo que sea) — buscar una unidad discreta y
+estandarizada que se pueda CONTAR en la imagen, y multiplicarla por un
+valor real configurado, en vez de pedirle a la IA que "calcule" la
+magnitud por fotogrametría o por su conocimiento general del valor
+estándar.** Surgió con la altura de una torre de comunicaciones: una sola
+foto sacada desde abajo no alcanza para fotogrametría real (no hay
+referencia de escala ni distancia conocida), así que inventar un número
+"calculado" ahí sería tan poco confiable como preguntarle el clima. Pero
+las torres se arman en TRAMOS modulares de largo estándar — eso sí es
+contable en una foto (una unión/brida visible entre secciones), así que
+el patrón queda: la IA clasifica el tipo de objeto y CUENTA unidades
+discretas visibles (marcando explícitamente si no está segura de haber
+visto el conjunto completo, igual criterio que "identificado" en el resto
+de la app) — el LARGO REAL de cada unidad sale de un catálogo chico
+configurado a mano (Configuración), nunca del "conocimiento general" de
+la IA sobre cuánto mide un tramo estándar (varía por fabricante/modelo,
+e inventarlo es la misma clase de error que preguntarle el clima en vez
+de usar una API real). Generaliza a cualquier "¿cuánto mide/pesa/vale X
+en total?" que se pueda descomponer en unidades contables × un valor
+real: preferir siempre esa descomposición antes que pedirle a una IA que
+estime la magnitud total de una.
 
 **Antes de armar un módulo nuevo para un pedido que "suena" distinto, revisar
 si ya existe uno con el mismo patrón de uso — puede que solo le falte una

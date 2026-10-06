@@ -30,6 +30,7 @@ export default async function ConfiguracionPage() {
     vehiculosRes,
     servicesRes,
     intervalosMantenimientoRes,
+    tramosTorreRes,
     auditRes,
     erroresRes,
   ] = await Promise.all([
@@ -53,6 +54,7 @@ export default async function ConfiguracionPage() {
       .order("patente"),
     supabase.from("vehiculo_services").select("id, vehiculo_id, fecha, kilometraje, descripcion").order("fecha", { ascending: false }),
     supabase.from("mantenimiento_intervalos").select("id, tipo_equipo, categoria, frecuencia_dias").order("tipo_equipo"),
+    supabase.from("torre_tipo_largos").select("tipo_torre, largo_tramo_m"),
     supabase.from("audit_log").select("id, actor_nombre, actor_rol, accion, created_at").order("created_at", { ascending: false }).limit(100),
     supabase
       .from("client_errores")
@@ -106,6 +108,7 @@ export default async function ConfiguracionPage() {
             categoria: i.categoria,
             frecuenciaDias: i.frecuencia_dias,
           })),
+          tramosTorre: (tramosTorreRes.data ?? []).map((t) => ({ tipoTorre: t.tipo_torre, largoTramoM: Number(t.largo_tramo_m) })),
         },
         umbralAviso: configRes.data?.umbral_aviso_historial ?? "20",
         recordatorioSemanal: configRes.data?.recordatorio_semanal_archivo ?? true,

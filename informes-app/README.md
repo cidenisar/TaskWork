@@ -1204,3 +1204,34 @@ general que salió de esto.
   Mismo límite que denominación: solo se carga al dar de alta el rack
   (alta al vuelo), no hay pantalla para editarlo después si un rack ya
   existente no lo tiene cargado.
+
+- **Torres de Comunicaciones: altura ESTIMADA de la torre por conteo de
+  tramos, nunca una medición real.** Medir la altura de una torre con una
+  sola foto sacada desde abajo no es confiable (fotogrametría necesita
+  una referencia de escala que ahí no hay) — en cambio, las torres se
+  arman en tramos modulares de largo estándar según el tipo, así que el
+  enfoque es: la IA clasifica el tipo de torre (autosoportada/
+  arriostrada/monopole/otro, `torre_tipo`) y CUENTA tramos visibles al
+  procesar las mismas fotos de equipamiento que ya se sacan para el
+  relevamiento (`/api/torres-comunicacion/leer-foto`, que ahora devuelve
+  `{ equipos, torre: { tipoTorre, tramosContados, tramosConfiable } }` en
+  vez de solo el array de equipos) — marcando `tramosConfiable: false`
+  si la foto no muestra la torre completa de abajo arriba. El LARGO real
+  de cada tramo nunca lo inventa la IA (varía por fabricante/modelo):
+  sale de un catálogo nuevo en Configuración → Catálogos → "Torres
+  Comunic. (tramos)" (tabla `torre_tipo_largos`, admin-only, un valor en
+  metros por tipo — "otro" no es configurable). La altura final
+  (`torres_comunicacion.altura_estimada_m` = tramos × largo del
+  catálogo) se precarga editable en el formulario de alta de una torre
+  nueva, junto con tipo y tramos contados, con un aviso si falta
+  configurar el largo de ese tipo o si la IA no está segura del conteo —
+  el técnico siempre puede corregir todo antes de guardar, igual criterio
+  que el resto de los campos estimados de esta app.
+  **Alcance, a propósito**: solo se carga/calcula al dar de alta la torre
+  (igual límite que denominación/etiqueta YPF — no hay pantalla para
+  recalcularla en una torre ya existente en esta entrega). Tab "Torres"
+  de Catálogos (el catálogo de cuadrillas/turnos de técnico,
+  `catalogo_torres` — un concepto físico totalmente distinto que
+  comparte la palabra en español, ver nota en la migración de Torres de
+  Comunicaciones) se renombró a "Torres (cuadrillas)" en la UI para que
+  no se confunda con el tab nuevo.

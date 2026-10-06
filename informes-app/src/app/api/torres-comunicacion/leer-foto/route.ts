@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { CATEGORIA_EQUIPO_OPCIONES, CATEGORIA_EQUIPO_LABEL, TORRE_FOTO_IA_MAX } from "@/components/torres-comunicacion/types";
-import type { TorreComunicacionCategoriaEquipo } from "@/lib/database.types";
+import { CATEGORIA_EQUIPO_OPCIONES, CATEGORIA_EQUIPO_LABEL, TORRE_FOTO_IA_MAX, TIPO_TORRE_OPCIONES, TIPO_TORRE_LABEL } from "@/components/torres-comunicacion/types";
+import type { TorreComunicacionCategoriaEquipo, TorreTipo } from "@/lib/database.types";
 
 /**
  * Lee hasta TORRE_FOTO_IA_MAX fotos de una torre de comunicaciones con
@@ -28,7 +28,14 @@ interface EquipoDetectado {
   consumoMaxW: number | null;
 }
 
+interface TorreDetectada {
+  tipoTorre: TorreTipo;
+  tramosContados: number | null;
+  tramosConfiable: boolean;
+}
+
 const CATEGORIAS_TEXTO = CATEGORIA_EQUIPO_OPCIONES.map((c) => `"${c}" (${CATEGORIA_EQUIPO_LABEL[c]})`).join(", ");
+const TIPOS_TORRE_TEXTO = TIPO_TORRE_OPCIONES.map((t) => `"${t}" (${TIPO_TORRE_LABEL[t]})`).join(", ");
 
 /**
  * Deja un registro en Configuración → Errores del dispositivo cuando la IA
@@ -120,9 +127,23 @@ export async function POST(req: NextRequest) {
         "para un equipo que no podés justificar de ninguna forma.\n\n" +
         "No inventes equipos que no estén en la foto, y no adivines una marca/modelo/altura/etiqueta que no puedas justificar por lo " +
         'que ves — pero "texto" y "categoriaEquipo" son obligatorios en todos los casos, con tu mejor estimación visual si hace falta.\n\n' +
-        'Respondé ÚNICAMENTE con un JSON válido: un array de objetos {"numero": number, "texto": string, "categoriaEquipo": string, ' +
+        "Además de la lista de equipamiento, evaluá la TORRE EN SÍ (una sola evaluación combinando todas las fotos, no por equipo) para " +
+        "estimar su altura por conteo de tramos — SOLO si las fotos muestran la torre completa de abajo arriba con razonable claridad:\n" +
+        `- "tipoTorre": EXACTAMENTE una de estas cadenas, la que mejor describa la estructura: ${TIPOS_TORRE_TEXTO}. "autosoportada" es ` +
+        'reticulada (de celosía/caños cruzados, sin vientos/cables tensores), "arriostrada" es un mástil delgado sostenido por vientos/' +
+        'cables tensores, "monopole" es un poste único liso o cónico sin reticulado. Usá "otro" si no podés distinguir con confianza.\n' +
+        '- "tramosContados": cantidad de tramos/secciones modulares que contás de abajo arriba (separados por una brida/unión visible ' +
+        "entre secciones) — SOLO si la foto muestra la torre completa desde la base hasta la punta con las uniones razonablemente " +
+        'claras. null si no se ve la torre completa, las uniones no son distinguibles, o el tipo es "otro".\n' +
+        '- "tramosConfiable": true SOLO si estás razonablemente seguro del conteo completo (torre entera visible, sin partes tapadas ' +
+        "por otro equipamiento/vegetación, sin corte en la foto antes de la punta). false en cualquier otro caso, incluyendo cuando " +
+        '"tramosContados" es null.\n' +
+        "Esto es para una ESTIMACIÓN de altura (tramos × largo de tramo estándar, que se aplica después con un valor real configurado, " +
+        "no algo que vos calcules) — nunca inventes un conteo que no puedas justificar por lo que ves en la foto.\n\n" +
+        'Respondé ÚNICAMENTE con un JSON válido: {"equipos": [{"numero": number, "texto": string, "categoriaEquipo": string, ' +
         '"marcaModelo": string, "alturaM": string, "etiquetaYpf": string, "identificado": boolean, "consumoPromedioW": number | null, ' +
-        '"consumoMaxW": number | null}, sin texto antes ni después, sin bloque de código markdown.',
+        '"consumoMaxW": number | null}], "torre": {"tipoTorre": string, "tramosContados": number | null, "tramosConfiable": boolean}}, ' +
+        "sin texto antes ni después, sin bloque de código markdown.",
       messages: [
         {
           role: "user",
@@ -149,20 +170,23 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "No se pudo leer la foto." }, { status: 502 });
     }
 
-    let equipos: EquipoDetectado[];
+    let parsed: { equipos?: EquipoDetectado[]; torre?: TorreDetectada };
     try {
-      const match = textBlock.text.match(/\[[\s\S]*\]/);
-      equipos = JSON.parse(match ? match[0] : textBlock.text);
+      const match = textBlock.text.match(/\{[\s\S]*\}/);
+      parsed = JSON.parse(match ? match[0] : textBlock.text);
     } catch {
       await logDiagnostico(supabase, profile.id, "leer-foto: la respuesta no fue JSON parseable", textBlock.text);
       return NextResponse.json({ error: "La IA no devolvió una lista reconocible — probá con otra foto o cargá el equipamiento a mano." }, { status: 502 });
     }
+    const equipos = parsed.equipos;
     if (!Array.isArray(equipos) || equipos.length === 0) {
       await logDiagnostico(supabase, profile.id, "leer-foto: la IA devolvió una lista vacía", textBlock.text);
       return NextResponse.json({ error: "No se detectó ningún equipo en la foto." }, { status: 200 });
     }
 
     const categoriasValidas = new Set<string>(CATEGORIA_EQUIPO_OPCIONES);
+    const tiposTorreValidos = new Set<string>(TIPO_TORRE_OPCIONES);
+    const torre = parsed.torre;
 
     return NextResponse.json({
       equipos: equipos
@@ -178,6 +202,12 @@ export async function POST(req: NextRequest) {
           consumoPromedioW: Number.isFinite(e.consumoPromedioW) && (e.consumoPromedioW as number) > 0 ? (e.consumoPromedioW as number) : null,
           consumoMaxW: Number.isFinite(e.consumoMaxW) && (e.consumoMaxW as number) > 0 ? (e.consumoMaxW as number) : null,
         })),
+      torre: {
+        tipoTorre: (torre && tiposTorreValidos.has(torre.tipoTorre) ? torre.tipoTorre : "otro") as TorreTipo,
+        tramosContados:
+          torre && Number.isFinite(torre.tramosContados) && (torre.tramosContados as number) > 0 ? Math.round(torre.tramosContados as number) : null,
+        tramosConfiable: torre?.tramosConfiable === true,
+      },
     });
   } catch (err) {
     const detalle = err instanceof Error ? err.message : String(err);

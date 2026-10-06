@@ -401,12 +401,29 @@ export type RackRelevamientoLecturaRow = {
   comentario: string | null;
 }
 
+export type TorreTipo = "autosoportada" | "arriostrada" | "monopole" | "otro";
+
 export type TorreComunicacionRow = {
   id: string;
   denominacion: string;
+  /** Clasificación visual de la torre, para estimar altura por tramos — null si no se estimó. */
+  tipo_torre: TorreTipo | null;
+  /** Tramos (secciones modulares) contados en las fotos del relevamiento — null si no se estimó/no es confiable. */
+  tramos_contados: number | null;
+  /** tramos_contados × largo de tramo (torre_tipo_largos) — ESTIMADA, nunca una medición real; editable por el técnico. */
+  altura_estimada_m: number | null;
   ubicacion_id: string;
   created_by: string | null;
   created_at: string;
+}
+
+/** Largo de tramo (m) estándar configurado por un Admin para cada tipo de torre — "otro" no aplica, no tiene largo estándar. */
+export type TorreTipoLargoRow = {
+  id: string;
+  tipo_torre: TorreTipo;
+  largo_tramo_m: number;
+  updated_by: string | null;
+  updated_at: string;
 }
 
 export type TorreComunicacionEquipamientoRow = {
@@ -747,6 +764,7 @@ export interface Database {
           Pick<TorreComunicacionRelevamientoLecturaRow, "relevamiento_id" | "equipamiento_id">,
         Partial<TorreComunicacionRelevamientoLecturaRow>
       >;
+      torre_tipo_largos: Tbl<TorreTipoLargoRow, Partial<TorreTipoLargoRow> & Pick<TorreTipoLargoRow, "tipo_torre" | "largo_tramo_m">, Partial<TorreTipoLargoRow>>;
       equipos: Tbl<
         EquipoRow,
         Partial<EquipoRow> & Pick<EquipoRow, "ubicacion_id" | "categoria_equipo" | "texto">,

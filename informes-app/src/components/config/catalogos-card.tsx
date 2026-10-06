@@ -6,12 +6,23 @@ import { VehiculosTab, type VehiculoItem } from "./catalogos/vehiculos-tab";
 import { ServiceTab, type ServiceItem } from "./catalogos/service-tab";
 import { VencimientosTab } from "./catalogos/vencimientos-tab";
 import { MantenimientoIntervalosTab, type IntervaloItem } from "./catalogos/mantenimiento-intervalos-tab";
+import { TorreTramosTab, type TramoTorreItem } from "./catalogos/torre-tramos-tab";
 import { Icon } from "@/components/icon";
 
-type TabId = "torres" | "clientes" | "vehiculos" | "vehservice" | "vehalertas" | "mantenimiento" | "provincias" | "tipos" | "gastocat";
+type TabId =
+  | "torres"
+  | "clientes"
+  | "vehiculos"
+  | "vehservice"
+  | "vehalertas"
+  | "mantenimiento"
+  | "torrecomtramos"
+  | "provincias"
+  | "tipos"
+  | "gastocat";
 
 const TABS: { id: TabId; label: React.ReactNode }[] = [
-  { id: "torres", label: "Torres" },
+  { id: "torres", label: "Torres (cuadrillas)" },
   { id: "clientes", label: "Clientes" },
   { id: "vehiculos", label: "Vehículos" },
   { id: "vehservice", label: "Service" },
@@ -24,6 +35,7 @@ const TABS: { id: TabId; label: React.ReactNode }[] = [
     ),
   },
   { id: "mantenimiento", label: "Mantenimiento" },
+  { id: "torrecomtramos", label: "Torres Comunic. (tramos)" },
   { id: "provincias", label: "Provincias" },
   { id: "tipos", label: "Tipos de Informe" },
   { id: "gastocat", label: "Categorías de Gasto" },
@@ -38,6 +50,7 @@ export interface CatalogosData {
   vehiculos: VehiculoItem[];
   services: ServiceItem[];
   intervalosMantenimiento: IntervaloItem[];
+  tramosTorre: TramoTorreItem[];
 }
 
 export function CatalogosCard({ data }: { data: CatalogosData }) {
@@ -45,6 +58,7 @@ export function CatalogosCard({ data }: { data: CatalogosData }) {
   const [vehiculos, setVehiculos] = useState(data.vehiculos);
   const [services, setServices] = useState(data.services);
   const [intervalosMantenimiento, setIntervalosMantenimiento] = useState(data.intervalosMantenimiento);
+  const [tramosTorre, setTramosTorre] = useState(data.tramosTorre);
 
   return (
     <div className="card">
@@ -81,6 +95,7 @@ export function CatalogosCard({ data }: { data: CatalogosData }) {
       {tab === "mantenimiento" && (
         <MantenimientoIntervalosTab intervalos={intervalosMantenimiento} setIntervalos={setIntervalosMantenimiento} />
       )}
+      {tab === "torrecomtramos" && <TorreTramosTab tramos={tramosTorre} setTramos={setTramosTorre} />}
       {tab === "provincias" && (
         <SimpleCatalogTab
           tabla="catalogo_provincias"

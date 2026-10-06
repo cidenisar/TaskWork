@@ -7,7 +7,7 @@ import { renderTorreComunicacionPdf } from "@/lib/pdf/render";
 import { buildTorreComunicacionFilename } from "@/lib/pdf/filename";
 import { resolverUbicacionId, tagGpsSiFalta, type PayloadUbicacionNueva, type PayloadGps } from "@/lib/ubicaciones/resolver";
 import { calcularResumenEquipamientoTorre } from "@/components/torres-comunicacion/types";
-import type { TorreComunicacionCategoriaEquipo } from "@/lib/database.types";
+import type { TorreComunicacionCategoriaEquipo, TorreTipo } from "@/lib/database.types";
 
 interface PayloadLectura {
   equipamientoId: string | null;
@@ -30,6 +30,9 @@ export interface CrearRelevamientoTorreComunicacionPayload {
   ubicacionNueva: PayloadUbicacionNueva | null;
   gps: PayloadGps | null;
   denominacionNueva: string;
+  tipoTorreNueva: TorreTipo | null;
+  tramosContadosNueva: number | null;
+  alturaEstimadaMNueva: number | null;
   fecha: string;
   lecturas: PayloadLectura[];
 }
@@ -81,6 +84,9 @@ export async function crearRelevamientoTorreComunicacionAction(formData: FormDat
       .from("torres_comunicacion")
       .insert({
         denominacion: payload.denominacionNueva.trim(),
+        tipo_torre: payload.tipoTorreNueva,
+        tramos_contados: payload.tramosContadosNueva,
+        altura_estimada_m: payload.alturaEstimadaMNueva,
         ubicacion_id: ubicacion.id,
         created_by: profile.id,
       })
@@ -94,7 +100,7 @@ export async function crearRelevamientoTorreComunicacionAction(formData: FormDat
 
   const { data: torreRow, error: torreReadErr } = await supabase
     .from("torres_comunicacion")
-    .select("denominacion, ubicacion_id")
+    .select("denominacion, tipo_torre, tramos_contados, altura_estimada_m, ubicacion_id")
     .eq("id", torreId)
     .single();
   if (torreReadErr || !torreRow) {
@@ -216,6 +222,9 @@ export async function crearRelevamientoTorreComunicacionAction(formData: FormDat
   const pdfBuffer = await renderTorreComunicacionPdf({
     numeroGeneracion,
     denominacion: torreRow.denominacion,
+    tipoTorre: torreRow.tipo_torre,
+    tramosContados: torreRow.tramos_contados,
+    alturaEstimadaM: torreRow.altura_estimada_m,
     region: ubicacionTorre.region,
     provincia: ubicacionTorre.provincia,
     localidad: ubicacionTorre.localidad,

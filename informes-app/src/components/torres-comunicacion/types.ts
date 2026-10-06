@@ -1,4 +1,4 @@
-import type { TorreComunicacionCategoriaEquipo } from "@/lib/database.types";
+import type { TorreComunicacionCategoriaEquipo, TorreTipo } from "@/lib/database.types";
 
 /**
  * Máximo de fotos que se pueden mandar juntas a la lectura con IA de una
@@ -33,6 +33,16 @@ export const CATEGORIA_EQUIPO_LABEL: Record<TorreComunicacionCategoriaEquipo, st
 
 export const ESTADO_OPCIONES: string[] = ["Funciona", "No funciona", "Revisar"];
 
+/** "otro" no entra acá: para estimar altura hace falta clasificar el tipo con confianza. */
+export const TIPO_TORRE_OPCIONES: TorreTipo[] = ["autosoportada", "arriostrada", "monopole", "otro"];
+
+export const TIPO_TORRE_LABEL: Record<TorreTipo, string> = {
+  autosoportada: "Autosoportada (reticulada)",
+  arriostrada: "Arriostrada (con vientos)",
+  monopole: "Monopole",
+  otro: "Otro / no identificado",
+};
+
 export interface EquipamientoTorreItem {
   /** null = equipo nuevo, todavía no existe en torre_comunicacion_equipamientos. */
   id: string | null;
@@ -64,6 +74,10 @@ export interface EquipamientoTorreItem {
 export interface TorreConEquipamiento {
   id: string;
   denominacion: string;
+  tipoTorre: TorreTipo | null;
+  tramosContados: number | null;
+  /** Altura ESTIMADA (tramos × largo de tramo del catálogo), nunca una medición real. */
+  alturaEstimadaM: number | null;
   ubicacionId: string;
   ubicacionLabel: string;
   equipamiento: EquipamientoTorreItem[];
