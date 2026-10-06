@@ -1040,3 +1040,32 @@ npm run dev
   revisión visual humana. El "Programador de mantenimientos" (pedido
   original del usuario) queda para un incremento siguiente, mismo
   criterio de entrega incremental que el resto de los módulos.
+
+- **Panel → Vehículos (`/panel/vehiculos`).** Segunda pantalla del Panel
+  (sumada a la sidebar junto a Vista General y Estadísticas). A pedido del
+  usuario, la lista es la MISMA que ya existe en Configuración → Vehículos
+  (`components/config/catalogos/vehiculos-tab.tsx`: patente/marca-modelo,
+  badges de Tarjeta Verde/RTO en fila, km actual) pero de solo lectura
+  (sin alta/baja/edición — eso sigue viviendo en Configuración, es
+  Admin-only) y suma lo que pedía: un badge de "Próximo service" y sigue
+  mostrando el kilometraje. Reusa directamente `VencBadge`
+  (`components/venc-badge.tsx`) para los dos vencimientos de documentos —
+  cero CSS nuevo, mismo criterio de reuso que el resto del Panel.
+  El "próximo service" NO existía como dato ni UI en ningún lado — solo
+  como mensajes de alerta sueltos dentro de "Vencimientos 🤖"
+  (`lib/config/fleet-alerts.ts`, sección 9.4 del spec): intervalo fijo de
+  `INTERVALO_SERVICE_KM` (10.000 km para todos, no configurable por
+  vehículo) contra el último `vehiculo_services` cargado. `lib/panel/
+  vehiculos.ts` (`getPanelVehiculos`) reusa esa misma constante y ese
+  mismo criterio (nunca se guarda un "próximo service" aparte, se
+  recalcula al vuelo) pero devuelve un badge estructurado por vehículo
+  (ok/warn/danger + mensaje) en vez de una lista de alertas de texto —
+  mismo dato, forma distinta para esta pantalla.
+  **Gap pre-existente que NO se tocó (fuera de alcance de este pedido):**
+  cargar un service (`addServiceAction`) nunca actualiza
+  `catalogo_vehiculos.kilometraje_actual` — son dos pasos manuales
+  desacoplados hoy. El "próximo service" de esta pantalla es tan preciso
+  como ese campo lo esté; si un Admin carga el service pero se olvida de
+  actualizar el km, la cuenta queda desactualizada. Documentado como
+  candidato a resolver en un incremento siguiente (ej. que
+  `addServiceAction` también bancee `kilometraje_actual`), no en este.
