@@ -62,7 +62,7 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
 
   const [tablerosRes, racksRes, equiposRes, informesRes, rendicionesRes] = await Promise.all([
     supabase.from("tableros").select("id, denominacion, subsistemas, ubicacion_id").in("ubicacion_id", siblingIds).order("denominacion"),
-    supabase.from("racks").select("id, denominacion, ubicacion_id").in("ubicacion_id", siblingIds).order("denominacion"),
+    supabase.from("racks").select("id, denominacion, etiqueta_ypf, ubicacion_id").in("ubicacion_id", siblingIds).order("denominacion"),
     supabase
       .from("equipos")
       .select(
@@ -392,7 +392,10 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
                     <summary>
                       <div className="info">
                         <div className="hist-main">
-                          <div className="hist-title">{r.denominacion}</div>
+                          <div className="hist-title">
+                            {r.denominacion}
+                            {r.etiqueta_ypf ? ` · YPF ${r.etiqueta_ypf}` : ""}
+                          </div>
                           <div className="hist-meta">
                             {hayVariasPlantas && `${labelPorUbicacionId.get(r.ubicacion_id)}`}
                             {fecha ? `${hayVariasPlantas ? " · " : ""}último relevamiento ${fmtFecha(fecha)}` : ""}

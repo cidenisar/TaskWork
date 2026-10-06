@@ -1190,3 +1190,17 @@ general que salió de esto.
   directa sigue siendo la opción recomendada (entre otras cosas porque de
   paso evita el problema de fotos HEIC de iPhone al elegir de la
   galería), pero la galería queda como alternativa.
+
+- **Racks: etiqueta YPF del rack en sí (para ServiceNow).** Hasta ahora
+  `racks` solo tenía `denominacion` (nombre libre) — no había forma de
+  anotar el número de inventario de YPF que se usa para cargar el rack
+  como activo en ServiceNow. Se agregó `racks.etiqueta_ypf` (nullable),
+  campo opcional al lado de "Denominación" cuando se da de alta un rack
+  nuevo en el Relevamiento de Equipamiento, y se muestra junto al nombre
+  del rack en la ficha de Sitio y en el encabezado del PDF. Importante:
+  es un campo DISTINTO del `etiquetaYpf` que ya tiene cada equipo
+  individual adentro del rack (la chapa de inventario de cada pieza de
+  equipamiento) — acá es la etiqueta del rack como mueble/gabinete en sí.
+  Mismo límite que denominación: solo se carga al dar de alta el rack
+  (alta al vuelo), no hay pantalla para editarlo después si un rack ya
+  existente no lo tiene cargado.

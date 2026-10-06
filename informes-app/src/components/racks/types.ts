@@ -85,6 +85,8 @@ export interface EquipamientoItem {
 export interface RackConEquipamiento {
   id: string;
   denominacion: string;
+  /** Etiqueta/chapa de inventario de YPF del rack en sí (para ServiceNow) — distinta de la denominación. */
+  etiquetaYpf: string | null;
   ubicacionId: string;
   ubicacionLabel: string;
   equipamiento: EquipamientoItem[];

@@ -58,6 +58,7 @@ export function NuevoRelevamientoForm({
   const [gps, setGps] = useState<GpsCapturado | null>(null);
   const [rackId, setRackId] = useState<string>(""); // "" = sin elegir, "__new" = crear
   const [denominacionNueva, setDenominacionNueva] = useState("");
+  const [etiquetaYpfRackNueva, setEtiquetaYpfRackNueva] = useState("");
   const [fecha, setFecha] = useState(() => new Date().toISOString().slice(0, 10));
   const [equipamiento, setEquipamiento] = useState<EquipamientoItem[]>([]);
   const [lecturas, setLecturas] = useState<Record<number, LecturaState>>({});
@@ -109,6 +110,7 @@ export function NuevoRelevamientoForm({
     setSuccess(null);
     setRackId("");
     setDenominacionNueva("");
+    setEtiquetaYpfRackNueva("");
     setEquipamiento([]);
     setLecturas({});
     if (id !== "__new") {
@@ -341,6 +343,7 @@ export function NuevoRelevamientoForm({
               : null,
           gps,
           denominacionNueva,
+          etiquetaYpfRackNueva: etiquetaYpfRackNueva.trim() || null,
           fecha,
           lecturas: equipamiento.map((e, i) => {
             const l = lecturas[i] ?? LECTURA_VACIA;
@@ -401,6 +404,7 @@ export function NuevoRelevamientoForm({
     setGps(null);
     setRackId("");
     setDenominacionNueva("");
+    setEtiquetaYpfRackNueva("");
     setEquipamiento([]);
     setLecturas({});
     setFotosGenerales([]);
@@ -453,18 +457,36 @@ export function NuevoRelevamientoForm({
             </select>
           </div>
           {rackId === "__new" && (
-            <div className="field">
-              <label>
-                Denominación <span className="req">*</span>
-              </label>
-              <input
-                type="text"
-                placeholder="Ej: Rack 1 - Transmisión"
-                value={denominacionNueva}
-                onChange={(e) => setDenominacionNueva(e.target.value)}
-                disabled={submitting}
-              />
-            </div>
+            <>
+              <div className="field">
+                <label>
+                  Denominación <span className="req">*</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ej: Rack 1 - Transmisión"
+                  value={denominacionNueva}
+                  onChange={(e) => setDenominacionNueva(e.target.value)}
+                  disabled={submitting}
+                />
+              </div>
+              <div className="field">
+                <label>
+                  Etiqueta YPF del rack <span className="opt">(opcional)</span>
+                </label>
+                <div className="hint" style={{ margin: "-2px 0 8px" }}>
+                  N° de inventario de YPF del rack en sí (para ServiceNow) — distinto de la etiqueta de cada equipo adentro.
+                </div>
+                <input
+                  type="text"
+                  placeholder="Ej: 123456"
+                  value={etiquetaYpfRackNueva}
+                  onChange={(e) => setEtiquetaYpfRackNueva(e.target.value)}
+                  disabled={submitting}
+                  style={{ maxWidth: 220 }}
+                />
+              </div>
+            </>
           )}
           <div className="field" style={{ marginTop: 16 }}>
             <label>

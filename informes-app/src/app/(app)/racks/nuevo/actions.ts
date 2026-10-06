@@ -32,6 +32,7 @@ export interface CrearRelevamientoPayload {
   ubicacionNueva: PayloadUbicacionNueva | null;
   gps: PayloadGps | null;
   denominacionNueva: string;
+  etiquetaYpfRackNueva: string | null;
   fecha: string;
   lecturas: PayloadLectura[];
 }
@@ -83,6 +84,7 @@ export async function crearRelevamientoRackAction(formData: FormData): Promise<C
       .from("racks")
       .insert({
         denominacion: payload.denominacionNueva.trim(),
+        etiqueta_ypf: payload.etiquetaYpfRackNueva?.trim() || null,
         ubicacion_id: ubicacion.id,
         created_by: profile.id,
       })
@@ -96,7 +98,7 @@ export async function crearRelevamientoRackAction(formData: FormData): Promise<C
 
   const { data: rackRow, error: rackReadErr } = await supabase
     .from("racks")
-    .select("denominacion, ubicacion_id")
+    .select("denominacion, etiqueta_ypf, ubicacion_id")
     .eq("id", rackId)
     .single();
   if (rackReadErr || !rackRow) {
@@ -221,6 +223,7 @@ export async function crearRelevamientoRackAction(formData: FormData): Promise<C
   const pdfBuffer = await renderRackPdf({
     numeroGeneracion,
     denominacion: rackRow.denominacion,
+    etiquetaYpf: rackRow.etiqueta_ypf,
     region: ubicacionRack.region,
     provincia: ubicacionRack.provincia,
     localidad: ubicacionRack.localidad,

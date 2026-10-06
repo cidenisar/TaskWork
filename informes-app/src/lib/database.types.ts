@@ -334,6 +334,8 @@ export type TableroMedicionLecturaRow = {
 export type RackRow = {
   id: string;
   denominacion: string;
+  /** Etiqueta/chapa de inventario de YPF del rack en sí (para ServiceNow) — distinta de la denominación. */
+  etiqueta_ypf: string | null;
   ubicacion_id: string;
   created_by: string | null;
   created_at: string;

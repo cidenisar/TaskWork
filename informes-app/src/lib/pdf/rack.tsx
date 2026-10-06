@@ -35,6 +35,7 @@ export interface RackPdfLectura {
 export interface RackPdfProps {
   numeroGeneracion: string;
   denominacion: string;
+  etiquetaYpf: string | null;
   region: string;
   provincia: string;
   localidad: string | null;
@@ -79,6 +80,7 @@ export function RackPdf(props: RackPdfProps) {
     logoBuffer,
     appName,
     realizoNombre,
+    etiquetaYpf,
   } = props;
   const fechaLabel = formatFechaArg(fecha);
   const documentoLabel = "RELEVAMIENTO DE EQUIPAMIENTO";
@@ -102,6 +104,7 @@ export function RackPdf(props: RackPdfProps) {
         <View style={commonStyles.kvTable}>
           <KeyValueRow k="N° de Generación:" v={numeroGeneracion} />
           <KeyValueRow k="Rack:" v={denominacion} />
+          {etiquetaYpf && <KeyValueRow k="Etiqueta YPF:" v={etiquetaYpf} />}
           <KeyValueRow k="Sitio:" v={sitio} />
           {planta && <KeyValueRow k="Planta:" v={planta} />}
           {oficina && <KeyValueRow k="Oficina:" v={oficina} />}

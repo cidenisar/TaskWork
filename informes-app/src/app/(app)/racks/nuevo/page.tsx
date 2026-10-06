@@ -10,7 +10,7 @@ export default async function NuevoRelevamientoPage() {
   const supabase = await createClient();
 
   const [racksRes, equipamientosRes, ubicaciones, provinciasRes] = await Promise.all([
-    supabase.from("racks").select("id, denominacion, ubicacion_id").order("denominacion"),
+    supabase.from("racks").select("id, denominacion, etiqueta_ypf, ubicacion_id").order("denominacion"),
     supabase
       .from("rack_equipamientos")
       .select(
@@ -52,6 +52,7 @@ export default async function NuevoRelevamientoPage() {
       return {
         id: r.id,
         denominacion: r.denominacion,
+        etiquetaYpf: r.etiqueta_ypf,
         ubicacionId: r.ubicacion_id,
         ubicacionLabel: labelUbicacion(ubicacion),
         equipamiento: equipamientoPorRack.get(r.id) ?? [],
