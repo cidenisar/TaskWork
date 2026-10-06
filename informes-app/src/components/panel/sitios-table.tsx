@@ -42,7 +42,8 @@ export function SitiosTable({ sitios }: { sitios: PanelSitioResumen[] }) {
                     {m}
                   </th>
                 ))}
-                <th style={{ textAlign: "right" }}>Total</th>
+                <th style={{ textAlign: "right" }}>Equipos</th>
+                <th style={{ textAlign: "right" }}>Consumo estimado (W)</th>
               </tr>
             </thead>
             <tbody>
@@ -55,7 +56,15 @@ export function SitiosTable({ sitios }: { sitios: PanelSitioResumen[] }) {
                       {s.porModulo[m] ?? "—"}
                     </td>
                   ))}
-                  <td style={{ textAlign: "right", fontWeight: 700 }}>{s.total}</td>
+                  <td style={{ textAlign: "right" }}>{s.total}</td>
+                  <td style={{ textAlign: "right", fontWeight: 700 }}>
+                    {s.consumoW != null ? s.consumoW.toLocaleString("es-AR") : "—"}
+                    {s.equiposSinConsumo > 0 && (
+                      <span style={{ fontWeight: 400, color: "var(--text-faint)", marginLeft: 4 }}>
+                        (+{s.equiposSinConsumo} sin estimar)
+                      </span>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>

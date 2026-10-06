@@ -1069,3 +1069,19 @@ npm run dev
   actualizar el km, la cuenta queda desactualizada. Documentado como
   candidato a resolver en un incremento siguiente (ej. que
   `addServiceAction` también bancee `kilometraje_actual`), no en este.
+
+- **Panel → Vista general: "Sitios con equipamiento" pasa a "Sitios y su
+  consumo".** A pedido del usuario, la tabla de sitios ahora se ordena por
+  consumo estimado (`consumo_promedio_w * cantidad`, sumado por sitio)
+  en vez de por cantidad de equipos — mismo dato que ya estimaba la IA en
+  Racks/Torres/Equipos Individuales (Tableros no suma: ahí se mide
+  corriente real, es otro tipo de dato), solo que hasta ahora no se
+  totalizaba por sitio en ningún lado. Se agregó `consumoW` y
+  `equiposSinConsumo` a `PanelSitioResumen`
+  (`lib/panel/overview.ts`) — un sitio con equipos sin marca/modelo
+  reconocido muestra ese conteo aparte ("+N sin estimar") en vez de que el
+  total parezca completo cuando no lo es. KPI nuevo `consumoTotalW` en el
+  encabezado de la tarjeta (no se agregó como KPI-tile aparte para no
+  tocar `.kpi-grid`, que comparte CSS con Estadísticas). Validado con el
+  equivalente en SQL directo contra la base real antes de confirmar la
+  agregación.

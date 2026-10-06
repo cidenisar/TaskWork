@@ -9,6 +9,8 @@ export interface PanelKpis {
   totalEquipamiento: number;
   tecnicosActivos: number;
   vencimientosProximos: number;
+  /** Suma de consumoW de todos los sitios — null si ningún sitio tiene el dato. */
+  consumoTotalW: number | null;
 }
 
 export interface PanelEquipoPorModulo {
@@ -22,6 +24,10 @@ export interface PanelSitioResumen {
   provincia: string;
   total: number;
   porModulo: Record<string, number>;
+  /** Suma de consumo_promedio_w * cantidad de lo que tiene ese dato estimado por IA — null si ningún equipo del sitio lo tiene. */
+  consumoW: number | null;
+  /** Cuántos equipos de este sitio (de los que SÍ suman al total) no tienen consumo estimado — para no mostrar el total como si fuera completo. */
+  equiposSinConsumo: number;
 }
 
 export type UrgenciaVencimiento = "vencido" | "proximo" | "normal";
@@ -84,10 +90,10 @@ export async function getPanelOverview(supabase: Supabase): Promise<PanelOvervie
     supabase.from("tableros").select("id, ubicacion_id"),
     supabase.from("tablero_circuitos").select("tablero_id").eq("estado", "activo"),
     supabase.from("racks").select("id, ubicacion_id"),
-    supabase.from("rack_equipamientos").select("rack_id, cantidad").eq("estado", "activo"),
+    supabase.from("rack_equipamientos").select("rack_id, cantidad, consumo_promedio_w").eq("estado", "activo"),
     supabase.from("torres_comunicacion").select("id, ubicacion_id"),
-    supabase.from("torre_comunicacion_equipamientos").select("torre_id, cantidad").eq("estado", "activo"),
-    supabase.from("equipos").select("ubicacion_id, cantidad").eq("estado", "activo"),
+    supabase.from("torre_comunicacion_equipamientos").select("torre_id, cantidad, consumo_promedio_w").eq("estado", "activo"),
+    supabase.from("equipos").select("ubicacion_id, cantidad, consumo_promedio_w").eq("estado", "activo"),
     supabase.from("profiles").select("nombre_completo, rol, activo, dni_vencimiento, licencia_conducir_vencimiento"),
     supabase.from("catalogo_vehiculos").select("patente, vencimiento_tarjeta_verde, vencimiento_rto"),
   ]);
@@ -99,25 +105,39 @@ export async function getPanelOverview(supabase: Supabase): Promise<PanelOvervie
 
   // Total por sitio y por módulo — una sola pasada por cada tabla de
   // equipamiento, sumando `cantidad` donde existe (un circuito de tablero
-  // siempre cuenta 1, no tiene ese campo).
+  // siempre cuenta 1, no tiene ese campo). En el mismo pasaje se acumula el
+  // consumo estimado (consumo_promedio_w * cantidad) donde el módulo lo
+  // tiene — Tableros no entra: ahí ya se mide corriente real en vez de
+  // estimar consumo por IA, es otro tipo de dato.
   const totalPorSitio = new Map<string, Record<string, number>>();
-  function sumar(ubicacionId: string | undefined, modulo: string, cantidad: number) {
+  const consumoWPorSitio = new Map<string, number>();
+  const sinConsumoPorSitio = new Map<string, number>();
+  function sumar(ubicacionId: string | undefined, modulo: string, cantidad: number, consumoPromedioW?: number | null) {
     if (!ubicacionId) return;
     const actual = totalPorSitio.get(ubicacionId) ?? {};
     actual[modulo] = (actual[modulo] ?? 0) + cantidad;
     totalPorSitio.set(ubicacionId, actual);
+    if (consumoPromedioW === undefined) return; // el módulo (Tableros) no tiene este dato en absoluto
+    if (consumoPromedioW != null && consumoPromedioW > 0) {
+      consumoWPorSitio.set(ubicacionId, (consumoWPorSitio.get(ubicacionId) ?? 0) + consumoPromedioW * cantidad);
+    } else {
+      sinConsumoPorSitio.set(ubicacionId, (sinConsumoPorSitio.get(ubicacionId) ?? 0) + cantidad);
+    }
   }
   for (const c of tableroCircuitosRes.data ?? []) {
     sumar(tableroIdUbicacion.get(c.tablero_id), "Tableros", 1);
   }
   for (const e of rackEquipamientosRes.data ?? []) {
-    sumar(rackIdUbicacion.get(e.rack_id), "Racks", Number.isFinite(e.cantidad) && e.cantidad > 0 ? e.cantidad : 1);
+    const cantidad = Number.isFinite(e.cantidad) && e.cantidad > 0 ? e.cantidad : 1;
+    sumar(rackIdUbicacion.get(e.rack_id), "Racks", cantidad, e.consumo_promedio_w);
   }
   for (const e of torreEquipamientosRes.data ?? []) {
-    sumar(torreIdUbicacion.get(e.torre_id), "Torres", Number.isFinite(e.cantidad) && e.cantidad > 0 ? e.cantidad : 1);
+    const cantidad = Number.isFinite(e.cantidad) && e.cantidad > 0 ? e.cantidad : 1;
+    sumar(torreIdUbicacion.get(e.torre_id), "Torres", cantidad, e.consumo_promedio_w);
   }
   for (const e of equiposRes.data ?? []) {
-    sumar(e.ubicacion_id, "Equipos Individuales", Number.isFinite(e.cantidad) && e.cantidad > 0 ? e.cantidad : 1);
+    const cantidad = Number.isFinite(e.cantidad) && e.cantidad > 0 ? e.cantidad : 1;
+    sumar(e.ubicacion_id, "Equipos Individuales", cantidad, e.consumo_promedio_w);
   }
 
   const equipoPorModuloMap = new Map<string, number>();
@@ -132,9 +152,17 @@ export async function getPanelOverview(supabase: Supabase): Promise<PanelOvervie
     for (const [modulo, cantidad] of Object.entries(porModulo)) {
       equipoPorModuloMap.set(modulo, (equipoPorModuloMap.get(modulo) ?? 0) + cantidad);
     }
-    sitios.push({ id: ubicacionId, label: labelUbicacion(ubicacion), provincia: ubicacion.provincia, total, porModulo });
+    sitios.push({
+      id: ubicacionId,
+      label: labelUbicacion(ubicacion),
+      provincia: ubicacion.provincia,
+      total,
+      porModulo,
+      consumoW: consumoWPorSitio.get(ubicacionId) ?? null,
+      equiposSinConsumo: sinConsumoPorSitio.get(ubicacionId) ?? 0,
+    });
   }
-  sitios.sort((a, b) => b.total - a.total);
+  sitios.sort((a, b) => (b.consumoW ?? -1) - (a.consumoW ?? -1));
 
   const equipoPorModulo: PanelEquipoPorModulo[] = [...equipoPorModuloMap.entries()]
     .map(([modulo, cantidad]) => ({ modulo, cantidad }))
@@ -182,6 +210,9 @@ export async function getPanelOverview(supabase: Supabase): Promise<PanelOvervie
   const vencimientosRelevantes = vencimientos.filter((v) => v.urgencia !== "normal");
 
   const tecnicosActivos = (profilesRes.data ?? []).filter((p) => p.rol === "tecnico" && p.activo).length;
+  const consumoTotalW = sitios.some((s) => s.consumoW != null)
+    ? sitios.reduce((acc, s) => acc + (s.consumoW ?? 0), 0)
+    : null;
 
   return {
     kpis: {
@@ -189,6 +220,7 @@ export async function getPanelOverview(supabase: Supabase): Promise<PanelOvervie
       totalEquipamiento,
       tecnicosActivos,
       vencimientosProximos: vencimientosRelevantes.length,
+      consumoTotalW,
     },
     equipoPorModulo,
     sitios: sitios.slice(0, MAX_SITIOS),

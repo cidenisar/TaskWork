@@ -17,7 +17,7 @@ export default async function PanelPage() {
       <div className="panel-topbar">
         <div>
           <h1>Vista general</h1>
-          <p>Sitios, equipamiento y vencimientos de un vistazo</p>
+          <p>Sitios, consumo y vencimientos de un vistazo</p>
         </div>
         <div className="panel-topbar-meta">{fmtHoy()}</div>
       </div>
@@ -46,13 +46,22 @@ export default async function PanelPage() {
       <div className="panel-grid-2">
         <div className="card">
           <div className="panel-card-title">
-            <h2>Sitios con equipamiento</h2>
-            <span className="panel-card-count">{sitios.length} sitio{sitios.length === 1 ? "" : "s"}</span>
+            <h2>Sitios y su consumo</h2>
+            <span className="panel-card-count">
+              {sitios.length} sitio{sitios.length === 1 ? "" : "s"}
+              {kpis.consumoTotalW != null && ` · ${kpis.consumoTotalW.toLocaleString("es-AR")} W estimados en total`}
+            </span>
           </div>
           {sitios.length === 0 ? (
             <div className="empty-note">Todavía no hay equipamiento cargado en ningún sitio.</div>
           ) : (
-            <SitiosTable sitios={sitios} />
+            <>
+              <div className="hint" style={{ margin: "-4px 0 10px" }}>
+                Ordenado por consumo estimado — es lo que la IA estimó al identificar marca/modelo de cada equipo, no una medición real;
+                los equipos sin marca/modelo reconocido no suman al total.
+              </div>
+              <SitiosTable sitios={sitios} />
+            </>
           )}
         </div>
 
