@@ -1262,6 +1262,15 @@ general que salió de esto.
     (historial completo de `mantenimientos_equipamiento` con buscador
     por equipo/sitio/categoría — antes este dato existía pero no tenía
     pantalla propia para repasarlo) y **Dotación** (ver próximo punto).
+    Cada tarjeta de mes es clickeable: abre un modal con la grilla de
+    días de ese mes (lunes a domingo, con los días vacíos de alineación
+    al principio) — cada día con mantenimientos muestra un punto con la
+    cantidad, coloreado según la peor urgencia de ese día (vencido en
+    rojo, próximo/nunca en amarillo), y clickeando un día se ve el
+    detalle de los equipos programados ahí (mismo formato de tarjeta que
+    la pestaña Pendientes: badge de urgencia, programación manual/auto,
+    motivo de reprogramación si lo tiene). Días sin nada quedan atenuados
+    y sin click.
   - **Estimación de cuántos técnicos hacen falta**
     (`lib/panel/mantenimiento-dotacion.ts`), agrupada por provincia
     (proxy simple de "zona", ya disponible sin armar un clustering

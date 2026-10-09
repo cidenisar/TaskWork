@@ -33,6 +33,15 @@ const MESES = [
   "Diciembre",
 ];
 
+const DIAS_SEMANA = ["L", "M", "M", "J", "V", "S", "D"];
+
+/** Peor urgencia entre los ítems de un día — define el color del punto en la grilla. */
+function peorUrgencia(items: PanelMantenimientoItem[]): string {
+  if (items.some((i) => i.urgencia === "vencido")) return "vencido";
+  if (items.some((i) => i.urgencia === "proximo" || i.urgencia === "nunca")) return "proximo";
+  return "ok";
+}
+
 type Tab = "pendientes" | "calendario" | "realizados" | "dotacion" | "configuracion";
 
 export function PlanMantenimiento({
@@ -73,6 +82,22 @@ export function PlanMantenimiento({
     for (const b of buckets) b.sort((a, bItem) => (a.fechaObjetivo! < bItem.fechaObjetivo! ? -1 : 1));
     return { buckets, fueraDeAnio };
   }, [items, anioActual]);
+
+  const [mesAbierto, setMesAbierto] = useState<number | null>(null);
+  const [diaAbierto, setDiaAbierto] = useState<string | null>(null);
+  const porDiaDelMesAbierto = useMemo(() => {
+    const mapa = new Map<string, PanelMantenimientoItem[]>();
+    if (mesAbierto == null) return mapa;
+    for (const item of porMes.buckets[mesAbierto]) {
+      mapa.set(item.fechaObjetivo!, [...(mapa.get(item.fechaObjetivo!) ?? []), item]);
+    }
+    return mapa;
+  }, [porMes, mesAbierto]);
+
+  function cerrarCalendarioMes() {
+    setMesAbierto(null);
+    setDiaAbierto(null);
+  }
 
   const [filtroTexto, setFiltroTexto] = useState("");
   const realizadosFiltrados = useMemo(() => {
@@ -212,7 +237,13 @@ export function PlanMantenimiento({
             {MESES.map((nombreMes, i) => {
               const itemsDelMes = porMes.buckets[i];
               return (
-                <div key={nombreMes} className="card" style={{ margin: 0, padding: 12 }}>
+                <button
+                  type="button"
+                  key={nombreMes}
+                  className="card"
+                  style={{ margin: 0, padding: 12, textAlign: "left", cursor: "pointer" }}
+                  onClick={() => setMesAbierto(i)}
+                >
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
                     <strong style={{ fontSize: 13 }}>{nombreMes}</strong>
                     <span className="chip">{itemsDelMes.length}</span>
@@ -232,7 +263,7 @@ export function PlanMantenimiento({
                       {itemsDelMes.length > 5 && <div className="item-sub">+{itemsDelMes.length - 5} más</div>}
                     </div>
                   )}
-                </div>
+                </button>
               );
             })}
           </div>
@@ -243,6 +274,114 @@ export function PlanMantenimiento({
               pestaña &ldquo;Pendientes&rdquo;.
             </div>
           )}
+        </div>
+      )}
+
+      {mesAbierto != null && (
+        <div className="modal-overlay" onClick={cerrarCalendarioMes}>
+          <div className="modal-card" style={{ maxWidth: diaAbierto ? 420 : 540 }} onClick={(e) => e.stopPropagation()}>
+            {diaAbierto ? (
+              <>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                  <button type="button" className="link-btn" onClick={() => setDiaAbierto(null)}>
+                    ← {MESES[mesAbierto]}
+                  </button>
+                  <button type="button" className="icon-btn" title="Cerrar" onClick={cerrarCalendarioMes}>
+                    <Icon name="x" size={14} />
+                  </button>
+                </div>
+                <div className="section-label" style={{ marginBottom: 10 }}>
+                  {fmtFecha(diaAbierto)}
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {(porDiaDelMesAbierto.get(diaAbierto) ?? []).map((item) => (
+                    <div
+                      key={`${item.tipoEquipo}-${item.equipoId}`}
+                      className="list-item"
+                      style={{ flexDirection: "column", alignItems: "stretch", gap: 4 }}
+                    >
+                      <div className="item-name">{item.texto}</div>
+                      <div className="item-sub">
+                        {item.tipoEquipoLabel} · {item.categoriaLabel} · {item.ubicacionLabel}
+                      </div>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
+                        <span className={`venc-badge ${BADGE_CLASE[item.urgencia]}`}>{item.mensaje}</span>
+                        {item.esProgramada && (
+                          <span className="chip">
+                            <Icon name="calendar" size={11} /> {item.programacionEsManual ? "Programado (excepción)" : "Programado (auto)"}
+                            {item.asignadoNombre ? ` · ${item.asignadoNombre}` : ""}
+                          </span>
+                        )}
+                        {item.motivoLabel && (
+                          <span className="venc-badge warn">
+                            <Icon name="warning" size={11} /> Reprogramado: {item.motivoLabel}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                  <div className="section-label">
+                    {MESES[mesAbierto]} {anioActual}
+                  </div>
+                  <button type="button" className="icon-btn" title="Cerrar" onClick={cerrarCalendarioMes}>
+                    <Icon name="x" size={14} />
+                  </button>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4, fontSize: 11 }}>
+                  {DIAS_SEMANA.map((d, idx) => (
+                    <div key={`dow-${idx}`} className="item-sub" style={{ textAlign: "center" }}>
+                      {d}
+                    </div>
+                  ))}
+                  {(() => {
+                    const diasEnMes = new Date(anioActual, mesAbierto + 1, 0).getDate();
+                    const primerDiaSemana = (new Date(anioActual, mesAbierto, 1).getDay() + 6) % 7;
+                    const celdas = [];
+                    for (let i = 0; i < primerDiaSemana; i++) celdas.push(<div key={`vacio-${i}`} />);
+                    for (let dia = 1; dia <= diasEnMes; dia++) {
+                      const fecha = `${anioActual}-${String(mesAbierto + 1).padStart(2, "0")}-${String(dia).padStart(2, "0")}`;
+                      const itemsDelDia = porDiaDelMesAbierto.get(fecha) ?? [];
+                      celdas.push(
+                        <button
+                          type="button"
+                          key={fecha}
+                          disabled={itemsDelDia.length === 0}
+                          onClick={() => setDiaAbierto(fecha)}
+                          className="card"
+                          style={{
+                            margin: 0,
+                            padding: "6px 2px",
+                            display: "flex",
+                            flexDirection: "column",
+                            alignItems: "center",
+                            gap: 2,
+                            cursor: itemsDelDia.length > 0 ? "pointer" : "default",
+                            opacity: itemsDelDia.length > 0 ? 1 : 0.5,
+                          }}
+                        >
+                          <span>{dia}</span>
+                          {itemsDelDia.length > 0 && (
+                            <span
+                              className={`venc-badge ${BADGE_CLASE[peorUrgencia(itemsDelDia)]}`}
+                              style={{ padding: "0 5px", fontSize: 10 }}
+                            >
+                              {itemsDelDia.length}
+                            </span>
+                          )}
+                        </button>,
+                      );
+                    }
+                    return celdas;
+                  })()}
+                </div>
+              </>
+            )}
+          </div>
         </div>
       )}
 
