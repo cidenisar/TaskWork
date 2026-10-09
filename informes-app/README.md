@@ -1287,3 +1287,24 @@ general que salió de esto.
     arranque, seguro el patrón real de este proyecto para catálogos con
     clave natural (`id` + `unique`), no una PK natural. Ver
     CRITERIOS_Y_IDEAS.md para el error que motivó esto.
+
+- **Plan de Mantenimiento: configuración movida de Catálogos al Panel,
+  como tabla editable.** Dos ajustes de UX a pedido de uso real. (1) La
+  configuración de intervalos + supuestos de dotación vivía en
+  Configuración → Catálogos → tab "Mantenimiento" — un salto de pantalla
+  separado del Plan que la usa. Se movió entera a
+  `/panel/mantenimientos` como una 5ª pestaña "Configuración", visible
+  solo para Admin (`esAdmin`, igual gate que las escrituras por RLS); los
+  textos que antes decían "configuralo en Configuración" ahora son
+  botones que cambian de pestaña en el mismo lugar, en vez de navegar a
+  otra pantalla. El tab "Mantenimiento" de Catálogos se eliminó (no quedó
+  un duplicado). (2) El formulario para cargar intervalos era "elegí
+  tipo + categoría + frecuencia + Agregar", con una lista aparte para
+  borrar de a uno — se cambió a una TABLA con una fila fija por cada
+  categoría existente (de Racks y de Equipos Individuales), frecuencia
+  editable en el lugar por fila, vacío = sin configurar (mismo patrón ya
+  usado para el largo de tramo de Torres). Esto obligó a agregar la
+  policy de UPDATE que le faltaba a `mantenimiento_intervalos` (tenía
+  select + insert + delete admin-only, pero no update — el upsert de la
+  tabla nueva hubiera afectado 0 filas en silencio al cambiar un valor
+  existente, mismo bug ya documentado con Torres en esta sesión).

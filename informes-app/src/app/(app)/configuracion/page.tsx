@@ -29,7 +29,6 @@ export default async function ConfiguracionPage() {
     categoriasRes,
     vehiculosRes,
     servicesRes,
-    intervalosMantenimientoRes,
     tramosTorreRes,
     auditRes,
     erroresRes,
@@ -37,7 +36,7 @@ export default async function ConfiguracionPage() {
     supabase
       .from("config_general")
       .select(
-        "logo_empresa_url, auto_enviar_email, umbral_aviso_historial, recordatorio_semanal_archivo, resumen_semanal_ia, liberacion_automatica_activa, pdm_horas_por_dia, pdm_dias_habiles_anio, pdm_horas_por_visita, pdm_velocidad_kmh",
+        "logo_empresa_url, auto_enviar_email, umbral_aviso_historial, recordatorio_semanal_archivo, resumen_semanal_ia, liberacion_automatica_activa",
       )
       .eq("id", 1)
       .single(),
@@ -53,7 +52,6 @@ export default async function ConfiguracionPage() {
       .select("id, patente, marca_modelo, vencimiento_tarjeta_verde, vencimiento_rto, kilometraje_actual")
       .order("patente"),
     supabase.from("vehiculo_services").select("id, vehiculo_id, fecha, kilometraje, descripcion").order("fecha", { ascending: false }),
-    supabase.from("mantenimiento_intervalos").select("id, tipo_equipo, categoria, frecuencia_dias").order("tipo_equipo"),
     supabase.from("torre_tipo_largos").select("tipo_torre, largo_tramo_m"),
     supabase.from("audit_log").select("id, actor_nombre, actor_rol, accion, created_at").order("created_at", { ascending: false }).limit(100),
     supabase
@@ -102,19 +100,7 @@ export default async function ConfiguracionPage() {
             kilometraje: Number(s.kilometraje),
             descripcion: s.descripcion,
           })),
-          intervalosMantenimiento: (intervalosMantenimientoRes.data ?? []).map((i) => ({
-            id: i.id,
-            tipoEquipo: i.tipo_equipo,
-            categoria: i.categoria,
-            frecuenciaDias: i.frecuencia_dias,
-          })),
           tramosTorre: (tramosTorreRes.data ?? []).map((t) => ({ tipoTorre: t.tipo_torre, largoTramoM: Number(t.largo_tramo_m) })),
-          supuestosDotacion: {
-            horasPorDia: Number(configRes.data?.pdm_horas_por_dia ?? 8),
-            diasHabilesAnio: Number(configRes.data?.pdm_dias_habiles_anio ?? 230),
-            horasPorVisita: Number(configRes.data?.pdm_horas_por_visita ?? 2),
-            velocidadKmh: Number(configRes.data?.pdm_velocidad_kmh ?? 60),
-          },
         },
         umbralAviso: configRes.data?.umbral_aviso_historial ?? "20",
         recordatorioSemanal: configRes.data?.recordatorio_semanal_archivo ?? true,

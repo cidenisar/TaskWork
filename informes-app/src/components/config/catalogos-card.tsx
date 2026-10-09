@@ -5,21 +5,10 @@ import { SimpleCatalogTab, type SimpleCatalogItem } from "./catalogos/simple-cat
 import { VehiculosTab, type VehiculoItem } from "./catalogos/vehiculos-tab";
 import { ServiceTab, type ServiceItem } from "./catalogos/service-tab";
 import { VencimientosTab } from "./catalogos/vencimientos-tab";
-import { MantenimientoIntervalosTab, type IntervaloItem, type SupuestosDotacion } from "./catalogos/mantenimiento-intervalos-tab";
 import { TorreTramosTab, type TramoTorreItem } from "./catalogos/torre-tramos-tab";
 import { Icon } from "@/components/icon";
 
-type TabId =
-  | "torres"
-  | "clientes"
-  | "vehiculos"
-  | "vehservice"
-  | "vehalertas"
-  | "mantenimiento"
-  | "torrecomtramos"
-  | "provincias"
-  | "tipos"
-  | "gastocat";
+type TabId = "torres" | "clientes" | "vehiculos" | "vehservice" | "vehalertas" | "torrecomtramos" | "provincias" | "tipos" | "gastocat";
 
 const TABS: { id: TabId; label: React.ReactNode }[] = [
   { id: "torres", label: "Torres (cuadrillas)" },
@@ -34,7 +23,6 @@ const TABS: { id: TabId; label: React.ReactNode }[] = [
       </>
     ),
   },
-  { id: "mantenimiento", label: "Mantenimiento" },
   { id: "torrecomtramos", label: "Torres Comunic. (tramos)" },
   { id: "provincias", label: "Provincias" },
   { id: "tipos", label: "Tipos de Informe" },
@@ -49,8 +37,6 @@ export interface CatalogosData {
   categoriasGasto: SimpleCatalogItem[];
   vehiculos: VehiculoItem[];
   services: ServiceItem[];
-  intervalosMantenimiento: IntervaloItem[];
-  supuestosDotacion: SupuestosDotacion;
   tramosTorre: TramoTorreItem[];
 }
 
@@ -58,7 +44,6 @@ export function CatalogosCard({ data }: { data: CatalogosData }) {
   const [tab, setTab] = useState<TabId>("torres");
   const [vehiculos, setVehiculos] = useState(data.vehiculos);
   const [services, setServices] = useState(data.services);
-  const [intervalosMantenimiento, setIntervalosMantenimiento] = useState(data.intervalosMantenimiento);
   const [tramosTorre, setTramosTorre] = useState(data.tramosTorre);
 
   return (
@@ -93,13 +78,6 @@ export function CatalogosCard({ data }: { data: CatalogosData }) {
         <ServiceTab services={services} setServices={setServices} vehiculos={vehiculos.map((v) => ({ id: v.id, patente: v.patente }))} />
       )}
       {tab === "vehalertas" && <VencimientosTab vehiculos={vehiculos} services={services} />}
-      {tab === "mantenimiento" && (
-        <MantenimientoIntervalosTab
-          intervalos={intervalosMantenimiento}
-          setIntervalos={setIntervalosMantenimiento}
-          supuestosDotacion={data.supuestosDotacion}
-        />
-      )}
       {tab === "torrecomtramos" && <TorreTramosTab tramos={tramosTorre} setTramos={setTramosTorre} />}
       {tab === "provincias" && (
         <SimpleCatalogTab

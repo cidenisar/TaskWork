@@ -1,10 +1,10 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import Link from "next/link";
 import { Icon } from "@/components/icon";
 import type { PanelMantenimientoItem, MantenimientoRealizado, KpisMantenimiento } from "@/lib/panel/mantenimientos";
 import type { DotacionEstimada } from "@/lib/panel/mantenimiento-dotacion";
+import { MantenimientoConfigTab, type IntervaloConfigurado, type SupuestosDotacion } from "@/components/panel/mantenimiento-config-tab";
 
 function fmtFecha(fecha: string) {
   const [y, m, d] = fecha.split("-");
@@ -28,18 +28,24 @@ const MESES = [
   "Diciembre",
 ];
 
-type Tab = "pendientes" | "calendario" | "realizados" | "dotacion";
+type Tab = "pendientes" | "calendario" | "realizados" | "dotacion" | "configuracion";
 
 export function PlanMantenimiento({
   items,
   kpis,
   realizados,
   dotacion,
+  esAdmin,
+  intervalos,
+  supuestosDotacion,
 }: {
   items: PanelMantenimientoItem[];
   kpis: KpisMantenimiento;
   realizados: MantenimientoRealizado[];
   dotacion: DotacionEstimada;
+  esAdmin: boolean;
+  intervalos: IntervaloConfigurado[];
+  supuestosDotacion: SupuestosDotacion;
 }) {
   const [tab, setTab] = useState<Tab>("pendientes");
   const pendientes = useMemo(() => items.filter((i) => i.urgencia !== "ok"), [items]);
@@ -110,6 +116,11 @@ export function PlanMantenimiento({
         <button type="button" className={tab === "dotacion" ? "active" : ""} onClick={() => setTab("dotacion")}>
           Dotación
         </button>
+        {esAdmin && (
+          <button type="button" className={tab === "configuracion" ? "active" : ""} onClick={() => setTab("configuracion")}>
+            <Icon name="wrench" size={13} /> Configuración
+          </button>
+        )}
       </div>
 
       {tab === "pendientes" && (
@@ -122,8 +133,15 @@ export function PlanMantenimiento({
           </div>
           {items.length === 0 ? (
             <div className="empty-note">
-              Todavía no hay intervalos de mantenimiento configurados — definilos en{" "}
-              <Link href="/configuracion">Configuración → Mantenimiento</Link> para que esta pantalla empiece a avisar.
+              Todavía no hay intervalos de mantenimiento configurados —{" "}
+              {esAdmin ? (
+                <button type="button" className="link-btn" onClick={() => setTab("configuracion")}>
+                  definilos en Configuración
+                </button>
+              ) : (
+                "pedile a un Administrador que los defina en Configuración"
+              )}{" "}
+              para que esta pantalla empiece a avisar.
             </div>
           ) : pendientes.length === 0 ? (
             <div className="empty-note">Todo al día — ningún equipo con intervalo configurado está vencido ni próximo a vencer.</div>
@@ -271,8 +289,14 @@ export function PlanMantenimiento({
           <div className="hint" style={{ margin: "-4px 0 12px" }}>
             Estimación, no una asignación de rutas real: por provincia, cuántas visitas al año hacen falta (según los intervalos
             configurados) y cuántas horas de viaje demanda la distancia REAL promedio entre los sitios de esa provincia (coordenadas GPS
-            ya cargadas) — nunca una distancia inventada. Ajustá los supuestos en{" "}
-            <Link href="/configuracion">Configuración → Mantenimiento</Link>.
+            ya cargadas) — nunca una distancia inventada.{" "}
+            {esAdmin ? (
+              <button type="button" className="link-btn" onClick={() => setTab("configuracion")}>
+                Ajustá los supuestos acá.
+              </button>
+            ) : (
+              "Pedile a un Administrador que ajuste los supuestos."
+            )}
           </div>
           {dotacion.porProvincia.length === 0 ? (
             <div className="empty-note">
@@ -314,6 +338,8 @@ export function PlanMantenimiento({
           </div>
         </div>
       )}
+
+      {tab === "configuracion" && esAdmin && <MantenimientoConfigTab intervalos={intervalos} supuestosDotacion={supuestosDotacion} />}
     </div>
   );
 }
