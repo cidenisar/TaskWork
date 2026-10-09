@@ -22,6 +22,7 @@ import { EntregarADepositoButton } from "@/components/deposito/entregar-boton";
 import { VerComprobanteEntregaBoton } from "@/components/deposito/ver-comprobante-boton";
 import { MOTIVO_ENTREGA_LABEL, CONDICION_LABEL, TIPO_EQUIPO_LABEL as TIPO_EQUIPO_DEPOSITO_LABEL } from "@/components/deposito/types";
 import { RegistrarMantenimientoButton } from "@/components/mantenimiento/registrar-mantenimiento-button";
+import { ProgramarMantenimientoButton } from "@/components/mantenimiento/programar-mantenimiento-button";
 
 function fmtFecha(fecha: string) {
   const [y, m, d] = fecha.split("-");
@@ -171,6 +172,23 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
   const lecturaPorCircuito = new Map((lecturasTableroRes.data ?? []).map((l) => [l.circuito_id, l]));
   const lecturaPorEquipamiento = new Map((lecturasRackRes.data ?? []).map((l) => [l.equipamiento_id, l]));
   const lecturaPorEquipo = new Map((lecturasEquipoRes.data ?? []).map((l) => [l.equipo_id, l]));
+
+  const equipoIndividualIds = equipos.map((e) => e.id);
+  const rackEquipoIds = equipamientos.map((e) => e.id);
+  const idsConMantenimiento = [...rackEquipoIds, ...equipoIndividualIds];
+  const [programacionesRes, tecnicosRes] = await Promise.all([
+    idsConMantenimiento.length > 0
+      ? supabase.from("mantenimiento_programaciones").select("tipo_equipo, equipo_id, fecha_programada, asignado_a, nota").in("equipo_id", idsConMantenimiento)
+      : { data: [] },
+    supabase.from("profiles").select("id, nombre_completo").eq("activo", true).order("nombre_completo"),
+  ]);
+  const programacionPorEquipo = new Map(
+    (programacionesRes.data ?? []).map((p) => [
+      `${p.tipo_equipo}:${p.equipo_id}`,
+      { fechaProgramada: p.fecha_programada, asignadoA: p.asignado_a, nota: p.nota },
+    ]),
+  );
+  const tecnicos = (tecnicosRes.data ?? []).map((t) => ({ id: t.id, nombreCompleto: t.nombre_completo }));
 
   const circuitosPorTablero = new Map<string, typeof circuitos>();
   for (const c of circuitos) circuitosPorTablero.set(c.tablero_id, [...(circuitosPorTablero.get(c.tablero_id) ?? []), c]);
@@ -446,6 +464,13 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
                                   <td>
                                     <div style={{ display: "flex", gap: 6 }}>
                                       <RegistrarMantenimientoButton tipoEquipo="rack_equipamiento" equipoId={e.id} equipoTexto={e.texto} />
+                                      <ProgramarMantenimientoButton
+                                        tipoEquipo="rack_equipamiento"
+                                        equipoId={e.id}
+                                        equipoTexto={e.texto}
+                                        tecnicos={tecnicos}
+                                        programacionActual={programacionPorEquipo.get(`rack_equipamiento:${e.id}`) ?? null}
+                                      />
                                       {puedeBajas && <DarDeBajaButton tipoEquipo="rack_equipamiento" equipoId={e.id} equipoTexto={e.texto} />}
                                       {puedeDeposito && (
                                         <EntregarADepositoButton tipoEquipo="rack_equipamiento" equipoId={e.id} equipoTexto={e.texto} />
@@ -524,6 +549,13 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
                         <td>
                           <div style={{ display: "flex", gap: 6 }}>
                             <RegistrarMantenimientoButton tipoEquipo="equipo_individual" equipoId={e.id} equipoTexto={e.texto} />
+                            <ProgramarMantenimientoButton
+                              tipoEquipo="equipo_individual"
+                              equipoId={e.id}
+                              equipoTexto={e.texto}
+                              tecnicos={tecnicos}
+                              programacionActual={programacionPorEquipo.get(`equipo_individual:${e.id}`) ?? null}
+                            />
                             {puedeBajas && <DarDeBajaButton tipoEquipo="equipo_individual" equipoId={e.id} equipoTexto={e.texto} />}
                             {puedeDeposito && (
                               <EntregarADepositoButton tipoEquipo="equipo_individual" equipoId={e.id} equipoTexto={e.texto} />

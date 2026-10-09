@@ -5,7 +5,7 @@ import { SimpleCatalogTab, type SimpleCatalogItem } from "./catalogos/simple-cat
 import { VehiculosTab, type VehiculoItem } from "./catalogos/vehiculos-tab";
 import { ServiceTab, type ServiceItem } from "./catalogos/service-tab";
 import { VencimientosTab } from "./catalogos/vencimientos-tab";
-import { MantenimientoIntervalosTab, type IntervaloItem } from "./catalogos/mantenimiento-intervalos-tab";
+import { MantenimientoIntervalosTab, type IntervaloItem, type SupuestosDotacion } from "./catalogos/mantenimiento-intervalos-tab";
 import { TorreTramosTab, type TramoTorreItem } from "./catalogos/torre-tramos-tab";
 import { Icon } from "@/components/icon";
 
@@ -50,6 +50,7 @@ export interface CatalogosData {
   vehiculos: VehiculoItem[];
   services: ServiceItem[];
   intervalosMantenimiento: IntervaloItem[];
+  supuestosDotacion: SupuestosDotacion;
   tramosTorre: TramoTorreItem[];
 }
 
@@ -93,7 +94,11 @@ export function CatalogosCard({ data }: { data: CatalogosData }) {
       )}
       {tab === "vehalertas" && <VencimientosTab vehiculos={vehiculos} services={services} />}
       {tab === "mantenimiento" && (
-        <MantenimientoIntervalosTab intervalos={intervalosMantenimiento} setIntervalos={setIntervalosMantenimiento} />
+        <MantenimientoIntervalosTab
+          intervalos={intervalosMantenimiento}
+          setIntervalos={setIntervalosMantenimiento}
+          supuestosDotacion={data.supuestosDotacion}
+        />
       )}
       {tab === "torrecomtramos" && <TorreTramosTab tramos={tramosTorre} setTramos={setTramosTorre} />}
       {tab === "provincias" && (

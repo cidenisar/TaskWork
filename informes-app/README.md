@@ -1235,3 +1235,55 @@ general que salió de esto.
   comparte la palabra en español, ver nota en la migración de Torres de
   Comunicaciones) se renombró a "Torres (cuadrillas)" en la UI para que
   no se confunda con el tab nuevo.
+
+- **Plan de Mantenimiento v2: programación manual, calendario anual,
+  historial de Realizados y estimación de dotación.** Mejora sobre el
+  PDM v1 (sección "PDM" más arriba) a pedido de uso real — la v1 solo
+  calculaba vencimientos de una lista plana; esta entrega lo convierte en
+  un plan de verdad:
+  - **Programación manual** (`mantenimiento_programaciones`, fecha +
+    técnico asignado opcional + nota): botón "Programar mantenimiento"
+    (ícono calendario) al lado de "Registrar mantenimiento" en la ficha
+    de Sitio, mismo criterio de acceso (sin gate de rol, un técnico
+    puede programar/reprogramar; solo Admin puede borrar una
+    programación, RLS admin-only). Es UNA fila por equipo (upsert por
+    `tipo_equipo+equipo_id` — reprogramar pisa la fecha anterior, no
+    acumula) que, cuando existe, se muestra junto a la fecha calculada
+    del intervalo — no la reemplaza en el cálculo de urgencia (vencido/
+    próximo/ok sigue siendo siempre del intervalo), solo se exhibe como
+    dato aparte ("Programado: fecha · técnico").
+  - **`/panel/mantenimientos` rediseñada** con KPIs arriba (% al día,
+    vencidos, vencen en 30 días) y 4 pestañas: **Pendientes** (la lista
+    de antes, ahora con el badge de programación si existe),
+    **Calendario del año actual** (grilla de 12 meses — cada equipo
+    pendiente cae en el mes de su fecha objetivo, programada o
+    calculada; lo muy vencido de años anteriores o sin fecha calculable
+    va aparte, para no romper la grilla del año), **Realizados**
+    (historial completo de `mantenimientos_equipamiento` con buscador
+    por equipo/sitio/categoría — antes este dato existía pero no tenía
+    pantalla propia para repasarlo) y **Dotación** (ver próximo punto).
+  - **Estimación de cuántos técnicos hacen falta**
+    (`lib/panel/mantenimiento-dotacion.ts`), agrupada por provincia
+    (proxy simple de "zona", ya disponible sin armar un clustering
+    propio): visitas/año necesarias según los intervalos configurados, +
+    horas de viaje estimadas con la distancia REAL **promedio** (Haversine,
+    sobre las coordenadas GPS que ya tiene cada sitio en Ubicaciones)
+    entre los sitios de esa provincia — nunca una distancia inventada por
+    la IA, mismo principio que el clima del Panel. Horas totales (trabajo
+    + viaje) ÷ horas disponibles por técnico = técnicos necesarios en esa
+    provincia; la suma total entre provincias es un límite superior
+    honesto, no una asignación de rutas real (un técnico podría cubrir
+    parte de dos provincias vecinas — eso ya es logística real, afuera de
+    esta estimación). Los supuestos (horas/día, días hábiles/año, horas
+    de trabajo por visita, velocidad de viaje promedio) son números reales
+    que carga un Admin en *Configuración → Catálogos → Mantenimiento*
+    (mismo tab que los intervalos), nunca inventados por la IA — valores
+    por defecto razonables (8h/día, 230 días hábiles, 2h/visita, 60km/h)
+    hasta que se ajusten a la cuadrilla real.
+  - **Error evitado en el camino**: la tabla nueva `torre_tipo_largos`
+    (de la entrega anterior) había quedado con `tipo_torre` como primary
+    key directa — se armó la tabla nueva de esta entrega
+    (`mantenimiento_programaciones`) con `id` uuid como PK desde el
+    arranque, seguro el patrón real de este proyecto para catálogos con
+    clave natural (`id` + `unique`), no una PK natural. Ver
+    CRITERIOS_Y_IDEAS.md para el error que motivó esto.

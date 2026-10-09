@@ -261,6 +261,11 @@ export type ConfigGeneralRow = {
   recordatorio_semanal_archivo: boolean;
   resumen_semanal_ia: boolean;
   liberacion_automatica_activa: boolean;
+  /** Supuestos para estimar cuántos técnicos hacen falta para cumplir el Plan de Mantenimiento (ver lib/panel/mantenimiento-dotacion.ts). */
+  pdm_horas_por_dia: number;
+  pdm_dias_habiles_anio: number;
+  pdm_horas_por_visita: number;
+  pdm_velocidad_kmh: number;
 }
 
 export type AuditLogRow = {
@@ -566,6 +571,18 @@ export type MantenimientoEquipamientoRow = {
   created_at: string;
 }
 
+/** Programación manual de la próxima visita — pisa (para mostrar) la fecha calculada del intervalo cuando hace falta coordinar algo puntual. */
+export type MantenimientoProgramacionRow = {
+  id: string;
+  tipo_equipo: TipoEquipoBaja;
+  equipo_id: string;
+  fecha_programada: string;
+  asignado_a: string | null;
+  nota: string | null;
+  created_by: string;
+  created_at: string;
+}
+
 export type InformeMaterialRow = {
   id: string;
   informe_id: string;
@@ -802,6 +819,12 @@ export interface Database {
         Partial<MantenimientoEquipamientoRow> &
           Pick<MantenimientoEquipamientoRow, "tipo_equipo" | "equipo_id" | "fecha" | "created_by">,
         Partial<MantenimientoEquipamientoRow>
+      >;
+      mantenimiento_programaciones: Tbl<
+        MantenimientoProgramacionRow,
+        Partial<MantenimientoProgramacionRow> &
+          Pick<MantenimientoProgramacionRow, "tipo_equipo" | "equipo_id" | "fecha_programada" | "created_by">,
+        Partial<MantenimientoProgramacionRow>
       >;
     };
     Views: Record<string, never>;

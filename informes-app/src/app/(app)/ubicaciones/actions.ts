@@ -2,7 +2,7 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import { revalidatePath } from "next/cache";
-import { requireProfile } from "@/lib/auth";
+import { requireProfile, requireAdmin } from "@/lib/auth";
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { puedeGestionarBajas, puedeGestionarDeposito } from "@/lib/types";
 import { CATEGORIA_EQUIPO_LABEL as RACK_CATEGORIA_LABEL } from "@/components/racks/types";
@@ -495,6 +495,68 @@ export async function registrarMantenimientoAction(formData: FormData): Promise<
     const { error: upErr } = await supabase.storage.from("informe-fotos").upload(path, buffer, { contentType: "image/jpeg", upsert: true });
     if (!upErr) await supabase.from("mantenimientos_equipamiento").update({ foto_url: path }).eq("id", mantenimiento.id);
   }
+
+  revalidatePath("/ubicaciones/[id]", "page");
+  revalidatePath("/panel/mantenimientos");
+  return { success: true };
+}
+
+export interface ProgramarMantenimientoResult {
+  success: boolean;
+  error?: string;
+}
+
+/**
+ * Programación MANUAL de la próxima visita (fecha + técnico asignado,
+ * opcional) — pisa, solo para mostrar, la fecha que sale del cálculo de
+ * intervalo (lib/mantenimiento/types.ts) cuando hace falta coordinar algo
+ * puntual (ej. "esta UPS la visitamos el 15/11 sí o sí"). Igual criterio
+ * de acceso que registrarMantenimientoAction: trabajo de campo normal,
+ * sin gate de rol. Un equipo tiene como máximo UNA programación activa
+ * (upsert por tipo_equipo+equipo_id, unique en la tabla) — reprogramar
+ * pisa la anterior, no acumula.
+ */
+export async function programarMantenimientoAction(payload: {
+  tipoEquipo: TipoEquipoBaja;
+  equipoId: string;
+  fechaProgramada: string;
+  asignadoA: string | null;
+  nota: string;
+}): Promise<ProgramarMantenimientoResult> {
+  const profile = await requireProfile();
+  if (!payload.tipoEquipo || !payload.equipoId || !payload.fechaProgramada) {
+    return { success: false, error: "Faltan datos de la programación." };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("mantenimiento_programaciones").upsert(
+    {
+      tipo_equipo: payload.tipoEquipo,
+      equipo_id: payload.equipoId,
+      fecha_programada: payload.fechaProgramada,
+      asignado_a: payload.asignadoA,
+      nota: payload.nota.trim() || null,
+      created_by: profile.id,
+    },
+    { onConflict: "tipo_equipo,equipo_id" },
+  );
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath("/ubicaciones/[id]", "page");
+  revalidatePath("/panel/mantenimientos");
+  return { success: true };
+}
+
+/** Solo Admin — igual criterio que el borrado de un mantenimiento ya registrado (RLS admin-only en la tabla). */
+export async function quitarProgramacionMantenimientoAction(tipoEquipo: TipoEquipoBaja, equipoId: string): Promise<ProgramarMantenimientoResult> {
+  await requireAdmin();
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("mantenimiento_programaciones")
+    .delete()
+    .eq("tipo_equipo", tipoEquipo)
+    .eq("equipo_id", equipoId);
+  if (error) return { success: false, error: error.message };
 
   revalidatePath("/ubicaciones/[id]", "page");
   revalidatePath("/panel/mantenimientos");

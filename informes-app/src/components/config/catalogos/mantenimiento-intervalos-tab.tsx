@@ -2,6 +2,7 @@
 
 import { useState, type Dispatch, type SetStateAction } from "react";
 import { addIntervaloMantenimientoAction, removeIntervaloMantenimientoAction } from "@/app/(app)/configuracion/actions/mantenimiento-intervalos";
+import { guardarSupuestosDotacionAction } from "@/app/(app)/configuracion/actions/mantenimiento-dotacion";
 import {
   TIPO_EQUIPO_MANTENIMIENTO_OPCIONES,
   TIPO_EQUIPO_MANTENIMIENTO_LABEL,
@@ -18,18 +19,48 @@ export interface IntervaloItem {
   frecuenciaDias: number;
 }
 
+export interface SupuestosDotacion {
+  horasPorDia: number;
+  diasHabilesAnio: number;
+  horasPorVisita: number;
+  velocidadKmh: number;
+}
+
 export function MantenimientoIntervalosTab({
   intervalos,
   setIntervalos,
+  supuestosDotacion,
 }: {
   intervalos: IntervaloItem[];
   setIntervalos: Dispatch<SetStateAction<IntervaloItem[]>>;
+  supuestosDotacion: SupuestosDotacion;
 }) {
   const [tipoEquipo, setTipoEquipo] = useState<TipoEquipoBaja>("rack_equipamiento");
   const [categoria, setCategoria] = useState("");
   const [frecuencia, setFrecuencia] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const [horasPorDia, setHorasPorDia] = useState(String(supuestosDotacion.horasPorDia));
+  const [diasHabilesAnio, setDiasHabilesAnio] = useState(String(supuestosDotacion.diasHabilesAnio));
+  const [horasPorVisita, setHorasPorVisita] = useState(String(supuestosDotacion.horasPorVisita));
+  const [velocidadKmh, setVelocidadKmh] = useState(String(supuestosDotacion.velocidadKmh));
+  const [dotacionBusy, setDotacionBusy] = useState(false);
+  const [dotacionError, setDotacionError] = useState<string | null>(null);
+  const [dotacionOk, setDotacionOk] = useState(false);
+
+  async function guardarDotacion() {
+    setDotacionBusy(true);
+    setDotacionError(null);
+    setDotacionOk(false);
+    const res = await guardarSupuestosDotacionAction({ horasPorDia, diasHabilesAnio, horasPorVisita, velocidadKmh });
+    setDotacionBusy(false);
+    if (!res.success) {
+      setDotacionError(res.error || "No se pudo guardar.");
+      return;
+    }
+    setDotacionOk(true);
+  }
 
   const opcionesCategoria = categoriasDeTipoEquipo(tipoEquipo);
 
@@ -128,6 +159,57 @@ export function MantenimientoIntervalosTab({
           ))
         )}
       </div>
+
+      <div className="section-label" style={{ marginTop: 20 }}>
+        Supuestos para estimar dotación necesaria
+      </div>
+      <div className="hint" style={{ margin: "0 0 10px" }}>
+        Se usan en Panel → Mantenimientos → &ldquo;Dotación&rdquo; para estimar cuántos técnicos hacen falta para cumplir el plan — ajustalos a la
+        realidad real de la cuadrilla (nunca los inventa la IA).
+      </div>
+      <div className="tech-form-grid">
+        <div className="field" style={{ marginBottom: 0 }}>
+          <label style={{ fontSize: 12 }}>Horas de trabajo por día</label>
+          <input type="text" inputMode="decimal" value={horasPorDia} onChange={(e) => setHorasPorDia(e.target.value)} disabled={dotacionBusy} />
+        </div>
+        <div className="field" style={{ marginBottom: 0 }}>
+          <label style={{ fontSize: 12 }}>Días hábiles por año</label>
+          <input
+            type="text"
+            inputMode="numeric"
+            value={diasHabilesAnio}
+            onChange={(e) => setDiasHabilesAnio(e.target.value)}
+            disabled={dotacionBusy}
+          />
+        </div>
+        <div className="field" style={{ marginBottom: 0 }}>
+          <label style={{ fontSize: 12 }}>Horas de trabajo por visita</label>
+          <input
+            type="text"
+            inputMode="decimal"
+            value={horasPorVisita}
+            onChange={(e) => setHorasPorVisita(e.target.value)}
+            disabled={dotacionBusy}
+          />
+        </div>
+        <div className="field" style={{ marginBottom: 0 }}>
+          <label style={{ fontSize: 12 }}>Velocidad de viaje promedio (km/h)</label>
+          <input type="text" inputMode="decimal" value={velocidadKmh} onChange={(e) => setVelocidadKmh(e.target.value)} disabled={dotacionBusy} />
+        </div>
+      </div>
+      <button type="button" className="btn btn-secondary btn-sm" onClick={guardarDotacion} disabled={dotacionBusy} style={{ marginTop: 10 }}>
+        {dotacionBusy ? "Guardando..." : "Guardar supuestos"}
+      </button>
+      {dotacionOk && !dotacionError && (
+        <div className="hint" style={{ color: "var(--ok)", marginTop: 6 }}>
+          <Icon name="check" size={12} /> Guardado.
+        </div>
+      )}
+      {dotacionError && (
+        <div className="error-text" style={{ marginTop: 8 }}>
+          {dotacionError}
+        </div>
+      )}
     </div>
   );
 }

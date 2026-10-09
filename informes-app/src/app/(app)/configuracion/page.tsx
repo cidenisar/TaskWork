@@ -37,7 +37,7 @@ export default async function ConfiguracionPage() {
     supabase
       .from("config_general")
       .select(
-        "logo_empresa_url, auto_enviar_email, umbral_aviso_historial, recordatorio_semanal_archivo, resumen_semanal_ia, liberacion_automatica_activa",
+        "logo_empresa_url, auto_enviar_email, umbral_aviso_historial, recordatorio_semanal_archivo, resumen_semanal_ia, liberacion_automatica_activa, pdm_horas_por_dia, pdm_dias_habiles_anio, pdm_horas_por_visita, pdm_velocidad_kmh",
       )
       .eq("id", 1)
       .single(),
@@ -109,6 +109,12 @@ export default async function ConfiguracionPage() {
             frecuenciaDias: i.frecuencia_dias,
           })),
           tramosTorre: (tramosTorreRes.data ?? []).map((t) => ({ tipoTorre: t.tipo_torre, largoTramoM: Number(t.largo_tramo_m) })),
+          supuestosDotacion: {
+            horasPorDia: Number(configRes.data?.pdm_horas_por_dia ?? 8),
+            diasHabilesAnio: Number(configRes.data?.pdm_dias_habiles_anio ?? 230),
+            horasPorVisita: Number(configRes.data?.pdm_horas_por_visita ?? 2),
+            velocidadKmh: Number(configRes.data?.pdm_velocidad_kmh ?? 60),
+          },
         },
         umbralAviso: configRes.data?.umbral_aviso_historial ?? "20",
         recordatorioSemanal: configRes.data?.recordatorio_semanal_archivo ?? true,
