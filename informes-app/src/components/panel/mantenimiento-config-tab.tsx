@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { guardarIntervaloMantenimientoAction } from "@/app/(app)/configuracion/actions/mantenimiento-intervalos";
 import { guardarSupuestosDotacionAction } from "@/app/(app)/configuracion/actions/mantenimiento-dotacion";
+import { agregarChecklistItemAction, quitarChecklistItemAction } from "@/app/(app)/configuracion/actions/mantenimiento-checklist";
 import {
   TIPO_EQUIPO_MANTENIMIENTO_OPCIONES,
   TIPO_EQUIPO_MANTENIMIENTO_LABEL,
@@ -25,6 +26,13 @@ export interface SupuestosDotacion {
   velocidadKmh: number;
 }
 
+export interface ChecklistItemCatalogo {
+  id: string;
+  tipoEquipo: TipoEquipoBaja;
+  categoria: string;
+  texto: string;
+}
+
 /**
  * Configuración del Plan de Mantenimiento — vivía en Configuración →
  * Catálogos, se movió acá (Panel → Mantenimientos → pestaña
@@ -35,9 +43,11 @@ export interface SupuestosDotacion {
 export function MantenimientoConfigTab({
   intervalos,
   supuestosDotacion,
+  checklistItems,
 }: {
   intervalos: IntervaloConfigurado[];
   supuestosDotacion: SupuestosDotacion;
+  checklistItems: ChecklistItemCatalogo[];
 }) {
   const router = useRouter();
   const frecuenciaPorClave = new Map(intervalos.map((i) => [`${i.tipoEquipo}:${i.categoria}`, String(i.frecuenciaDias)]));
@@ -77,6 +87,45 @@ export function MantenimientoConfigTab({
       return;
     }
     setDotacionOk(true);
+    router.refresh();
+  }
+
+  const [tipoEquipoChecklist, setTipoEquipoChecklist] = useState<TipoEquipoBaja>("rack_equipamiento");
+  const [categoriaChecklist, setCategoriaChecklist] = useState("");
+  const [nuevoItemTexto, setNuevoItemTexto] = useState("");
+  const [checklistBusy, setChecklistBusy] = useState(false);
+  const [checklistError, setChecklistError] = useState<string | null>(null);
+
+  function onTipoEquipoChecklistChange(v: TipoEquipoBaja) {
+    setTipoEquipoChecklist(v);
+    setCategoriaChecklist("");
+  }
+
+  const itemsDeLaCategoria = checklistItems.filter((i) => i.tipoEquipo === tipoEquipoChecklist && i.categoria === categoriaChecklist);
+
+  async function agregarItem() {
+    if (!categoriaChecklist || !nuevoItemTexto.trim()) return;
+    setChecklistBusy(true);
+    setChecklistError(null);
+    const res = await agregarChecklistItemAction(tipoEquipoChecklist, categoriaChecklist, nuevoItemTexto);
+    setChecklistBusy(false);
+    if (!res.success) {
+      setChecklistError(res.error || "No se pudo agregar.");
+      return;
+    }
+    setNuevoItemTexto("");
+    router.refresh();
+  }
+
+  async function quitarItem(id: string) {
+    setChecklistBusy(true);
+    setChecklistError(null);
+    const res = await quitarChecklistItemAction(id);
+    setChecklistBusy(false);
+    if (!res.success) {
+      setChecklistError(res.error || "No se pudo quitar.");
+      return;
+    }
     router.refresh();
   }
 
@@ -192,6 +241,71 @@ export function MantenimientoConfigTab({
       {dotacionError && (
         <div className="error-text" style={{ marginTop: 8 }}>
           {dotacionError}
+        </div>
+      )}
+
+      <div className="section-label" style={{ marginTop: 20 }}>
+        Checklist de mantenimiento por categoría
+      </div>
+      <div className="hint" style={{ margin: "0 0 10px" }}>
+        Ítems que aparecen para completar al registrar un mantenimiento de esa categoría (si la categoría no tiene ítems, no se muestra
+        ningún checklist). Vienen precargados para UPS, Grupo electrógeno, Banco de baterías, Rectificador y Radioenlace — agregá/quitá
+        según lo que de verdad se controla en el campo.
+      </div>
+      <div className="tech-form-grid">
+        <select value={tipoEquipoChecklist} onChange={(e) => onTipoEquipoChecklistChange(e.target.value as TipoEquipoBaja)} disabled={checklistBusy}>
+          {TIPO_EQUIPO_MANTENIMIENTO_OPCIONES.map((t) => (
+            <option key={t} value={t}>
+              {TIPO_EQUIPO_MANTENIMIENTO_LABEL[t]}
+            </option>
+          ))}
+        </select>
+        <select value={categoriaChecklist} onChange={(e) => setCategoriaChecklist(e.target.value)} disabled={checklistBusy}>
+          <option value="">Elegí categoría...</option>
+          {categoriasDeTipoEquipo(tipoEquipoChecklist).map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {categoriaChecklist && (
+        <>
+          <div className="item-list" style={{ marginTop: 10 }}>
+            {itemsDeLaCategoria.length === 0 ? (
+              <div className="empty-note">Sin ítems configurados para esta categoría todavía.</div>
+            ) : (
+              itemsDeLaCategoria.map((item) => (
+                <div className="list-item" key={item.id}>
+                  <div className="item-name" style={{ fontSize: 13 }}>
+                    {item.texto}
+                  </div>
+                  <button type="button" className="remove-btn" onClick={() => quitarItem(item.id)} disabled={checklistBusy}>
+                    <Icon name="x" size={12} />
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+          <div className="field" style={{ maxWidth: 420, marginTop: 10 }}>
+            <label style={{ fontSize: 12 }}>Nuevo ítem</label>
+            <input
+              type="text"
+              placeholder="Ej: Nivel de aceite de motor"
+              value={nuevoItemTexto}
+              onChange={(e) => setNuevoItemTexto(e.target.value)}
+              disabled={checklistBusy}
+            />
+          </div>
+          <button type="button" className="btn btn-secondary btn-sm" onClick={agregarItem} disabled={checklistBusy || !nuevoItemTexto.trim()}>
+            + Agregar ítem
+          </button>
+        </>
+      )}
+      {checklistError && (
+        <div className="error-text" style={{ marginTop: 8 }}>
+          {checklistError}
         </div>
       )}
     </div>

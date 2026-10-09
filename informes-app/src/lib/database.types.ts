@@ -54,6 +54,7 @@ export type TorreComunicacionCategoriaEquipo =
 export type EquipoCategoria =
   | "ups"
   | "banco_baterias"
+  | "grupo_electrogeno"
   | "camara_cctv"
   | "control_acceso"
   | "impresora"
@@ -571,6 +572,28 @@ export type MantenimientoEquipamientoRow = {
   created_at: string;
 }
 
+/** Catálogo de ítems de checklist por (tipo_equipo, categoria) — admin-configurable. */
+export type MantenimientoChecklistItemRow = {
+  id: string;
+  tipo_equipo: TipoEquipoBaja;
+  categoria: string;
+  orden: number;
+  texto: string;
+  created_by: string | null;
+  created_at: string;
+}
+
+export type EstadoChecklist = "ok" | "no_ok" | "no_aplica";
+
+/** Respuesta de un ítem de checklist, guardada junto al mantenimiento que la generó. */
+export type MantenimientoChecklistRespuestaRow = {
+  id: string;
+  mantenimiento_id: string;
+  item_id: string;
+  estado: EstadoChecklist;
+  observacion: string | null;
+}
+
 /** Programación manual de la próxima visita — pisa (para mostrar) la fecha calculada del intervalo cuando hace falta coordinar algo puntual. */
 export type MantenimientoProgramacionRow = {
   id: string;
@@ -825,6 +848,16 @@ export interface Database {
         Partial<MantenimientoProgramacionRow> &
           Pick<MantenimientoProgramacionRow, "tipo_equipo" | "equipo_id" | "fecha_programada" | "created_by">,
         Partial<MantenimientoProgramacionRow>
+      >;
+      mantenimiento_checklist_items: Tbl<
+        MantenimientoChecklistItemRow,
+        Partial<MantenimientoChecklistItemRow> & Pick<MantenimientoChecklistItemRow, "tipo_equipo" | "categoria" | "texto">,
+        Partial<MantenimientoChecklistItemRow>
+      >;
+      mantenimiento_checklist_respuestas: Tbl<
+        MantenimientoChecklistRespuestaRow,
+        Partial<MantenimientoChecklistRespuestaRow> & Pick<MantenimientoChecklistRespuestaRow, "mantenimiento_id" | "item_id" | "estado">,
+        Partial<MantenimientoChecklistRespuestaRow>
       >;
     };
     Views: Record<string, never>;

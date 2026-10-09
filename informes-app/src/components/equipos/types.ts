@@ -6,6 +6,7 @@ export const EQUIPO_FOTO_IA_MAX = 7;
 export const CATEGORIA_EQUIPO_OPCIONES: EquipoCategoria[] = [
   "ups",
   "banco_baterias",
+  "grupo_electrogeno",
   "camara_cctv",
   "control_acceso",
   "impresora",
@@ -17,6 +18,7 @@ export const CATEGORIA_EQUIPO_OPCIONES: EquipoCategoria[] = [
 export const CATEGORIA_EQUIPO_LABEL: Record<EquipoCategoria, string> = {
   ups: "UPS",
   banco_baterias: "Banco de baterías",
+  grupo_electrogeno: "Grupo electrógeno",
   camara_cctv: "Cámara CCTV",
   control_acceso: "Control de acceso",
   impresora: "Impresora",

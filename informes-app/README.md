@@ -1308,3 +1308,39 @@ general que salió de esto.
   select + insert + delete admin-only, pero no update — el upsert de la
   tabla nueva hubiera afectado 0 filas en silencio al cambiar un valor
   existente, mismo bug ya documentado con Torres en esta sesión).
+
+- **Checklist de mantenimiento por categoría de equipo.** El flujo real
+  queda: primero se releva el equipamiento (ya existía), después se
+  registra el mantenimiento desde la ficha de Sitio (botón que ya
+  existía) — y ahora, si la categoría de ese equipo tiene un checklist
+  configurado, aparece inline en el MISMO modal de "Registrar
+  mantenimiento" (no se agregó una pantalla ni un botón nuevo: ya estás
+  parado en el equipo correcto, no hace falta elegirlo de nuevo en otro
+  lado). Cada ítem se marca OK / No OK / No aplica, con una observación
+  opcional cuando algo no está OK.
+  - **Catálogo de ítems** (`mantenimiento_checklist_items`, `tipo_equipo` +
+    `categoria` + `orden` + `texto`) — admin-configurable desde el mismo
+    lugar que los intervalos (Panel → Mantenimientos → Configuración):
+    elegís tipo + categoría, ves los ítems existentes, agregás/quitás.
+  - **Respuestas** (`mantenimiento_checklist_respuestas`) quedan
+    guardadas junto al mantenimiento que las generó (`mantenimiento_id`),
+    no son un registro aparte.
+  - **Contenido inicial investigado** (no genérico) para las 6 categorías
+    más relevantes en sitios de YPF: UPS, Grupo Electrógeno, Banco de
+    Baterías, Rectificador, Radioenlace y Cámara CCTV — aplicado a cada
+    `tipo_equipo` donde esa categoría existe de verdad (ej. UPS está en
+    Rack y en Equipo Individual, Radioenlace solo en Rack, Grupo
+    Electrógeno y Cámara CCTV solo en Equipo Individual). Un Admin puede
+    agregar/quitar ítems después sin tocar código.
+  - **Categoría nueva: "Grupo electrógeno"** en Equipos Individuales
+    (`equipo_categoria` — faltaba, señalado por uso real en campo).
+    `ALTER TYPE ... ADD VALUE` va en su propia migración/transacción
+    (no se puede usar el valor nuevo en la misma transacción que lo
+    agrega) — por eso quedó en un archivo de migración aparte del resto.
+  - **Alcance, a propósito**: el checklist es opcional por diseño — un
+    mantenimiento se puede registrar igual que antes (fecha +
+    descripción + foto) sin completar ningún ítem, y una categoría sin
+    ítems configurados simplemente no muestra la sección. No se armó un
+    PDF de checklist aparte en esta entrega (las respuestas quedan en la
+    base, consultables, pero no se imprimen todavía) — se puede sumar
+    después si hace falta un comprobante en papel.

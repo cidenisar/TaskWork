@@ -14,7 +14,7 @@ import { nuevoNumeroGeneracionEntrega } from "@/lib/deposito/numero-generacion";
 import { renderBajaPdf, renderEntregaDepositoPdf } from "@/lib/pdf/render";
 import { buildBajaFilename, buildEntregaDepositoFilename } from "@/lib/pdf/filename";
 import { resolverEquipo, TABLA_POR_TIPO } from "@/lib/equipamiento/resolver-equipo";
-import type { MotivoBaja, MotivoEntregaDeposito, CondicionMaterial, TipoEquipoBaja } from "@/lib/database.types";
+import type { MotivoBaja, MotivoEntregaDeposito, CondicionMaterial, TipoEquipoBaja, EstadoChecklist } from "@/lib/database.types";
 
 export interface EstimarConsumoResult {
   success: boolean;
@@ -462,7 +462,13 @@ export async function registrarMantenimientoAction(formData: FormData): Promise<
 
   const raw = formData.get("payload");
   if (typeof raw !== "string") return { success: false, error: "Faltan datos del mantenimiento." };
-  let payload: { tipoEquipo: TipoEquipoBaja; equipoId: string; fecha: string; descripcion: string };
+  let payload: {
+    tipoEquipo: TipoEquipoBaja;
+    equipoId: string;
+    fecha: string;
+    descripcion: string;
+    checklist?: { itemId: string; estado: EstadoChecklist; observacion: string }[];
+  };
   try {
     payload = JSON.parse(raw);
   } catch {
@@ -494,6 +500,17 @@ export async function registrarMantenimientoAction(formData: FormData): Promise<
     const path = `${profile.id}/mantenimientos/${mantenimiento.id}.jpg`;
     const { error: upErr } = await supabase.storage.from("informe-fotos").upload(path, buffer, { contentType: "image/jpeg", upsert: true });
     if (!upErr) await supabase.from("mantenimientos_equipamiento").update({ foto_url: path }).eq("id", mantenimiento.id);
+  }
+
+  if (payload.checklist && payload.checklist.length > 0) {
+    await supabase.from("mantenimiento_checklist_respuestas").insert(
+      payload.checklist.map((c) => ({
+        mantenimiento_id: mantenimiento.id,
+        item_id: c.itemId,
+        estado: c.estado,
+        observacion: c.observacion.trim() || null,
+      })),
+    );
   }
 
   revalidatePath("/ubicaciones/[id]", "page");

@@ -4,7 +4,12 @@ import { useMemo, useState } from "react";
 import { Icon } from "@/components/icon";
 import type { PanelMantenimientoItem, MantenimientoRealizado, KpisMantenimiento } from "@/lib/panel/mantenimientos";
 import type { DotacionEstimada } from "@/lib/panel/mantenimiento-dotacion";
-import { MantenimientoConfigTab, type IntervaloConfigurado, type SupuestosDotacion } from "@/components/panel/mantenimiento-config-tab";
+import {
+  MantenimientoConfigTab,
+  type IntervaloConfigurado,
+  type SupuestosDotacion,
+  type ChecklistItemCatalogo,
+} from "@/components/panel/mantenimiento-config-tab";
 
 function fmtFecha(fecha: string) {
   const [y, m, d] = fecha.split("-");
@@ -38,6 +43,7 @@ export function PlanMantenimiento({
   esAdmin,
   intervalos,
   supuestosDotacion,
+  checklistItems,
 }: {
   items: PanelMantenimientoItem[];
   kpis: KpisMantenimiento;
@@ -46,6 +52,7 @@ export function PlanMantenimiento({
   esAdmin: boolean;
   intervalos: IntervaloConfigurado[];
   supuestosDotacion: SupuestosDotacion;
+  checklistItems: ChecklistItemCatalogo[];
 }) {
   const [tab, setTab] = useState<Tab>("pendientes");
   const pendientes = useMemo(() => items.filter((i) => i.urgencia !== "ok"), [items]);
@@ -339,7 +346,9 @@ export function PlanMantenimiento({
         </div>
       )}
 
-      {tab === "configuracion" && esAdmin && <MantenimientoConfigTab intervalos={intervalos} supuestosDotacion={supuestosDotacion} />}
+      {tab === "configuracion" && esAdmin && (
+        <MantenimientoConfigTab intervalos={intervalos} supuestosDotacion={supuestosDotacion} checklistItems={checklistItems} />
+      )}
     </div>
   );
 }

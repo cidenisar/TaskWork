@@ -176,11 +176,12 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
   const equipoIndividualIds = equipos.map((e) => e.id);
   const rackEquipoIds = equipamientos.map((e) => e.id);
   const idsConMantenimiento = [...rackEquipoIds, ...equipoIndividualIds];
-  const [programacionesRes, tecnicosRes] = await Promise.all([
+  const [programacionesRes, tecnicosRes, checklistItemsRes] = await Promise.all([
     idsConMantenimiento.length > 0
       ? supabase.from("mantenimiento_programaciones").select("tipo_equipo, equipo_id, fecha_programada, asignado_a, nota").in("equipo_id", idsConMantenimiento)
       : { data: [] },
     supabase.from("profiles").select("id, nombre_completo").eq("activo", true).order("nombre_completo"),
+    supabase.from("mantenimiento_checklist_items").select("id, tipo_equipo, categoria, texto").order("orden"),
   ]);
   const programacionPorEquipo = new Map(
     (programacionesRes.data ?? []).map((p) => [
@@ -189,6 +190,11 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
     ]),
   );
   const tecnicos = (tecnicosRes.data ?? []).map((t) => ({ id: t.id, nombreCompleto: t.nombre_completo }));
+  const checklistPorCategoria = new Map<string, { id: string; texto: string }[]>();
+  for (const item of checklistItemsRes.data ?? []) {
+    const clave = `${item.tipo_equipo}:${item.categoria}`;
+    checklistPorCategoria.set(clave, [...(checklistPorCategoria.get(clave) ?? []), { id: item.id, texto: item.texto }]);
+  }
 
   const circuitosPorTablero = new Map<string, typeof circuitos>();
   for (const c of circuitos) circuitosPorTablero.set(c.tablero_id, [...(circuitosPorTablero.get(c.tablero_id) ?? []), c]);
@@ -463,7 +469,12 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
                                   <td>{lectura?.comentario || "—"}</td>
                                   <td>
                                     <div style={{ display: "flex", gap: 6 }}>
-                                      <RegistrarMantenimientoButton tipoEquipo="rack_equipamiento" equipoId={e.id} equipoTexto={e.texto} />
+                                      <RegistrarMantenimientoButton
+                                        tipoEquipo="rack_equipamiento"
+                                        equipoId={e.id}
+                                        equipoTexto={e.texto}
+                                        checklistItems={checklistPorCategoria.get(`rack_equipamiento:${e.categoria_equipo}`) ?? []}
+                                      />
                                       <ProgramarMantenimientoButton
                                         tipoEquipo="rack_equipamiento"
                                         equipoId={e.id}
@@ -548,7 +559,12 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
                         <td>{lectura?.comentario || "—"}</td>
                         <td>
                           <div style={{ display: "flex", gap: 6 }}>
-                            <RegistrarMantenimientoButton tipoEquipo="equipo_individual" equipoId={e.id} equipoTexto={e.texto} />
+                            <RegistrarMantenimientoButton
+                              tipoEquipo="equipo_individual"
+                              equipoId={e.id}
+                              equipoTexto={e.texto}
+                              checklistItems={checklistPorCategoria.get(`equipo_individual:${e.categoria_equipo}`) ?? []}
+                            />
                             <ProgramarMantenimientoButton
                               tipoEquipo="equipo_individual"
                               equipoId={e.id}

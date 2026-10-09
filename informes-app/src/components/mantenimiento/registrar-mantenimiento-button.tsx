@@ -4,27 +4,39 @@ import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Icon } from "@/components/icon";
 import { registrarMantenimientoAction } from "@/app/(app)/ubicaciones/actions";
-import type { TipoEquipoBaja } from "@/lib/database.types";
+import type { TipoEquipoBaja, EstadoChecklist } from "@/lib/database.types";
 
 function hoyISO(): string {
   return new Date().toISOString().slice(0, 10);
 }
+
+export interface ChecklistItemConfigurado {
+  id: string;
+  texto: string;
+}
+
+const ESTADO_CHECKLIST_LABEL: Record<EstadoChecklist, string> = { ok: "OK", no_ok: "No OK", no_aplica: "N/A" };
 
 /**
  * Botón "Registrar mantenimiento" para una fila de equipamiento (Rack o
  * Equipo Individual — ver `lib/mantenimiento/types.ts`) en la ficha de
  * Sitio — mismo modal self-contained que DarDeBajaButton/
  * EntregarADepositoButton, pero sin gate de rol: es trabajo de campo
- * normal, no una decisión operativa.
+ * normal, no una decisión operativa. Si la categoría del equipo tiene un
+ * checklist configurado (`checklistItems`), aparece inline en este mismo
+ * modal — no hace falta una pantalla aparte, ya estás parado en el
+ * equipo correcto.
  */
 export function RegistrarMantenimientoButton({
   tipoEquipo,
   equipoId,
   equipoTexto,
+  checklistItems = [],
 }: {
   tipoEquipo: TipoEquipoBaja;
   equipoId: string;
   equipoTexto: string;
+  checklistItems?: ChecklistItemConfigurado[];
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -34,6 +46,7 @@ export function RegistrarMantenimientoButton({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fotoInputRef = useRef<HTMLInputElement>(null);
+  const [checklist, setChecklist] = useState<Record<string, { estado: EstadoChecklist | null; observacion: string }>>({});
 
   function cerrar() {
     if (busy) return;
@@ -42,13 +55,33 @@ export function RegistrarMantenimientoButton({
     setDescripcion("");
     setFoto(null);
     setError(null);
+    setChecklist({});
+  }
+
+  function setEstadoItem(itemId: string, estado: EstadoChecklist) {
+    setChecklist((prev) => ({ ...prev, [itemId]: { estado, observacion: prev[itemId]?.observacion ?? "" } }));
+  }
+
+  function setObservacionItem(itemId: string, observacion: string) {
+    setChecklist((prev) => ({ ...prev, [itemId]: { estado: prev[itemId]?.estado ?? null, observacion } }));
   }
 
   async function confirmar() {
     setBusy(true);
     setError(null);
     const fd = new FormData();
-    fd.append("payload", JSON.stringify({ tipoEquipo, equipoId, fecha, descripcion }));
+    fd.append(
+      "payload",
+      JSON.stringify({
+        tipoEquipo,
+        equipoId,
+        fecha,
+        descripcion,
+        checklist: Object.entries(checklist)
+          .filter(([, v]) => v.estado !== null)
+          .map(([itemId, v]) => ({ itemId, estado: v.estado, observacion: v.observacion })),
+      }),
+    );
     if (foto) fd.append("foto", foto);
 
     const res = await registrarMantenimientoAction(fd);
@@ -102,6 +135,46 @@ export function RegistrarMantenimientoButton({
                 onChange={(e) => setFoto(e.target.files?.[0] ?? null)}
               />
             </div>
+
+            {checklistItems.length > 0 && (
+              <div className="field">
+                <label>
+                  Checklist de mantenimiento <span className="opt">(opcional)</span>
+                </label>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {checklistItems.map((item) => {
+                    const valor = checklist[item.id];
+                    return (
+                      <div key={item.id} style={{ border: "1px solid var(--field-border)", borderRadius: 8, padding: 8 }}>
+                        <div style={{ fontSize: 12.5, marginBottom: 6 }}>{item.texto}</div>
+                        <div style={{ display: "flex", gap: 4, marginBottom: valor?.estado === "no_ok" ? 6 : 0 }}>
+                          {(Object.keys(ESTADO_CHECKLIST_LABEL) as EstadoChecklist[]).map((estado) => (
+                            <button
+                              key={estado}
+                              type="button"
+                              className={`btn btn-sm ${valor?.estado === estado ? "btn-primary" : "btn-secondary"}`}
+                              onClick={() => setEstadoItem(item.id, estado)}
+                              disabled={busy}
+                            >
+                              {ESTADO_CHECKLIST_LABEL[estado]}
+                            </button>
+                          ))}
+                        </div>
+                        {valor?.estado === "no_ok" && (
+                          <input
+                            type="text"
+                            placeholder="Observación (opcional)"
+                            value={valor.observacion}
+                            onChange={(e) => setObservacionItem(item.id, e.target.value)}
+                            disabled={busy}
+                          />
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             {error && <div className="error-text">{error}</div>}
 
