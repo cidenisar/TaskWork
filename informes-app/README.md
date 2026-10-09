@@ -1332,6 +1332,17 @@ general que salió de esto.
     Rack y en Equipo Individual, Radioenlace solo en Rack, Grupo
     Electrógeno y Cámara CCTV solo en Equipo Individual). Un Admin puede
     agregar/quitar ítems después sin tocar código.
+  - **Cobertura ampliada a todas las categorías restantes** (migración
+    `20261009060000_mantenimiento_checklist_resto_categorias`), mismo
+    criterio de contenido investigado por tipo de equipo, no genérico: en
+    Racks — Router, Switch, Servidor, ODF, Patch panel, Convertidor de
+    medios, Firewall, Multiplexor, PDU/Regleta; en Equipos Individuales —
+    Control de acceso, Impresora, Telefonía, Climatización. Solo
+    "Otro" queda sin checklist en los dos `tipo_equipo` — es un cajón de
+    sastre, no un tipo de equipo real sobre el que tenga sentido escribir
+    ítems. No hizo falta tocar código: la UI ya buscaba ítems por
+    `tipo_equipo+categoria` de forma genérica (sección #51), así que
+    cualquier categoría con ítems cargados los muestra sola.
   - **Categoría nueva: "Grupo electrógeno"** en Equipos Individuales
     (`equipo_categoria` — faltaba, señalado por uso real en campo).
     `ALTER TYPE ... ADD VALUE` va en su propia migración/transacción
