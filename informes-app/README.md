@@ -1378,3 +1378,20 @@ general que salió de esto.
     se asigna a mano después si hace falta). Sirve para dimensionar
     cuándo visitar cada sitio, no para reemplazar el criterio de quien
     arma las salidas reales de la cuadrilla.
+
+- **Motivo de reprogramación en "Programar mantenimiento".** El botón de
+  excepción puntual (ver punto anterior) también se usa cuando un técnico
+  YA llegó al sitio y no pudo hacer el mantenimiento — para ese caso se
+  sumó un campo **"Motivo de la reprogramación"** (opcional, select) en el
+  mismo modal, antes de la Nota: `motivo_reprogramacion_mantenimiento`
+  (enum nuevo en `mantenimiento_programaciones.motivo`, mismo criterio que
+  `MotivoBaja`/`MotivoEntregaDeposito` — un enum chico con "otro" de
+  escape, nunca texto libre suelto): Clima, Sitio inaccesible, Falta
+  repuesto/herramienta, Equipo no encontrado/retirado, No se pudo ingresar
+  (seguridad del sitio), Otro. Queda `null` cuando la reprogramación es
+  simplemente una fecha anticipada de antemano (no hubo un intento
+  fallido) o cuando la programación la generó el algoritmo automático. En
+  el Plan (`/panel/mantenimientos`, pestaña Pendientes) se muestra como un
+  badge aparte ("Reprogramado: Clima") junto al de programación existente,
+  así queda visible de un vistazo por qué ese sitio no quedó resuelto en
+  la visita anterior.

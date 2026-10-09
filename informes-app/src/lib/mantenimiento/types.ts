@@ -1,4 +1,4 @@
-import type { TipoEquipoBaja } from "@/lib/database.types";
+import type { TipoEquipoBaja, MotivoReprogramacionMantenimiento } from "@/lib/database.types";
 import { CATEGORIA_EQUIPO_OPCIONES as RACK_CATEGORIAS, CATEGORIA_EQUIPO_LABEL as RACK_CATEGORIA_LABEL } from "@/components/racks/types";
 import { CATEGORIA_EQUIPO_OPCIONES as EQUIPO_CATEGORIAS, CATEGORIA_EQUIPO_LABEL as EQUIPO_CATEGORIA_LABEL } from "@/components/equipos/types";
 
@@ -35,6 +35,25 @@ export function categoriasDeTipoEquipo(tipoEquipo: TipoEquipoBaja): { value: str
 export function labelCategoriaMantenimiento(tipoEquipo: TipoEquipoBaja, categoria: string): string {
   return categoriasDeTipoEquipo(tipoEquipo).find((o) => o.value === categoria)?.label ?? categoria;
 }
+
+/** Por qué se reprograma a mano — ej. el técnico llegó al sitio y no pudo hacer el mantenimiento. Igual criterio que MotivoBaja: enum chico con "otro" de escape. */
+export const MOTIVO_REPROGRAMACION_OPCIONES: MotivoReprogramacionMantenimiento[] = [
+  "clima",
+  "sitio_inaccesible",
+  "falta_repuesto",
+  "equipo_no_encontrado",
+  "seguridad_sitio",
+  "otro",
+];
+
+export const MOTIVO_REPROGRAMACION_LABEL: Record<MotivoReprogramacionMantenimiento, string> = {
+  clima: "Clima (lluvia, tormenta, etc.)",
+  sitio_inaccesible: "Sitio inaccesible (ruta, llave, etc.)",
+  falta_repuesto: "Falta repuesto/herramienta",
+  equipo_no_encontrado: "Equipo no se encontró / fue retirado",
+  seguridad_sitio: "No se pudo ingresar (seguridad del sitio)",
+  otro: "Otro",
+};
 
 export type UrgenciaMantenimiento = "vencido" | "proximo" | "ok" | "nunca" | "sin_intervalo";
 

@@ -14,7 +14,14 @@ import { nuevoNumeroGeneracionEntrega } from "@/lib/deposito/numero-generacion";
 import { renderBajaPdf, renderEntregaDepositoPdf } from "@/lib/pdf/render";
 import { buildBajaFilename, buildEntregaDepositoFilename } from "@/lib/pdf/filename";
 import { resolverEquipo, TABLA_POR_TIPO } from "@/lib/equipamiento/resolver-equipo";
-import type { MotivoBaja, MotivoEntregaDeposito, CondicionMaterial, TipoEquipoBaja, EstadoChecklist } from "@/lib/database.types";
+import type {
+  MotivoBaja,
+  MotivoEntregaDeposito,
+  CondicionMaterial,
+  TipoEquipoBaja,
+  EstadoChecklist,
+  MotivoReprogramacionMantenimiento,
+} from "@/lib/database.types";
 
 export interface EstimarConsumoResult {
   success: boolean;
@@ -539,6 +546,7 @@ export async function programarMantenimientoAction(payload: {
   fechaProgramada: string;
   asignadoA: string | null;
   nota: string;
+  motivo: MotivoReprogramacionMantenimiento | null;
 }): Promise<ProgramarMantenimientoResult> {
   const profile = await requireProfile();
   if (!payload.tipoEquipo || !payload.equipoId || !payload.fechaProgramada) {
@@ -553,6 +561,7 @@ export async function programarMantenimientoAction(payload: {
       fecha_programada: payload.fechaProgramada,
       asignado_a: payload.asignadoA,
       nota: payload.nota.trim() || null,
+      motivo: payload.motivo,
       origen: "manual",
       created_by: profile.id,
     },

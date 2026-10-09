@@ -1,7 +1,12 @@
 import type { createClient } from "@/lib/supabase/server";
 import { fetchTodasLasUbicaciones } from "@/lib/ubicaciones/fetch-todas";
 import { labelUbicacion } from "@/components/ubicaciones/types";
-import { calcularEstadoMantenimiento, labelCategoriaMantenimiento, TIPO_EQUIPO_MANTENIMIENTO_LABEL } from "@/lib/mantenimiento/types";
+import {
+  calcularEstadoMantenimiento,
+  labelCategoriaMantenimiento,
+  TIPO_EQUIPO_MANTENIMIENTO_LABEL,
+  MOTIVO_REPROGRAMACION_LABEL,
+} from "@/lib/mantenimiento/types";
 import { getPronosticosPorSitio, type PronosticoSitio } from "@/lib/panel/clima";
 import type { TipoEquipoBaja } from "@/lib/database.types";
 
@@ -26,6 +31,8 @@ export interface PanelMantenimientoItem {
   esProgramada: boolean;
   /** true si la programación la cargó un técnico a mano (excepción puntual) — false si salió del generador automático. */
   programacionEsManual: boolean;
+  /** Por qué se reprogramó a mano (ej. "Clima") — null si no hubo motivo cargado. */
+  motivoLabel: string | null;
   asignadoNombre: string | null;
   clima: PronosticoSitio | null;
 }
@@ -65,7 +72,7 @@ export async function getPanelMantenimientos(supabase: Supabase): Promise<PanelM
       supabase.from("rack_equipamientos").select("id, rack_id, categoria_equipo, texto").eq("estado", "activo"),
       supabase.from("equipos").select("id, categoria_equipo, texto, ubicacion_id").eq("estado", "activo"),
       supabase.from("mantenimientos_equipamiento").select("tipo_equipo, equipo_id, fecha").order("fecha", { ascending: false }),
-      supabase.from("mantenimiento_programaciones").select("tipo_equipo, equipo_id, fecha_programada, asignado_a, origen"),
+      supabase.from("mantenimiento_programaciones").select("tipo_equipo, equipo_id, fecha_programada, asignado_a, origen, motivo"),
       supabase.from("profiles").select("id, nombre_completo"),
     ]);
 
@@ -88,7 +95,7 @@ export async function getPanelMantenimientos(supabase: Supabase): Promise<PanelM
   const programacionPorEquipo = new Map(
     (programacionesRes.data ?? []).map((p) => [
       `${p.tipo_equipo}:${p.equipo_id}`,
-      { fecha: p.fecha_programada, asignadoA: p.asignado_a, origen: p.origen },
+      { fecha: p.fecha_programada, asignadoA: p.asignado_a, origen: p.origen, motivo: p.motivo },
     ]),
   );
 
@@ -127,6 +134,7 @@ export async function getPanelMantenimientos(supabase: Supabase): Promise<PanelM
       fechaObjetivo: programacion?.fecha ?? fechaCalculada,
       esProgramada: programacion != null,
       programacionEsManual: programacion?.origen === "manual",
+      motivoLabel: programacion?.motivo ? MOTIVO_REPROGRAMACION_LABEL[programacion.motivo] : null,
       asignadoNombre: programacion?.asignadoA ? (nombrePorTecnico.get(programacion.asignadoA) ?? null) : null,
       clima: null,
     });

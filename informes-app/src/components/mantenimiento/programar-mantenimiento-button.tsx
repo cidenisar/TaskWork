@@ -4,7 +4,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Icon } from "@/components/icon";
 import { programarMantenimientoAction } from "@/app/(app)/ubicaciones/actions";
-import type { TipoEquipoBaja } from "@/lib/database.types";
+import { MOTIVO_REPROGRAMACION_OPCIONES, MOTIVO_REPROGRAMACION_LABEL } from "@/lib/mantenimiento/types";
+import type { TipoEquipoBaja, MotivoReprogramacionMantenimiento } from "@/lib/database.types";
 
 /**
  * Botón "Programar mantenimiento" para una fila de equipamiento (Rack o
@@ -26,13 +27,19 @@ export function ProgramarMantenimientoButton({
   equipoId: string;
   equipoTexto: string;
   tecnicos: { id: string; nombreCompleto: string }[];
-  programacionActual: { fechaProgramada: string; asignadoA: string | null; nota: string | null } | null;
+  programacionActual: {
+    fechaProgramada: string;
+    asignadoA: string | null;
+    nota: string | null;
+    motivo: MotivoReprogramacionMantenimiento | null;
+  } | null;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [fecha, setFecha] = useState(programacionActual?.fechaProgramada ?? "");
   const [asignadoA, setAsignadoA] = useState(programacionActual?.asignadoA ?? "");
   const [nota, setNota] = useState(programacionActual?.nota ?? "");
+  const [motivo, setMotivo] = useState<MotivoReprogramacionMantenimiento | "">(programacionActual?.motivo ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -55,6 +62,7 @@ export function ProgramarMantenimientoButton({
       fechaProgramada: fecha,
       asignadoA: asignadoA || null,
       nota,
+      motivo: motivo || null,
     });
     setBusy(false);
     if (!res.success) {
@@ -96,6 +104,22 @@ export function ProgramarMantenimientoButton({
                 {tecnicos.map((t) => (
                   <option key={t.id} value={t.id}>
                     {t.nombreCompleto}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="field">
+              <label>
+                Motivo de la reprogramación <span className="opt">(opcional)</span>
+              </label>
+              <div className="hint" style={{ margin: "-2px 0 6px" }}>
+                Completalo si llegaste al sitio y no se pudo hacer el mantenimiento — queda registrado el porqué.
+              </div>
+              <select value={motivo} onChange={(e) => setMotivo(e.target.value as MotivoReprogramacionMantenimiento | "")} disabled={busy}>
+                <option value="">Sin motivo específico (reprogramación de antemano)</option>
+                {MOTIVO_REPROGRAMACION_OPCIONES.map((m) => (
+                  <option key={m} value={m}>
+                    {MOTIVO_REPROGRAMACION_LABEL[m]}
                   </option>
                 ))}
               </select>

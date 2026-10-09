@@ -178,7 +178,7 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
   const idsConMantenimiento = [...rackEquipoIds, ...equipoIndividualIds];
   const [programacionesRes, tecnicosRes, checklistItemsRes] = await Promise.all([
     idsConMantenimiento.length > 0
-      ? supabase.from("mantenimiento_programaciones").select("tipo_equipo, equipo_id, fecha_programada, asignado_a, nota").in("equipo_id", idsConMantenimiento)
+      ? supabase.from("mantenimiento_programaciones").select("tipo_equipo, equipo_id, fecha_programada, asignado_a, nota, motivo").in("equipo_id", idsConMantenimiento)
       : { data: [] },
     supabase.from("profiles").select("id, nombre_completo").eq("activo", true).order("nombre_completo"),
     supabase.from("mantenimiento_checklist_items").select("id, tipo_equipo, categoria, texto").order("orden"),
@@ -186,7 +186,7 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
   const programacionPorEquipo = new Map(
     (programacionesRes.data ?? []).map((p) => [
       `${p.tipo_equipo}:${p.equipo_id}`,
-      { fechaProgramada: p.fecha_programada, asignadoA: p.asignado_a, nota: p.nota },
+      { fechaProgramada: p.fecha_programada, asignadoA: p.asignado_a, nota: p.nota, motivo: p.motivo },
     ]),
   );
   const tecnicos = (tecnicosRes.data ?? []).map((t) => ({ id: t.id, nombreCompleto: t.nombre_completo }));
