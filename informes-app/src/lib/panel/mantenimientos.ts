@@ -24,6 +24,8 @@ export interface PanelMantenimientoItem {
   fechaObjetivo: string | null;
   /** true si fechaObjetivo viene de una programación manual, no del cálculo. */
   esProgramada: boolean;
+  /** true si la programación la cargó un técnico a mano (excepción puntual) — false si salió del generador automático. */
+  programacionEsManual: boolean;
   asignadoNombre: string | null;
   clima: PronosticoSitio | null;
 }
@@ -63,7 +65,7 @@ export async function getPanelMantenimientos(supabase: Supabase): Promise<PanelM
       supabase.from("rack_equipamientos").select("id, rack_id, categoria_equipo, texto").eq("estado", "activo"),
       supabase.from("equipos").select("id, categoria_equipo, texto, ubicacion_id").eq("estado", "activo"),
       supabase.from("mantenimientos_equipamiento").select("tipo_equipo, equipo_id, fecha").order("fecha", { ascending: false }),
-      supabase.from("mantenimiento_programaciones").select("tipo_equipo, equipo_id, fecha_programada, asignado_a"),
+      supabase.from("mantenimiento_programaciones").select("tipo_equipo, equipo_id, fecha_programada, asignado_a, origen"),
       supabase.from("profiles").select("id, nombre_completo"),
     ]);
 
@@ -84,7 +86,10 @@ export async function getPanelMantenimientos(supabase: Supabase): Promise<PanelM
     if (!ultimaFechaPorEquipo.has(clave)) ultimaFechaPorEquipo.set(clave, m.fecha);
   }
   const programacionPorEquipo = new Map(
-    (programacionesRes.data ?? []).map((p) => [`${p.tipo_equipo}:${p.equipo_id}`, { fecha: p.fecha_programada, asignadoA: p.asignado_a }]),
+    (programacionesRes.data ?? []).map((p) => [
+      `${p.tipo_equipo}:${p.equipo_id}`,
+      { fecha: p.fecha_programada, asignadoA: p.asignado_a, origen: p.origen },
+    ]),
   );
 
   const hoy = new Date();
@@ -121,6 +126,7 @@ export async function getPanelMantenimientos(supabase: Supabase): Promise<PanelM
       mensaje: estado.mensaje,
       fechaObjetivo: programacion?.fecha ?? fechaCalculada,
       esProgramada: programacion != null,
+      programacionEsManual: programacion?.origen === "manual",
       asignadoNombre: programacion?.asignadoA ? (nombrePorTecnico.get(programacion.asignadoA) ?? null) : null,
       clima: null,
     });

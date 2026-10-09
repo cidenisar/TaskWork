@@ -178,7 +178,8 @@ export function PlanMantenimiento({
                     </span>
                     {item.esProgramada && item.fechaObjetivo && (
                       <span className="chip">
-                        <Icon name="calendar" size={11} /> Programado: {fmtFecha(item.fechaObjetivo)}
+                        <Icon name="calendar" size={11} /> {item.programacionEsManual ? "Programado (excepción)" : "Programado (auto)"}:{" "}
+                        {fmtFecha(item.fechaObjetivo)}
                         {item.asignadoNombre ? ` · ${item.asignadoNombre}` : ""}
                       </span>
                     )}

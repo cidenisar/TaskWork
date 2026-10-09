@@ -595,6 +595,8 @@ export type MantenimientoChecklistRespuestaRow = {
 }
 
 /** Programación manual de la próxima visita — pisa (para mostrar) la fecha calculada del intervalo cuando hace falta coordinar algo puntual. */
+export type OrigenProgramacion = "manual" | "auto";
+
 export type MantenimientoProgramacionRow = {
   id: string;
   tipo_equipo: TipoEquipoBaja;
@@ -602,6 +604,8 @@ export type MantenimientoProgramacionRow = {
   fecha_programada: string;
   asignado_a: string | null;
   nota: string | null;
+  /** 'auto' = generada por el algoritmo (Configuración → Generar programación automática), nunca se pisa a mano; 'manual' = cargada por un técnico, el algoritmo nunca la toca. */
+  origen: OrigenProgramacion;
   created_by: string;
   created_at: string;
 }

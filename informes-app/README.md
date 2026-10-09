@@ -1344,3 +1344,37 @@ general que salió de esto.
     PDF de checklist aparte en esta entrega (las respuestas quedan en la
     base, consultables, pero no se imprimen todavía) — se puede sumar
     después si hace falta un comprobante en papel.
+
+- **Programación automática del Plan de Mantenimiento.** Corrección sobre
+  la entrega anterior: el botón "Programar mantenimiento" por equipo se
+  había entendido como la forma normal de armar la agenda — pero la idea
+  real es que la agenda la calcule el sistema desde Configuración, y ese
+  botón quede solo para una excepción puntual ("este sitio se adelanta/
+  atrasa"). Se agregó un botón **"Generar programación automática"** en
+  *Panel → Mantenimientos → Configuración*
+  (`lib/mantenimiento/generar-programacion.ts`, solo Admin) que arma la
+  agenda de los próximos ~90 días (ventana deslizante — se vuelve a
+  correr cuando hace falta, no es un plan anual fijo):
+  - Agrupa los equipos vencidos/por vencer por SITIO (una visita cubre
+    todo lo que vence ahí, no un viaje por equipo) y por PROVINCIA
+    (mismo proxy de "zona" que ya usa Dotación).
+  - La hora de viaje por visita sale de la distancia PROMEDIO real
+    (Haversine, coordenadas GPS ya cargadas) entre los sitios de esa
+    provincia — nunca inventada.
+  - Empaqueta greedy, día hábil por día hábil: ubica cada visita en el
+    primer día con horas libres (según los supuestos ya configurados:
+    horas/día, horas/visita, velocidad de viaje) sin pasarse de la fecha
+    límite de sus equipos.
+  - **Nunca pisa una programación cargada a mano** (`mantenimiento_
+    programaciones.origen`, `'manual' | 'auto'` — columna nueva): cada
+    corrida borra y reemplaza solo lo que generó ella misma la vez
+    anterior (`origen = 'auto'`), dejando intactas las excepciones
+    puntuales cargadas por un técnico. En el Plan, el badge distingue
+    "Programado (auto)" de "Programado (excepción)".
+  - **A propósito, no es ruteo real**: sigue siendo una ESTIMACIÓN —
+    trata cada provincia como una sola cuadrilla (mismo supuesto
+    simplificador que Dotación), no arma un itinerario óptimo entre
+    sitios ni asigna técnico automáticamente (ese campo queda en null,
+    se asigna a mano después si hace falta). Sirve para dimensionar
+    cuándo visitar cada sitio, no para reemplazar el criterio de quien
+    arma las salidas reales de la cuadrilla.

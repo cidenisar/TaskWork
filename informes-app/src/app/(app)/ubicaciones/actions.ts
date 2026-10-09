@@ -553,6 +553,7 @@ export async function programarMantenimientoAction(payload: {
       fecha_programada: payload.fechaProgramada,
       asignado_a: payload.asignadoA,
       nota: payload.nota.trim() || null,
+      origen: "manual",
       created_by: profile.id,
     },
     { onConflict: "tipo_equipo,equipo_id" },

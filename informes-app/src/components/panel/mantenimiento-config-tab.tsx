@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { guardarIntervaloMantenimientoAction } from "@/app/(app)/configuracion/actions/mantenimiento-intervalos";
 import { guardarSupuestosDotacionAction } from "@/app/(app)/configuracion/actions/mantenimiento-dotacion";
 import { agregarChecklistItemAction, quitarChecklistItemAction } from "@/app/(app)/configuracion/actions/mantenimiento-checklist";
+import { generarProgramacionAutomaticaAction } from "@/app/(app)/configuracion/actions/mantenimiento-programacion";
 import {
   TIPO_EQUIPO_MANTENIMIENTO_OPCIONES,
   TIPO_EQUIPO_MANTENIMIENTO_LABEL,
@@ -12,6 +13,11 @@ import {
 } from "@/lib/mantenimiento/types";
 import { Icon } from "@/components/icon";
 import type { TipoEquipoBaja } from "@/lib/database.types";
+
+function fmtFecha(fecha: string) {
+  const [y, m, d] = fecha.split("-");
+  return d && m && y ? `${d}/${m}/${y}` : fecha;
+}
 
 export interface IntervaloConfigurado {
   tipoEquipo: TipoEquipoBaja;
@@ -50,6 +56,30 @@ export function MantenimientoConfigTab({
   checklistItems: ChecklistItemCatalogo[];
 }) {
   const router = useRouter();
+
+  const [generando, setGenerando] = useState(false);
+  const [generarError, setGenerarError] = useState<string | null>(null);
+  const [generarResultado, setGenerarResultado] = useState<{
+    sitiosProgramados: number;
+    equiposProgramados: number;
+    primeraFecha: string | null;
+    ultimaFecha: string | null;
+  } | null>(null);
+
+  async function generarProgramacion() {
+    setGenerando(true);
+    setGenerarError(null);
+    setGenerarResultado(null);
+    const res = await generarProgramacionAutomaticaAction();
+    setGenerando(false);
+    if (!res.success || !res.resultado) {
+      setGenerarError(res.error || "No se pudo generar la programación.");
+      return;
+    }
+    setGenerarResultado(res.resultado);
+    router.refresh();
+  }
+
   const frecuenciaPorClave = new Map(intervalos.map((i) => [`${i.tipoEquipo}:${i.categoria}`, String(i.frecuenciaDias)]));
   const [valores, setValores] = useState<Record<string, string>>(() => Object.fromEntries(frecuenciaPorClave));
   const [busyClave, setBusyClave] = useState<string | null>(null);
@@ -132,6 +162,32 @@ export function MantenimientoConfigTab({
   return (
     <div className="card">
       <div className="panel-card-title">
+        <h2>Programación automática</h2>
+      </div>
+      <div className="hint" style={{ margin: "-4px 0 12px" }}>
+        Arma la agenda de los próximos ~90 días: agrupa equipos por sitio, agrupa sitios cercanos por provincia (distancia real entre
+        coordenadas GPS, no inventada) y reparte las visitas respetando las horas/día configuradas abajo — así la fecha de cada visita
+        sale calculada, no la inventa cada técnico en el campo. Se puede correr las veces que haga falta: nunca pisa una programación que
+        un técnico ya cargó a mano como excepción puntual.
+      </div>
+      <button type="button" className="btn btn-primary btn-sm" onClick={generarProgramacion} disabled={generando}>
+        <Icon name="calendar" size={13} /> {generando ? "Generando..." : "Generar programación automática"}
+      </button>
+      {generarResultado && !generarError && (
+        <div className="hint" style={{ color: "var(--ok)", marginTop: 8 }}>
+          <Icon name="check" size={12} />{" "}
+          {generarResultado.sitiosProgramados === 0
+            ? "No hay nada para programar en los próximos 90 días."
+            : `Se programaron ${generarResultado.sitiosProgramados} sitio${generarResultado.sitiosProgramados === 1 ? "" : "s"} (${generarResultado.equiposProgramados} equipo${generarResultado.equiposProgramados === 1 ? "" : "s"}), entre el ${fmtFecha(generarResultado.primeraFecha!)} y el ${fmtFecha(generarResultado.ultimaFecha!)}.`}
+        </div>
+      )}
+      {generarError && (
+        <div className="error-text" style={{ marginTop: 8 }}>
+          {generarError}
+        </div>
+      )}
+
+      <div className="panel-card-title" style={{ marginTop: 20 }}>
         <h2>Intervalos por categoría</h2>
       </div>
       <div className="hint" style={{ margin: "-4px 0 12px" }}>

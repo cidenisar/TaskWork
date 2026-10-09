@@ -76,8 +76,11 @@ export function ProgramarMantenimientoButton({
             <div className="section-label" style={{ marginBottom: 4 }}>
               Programar mantenimiento
             </div>
-            <p className="hint" style={{ margin: "0 0 14px" }}>
+            <p className="hint" style={{ margin: "0 0 4px" }}>
               {equipoTexto}
+            </p>
+            <p className="hint" style={{ margin: "0 0 14px" }}>
+              Para una excepción puntual — la agenda general se genera sola desde Configuración (Panel → Mantenimientos).
             </p>
 
             <div className="field">
