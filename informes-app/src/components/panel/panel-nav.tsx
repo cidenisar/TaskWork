@@ -9,6 +9,7 @@ const ITEMS: { href: string; label: string; icon: IconName }[] = [
   { href: "/panel/mantenimientos", label: "Mantenimientos", icon: "wrench" },
   { href: "/panel/vehiculos", label: "Vehículos", icon: "truck" },
   { href: "/estadisticas", label: "Estadísticas", icon: "chart" },
+  { href: "/configuracion", label: "Configuración", icon: "settings" },
 ];
 
 export function PanelNav() {

@@ -1,10 +1,18 @@
+import Link from "next/link";
 import { requireProfile } from "@/lib/auth";
 import { puedeVerConfiguracion } from "@/lib/types";
 import { LockedPanel } from "@/components/locked-panel";
-import { createClient } from "@/lib/supabase/server";
-import { ConfiguracionView } from "@/components/config/view";
+import { ModuleIcon } from "@/components/module-icon";
 
-export default async function ConfiguracionPage() {
+/**
+ * Hub de Configuración — antes era una sola pantalla con 9 tarjetas
+ * apiladas una debajo de la otra (todo junto, scroll largo); ahora cada
+ * sección es su propia subruta con su propio fetch acotado, mismo criterio
+ * que el hub de "Relevamiento de Equipos" (`/relevamiento`). Solo
+ * Administrador — ya no aparece en el menú principal de los técnicos, se
+ * accede desde el Panel de Supervisión (`PanelNav`).
+ */
+export default async function ConfiguracionHubPage() {
   const profile = await requireProfile();
 
   if (!puedeVerConfiguracion(profile.rol)) {
@@ -16,115 +24,79 @@ export default async function ConfiguracionPage() {
     );
   }
 
-  const supabase = await createClient();
-
-  const [
-    configRes,
-    usuariosRes,
-    emailsRes,
-    torresRes,
-    clientesRes,
-    provinciasRes,
-    tiposRes,
-    categoriasRes,
-    vehiculosRes,
-    servicesRes,
-    tramosTorreRes,
-    auditRes,
-    erroresRes,
-  ] = await Promise.all([
-    supabase
-      .from("config_general")
-      .select(
-        "logo_empresa_url, auto_enviar_email, umbral_aviso_historial, recordatorio_semanal_archivo, resumen_semanal_ia, liberacion_automatica_activa",
-      )
-      .eq("id", 1)
-      .single(),
-    supabase.from("profiles").select("id, email, nombre_completo, rol, torre, activo").order("nombre_completo"),
-    supabase.from("config_emails_envio").select("id, email, activo").order("email"),
-    supabase.from("catalogo_torres").select("id, nombre").order("nombre"),
-    supabase.from("catalogo_clientes").select("id, nombre").order("nombre"),
-    supabase.from("catalogo_provincias").select("id, nombre").order("nombre"),
-    supabase.from("catalogo_tipos_informe").select("id, nombre").order("nombre"),
-    supabase.from("catalogo_categorias_gasto").select("id, nombre").order("nombre"),
-    supabase
-      .from("catalogo_vehiculos")
-      .select("id, patente, marca_modelo, vencimiento_tarjeta_verde, vencimiento_rto, kilometraje_actual")
-      .order("patente"),
-    supabase.from("vehiculo_services").select("id, vehiculo_id, fecha, kilometraje, descripcion").order("fecha", { ascending: false }),
-    supabase.from("torre_tipo_largos").select("tipo_torre, largo_tramo_m"),
-    supabase.from("audit_log").select("id, actor_nombre, actor_rol, accion, created_at").order("created_at", { ascending: false }).limit(100),
-    supabase
-      .from("client_errores")
-      .select("id, mensaje, contexto, usuario_nombre, usuario_email, url, user_agent, stack, created_at")
-      .order("created_at", { ascending: false })
-      .limit(200),
-  ]);
-
-  const patentePorVehiculo = new Map((vehiculosRes.data ?? []).map((v) => [v.id, v.patente]));
-
   return (
-    <ConfiguracionView
-      data={{
-        logoUrl: configRes.data?.logo_empresa_url ?? null,
-        autoEnviarEmail: configRes.data?.auto_enviar_email ?? true,
-        usuarios: (usuariosRes.data ?? []).map((u) => ({
-          id: u.id,
-          email: u.email,
-          nombreCompleto: u.nombre_completo,
-          rol: u.rol,
-          torre: u.torre,
-          activo: u.activo,
-        })),
-        currentUserId: profile.id,
-        emails: (emailsRes.data ?? []).map((e) => ({ id: e.id, email: e.email, activo: e.activo })),
-        catalogos: {
-          torres: torresRes.data ?? [],
-          clientes: clientesRes.data ?? [],
-          provincias: provinciasRes.data ?? [],
-          tiposInforme: tiposRes.data ?? [],
-          categoriasGasto: categoriasRes.data ?? [],
-          vehiculos: (vehiculosRes.data ?? []).map((v) => ({
-            id: v.id,
-            patente: v.patente,
-            marcaModelo: v.marca_modelo,
-            vencimientoTarjetaVerde: v.vencimiento_tarjeta_verde,
-            vencimientoRto: v.vencimiento_rto,
-            kilometrajeActual: v.kilometraje_actual,
-          })),
-          services: (servicesRes.data ?? []).map((s) => ({
-            id: s.id,
-            vehiculoId: s.vehiculo_id,
-            patente: patentePorVehiculo.get(s.vehiculo_id) ?? "—",
-            fecha: s.fecha,
-            kilometraje: Number(s.kilometraje),
-            descripcion: s.descripcion,
-          })),
-          tramosTorre: (tramosTorreRes.data ?? []).map((t) => ({ tipoTorre: t.tipo_torre, largoTramoM: Number(t.largo_tramo_m) })),
-        },
-        umbralAviso: configRes.data?.umbral_aviso_historial ?? "20",
-        recordatorioSemanal: configRes.data?.recordatorio_semanal_archivo ?? true,
-        liberacionAutomatica: configRes.data?.liberacion_automatica_activa ?? false,
-        resumenSemanalIa: configRes.data?.resumen_semanal_ia ?? true,
-        auditLog: (auditRes.data ?? []).map((a) => ({
-          id: a.id,
-          actorNombre: a.actor_nombre,
-          actorRol: a.actor_rol,
-          accion: a.accion,
-          createdAt: a.created_at,
-        })),
-        erroresCliente: (erroresRes.data ?? []).map((e) => ({
-          id: e.id,
-          mensaje: e.mensaje,
-          contexto: e.contexto,
-          usuarioNombre: e.usuario_nombre,
-          usuarioEmail: e.usuario_email,
-          url: e.url,
-          userAgent: e.user_agent,
-          stack: e.stack,
-          createdAt: e.created_at,
-        })),
-      }}
-    />
+    <div>
+      <div className="page-heading">
+        <h1>Configuración</h1>
+        <p>Elegí qué querés configurar</p>
+      </div>
+      <div className="module-grid">
+        <Link href="/configuracion/empresa" className="module-card">
+          <div className="module-ico">
+            <ModuleIcon name="empresa" />
+          </div>
+          <div className="module-title">Empresa</div>
+          <div className="module-sub">Logo que aparece en la cabecera de todos los PDF que se generan</div>
+        </Link>
+        <Link href="/configuracion/usuarios" className="module-card">
+          <div className="module-ico">
+            <ModuleIcon name="usuarios" />
+          </div>
+          <div className="module-title">Usuarios</div>
+          <div className="module-sub">Alta, rol, torre asignada, blanqueo de contraseña y baja de cuentas</div>
+        </Link>
+        <Link href="/configuracion/catalogos" className="module-card">
+          <div className="module-ico">
+            <ModuleIcon name="catalogos" />
+          </div>
+          <div className="module-title">Catálogos</div>
+          <div className="module-sub">
+            Torres (cuadrillas), clientes, provincias, tipos de informe, categorías de gasto, vehículos y tramos de torre
+          </div>
+        </Link>
+        <Link href="/configuracion/emails" className="module-card">
+          <div className="module-ico">
+            <ModuleIcon name="emails" />
+          </div>
+          <div className="module-title">Emails de envío</div>
+          <div className="module-sub">Envío automático de informes y la lista de direcciones que los reciben</div>
+        </Link>
+        <Link href="/configuracion/almacenamiento" className="module-card">
+          <div className="module-ico">
+            <ModuleIcon name="almacenamiento" />
+          </div>
+          <div className="module-title">Almacenamiento</div>
+          <div className="module-sub">Umbral de aviso, recordatorio semanal y liberación automática de archivos viejos</div>
+        </Link>
+        <Link href="/configuracion/resumen-semanal" className="module-card">
+          <div className="module-ico">
+            <ModuleIcon name="resumen-ia" />
+          </div>
+          <div className="module-title">Resumen semanal IA</div>
+          <div className="module-sub">El mensaje que la IA redacta cada semana con lo que hizo el equipo</div>
+        </Link>
+        <Link href="/configuracion/auditoria" className="module-card">
+          <div className="module-ico">
+            <ModuleIcon name="auditoria" />
+          </div>
+          <div className="module-title">Auditoría</div>
+          <div className="module-sub">Quién hizo qué — últimas 100 acciones de administración registradas</div>
+        </Link>
+        <Link href="/configuracion/errores" className="module-card">
+          <div className="module-ico">
+            <ModuleIcon name="errores" />
+          </div>
+          <div className="module-title">Errores reportados</div>
+          <div className="module-sub">Errores que capturó la app en el navegador de los usuarios</div>
+        </Link>
+        <Link href="/configuracion/datos-prueba" className="module-card">
+          <div className="module-ico">
+            <ModuleIcon name="datos-prueba" />
+          </div>
+          <div className="module-title">Datos de prueba</div>
+          <div className="module-sub">Vaciar todo lo cargado de prueba antes de arrancar en producción real</div>
+        </Link>
+      </div>
+    </div>
   );
 }

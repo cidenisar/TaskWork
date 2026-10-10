@@ -1415,3 +1415,28 @@ general que salió de esto.
   badge aparte ("Reprogramado: Clima") junto al de programación existente,
   así queda visible de un vistazo por qué ese sitio no quedó resuelto en
   la visita anterior.
+
+- **Configuración: reorganizada en 9 secciones propias, accesible solo
+  desde el Panel de Supervisión.** Dos cambios de UX a pedido de uso real.
+  (1) **Ya no aparece en el menú principal de los técnicos** — ni como
+  tarjeta en el inicio ni como tab dentro de Estadísticas: se sacó de
+  `src/app/(app)/page.tsx` y de `NAV_CONFIG.estadisticas.tabs` en
+  `app-shell.tsx`. Se accede desde `PanelNav` (el sidebar del Panel de
+  Supervisión), mismo lugar donde ya vivía el acceso a Estadísticas — el
+  gate real sigue siendo RLS + `puedeVerConfiguracion` (solo Admin, más
+  estricto que el Panel en sí, que es Admin o Supervisor), esto solo
+  cambia DÓNDE aparece el link, no quién puede entrar. (2) **Antes era una
+  sola pantalla con 9 tarjetas apiladas** (Empresa, Usuarios, Emails,
+  Catálogos, Almacenamiento, Resumen semanal IA, Auditoría, Errores,
+  Datos de prueba) con scroll largo — ahora `/configuracion` es un hub
+  (mismo patrón que `/relevamiento`) con una tarjeta por sección, y cada
+  una es su propia subruta (`/configuracion/usuarios`,
+  `/configuracion/catalogos`, etc.) con su propio fetch acotado a lo que
+  esa pantalla necesita, en vez de un solo `page.tsx` gigante que traía
+  las 13 queries de todas las secciones juntas de una. El componente
+  viejo `ConfiguracionView` (stack de las 9 cards) se borró — ya no tenía
+  uso. El botón "Volver" del header baja un nivel por vez: desde una
+  sección vuelve al hub, desde el hub vuelve al Panel. Se sumaron 9
+  íconos nuevos al sistema de íconos de módulo (`module-icon.tsx`) y uno
+  chico (`settings`, para el link del Panel) — mismo criterio de siempre:
+  líneas simples, nunca emoji.

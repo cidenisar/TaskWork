@@ -111,10 +111,7 @@ const NAV_CONFIG: Record<string, ModuleConfig> = {
   },
   estadisticas: {
     brand: "Estadísticas",
-    tabs: [
-      { href: "/estadisticas", label: "Resumen" },
-      { href: "/configuracion", label: "Configuración", gated: true },
-    ],
+    tabs: [{ href: "/estadisticas", label: "Resumen" }],
   },
   ayuda: {
     brand: "Ayuda",
@@ -134,15 +131,29 @@ export function AppShell({ profile, children }: { profile: Profile; children: Re
   const moduleKey = moduleKeyFor(pathname);
   const moduleConfig = moduleKey ? NAV_CONFIG[moduleKey] : null;
   const isHome = pathname === "/";
-  const brand = moduleConfig?.brand ?? (pathname === "/configuracion" ? "Configuración" : "Informes");
-  const backHref = moduleConfig?.backHref ?? "/";
-  const backLabel = moduleConfig?.backHref ? "Volver a Relevamiento de Equipos" : "Volver al inicio";
+  // Configuración vive entera bajo /configuracion/* pero son subrutas, no
+  // un moduleKey (moduleKeyFor la excluye a propósito) — se trata aparte en
+  // vez de sumar un NAV_CONFIG por sección: el hub vuelve al Panel (es la
+  // única puerta de entrada ahora, ver PanelNav) y cada subpágina vuelve al
+  // hub, un nivel por vez, mismo criterio que "Volver a Relevamiento".
+  const esConfigHub = pathname === "/configuracion";
+  const esConfigSubpagina = pathname.startsWith("/configuracion/");
+  const brand = moduleConfig?.brand ?? (esConfigHub || esConfigSubpagina ? "Configuración" : "Informes");
+  const backHref = moduleConfig?.backHref ?? (esConfigHub ? "/panel" : esConfigSubpagina ? "/configuracion" : "/");
+  const backLabel = moduleConfig?.backHref
+    ? "Volver a Relevamiento de Equipos"
+    : esConfigHub
+      ? "Volver al Panel"
+      : esConfigSubpagina
+        ? "Volver a Configuración"
+        : "Volver al inicio";
   // Pantallas con mucho dato para visualizar (listas largas, tablas) — en
   // pantalla ancha usan .app-wide en vez de los 800px fijos de siempre. Los
   // historiales entran por ruta, no por módulo entero: las pantallas de
   // carga (nuevo/mantenimiento) del mismo módulo son formularios angostos,
   // no se benefician de más ancho.
-  const anchoCompleto = moduleKey === "estadisticas" || moduleKey === "ubicaciones" || pathname.endsWith("/historial");
+  const anchoCompleto =
+    moduleKey === "estadisticas" || moduleKey === "ubicaciones" || pathname.endsWith("/historial") || esConfigSubpagina;
 
   return (
     <div className={anchoCompleto ? "app app-wide" : "app"}>

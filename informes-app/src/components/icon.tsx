@@ -69,6 +69,14 @@ const PATHS: Record<string, React.ReactNode> = {
       <path d="m14.5 6.5 3-1 1 1-1 3-3 1-1-1Z" />
     </>
   ),
+  settings: (
+    <>
+      <path d="M4 7h10" />
+      <circle cx="17" cy="7" r="2" />
+      <path d="M20 17H10" />
+      <circle cx="7" cy="17" r="2" />
+    </>
+  ),
   check: <path d="m5 12.5 4.5 4.5L19.5 7" />,
   "chevron-right": <path d="m9 5 7 7-7 7" />,
   x: (

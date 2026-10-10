@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { requireProfile } from "@/lib/auth";
-import { puedeVerEstadisticas, puedeVerConfiguracion, puedeGestionarBajas, puedeGestionarDeposito, puedeVerPanel } from "@/lib/types";
+import { puedeVerEstadisticas, puedeGestionarBajas, puedeGestionarDeposito, puedeVerPanel } from "@/lib/types";
 import { ModuleIcon } from "@/components/module-icon";
 import { Icon } from "@/components/icon";
 
@@ -8,7 +8,6 @@ export default async function HomePage() {
   const profile = await requireProfile();
   const statsLocked = !puedeVerEstadisticas(profile.rol);
   const panelLocked = !puedeVerPanel(profile.rol);
-  const configLocked = !puedeVerConfiguracion(profile.rol);
   const bajasLocked = !puedeGestionarBajas(profile.rol);
   const depositoLocked = !puedeGestionarDeposito(profile.rol);
 
@@ -92,15 +91,6 @@ export default async function HomePage() {
             Estadísticas {statsLocked && <span className="lock"><Icon name="lock" size={12} /></span>}
           </div>
           <div className="module-sub">Vista general de informes, gastos y actividad del equipo</div>
-        </Link>
-        <Link href="/configuracion" className="module-card">
-          <div className="module-ico">
-            <ModuleIcon name="configuracion" />
-          </div>
-          <div className="module-title">
-            Configuración {configLocked && <span className="lock"><Icon name="lock" size={12} /></span>}
-          </div>
-          <div className="module-sub">Usuarios, catálogos, vehículos y almacenamiento — solo Administrador</div>
         </Link>
       </div>
     </div>
