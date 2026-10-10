@@ -1440,3 +1440,41 @@ general que salió de esto.
   íconos nuevos al sistema de íconos de módulo (`module-icon.tsx`) y uno
   chico (`settings`, para el link del Panel) — mismo criterio de siempre:
   líneas simples, nunca emoji.
+
+- **Montaje de cámaras/domos: qué recurso hace falta para el
+  mantenimiento.** A pedido de uso real — al relevar una cámara/domo
+  (Equipos Individuales, categoría Cámara CCTV) ahora se puede cargar
+  **dónde está montada** (Torre, Columna, Poste, Pared, Techo/azotea) y
+  **a qué altura real** (metros, opcional). Con eso, la app calcula qué
+  recurso hace falta para hacer el mantenimiento más adelante — nunca
+  inventado por IA, el técnico lo mide/estima y lo carga a mano, mismo
+  criterio que la distancia real de Dotación y el largo de tramo real de
+  Torres:
+  - **Torre → siempre Grupo de altura**, sin importar la altura real —
+    es una decisión organizacional (equipo especializado), no una
+    cuestión de metros.
+  - **Columna / Poste / Pared / Techo → según la altura real** contra un
+    umbral configurable: hasta el umbral, Escalera; por encima, Andamio/
+    manlift.
+  - **Catálogo admin-configurable** (`catalogo_recurso_altura`, tab
+    "Recurso por altura" dentro de Configuración → Catálogos): una fila
+    fija por tipo de montaje, con "Recurso fijo" (ignora la altura, ya
+    viene marcado así para Torre) o un umbral en metros — un Admin ajusta
+    los números reales de su operación sin tocar código. Valores
+    semilla razonables (4m para columna/poste/pared, 3m para techo) hasta
+    que se ajusten.
+  - **Se ve en 3 lugares**: en el propio formulario de relevamiento (chip
+    "Recurso: ..." en vivo mientras se completa Montaje/Altura), en la
+    ficha de Sitio (columna "Montaje" de la tabla de Equipos
+    Individuales) y en el Plan de Mantenimiento (`/panel/mantenimientos`,
+    pestaña Pendientes) como un chip más junto a la urgencia — para que
+    al planificar una visita ya se sepa qué equipo llevar.
+  - **Alcance, a propósito**: solo se carga al dar de alta el equipo
+    (igual límite que marca/modelo/N° de serie en Equipos Individuales —
+    no hay edición de equipo existente todavía en esta app, para ningún
+    campo). Un equipo cargado antes de esta entrega simplemente no tiene
+    montaje hasta que se re-cargue o se sume una edición más adelante. No
+    se agregó al PDF del relevamiento en esta entrega (sí a las pantallas
+    de planificación, que es donde realmente se usa este dato) ni a
+    Tableros (la cámara ahí es un circuito eléctrico del tablero, no el
+    equipo físico con mantenimiento propio — ver Equipos Individuales).

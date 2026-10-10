@@ -1,4 +1,4 @@
-import type { EquipoCategoria } from "@/lib/database.types";
+import type { EquipoCategoria, TipoMontajeCamara } from "@/lib/database.types";
 
 /** Máximo de fotos que se pueden mandar juntas a la lectura con IA (distintos equipos sueltos, o distintos ángulos del mismo). */
 export const EQUIPO_FOTO_IA_MAX = 7;
@@ -49,6 +49,15 @@ export interface EquipoItem {
    */
   consumoPromedioW: number | null;
   consumoMaxW: number | null;
+  /**
+   * Dónde está montada y a qué altura real — solo tiene sentido para
+   * categoriaEquipo='camara_cctv' (en el resto de categorías queda null).
+   * Determina, junto con el catálogo admin de Configuración, qué recurso
+   * hace falta para el mantenimiento (escalera, andamio/manlift, grupo de
+   * altura) — nunca lo adivina la IA, lo carga el técnico a mano.
+   */
+  tipoMontaje: TipoMontajeCamara | null;
+  alturaMontajeM: number | null;
   /**
    * Solo transitorio en el form (no se persiste): true cuando lo cargó la
    * lectura de foto con IA sin encontrar una etiqueta/chapa legible, así el

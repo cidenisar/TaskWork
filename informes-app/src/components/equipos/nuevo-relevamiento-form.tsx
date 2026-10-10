@@ -19,6 +19,13 @@ import {
   calcularResumenEquipos,
   type EquipoItem,
 } from "./types";
+import {
+  TIPO_MONTAJE_OPCIONES,
+  TIPO_MONTAJE_LABEL,
+  RECURSO_ALTURA_LABEL,
+  calcularRecursoAltura,
+  type ConfigRecursoAltura,
+} from "@/lib/equipos/recurso-altura";
 
 interface LecturaState {
   estado: string;
@@ -34,6 +41,8 @@ const EQUIPO_NUEVO_BASE = {
   cantidad: 1,
   consumoPromedioW: null as number | null,
   consumoMaxW: null as number | null,
+  tipoMontaje: null,
+  alturaMontajeM: null,
 };
 
 export function NuevoRelevamientoEquiposForm({
@@ -41,11 +50,13 @@ export function NuevoRelevamientoEquiposForm({
   provincias,
   equiposExistentesPorUbicacion,
   puedeDeposito,
+  recursoAlturaConfig,
 }: {
   ubicaciones: Ubicacion[];
   provincias: string[];
   equiposExistentesPorUbicacion: Record<string, EquipoItem[]>;
   puedeDeposito: boolean;
+  recursoAlturaConfig: ConfigRecursoAltura[];
 }) {
   const [provinciaFiltro, setProvinciaFiltro] = useState("");
   const [ubicacionId, setUbicacionId] = useState<string>(""); // "" = sin elegir, "__new" = crear
@@ -178,6 +189,8 @@ export function NuevoRelevamientoEquiposForm({
           cantidad: 1,
           consumoPromedioW: d.consumoPromedioW,
           consumoMaxW: d.consumoMaxW,
+          tipoMontaje: null,
+          alturaMontajeM: null,
           revisar: d.identificado !== true,
         })),
       ]);
@@ -227,6 +240,8 @@ export function NuevoRelevamientoEquiposForm({
         cantidad: item.cantidad,
         consumoPromedioW: item.consumoPromedioW,
         consumoMaxW: item.consumoMaxW,
+        tipoMontaje: item.tipoMontaje,
+        alturaMontajeM: item.alturaMontajeM,
         desdeDeposito: true,
       },
     ]);
@@ -307,6 +322,8 @@ export function NuevoRelevamientoEquiposForm({
               cantidad: e.cantidad,
               consumoPromedioW: e.consumoPromedioW,
               consumoMaxW: e.consumoMaxW,
+              tipoMontaje: e.tipoMontaje,
+              alturaMontajeM: e.alturaMontajeM,
               estado: l.estado,
               comentario: l.comentario,
               desdeDeposito: e.desdeDeposito ?? false,
@@ -702,6 +719,49 @@ export function NuevoRelevamientoEquiposForm({
                           <Icon name="x" size={12} />
                         </button>
                       </div>
+                      {e.categoriaEquipo === "camara_cctv" && (
+                        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-end" }}>
+                          <div className="field" style={{ marginBottom: 0, width: 150 }}>
+                            <label style={{ fontSize: 11 }}>
+                              Montaje <span className="opt">(opcional)</span>
+                            </label>
+                            <select
+                              value={e.tipoMontaje ?? ""}
+                              onChange={(ev) => actualizarEquipo(i, { tipoMontaje: (ev.target.value || null) as EquipoItem["tipoMontaje"] })}
+                              disabled={submitting}
+                            >
+                              <option value="">—</option>
+                              {TIPO_MONTAJE_OPCIONES.map((t) => (
+                                <option key={t} value={t}>
+                                  {TIPO_MONTAJE_LABEL[t]}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <div className="field" style={{ marginBottom: 0, width: 110 }}>
+                            <label style={{ fontSize: 11 }}>
+                              Altura (m) <span className="opt">(opcional)</span>
+                            </label>
+                            <input
+                              type="number"
+                              min={0}
+                              step="0.1"
+                              placeholder="Ej: 12"
+                              value={e.alturaMontajeM ?? ""}
+                              onChange={(ev) => actualizarEquipo(i, { alturaMontajeM: ev.target.value === "" ? null : Number(ev.target.value) })}
+                              disabled={submitting}
+                            />
+                          </div>
+                          {(() => {
+                            const recurso = calcularRecursoAltura(e.tipoMontaje, e.alturaMontajeM, recursoAlturaConfig);
+                            return recurso ? (
+                              <span className="chip">
+                                <Icon name="wrench" size={11} /> Recurso: {RECURSO_ALTURA_LABEL[recurso]}
+                              </span>
+                            ) : null;
+                          })()}
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <div className="item-name" style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
@@ -713,7 +773,17 @@ export function NuevoRelevamientoEquiposForm({
                         {e.cantidad > 1 ? ` · x${e.cantidad}` : ""}
                         {e.consumoPromedioW ? ` · ~${e.consumoPromedioW}W prom.` : ""}
                         {e.consumoMaxW ? ` · ~${e.consumoMaxW}W máx.` : ""}
+                        {e.tipoMontaje ? ` · ${TIPO_MONTAJE_LABEL[e.tipoMontaje]}` : ""}
+                        {e.alturaMontajeM != null ? ` a ${e.alturaMontajeM}m` : ""}
                       </span>
+                      {(() => {
+                        const recurso = calcularRecursoAltura(e.tipoMontaje, e.alturaMontajeM, recursoAlturaConfig);
+                        return recurso ? (
+                          <span className="chip">
+                            <Icon name="wrench" size={11} /> Recurso: {RECURSO_ALTURA_LABEL[recurso]}
+                          </span>
+                        ) : null;
+                      })()}
                       {e.desdeDeposito && (
                         <>
                           <span className="chip">

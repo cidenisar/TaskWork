@@ -67,6 +67,9 @@ export type CondicionMaterial = "nuevo" | "usado_funcional";
 export type MotivoEntregaDeposito = "sobrante_obra" | "reemplazo_funcional" | "retorno_mantenimiento" | "otro";
 export type MotivoBaja = "rotura" | "ampliacion" | "obsolescencia" | "otro";
 export type TipoEquipoBaja = "tablero_circuito" | "rack_equipamiento" | "equipo_individual";
+/** Dónde está instalada una cámara/domo (Equipos Individuales) — determina junto con la altura qué recurso hace falta para el mantenimiento. */
+export type TipoMontajeCamara = "torre" | "columna" | "poste" | "pared" | "techo" | "otro";
+export type RecursoAlturaMantenimiento = "escalera" | "andamio_manlift" | "grupo_altura";
 
 /** Helper para darle a cada tabla la forma que espera postgrest-js (incluye Relationships). */
 type Tbl<
@@ -483,8 +486,21 @@ export type EquipoRow = {
   consumo_max_w: number | null;
   etiqueta_ypf: string | null;
   estado: EstadoEquipamiento;
+  /** Solo tiene sentido en categoria_equipo='camara_cctv' — en el resto queda null. */
+  tipo_montaje: TipoMontajeCamara | null;
+  altura_montaje_m: number | null;
   created_by: string | null;
   created_at: string;
+}
+
+/** Qué recurso hace falta para el mantenimiento según el tipo de montaje y la altura real — admin-configurable, nunca inventado por IA. */
+export type CatalogoRecursoAlturaRow = {
+  id: string;
+  tipo_montaje: TipoMontajeCamara;
+  recurso_fijo: RecursoAlturaMantenimiento | null;
+  umbral_escalera_m: number | null;
+  updated_by: string | null;
+  updated_at: string;
 }
 
 export type EquipoRelevamientoRow = {
@@ -819,6 +835,11 @@ export interface Database {
         Partial<TorreComunicacionRelevamientoLecturaRow>
       >;
       torre_tipo_largos: Tbl<TorreTipoLargoRow, Partial<TorreTipoLargoRow> & Pick<TorreTipoLargoRow, "tipo_torre" | "largo_tramo_m">, Partial<TorreTipoLargoRow>>;
+      catalogo_recurso_altura: Tbl<
+        CatalogoRecursoAlturaRow,
+        Partial<CatalogoRecursoAlturaRow> & Pick<CatalogoRecursoAlturaRow, "tipo_montaje">,
+        Partial<CatalogoRecursoAlturaRow>
+      >;
       equipos: Tbl<
         EquipoRow,
         Partial<EquipoRow> & Pick<EquipoRow, "ubicacion_id" | "categoria_equipo" | "texto">,

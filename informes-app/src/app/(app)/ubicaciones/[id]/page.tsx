@@ -12,6 +12,7 @@ import {
 } from "@/components/tableros/types";
 import { calcularResumenEquipamiento as calcularResumenRacks, CATEGORIA_EQUIPO_LABEL as RACK_CATEGORIA_LABEL } from "@/components/racks/types";
 import { calcularResumenEquipos, CATEGORIA_EQUIPO_LABEL as EQUIPO_CATEGORIA_LABEL } from "@/components/equipos/types";
+import { calcularRecursoAltura, TIPO_MONTAJE_LABEL, RECURSO_ALTURA_LABEL, type ConfigRecursoAltura } from "@/lib/equipos/recurso-altura";
 import { EstimarConsumoButton } from "@/components/ubicaciones/estimar-consumo-button";
 import { estimarConsumoRacksAction, estimarConsumoEquiposAction } from "../actions";
 import { puedeGestionarBajas, puedeGestionarDeposito } from "@/lib/types";
@@ -67,7 +68,7 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
     supabase
       .from("equipos")
       .select(
-        "id, categoria_equipo, texto, marca_modelo, numero_serie, etiqueta_ypf, cantidad, consumo_promedio_w, consumo_max_w, ubicacion_id, estado",
+        "id, categoria_equipo, texto, marca_modelo, numero_serie, etiqueta_ypf, cantidad, consumo_promedio_w, consumo_max_w, tipo_montaje, altura_montaje_m, ubicacion_id, estado",
       )
       .in("ubicacion_id", siblingIds)
       .order("texto"),
@@ -176,13 +177,19 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
   const equipoIndividualIds = equipos.map((e) => e.id);
   const rackEquipoIds = equipamientos.map((e) => e.id);
   const idsConMantenimiento = [...rackEquipoIds, ...equipoIndividualIds];
-  const [programacionesRes, tecnicosRes, checklistItemsRes] = await Promise.all([
+  const [programacionesRes, tecnicosRes, checklistItemsRes, recursoAlturaRes] = await Promise.all([
     idsConMantenimiento.length > 0
       ? supabase.from("mantenimiento_programaciones").select("tipo_equipo, equipo_id, fecha_programada, asignado_a, nota, motivo").in("equipo_id", idsConMantenimiento)
       : { data: [] },
     supabase.from("profiles").select("id, nombre_completo").eq("activo", true).order("nombre_completo"),
     supabase.from("mantenimiento_checklist_items").select("id, tipo_equipo, categoria, texto").order("orden"),
+    supabase.from("catalogo_recurso_altura").select("tipo_montaje, recurso_fijo, umbral_escalera_m"),
   ]);
+  const recursoAlturaConfig: ConfigRecursoAltura[] = (recursoAlturaRes.data ?? []).map((r) => ({
+    tipoMontaje: r.tipo_montaje,
+    recursoFijo: r.recurso_fijo,
+    umbralEscaleraM: r.umbral_escalera_m,
+  }));
   const programacionPorEquipo = new Map(
     (programacionesRes.data ?? []).map((p) => [
       `${p.tipo_equipo}:${p.equipo_id}`,
@@ -536,6 +543,7 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
                     <th style={{ textAlign: "right" }}>Cant.</th>
                     <th style={{ textAlign: "right" }}>Cons. prom.</th>
                     <th style={{ textAlign: "right" }}>Cons. máx.</th>
+                    <th>Montaje</th>
                     <th>Estado</th>
                     <th>Comentario</th>
                     <th />
@@ -544,6 +552,7 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
                 <tbody>
                   {equipos.map((e) => {
                     const lectura = lecturaPorEquipo.get(e.id);
+                    const recurso = calcularRecursoAltura(e.tipo_montaje, e.altura_montaje_m, recursoAlturaConfig);
                     return (
                       <tr key={e.id}>
                         <td>{e.texto}</td>
@@ -555,6 +564,21 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
                         <td style={{ textAlign: "right" }}>{e.cantidad}</td>
                         <td style={{ textAlign: "right" }}>{e.consumo_promedio_w ? `~${e.consumo_promedio_w}W` : "—"}</td>
                         <td style={{ textAlign: "right" }}>{e.consumo_max_w ? `~${e.consumo_max_w}W` : "—"}</td>
+                        <td>
+                          {e.tipo_montaje ? (
+                            <>
+                              {TIPO_MONTAJE_LABEL[e.tipo_montaje]}
+                              {e.altura_montaje_m != null ? ` · ${e.altura_montaje_m}m` : ""}
+                              {recurso && (
+                                <div className="hist-meta">
+                                  <Icon name="wrench" size={11} /> {RECURSO_ALTURA_LABEL[recurso]}
+                                </div>
+                              )}
+                            </>
+                          ) : (
+                            "—"
+                          )}
+                        </td>
                         <td>{lectura?.estado || "—"}</td>
                         <td>{lectura?.comentario || "—"}</td>
                         <td>

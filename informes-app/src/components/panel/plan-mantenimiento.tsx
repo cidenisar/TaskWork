@@ -213,6 +213,11 @@ export function PlanMantenimiento({
                         <Icon name="warning" size={11} /> Reprogramado: {item.motivoLabel}
                       </span>
                     )}
+                    {item.recursoAlturaLabel && (
+                      <span className="chip">
+                        <Icon name="wrench" size={11} /> Recurso: {item.recursoAlturaLabel}
+                      </span>
+                    )}
                     {item.clima?.lluviaProxima && (
                       <span className="venc-badge warn">
                         <Icon name="warning" size={11} /> Lluvia prevista en los próximos días ({Math.round(item.clima.probabilidadMaxima)}%)

@@ -6,9 +6,20 @@ import { VehiculosTab, type VehiculoItem } from "./catalogos/vehiculos-tab";
 import { ServiceTab, type ServiceItem } from "./catalogos/service-tab";
 import { VencimientosTab } from "./catalogos/vencimientos-tab";
 import { TorreTramosTab, type TramoTorreItem } from "./catalogos/torre-tramos-tab";
+import { RecursoAlturaTab, type RecursoAlturaItem } from "./catalogos/recurso-altura-tab";
 import { Icon } from "@/components/icon";
 
-type TabId = "torres" | "clientes" | "vehiculos" | "vehservice" | "vehalertas" | "torrecomtramos" | "provincias" | "tipos" | "gastocat";
+type TabId =
+  | "torres"
+  | "clientes"
+  | "vehiculos"
+  | "vehservice"
+  | "vehalertas"
+  | "torrecomtramos"
+  | "recursoaltura"
+  | "provincias"
+  | "tipos"
+  | "gastocat";
 
 const TABS: { id: TabId; label: React.ReactNode }[] = [
   { id: "torres", label: "Torres (cuadrillas)" },
@@ -24,6 +35,7 @@ const TABS: { id: TabId; label: React.ReactNode }[] = [
     ),
   },
   { id: "torrecomtramos", label: "Torres Comunic. (tramos)" },
+  { id: "recursoaltura", label: "Recurso por altura" },
   { id: "provincias", label: "Provincias" },
   { id: "tipos", label: "Tipos de Informe" },
   { id: "gastocat", label: "Categorías de Gasto" },
@@ -38,6 +50,7 @@ export interface CatalogosData {
   vehiculos: VehiculoItem[];
   services: ServiceItem[];
   tramosTorre: TramoTorreItem[];
+  recursoAltura: RecursoAlturaItem[];
 }
 
 export function CatalogosCard({ data }: { data: CatalogosData }) {
@@ -45,6 +58,7 @@ export function CatalogosCard({ data }: { data: CatalogosData }) {
   const [vehiculos, setVehiculos] = useState(data.vehiculos);
   const [services, setServices] = useState(data.services);
   const [tramosTorre, setTramosTorre] = useState(data.tramosTorre);
+  const [recursoAltura, setRecursoAltura] = useState(data.recursoAltura);
 
   return (
     <div className="card">
@@ -79,6 +93,7 @@ export function CatalogosCard({ data }: { data: CatalogosData }) {
       )}
       {tab === "vehalertas" && <VencimientosTab vehiculos={vehiculos} services={services} />}
       {tab === "torrecomtramos" && <TorreTramosTab tramos={tramosTorre} setTramos={setTramosTorre} />}
+      {tab === "recursoaltura" && <RecursoAlturaTab items={recursoAltura} setItems={setRecursoAltura} />}
       {tab === "provincias" && (
         <SimpleCatalogTab
           tabla="catalogo_provincias"

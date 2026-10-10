@@ -9,7 +9,7 @@ import { resolverUbicacionId, tagGpsSiFalta, type PayloadUbicacionNueva, type Pa
 import { calcularResumenEquipos } from "@/components/equipos/types";
 import { puedeGestionarDeposito } from "@/lib/types";
 import { labelUbicacion } from "@/components/ubicaciones/types";
-import type { EquipoCategoria } from "@/lib/database.types";
+import type { EquipoCategoria, TipoMontajeCamara } from "@/lib/database.types";
 
 interface PayloadLectura {
   equipoId: string | null;
@@ -21,6 +21,8 @@ interface PayloadLectura {
   cantidad: number;
   consumoPromedioW: number | null;
   consumoMaxW: number | null;
+  tipoMontaje: TipoMontajeCamara | null;
+  alturaMontajeM: number | null;
   estado: string;
   comentario: string;
   /** true si este equipo se trajo desde depósito para instalarlo acá — ver más abajo. */
@@ -134,6 +136,8 @@ export async function crearRelevamientoEquiposAction(formData: FormData): Promis
         cantidad: Number.isFinite(l.cantidad) && l.cantidad > 0 ? l.cantidad : 1,
         consumo_promedio_w: Number.isFinite(l.consumoPromedioW) && (l.consumoPromedioW as number) > 0 ? l.consumoPromedioW : null,
         consumo_max_w: Number.isFinite(l.consumoMaxW) && (l.consumoMaxW as number) > 0 ? l.consumoMaxW : null,
+        tipo_montaje: l.tipoMontaje,
+        altura_montaje_m: Number.isFinite(l.alturaMontajeM) && (l.alturaMontajeM as number) >= 0 ? l.alturaMontajeM : null,
         created_by: profile.id,
       })
       .select("id")
@@ -265,6 +269,8 @@ export interface EquipoEnDepositoResultado {
   cantidad: number;
   consumoPromedioW: number | null;
   consumoMaxW: number | null;
+  tipoMontaje: TipoMontajeCamara | null;
+  alturaMontajeM: number | null;
   ubicacionLabel: string;
 }
 
@@ -282,7 +288,9 @@ export async function buscarEquiposEnDepositoAction(query: string): Promise<Equi
 
   let builder = supabase
     .from("equipos")
-    .select("id, categoria_equipo, texto, marca_modelo, numero_serie, etiqueta_ypf, cantidad, consumo_promedio_w, consumo_max_w, ubicacion_id")
+    .select(
+      "id, categoria_equipo, texto, marca_modelo, numero_serie, etiqueta_ypf, cantidad, consumo_promedio_w, consumo_max_w, tipo_montaje, altura_montaje_m, ubicacion_id",
+    )
     .eq("estado", "en_deposito")
     .order("texto")
     .limit(25);
@@ -313,6 +321,8 @@ export async function buscarEquiposEnDepositoAction(query: string): Promise<Equi
       cantidad: d.cantidad,
       consumoPromedioW: d.consumo_promedio_w,
       consumoMaxW: d.consumo_max_w,
+      tipoMontaje: d.tipo_montaje,
+      alturaMontajeM: d.altura_montaje_m,
       ubicacionLabel: ubicacion ? labelUbicacion(ubicacion) : "—",
     };
   });

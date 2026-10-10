@@ -12,19 +12,21 @@ export default async function ConfiguracionCatalogosPage() {
   }
 
   const supabase = await createClient();
-  const [torresRes, clientesRes, provinciasRes, tiposRes, categoriasRes, vehiculosRes, servicesRes, tramosTorreRes] = await Promise.all([
-    supabase.from("catalogo_torres").select("id, nombre").order("nombre"),
-    supabase.from("catalogo_clientes").select("id, nombre").order("nombre"),
-    supabase.from("catalogo_provincias").select("id, nombre").order("nombre"),
-    supabase.from("catalogo_tipos_informe").select("id, nombre").order("nombre"),
-    supabase.from("catalogo_categorias_gasto").select("id, nombre").order("nombre"),
-    supabase
-      .from("catalogo_vehiculos")
-      .select("id, patente, marca_modelo, vencimiento_tarjeta_verde, vencimiento_rto, kilometraje_actual")
-      .order("patente"),
-    supabase.from("vehiculo_services").select("id, vehiculo_id, fecha, kilometraje, descripcion").order("fecha", { ascending: false }),
-    supabase.from("torre_tipo_largos").select("tipo_torre, largo_tramo_m"),
-  ]);
+  const [torresRes, clientesRes, provinciasRes, tiposRes, categoriasRes, vehiculosRes, servicesRes, tramosTorreRes, recursoAlturaRes] =
+    await Promise.all([
+      supabase.from("catalogo_torres").select("id, nombre").order("nombre"),
+      supabase.from("catalogo_clientes").select("id, nombre").order("nombre"),
+      supabase.from("catalogo_provincias").select("id, nombre").order("nombre"),
+      supabase.from("catalogo_tipos_informe").select("id, nombre").order("nombre"),
+      supabase.from("catalogo_categorias_gasto").select("id, nombre").order("nombre"),
+      supabase
+        .from("catalogo_vehiculos")
+        .select("id, patente, marca_modelo, vencimiento_tarjeta_verde, vencimiento_rto, kilometraje_actual")
+        .order("patente"),
+      supabase.from("vehiculo_services").select("id, vehiculo_id, fecha, kilometraje, descripcion").order("fecha", { ascending: false }),
+      supabase.from("torre_tipo_largos").select("tipo_torre, largo_tramo_m"),
+      supabase.from("catalogo_recurso_altura").select("tipo_montaje, recurso_fijo, umbral_escalera_m"),
+    ]);
 
   const patentePorVehiculo = new Map((vehiculosRes.data ?? []).map((v) => [v.id, v.patente]));
 
@@ -58,6 +60,11 @@ export default async function ConfiguracionCatalogosPage() {
             descripcion: s.descripcion,
           })),
           tramosTorre: (tramosTorreRes.data ?? []).map((t) => ({ tipoTorre: t.tipo_torre, largoTramoM: Number(t.largo_tramo_m) })),
+          recursoAltura: (recursoAlturaRes.data ?? []).map((r) => ({
+            tipoMontaje: r.tipo_montaje,
+            recursoFijo: r.recurso_fijo,
+            umbralEscaleraM: r.umbral_escalera_m,
+          })),
         }}
       />
     </div>
