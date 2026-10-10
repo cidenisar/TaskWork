@@ -23,6 +23,9 @@ export interface PanelVehiculo {
   vencimientoRto: string | null;
   ultimoService: PanelVehiculoUltimoService | null;
   proximoService: PanelVehiculoProximoService;
+  /** Descripción del estado general (rayones/roturas) cargada al dar de alta el vehículo con fotos — null si se cargó por el alta manual o nunca se completó. */
+  estadoAlta: string | null;
+  tieneDaniosAlta: boolean | null;
 }
 
 /**
@@ -31,7 +34,7 @@ export interface PanelVehiculo {
  * km para todos, por ahora) y se recalcula al vuelo a partir del último
  * service cargado — nunca se guarda un "próximo service" aparte.
  */
-function calcularProximoService(
+export function calcularProximoService(
   kilometrajeActual: number | null,
   ultimoService: PanelVehiculoUltimoService | null,
 ): PanelVehiculoProximoService {
@@ -53,7 +56,7 @@ export async function getPanelVehiculos(supabase: Supabase): Promise<PanelVehicu
   const [vehiculosRes, servicesRes] = await Promise.all([
     supabase
       .from("catalogo_vehiculos")
-      .select("id, patente, marca_modelo, kilometraje_actual, vencimiento_tarjeta_verde, vencimiento_rto")
+      .select("id, patente, marca_modelo, kilometraje_actual, vencimiento_tarjeta_verde, vencimiento_rto, estado_alta, tiene_danios_alta")
       .order("patente"),
     supabase.from("vehiculo_services").select("vehiculo_id, fecha, kilometraje").order("fecha", { ascending: false }),
   ]);
@@ -78,6 +81,8 @@ export async function getPanelVehiculos(supabase: Supabase): Promise<PanelVehicu
       vencimientoRto: v.vencimiento_rto,
       ultimoService,
       proximoService: calcularProximoService(v.kilometraje_actual, ultimoService),
+      estadoAlta: v.estado_alta,
+      tieneDaniosAlta: v.tiene_danios_alta,
     };
   });
 }

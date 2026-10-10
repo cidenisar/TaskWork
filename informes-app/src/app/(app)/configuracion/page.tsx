@@ -51,7 +51,7 @@ export default async function ConfiguracionHubPage() {
           </div>
           <div className="module-title">Catálogos</div>
           <div className="module-sub">
-            Torres (cuadrillas), clientes, provincias, tipos de informe, categorías de gasto, vehículos y tramos de torre
+            Torres (cuadrillas), clientes, provincias, tipos de informe, categorías de gasto y tramos de torre
           </div>
         </Link>
         <Link href="/configuracion/emails" className="module-card">

@@ -15,7 +15,7 @@ interface VehiculoPayload {
 }
 
 function revalidateAll() {
-  revalidatePath("/configuracion");
+  revalidatePath("/panel/vehiculos");
   revalidatePath("/informe-tecnico/nuevo");
 }
 
@@ -140,4 +140,70 @@ export async function addServiceAction(formData: FormData): Promise<ConfigAction
   await logAudit(supabase, profile, `Registró un service para "${vehiculo?.patente ?? payload.vehiculoId}" (${km.toLocaleString("es-AR")} km)`);
   revalidateAll();
   return { success: true };
+}
+
+interface AltaVehiculoPayload {
+  patente: string;
+  marcaModelo: string;
+  kilometrajeActual: string;
+  estadoGeneral: string;
+  tieneDanios: boolean | null;
+}
+
+export interface AltaVehiculoResult extends ConfigActionResult {
+  vehiculoId?: string;
+}
+
+/**
+ * Alta de vehículo con fotos (IA): mismo flujo de siempre (la IA lee,
+ * el Admin revisa/corrige, los campos finales son los que llegan en el
+ * payload, nunca lo que devolvió la IA sin pasar por acá) — solo guarda UNA
+ * foto representativa de cada lote (exterior/tablero) como evidencia del
+ * estado al momento del alta, el resto de las fotos que se mandaron a leer
+ * no se persisten (mismo criterio que Equipos/Racks).
+ */
+export async function altaVehiculoConFotosAction(formData: FormData): Promise<AltaVehiculoResult> {
+  const profile = await requireAdmin();
+  const raw = formData.get("payload");
+  if (typeof raw !== "string") return { success: false, error: "Datos inválidos." };
+  const payload: AltaVehiculoPayload = JSON.parse(raw);
+
+  const patente = payload.patente.trim().toUpperCase();
+  if (!patente) return { success: false, error: "Falta la patente." };
+
+  const supabase = await createClient();
+  const { data: vehiculo, error } = await supabase
+    .from("catalogo_vehiculos")
+    .insert({
+      patente,
+      marca_modelo: payload.marcaModelo.trim() || null,
+      kilometraje_actual: payload.kilometrajeActual ? Number(payload.kilometrajeActual) : null,
+      estado_alta: payload.estadoGeneral.trim() || null,
+      tiene_danios_alta: payload.tieneDanios,
+    })
+    .select("id")
+    .single();
+
+  if (error || !vehiculo) {
+    return { success: false, error: error?.code === "23505" ? "Ya existe un vehículo con esa patente." : error?.message };
+  }
+
+  const fotoExterior = formData.get("fotoExterior");
+  if (fotoExterior instanceof File && fotoExterior.size > 0) {
+    const buffer = Buffer.from(await fotoExterior.arrayBuffer());
+    const path = `${vehiculo.id}/alta-exterior.jpg`;
+    const { error: upErr } = await supabase.storage.from("vehiculo-docs").upload(path, buffer, { contentType: "image/jpeg", upsert: true });
+    if (!upErr) await supabase.from("catalogo_vehiculos").update({ foto_estado_alta_url: path }).eq("id", vehiculo.id);
+  }
+  const fotoTablero = formData.get("fotoTablero");
+  if (fotoTablero instanceof File && fotoTablero.size > 0) {
+    const buffer = Buffer.from(await fotoTablero.arrayBuffer());
+    const path = `${vehiculo.id}/alta-tablero.jpg`;
+    const { error: upErr } = await supabase.storage.from("vehiculo-docs").upload(path, buffer, { contentType: "image/jpeg", upsert: true });
+    if (!upErr) await supabase.from("catalogo_vehiculos").update({ foto_tablero_url: path }).eq("id", vehiculo.id);
+  }
+
+  await logAudit(supabase, profile, `Dio de alta el vehículo "${patente}" con fotos (IA)`);
+  revalidateAll();
+  return { success: true, vehiculoId: vehiculo.id };
 }

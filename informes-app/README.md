@@ -1478,3 +1478,58 @@ general que salió de esto.
     de planificación, que es donde realmente se usa este dato) ni a
     Tableros (la cámara ahí es un circuito eléctrico del tablero, no el
     equipo físico con mantenimiento propio — ver Equipos Individuales).
+
+- **Vehículos: todo a Panel de Supervisión, más alta con fotos (IA).** Dos
+  cambios a pedido de uso real.
+  - **Gestión de la flota trasladada de Configuración → Catálogos a Panel
+    de Supervisión → Vehículos.** Antes el alta/service/vencimientos
+    vivían en Catálogos (dentro de Configuración, Admin-only) y la vista
+    general estaba aparte, en el Panel, solo de lectura — dos lugares
+    para lo mismo. Ahora `/panel/vehiculos` es una sola pantalla con 4
+    pestañas: **Flota** (vista general, visible para Admin y Supervisor
+    igual que el resto del Panel), **Gestión** (alta manual, baja,
+    actualizar kilometraje — Admin-only), **Service** (Admin-only) y
+    **Vencimientos** (lectura, visible para los dos roles). Los
+    componentes se movieron de `components/config/catalogos/` a
+    `components/panel/vehiculos/`; las Server Actions se quedaron donde
+    estaban (`configuracion/actions/vehiculos.ts` — la ubicación de la
+    action no tiene que ver con dónde vive la UI que la llama, mismo
+    criterio ya usado con Mantenimiento).
+  - **Alta de vehículo con fotos**, mismo sistema de lectura con IA que
+    Racks/Equipos/Torres (`/panel/vehiculos/nuevo`, botón "Alta con fotos
+    (IA)" en la pestaña Flota): a diferencia del alta manual de siempre
+    (que solo pedía patente/marca a mano), acá la IA lee **patente,
+    marca/modelo, estado general (rayones/roturas) y kilometraje**
+    directo de las fotos. Dos lotes de fotos SEPARADOS, cada uno con su
+    propio botón "Leer con IA" — son dos cosas físicamente distintas, no
+    tiene sentido mezclarlas en una sola lectura:
+    - **Exterior** (`/api/vehiculos/leer-exterior`, hasta 5 fotos): lee
+      patente y marca/modelo, y describe el estado general de la
+      carrocería con un flag `tieneDanios` (true/false/null si no se
+      puede evaluar). La patente es un dato que tiene que ser exacto —
+      el prompt es explícito en devolver vacío antes que adivinar un
+      carácter que no se lee con certeza (mismo criterio que el número
+      de serie en Equipos: nunca inventar un dato preciso que no se
+      puede justificar por la foto).
+    - **Tablero** (`/api/vehiculos/leer-tablero`, hasta 2 fotos): lee el
+      kilometraje del odómetro — mismo criterio de precisión, `null` si
+      no se puede leer cada dígito con certeza.
+    - Los campos que llegan de la IA quedan en inputs editables (nunca
+      se graban directo) con un aviso "revisar" cuando la IA no estuvo
+      seguro (`identificadoPatente`/`identificadoMarca`/`identificado`
+      en `false`) — mismo patrón `revisar` que Equipos Individuales.
+    - Al guardar, se persiste solo **una** foto representativa de cada
+      lote como evidencia del estado al momento del alta
+      (`catalogo_vehiculos.foto_estado_alta_url`/`foto_tablero_url`,
+      bucket `vehiculo-docs`) — el resto de las fotos que se mandaron a
+      leer no se guardan, mismo criterio que Equipos/Racks (la IA lee,
+      no archiva).
+    - Nuevas columnas en `catalogo_vehiculos`: `estado_alta` (texto
+      libre), `tiene_danios_alta` (boolean), `foto_estado_alta_url`,
+      `foto_tablero_url`. Se ven en la pestaña Flota como badge "Con
+      daños al alta" + la descripción del estado.
+    - **Alcance, a propósito**: es una foto del estado AL MOMENTO del
+      alta, no un registro que se actualiza después — para eso ya existe
+      Service. El alta manual de la pestaña Gestión sigue existiendo tal
+      cual estaba, como alternativa más rápida cuando no hace falta el
+      detalle de fotos.

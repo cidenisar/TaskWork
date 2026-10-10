@@ -1,73 +1,44 @@
+import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { getPanelVehiculos } from "@/lib/panel/vehiculos";
-import { VencBadge } from "@/components/venc-badge";
-import { Icon, StatusDot } from "@/components/icon";
-
-function fmtFecha(fecha: string) {
-  const [y, m, d] = fecha.split("-");
-  return d && m && y ? `${d}/${m}/${y}` : fecha;
-}
+import { FlotaVehiculos } from "@/components/panel/vehiculos/flota-vehiculos";
 
 export default async function PanelVehiculosPage() {
+  const profile = await requireProfile();
   const supabase = await createClient();
-  const vehiculos = await getPanelVehiculos(supabase);
+
+  const [vehiculosRes, servicesRes] = await Promise.all([
+    supabase
+      .from("catalogo_vehiculos")
+      .select(
+        "id, patente, marca_modelo, vencimiento_tarjeta_verde, vencimiento_rto, kilometraje_actual, estado_alta, tiene_danios_alta",
+      )
+      .order("patente"),
+    supabase.from("vehiculo_services").select("id, vehiculo_id, fecha, kilometraje, descripcion").order("fecha", { ascending: false }),
+  ]);
+
+  const patentePorVehiculo = new Map((vehiculosRes.data ?? []).map((v) => [v.id, v.patente]));
 
   return (
-    <div>
-      <div className="panel-topbar">
-        <div>
-          <h1>Vehículos</h1>
-          <p>Documentación y service de la flota</p>
-        </div>
-      </div>
-
-      <div className="card">
-        <div className="panel-card-title">
-          <h2>Flota</h2>
-          <span className="panel-card-count">
-            {vehiculos.length} vehículo{vehiculos.length === 1 ? "" : "s"}
-          </span>
-        </div>
-        {vehiculos.length === 0 ? (
-          <div className="empty-note">Todavía no hay vehículos en el catálogo.</div>
-        ) : (
-          <div className="item-list">
-            {vehiculos.map((v) => (
-              <div className="list-item" key={v.id} style={{ flexDirection: "column", alignItems: "stretch", gap: 8 }}>
-                <div className="info">
-                  <div className="avatar">
-                    <Icon name="truck" size={16} />
-                  </div>
-                  <div>
-                    <div className="item-name">{v.patente}</div>
-                    <div className="item-sub">{v.marcaModelo || "Sin marca/modelo"}</div>
-                  </div>
-                </div>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                  <VencBadge label="Tarjeta Verde" fecha={v.vencimientoTarjetaVerde} />
-                  <VencBadge label="RTO" fecha={v.vencimientoRto} />
-                  {v.proximoService.estado ? (
-                    <span className={`venc-badge ${v.proximoService.estado}`}>
-                      <StatusDot tone={v.proximoService.estado} /> Service: {v.proximoService.mensaje}
-                    </span>
-                  ) : (
-                    <span className="venc-badge">Service: {v.proximoService.mensaje}</span>
-                  )}
-                </div>
-                <div className="item-sub">
-                  Km actual: {v.kilometrajeActual != null ? v.kilometrajeActual.toLocaleString("es-AR") : "—"}
-                  {v.ultimoService && (
-                    <>
-                      {" "}
-                      · Último service: {v.ultimoService.kilometraje.toLocaleString("es-AR")} km ({fmtFecha(v.ultimoService.fecha)})
-                    </>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
+    <FlotaVehiculos
+      vehiculos={(vehiculosRes.data ?? []).map((v) => ({
+        id: v.id,
+        patente: v.patente,
+        marcaModelo: v.marca_modelo,
+        vencimientoTarjetaVerde: v.vencimiento_tarjeta_verde,
+        vencimientoRto: v.vencimiento_rto,
+        kilometrajeActual: v.kilometraje_actual,
+        estadoAlta: v.estado_alta,
+        tieneDaniosAlta: v.tiene_danios_alta,
+      }))}
+      services={(servicesRes.data ?? []).map((s) => ({
+        id: s.id,
+        vehiculoId: s.vehiculo_id,
+        patente: patentePorVehiculo.get(s.vehiculo_id) ?? "—",
+        fecha: s.fecha,
+        kilometraje: Number(s.kilometraje),
+        descripcion: s.descripcion,
+      }))}
+      esAdmin={profile.rol === "admin"}
+    />
   );
 }

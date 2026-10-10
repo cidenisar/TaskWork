@@ -12,6 +12,9 @@ export interface VehiculoItem {
   vencimientoTarjetaVerde: string | null;
   vencimientoRto: string | null;
   kilometrajeActual: number | null;
+  /** Estado general (rayones/roturas) y foto cargados al dar de alta con el flujo de fotos — null si se agregó por el alta manual de acá abajo. */
+  estadoAlta?: string | null;
+  tieneDaniosAlta?: boolean | null;
 }
 
 export function VehiculosTab({

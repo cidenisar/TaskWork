@@ -152,6 +152,11 @@ export type CatalogoVehiculoRow = {
   foto_tarjeta_verde_url: string | null;
   vencimiento_rto: string | null;
   foto_rto_url: string | null;
+  /** Estado general (rayones/roturas) relevado con fotos al dar de alta el vehículo — null si se cargó por el alta manual o nunca se completó. */
+  estado_alta: string | null;
+  tiene_danios_alta: boolean | null;
+  foto_estado_alta_url: string | null;
+  foto_tablero_url: string | null;
   created_at: string;
   updated_at: string;
 }
