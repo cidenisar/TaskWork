@@ -86,6 +86,18 @@ export function buildRackFilename(opts: {
   return `${partes.join("_")}.pdf`;
 }
 
+export function buildTorreComunicacionFilename(opts: {
+  numeroGeneracion: string;
+  denominacion: string;
+  sitio: string;
+  generadoEn?: Date;
+}): string {
+  const partes = [opts.numeroGeneracion, timestampCompacto(opts.generadoEn ?? new Date()), slug(opts.denominacion), slug(opts.sitio)].filter(
+    (p): p is string => Boolean(p),
+  );
+  return `${partes.join("_")}.pdf`;
+}
+
 export function buildEquipoFilename(opts: {
   numeroGeneracion: string;
   sitio: string;
@@ -94,6 +106,36 @@ export function buildEquipoFilename(opts: {
   const partes = [opts.numeroGeneracion, timestampCompacto(opts.generadoEn ?? new Date()), slug(opts.sitio)].filter(
     (p): p is string => Boolean(p),
   );
+  return `${partes.join("_")}.pdf`;
+}
+
+export function buildBajaFilename(opts: {
+  numeroGeneracion: string;
+  equipoTexto: string;
+  sitio: string;
+  generadoEn?: Date;
+}): string {
+  const partes = [
+    opts.numeroGeneracion,
+    timestampCompacto(opts.generadoEn ?? new Date()),
+    slug(opts.equipoTexto),
+    slug(opts.sitio),
+  ].filter((p): p is string => Boolean(p));
+  return `${partes.join("_")}.pdf`;
+}
+
+export function buildEntregaDepositoFilename(opts: {
+  numeroGeneracion: string;
+  descripcion: string;
+  sitio: string;
+  generadoEn?: Date;
+}): string {
+  const partes = [
+    opts.numeroGeneracion,
+    timestampCompacto(opts.generadoEn ?? new Date()),
+    slug(opts.descripcion),
+    slug(opts.sitio),
+  ].filter((p): p is string => Boolean(p));
   return `${partes.join("_")}.pdf`;
 }
 

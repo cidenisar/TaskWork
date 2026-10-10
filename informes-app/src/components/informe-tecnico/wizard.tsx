@@ -13,6 +13,8 @@ import { Step4Revision } from "./step-4-revision";
 import { EMPTY_FORM, type CatalogosInforme, type EmailDestinatario, type InformeFormState } from "./types";
 import { ErrorNote } from "@/components/notes";
 import { reportarErrorCliente } from "@/lib/client-error-report";
+import { resizeImageToJpeg } from "@/lib/image-resize";
+import type { MaterialInformeItem, RemitoItem } from "./materiales-types";
 
 const STEPS: WizardStep[] = [
   { title: "Información General", sub: "Datos básicos del informe" },
@@ -36,6 +38,10 @@ export function InformeTecnicoWizard({
   const [tecnicos, setTecnicos] = useState<Tecnico[]>([]);
   const [vehiculos, setVehiculos] = useState<Vehiculo[]>([]);
   const [imagenes, setImagenes] = useState<ImagenInforme[]>([]);
+  const [materiales, setMateriales] = useState<MaterialInformeItem[]>([]);
+  const [remitoFotos, setRemitoFotos] = useState<File[]>([]);
+  const [remitoNumero, setRemitoNumero] = useState("");
+  const [remitoItems, setRemitoItems] = useState<RemitoItem[]>([]);
   const [selectedEmails, setSelectedEmails] = useState<Set<string>>(
     () => new Set(emails.filter((e) => e.activo).map((e) => e.email)),
   );
@@ -105,9 +111,30 @@ export function InformeTecnicoWizard({
           imagenes: imagenes.map((i) => ({ lat: i.lat, lon: i.lon, accuracyM: i.accuracyM, tomadaEn: i.tomadaEn })),
           emailsSeleccionados: Array.from(selectedEmails),
           numeroGeneracionPreferido: numeroGeneracion,
+          materiales: materiales.map((m) => ({
+            categoriaEquipo: m.categoriaEquipo,
+            descripcion: m.descripcion.trim(),
+            marcaModelo: m.marcaModelo.trim(),
+            numeroSerie: m.numeroSerie.trim(),
+            etiquetaYpf: m.etiquetaYpf.trim(),
+            cantidad: m.cantidad,
+            consumoPromedioW: m.consumoPromedioW,
+            consumoMaxW: m.consumoMaxW,
+            comentario: m.comentario.trim(),
+          })),
+          remitoNumero: remitoNumero.trim() || null,
+          remitoItems: remitoItems.map((r) => ({
+            descripcion: r.descripcion.trim(),
+            cantidadEsperada: r.cantidadEsperada,
+            cantidadSobrante: r.cantidadSobrante,
+          })),
         }),
       );
       imagenes.forEach((img, i) => fd.append(`imagen_${i}`, img.blob, `foto-${i}.jpg`));
+      for (const foto of remitoFotos) {
+        const jpeg = await resizeImageToJpeg(foto);
+        fd.append("remitoFoto", jpeg, "remito.jpg");
+      }
 
       const result = await crearInformeTecnicoAction(fd);
       if (!result.success) {
@@ -147,6 +174,17 @@ export function InformeTecnicoWizard({
           vehiculos={vehiculos}
           setVehiculos={setVehiculos}
           catalogos={catalogos}
+          materialesProps={{
+            tieneUbicacion: Boolean(form.ubicacionId),
+            materiales,
+            setMateriales,
+            remitoFotos,
+            setRemitoFotos,
+            remitoNumero,
+            setRemitoNumero,
+            remitoItems,
+            setRemitoItems,
+          }}
         />
       )}
       {step === 3 && <Step3Imagenes imagenes={imagenes} setImagenes={setImagenes} cliente={form.cliente} />}
@@ -158,6 +196,9 @@ export function InformeTecnicoWizard({
           tecnicos={tecnicos}
           vehiculos={vehiculos}
           imagenes={imagenes}
+          materiales={materiales}
+          remitoNumero={remitoNumero}
+          remitoItems={remitoItems}
           emails={emails}
           selectedEmails={selectedEmails}
           onToggleEmail={toggleEmail}

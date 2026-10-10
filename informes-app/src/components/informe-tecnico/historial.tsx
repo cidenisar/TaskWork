@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import JSZip from "jszip";
 import { filtrarInformesPorConsulta, type HistorialInformeBuscable } from "@/lib/informe-tecnico/nl-search";
-import { obtenerUrlPdfInformeAction } from "@/app/(app)/informe-tecnico/historial/actions";
+import { obtenerUrlPdfInformeAction, eliminarInformeAction } from "@/app/(app)/informe-tecnico/historial/actions";
 import { Icon } from "@/components/icon";
 
 export interface HistorialInformeRow extends HistorialInformeBuscable {
@@ -17,7 +17,8 @@ function fmtFecha(fecha: string) {
   return d && m && y ? `${d}/${m}/${y}` : fecha;
 }
 
-export function HistorialInformes({ informes }: { informes: HistorialInformeRow[] }) {
+export function HistorialInformes({ informes: informesIniciales, esAdmin }: { informes: HistorialInformeRow[]; esAdmin: boolean }) {
+  const [informes, setInformes] = useState(informesIniciales);
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -40,7 +41,7 @@ export function HistorialInformes({ informes }: { informes: HistorialInformeRow[
     });
   }
 
-  async function verDescargar(id: string, numeroGeneracion: string) {
+  async function verPdf(id: string) {
     setBusyId(id);
     setNotice(null);
     const res = await obtenerUrlPdfInformeAction(id);
@@ -49,15 +50,20 @@ export function HistorialInformes({ informes }: { informes: HistorialInformeRow[
       setNotice(res.error || "No se pudo abrir el PDF.");
       return;
     }
-    const blob = await fetch(res.url).then((r) => r.blob());
-    const blobUrl = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = blobUrl;
-    a.download = res.filename || `${numeroGeneracion}.pdf`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(blobUrl);
+    window.open(res.url, "_blank", "noopener,noreferrer");
+  }
+
+  async function eliminar(id: string, titulo: string) {
+    if (!window.confirm(`¿Borrar definitivamente el informe "${titulo}"? Esto no se puede deshacer.`)) return;
+    setBusyId(id);
+    setNotice(null);
+    const res = await eliminarInformeAction(id);
+    setBusyId(null);
+    if (!res.success) {
+      setNotice(res.error || "No se pudo borrar el informe.");
+      return;
+    }
+    setInformes((prev) => prev.filter((i) => i.id !== id));
   }
 
   async function descargarSeleccionados() {
@@ -151,7 +157,7 @@ export function HistorialInformes({ informes }: { informes: HistorialInformeRow[
         {filtered.length === 0 ? (
           <div className="empty-note">No se encontraron informes con esa búsqueda.</div>
         ) : (
-          <div>
+          <div className="list-grid">
             {filtered.map((i) => (
               <div className={`hist-item${i.pdfDisponible ? "" : " archived"}`} key={i.id}>
                 <div className="info">
@@ -180,12 +186,23 @@ export function HistorialInformes({ informes }: { informes: HistorialInformeRow[
                   <button
                     type="button"
                     className="icon-btn"
-                    title={i.pdfDisponible ? "Ver / descargar PDF" : "Sin PDF disponible"}
+                    title={i.pdfDisponible ? "Ver PDF" : "Sin PDF disponible"}
                     disabled={!i.pdfDisponible || busyId === i.id}
-                    onClick={() => verDescargar(i.id, i.numeroGeneracion)}
+                    onClick={() => verPdf(i.id)}
                   >
-                    {busyId === i.id ? "…" : <Icon name="download" size={15} />}
+                    {busyId === i.id ? "…" : <Icon name="eye" size={15} />}
                   </button>
+                  {esAdmin && (
+                    <button
+                      type="button"
+                      className="icon-btn icon-btn-danger"
+                      title="Borrar informe"
+                      disabled={busyId === i.id}
+                      onClick={() => eliminar(i.id, i.titulo)}
+                    >
+                      <Icon name="trash" size={15} />
+                    </button>
+                  )}
                 </div>
               </div>
             ))}

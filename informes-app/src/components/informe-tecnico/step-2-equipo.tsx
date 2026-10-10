@@ -1,10 +1,24 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type Dispatch, type SetStateAction } from "react";
 import type { Tecnico, Vehiculo } from "@/lib/types";
 import type { CatalogosInforme } from "./types";
 import { Icon } from "@/components/icon";
 import { AutocompleteInput } from "@/components/ui/autocomplete-input";
+import { MaterialesSection } from "./materiales-section";
+import type { MaterialInformeItem, RemitoItem } from "./materiales-types";
+
+export interface MaterialesStepProps {
+  tieneUbicacion: boolean;
+  materiales: MaterialInformeItem[];
+  setMateriales: Dispatch<SetStateAction<MaterialInformeItem[]>>;
+  remitoFotos: File[];
+  setRemitoFotos: Dispatch<SetStateAction<File[]>>;
+  remitoNumero: string;
+  setRemitoNumero: Dispatch<SetStateAction<string>>;
+  remitoItems: RemitoItem[];
+  setRemitoItems: Dispatch<SetStateAction<RemitoItem[]>>;
+}
 
 export function Step2Equipo({
   tecnicos,
@@ -12,13 +26,19 @@ export function Step2Equipo({
   vehiculos,
   setVehiculos,
   catalogos,
+  materialesProps,
 }: {
   tecnicos: Tecnico[];
   setTecnicos: (t: Tecnico[]) => void;
   vehiculos: Vehiculo[];
   setVehiculos: (v: Vehiculo[]) => void;
   catalogos: CatalogosInforme;
+  /** null = edición de un informe existente, donde los materiales no se tocan (igual criterio que las fotos). */
+  materialesProps: MaterialesStepProps | null;
 }) {
+  const [mostrarMateriales, setMostrarMateriales] = useState(
+    Boolean(materialesProps && (materialesProps.materiales.length > 0 || materialesProps.remitoItems.length > 0)),
+  );
   const [nombre, setNombre] = useState("");
   const [torre, setTorre] = useState("");
   const [seguridad, setSeguridad] = useState(false);
@@ -147,6 +167,48 @@ export function Step2Equipo({
           )}
         </div>
       </div>
+
+      {materialesProps &&
+        (materialesProps.tieneUbicacion ? (
+          mostrarMateriales ? (
+            <>
+              <MaterialesSection
+                materiales={materialesProps.materiales}
+                setMateriales={materialesProps.setMateriales}
+                remitoFotos={materialesProps.remitoFotos}
+                setRemitoFotos={materialesProps.setRemitoFotos}
+                remitoNumero={materialesProps.remitoNumero}
+                setRemitoNumero={materialesProps.setRemitoNumero}
+                remitoItems={materialesProps.remitoItems}
+                setRemitoItems={materialesProps.setRemitoItems}
+                disabled={false}
+              />
+              {materialesProps.materiales.length === 0 && materialesProps.remitoItems.length === 0 && (
+                <div className="card">
+                  <button type="button" className="btn btn-secondary btn-sm" onClick={() => setMostrarMateriales(false)}>
+                    <Icon name="x" size={13} /> Este trabajo no usó materiales/equipos
+                  </button>
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="card">
+              <button type="button" className="btn btn-secondary" onClick={() => setMostrarMateriales(true)}>
+                + Agregar materiales/equipos
+              </button>
+              <div className="hint" style={{ margin: "8px 0 0" }}>
+                Si este trabajo instaló o usó materiales/equipos (una instalación, una reparación con repuestos, lo que sea), agregalos
+                acá — quedan dados de alta en el Sitio y, si tenés el remito de depósito, se devuelve solo lo que sobró.
+              </div>
+            </div>
+          )
+        ) : (
+          <div className="card">
+            <div className="hint" style={{ margin: 0 }}>
+              Elegí una ubicación en el paso anterior para poder agregar materiales/equipos.
+            </div>
+          </div>
+        ))}
     </>
   );
 }

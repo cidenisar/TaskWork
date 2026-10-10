@@ -31,6 +31,13 @@ export default async function RelevamientoHubPage() {
           <div className="module-title">Comunicaciones (Racks)</div>
           <div className="module-sub">Sacá fotos de un rack y la IA te dice qué equipamiento tenés — routers, switches, UPS...</div>
         </Link>
+        <Link href="/torres-comunicacion/nuevo" className="module-card">
+          <div className="module-ico">
+            <ModuleIcon name="torre-comunicacion" />
+          </div>
+          <div className="module-title">Torres de Comunicaciones</div>
+          <div className="module-sub">Dá de alta una torre y relevá todo el equipamiento montado — antenas, radioenlaces, balizas...</div>
+        </Link>
         <Link href="/equipos/nuevo" className="module-card">
           <div className="module-ico">
             <ModuleIcon name="equipos" />

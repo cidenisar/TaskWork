@@ -55,22 +55,38 @@ export default async function EstadisticasPage() {
 
       <KpiGrid kpis={base.kpis} />
 
-      <div className="card">
-        <div className="section-label">Gastos por categoría (este mes)</div>
-        <BarList items={base.gastosPorCategoria.map((g) => ({ label: g.categoria, value: g.monto, displayValue: `ARS ${g.monto.toLocaleString("es-AR")}` }))} />
-      </div>
+      <div className="wide-grid">
+        <div className="wide-cell card">
+          <div className="section-label">Gastos por categoría (este mes)</div>
+          <BarList items={base.gastosPorCategoria.map((g) => ({ label: g.categoria, value: g.monto, displayValue: `ARS ${g.monto.toLocaleString("es-AR")}` }))} />
+        </div>
 
-      <div className="card">
-        <div className="section-label">Informes por técnico (este mes)</div>
-        <BarList items={base.informesPorTecnico.map((t) => ({ label: t.nombre, value: t.cantidad, displayValue: String(t.cantidad) }))} />
-      </div>
+        <div className="wide-cell card">
+          <div className="section-label">Informes por técnico (este mes)</div>
+          <BarList items={base.informesPorTecnico.map((t) => ({ label: t.nombre, value: t.cantidad, displayValue: String(t.cantidad) }))} />
+        </div>
 
-      <InsightsCard />
-      <AsistenteCard />
-      <HeatmapCard points={base.heatmapPoints} />
-      <MantenimientoPredictivoCard alertas={base.mantenimientoPredictivo} />
-      <ComparacionCard grupos={base.comparacionPorTorre} />
-      <VerificacionFotosCard candidatos={candidatosVerificacion} />
+        <div className="wide-cell">
+          <InsightsCard />
+        </div>
+        <div className="wide-cell">
+          <MantenimientoPredictivoCard alertas={base.mantenimientoPredictivo} />
+        </div>
+
+        <div className="wide-cell wide-span-2">
+          <AsistenteCard />
+        </div>
+        <div className="wide-cell wide-span-2">
+          <HeatmapCard points={base.heatmapPoints} />
+        </div>
+
+        <div className="wide-cell">
+          <ComparacionCard grupos={base.comparacionPorTorre} />
+        </div>
+        <div className="wide-cell">
+          <VerificacionFotosCard candidatos={candidatosVerificacion} />
+        </div>
+      </div>
     </div>
   );
 }

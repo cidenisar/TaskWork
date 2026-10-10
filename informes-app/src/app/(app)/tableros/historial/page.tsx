@@ -6,7 +6,7 @@ import type { MantenimientoRow } from "@/components/tableros/types";
 import { fetchTodasLasUbicaciones } from "@/lib/ubicaciones/fetch-todas";
 
 export default async function HistorialTablerosPage() {
-  await requireProfile();
+  const profile = await requireProfile();
   const supabase = await createClient();
 
   // RLS (tablero_mediciones_select_own / tablero_mantenimientos_select_own)
@@ -72,5 +72,5 @@ export default async function HistorialTablerosPage() {
     })
     .filter((r): r is MantenimientoRow => r !== null);
 
-  return <HistorialTableros mediciones={mediciones} mantenimientos={mantenimientos} />;
+  return <HistorialTableros mediciones={mediciones} mantenimientos={mantenimientos} esAdmin={profile.rol === "admin"} />;
 }

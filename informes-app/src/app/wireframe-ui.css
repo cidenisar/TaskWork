@@ -260,6 +260,43 @@ body {
   margin-top: 16px;
 }
 
+/* Estadísticas en pantalla ancha: las tarjetas secundarias (todo lo que no
+   es el KpiGrid) pasan de apilarse una debajo de la otra a un grid de 2
+   columnas — el mapa de calor y el asistente ocupan las dos (necesitan el
+   ancho), el resto se empareja. Envueltas en `.wide-cell` en vez de
+   `.card + .card` directo: así ninguna `.card` queda adyacente a otra en el
+   DOM y la regla de arriba no duplica el espaciado sumado al `gap` del grid. */
+.wide-cell + .wide-cell {
+  margin-top: 16px;
+}
+@media (min-width: 1024px) {
+  .wide-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+  .wide-cell + .wide-cell {
+    margin-top: 0;
+  }
+  .wide-span-2 {
+    grid-column: 1 / -1;
+  }
+}
+
+/* Listas de filas clickeables (drill-down de Región/Provincia/Sitio,
+   resultados de búsqueda): en pantalla ancha se acomodan en 2 columnas en
+   vez de una fila larga por ítem — mismo breakpoint que .wide-grid. */
+@media (min-width: 1024px) {
+  .list-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .list-grid > .hist-item {
+    margin-bottom: 0;
+  }
+}
+
 .grid2 {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -425,6 +462,13 @@ textarea {
 }
 .btn-secondary:hover {
   border-color: var(--text-faint);
+}
+.btn-danger {
+  background: var(--accent-2);
+  color: #fff;
+}
+.btn-danger:hover {
+  opacity: 0.9;
 }
 .btn-sm {
   padding: 8px 14px;
@@ -803,6 +847,66 @@ textarea {
 .hist-item.archived {
   opacity: 0.6;
 }
+
+/* Fila expandible (tableros/racks en el detalle de Sitio) — mismo look que
+   .hist-item, pero es un <details> con una tabla adentro en vez de un <div>. */
+.detalle-item {
+  background: var(--panel-2);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius);
+  margin-bottom: 8px;
+  overflow: hidden;
+}
+.detalle-item > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px;
+  cursor: pointer;
+  list-style: none;
+}
+.detalle-item > summary::-webkit-details-marker {
+  display: none;
+}
+.detalle-item[open] > summary {
+  border-bottom: 1px solid var(--border-soft);
+}
+.detalle-chevron {
+  flex-shrink: 0;
+  transition: transform 0.15s ease;
+}
+.detalle-item[open] .detalle-chevron {
+  transform: rotate(90deg);
+}
+.detalle-table-wrap {
+  overflow-x: auto;
+  padding: 10px 14px 14px;
+}
+.detalle-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.detalle-table th {
+  text-align: left;
+  color: var(--text-dim);
+  font-weight: 600;
+  font-size: 11px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border-soft);
+  white-space: nowrap;
+}
+.detalle-table td {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border-soft);
+  color: var(--text);
+  white-space: nowrap;
+}
+.detalle-table tr:last-child td {
+  border-bottom: none;
+}
 .hist-item .info {
   display: flex;
   align-items: center;
@@ -871,6 +975,10 @@ textarea {
 .icon-btn:hover {
   border-color: var(--text-faint);
   color: var(--text);
+}
+.icon-btn-danger:hover {
+  border-color: var(--accent-2);
+  color: var(--accent-2);
 }
 .icon-btn:disabled {
   opacity: 0.35;
@@ -1009,7 +1117,55 @@ textarea {
   color: var(--accent);
   letter-spacing: 0.03em;
 }
+
+/* Ayuda (/ayuda): cada sección es un <details> nativo — sin JS, sin estado,
+   se abre/cierra solo con el navegador. */
+.help-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.help-item {
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-lg);
+  background: var(--panel-2);
+}
+.help-item summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 14px;
+  cursor: pointer;
+  list-style: none;
+  font-weight: 600;
+  font-size: 13.5px;
+}
+.help-item summary::-webkit-details-marker {
+  display: none;
+}
+.help-item-titulo {
+  flex: 1;
+}
+.help-item-body {
+  padding: 0 14px 14px;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+.help-item-body p {
+  margin: 0 0 8px;
+}
+.help-item-body ul {
+  margin: 0;
+  padding-left: 18px;
+}
+.help-item-body li {
+  margin-bottom: 4px;
+}
 .sessionbar .signout {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   background: none;
   border: none;
   color: var(--text-faint);
@@ -1327,6 +1483,19 @@ textarea {
   opacity: 0.6;
   cursor: default;
 }
+.link-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: var(--accent);
+  text-decoration: underline;
+  cursor: pointer;
+}
+.link-btn:hover {
+  opacity: 0.85;
+}
 .ai-note {
   display: flex;
   gap: 8px;
@@ -1335,4 +1504,28 @@ textarea {
   color: var(--text-faint);
   margin-top: 8px;
   line-height: 1.5;
+}
+
+/* Modal chico autocontenido (ej. "Dar de baja" sobre una fila de una tabla
+   densa) — no hay otro modal en la app todavía, así que es genérico a
+   propósito: fondo fijo + tarjeta centrada, sin librería. */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  z-index: 50;
+}
+.modal-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  max-width: 420px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
 }

@@ -6,6 +6,8 @@ import type { Ubicacion } from "@/components/ubicaciones/types";
 import { ErrorNote, SuccessNote } from "@/components/notes";
 import { VerPdfLink } from "@/components/ver-pdf-link";
 import { obtenerUrlPdfInformeAction } from "@/app/(app)/informe-tecnico/historial/actions";
+import { CATEGORIA_EQUIPO_LABEL } from "@/components/equipos/types";
+import type { MaterialInformeItem, RemitoItem } from "./materiales-types";
 
 function fmtFecha(fecha: string) {
   if (!fecha) return "—";
@@ -20,6 +22,9 @@ export function Step4Revision({
   tecnicos,
   vehiculos,
   imagenes,
+  materiales,
+  remitoNumero,
+  remitoItems,
   emails,
   selectedEmails,
   onToggleEmail,
@@ -33,6 +38,9 @@ export function Step4Revision({
   tecnicos: Tecnico[];
   vehiculos: Vehiculo[];
   imagenes: ImagenInforme[];
+  materiales: MaterialInformeItem[];
+  remitoNumero: string;
+  remitoItems: RemitoItem[];
   emails: EmailDestinatario[];
   selectedEmails: Set<string>;
   onToggleEmail: (email: string) => void;
@@ -148,6 +156,36 @@ export function Step4Revision({
             </tr>
           </tbody>
         </table>
+
+        {(materiales.length > 0 || remitoItems.length > 0) && (
+          <>
+            <div className="review-block-title">Materiales / equipos</div>
+            {materiales.length > 0 && (
+              <table className="review-table">
+                <tbody>
+                  {materiales.map((m, i) => (
+                    <tr key={i}>
+                      <td className="k">{CATEGORIA_EQUIPO_LABEL[m.categoriaEquipo]}</td>
+                      <td className="v">
+                        {m.descripcion} {m.cantidad > 1 ? `· x${m.cantidad}` : ""}
+                        {m.marcaModelo ? ` · ${m.marcaModelo}` : ""}
+                        {m.numeroSerie ? ` · S/N ${m.numeroSerie}` : ""}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+            {remitoItems.length > 0 && (
+              <div className="hint" style={{ marginTop: 8 }}>
+                Remito{remitoNumero ? ` ${remitoNumero}` : ""}: {remitoItems.length} línea{remitoItems.length === 1 ? "" : "s"}
+                {remitoItems.some((r) => r.cantidadSobrante > 0)
+                  ? ` — se va a generar una devolución a depósito con ${remitoItems.reduce((acc, r) => acc + (r.cantidadSobrante || 0), 0)} unidad(es) sobrante(s).`
+                  : "."}
+              </div>
+            )}
+          </>
+        )}
 
         <div className="review-block-title">Imágenes adjuntas</div>
         <div className="img-grid">

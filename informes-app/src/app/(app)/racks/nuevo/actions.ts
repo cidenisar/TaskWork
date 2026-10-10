@@ -16,7 +16,12 @@ interface PayloadLectura {
   texto: string;
   marcaModelo: string;
   posicionU: string;
+  etiquetaYpf: string;
+  numeroSerie: string;
   cantidad: number;
+  consumoPromedioW: number | null;
+  consumoMaxW: number | null;
+  bocasDisponibles: number | null;
   estado: string;
   comentario: string;
 }
@@ -27,6 +32,7 @@ export interface CrearRelevamientoPayload {
   ubicacionNueva: PayloadUbicacionNueva | null;
   gps: PayloadGps | null;
   denominacionNueva: string;
+  etiquetaYpfRackNueva: string | null;
   fecha: string;
   lecturas: PayloadLectura[];
 }
@@ -52,7 +58,7 @@ export async function crearRelevamientoRackAction(formData: FormData): Promise<C
   } catch {
     return { success: false, error: "Faltan datos del relevamiento." };
   }
-  const fotoGeneral = formData.get("fotoGeneral");
+  const fotosGenerales = formData.getAll("fotoGeneral").filter((f): f is File => f instanceof File);
 
   if (!payload.lecturas.length) {
     return { success: false, error: "El rack no tiene equipamiento cargado." };
@@ -78,6 +84,7 @@ export async function crearRelevamientoRackAction(formData: FormData): Promise<C
       .from("racks")
       .insert({
         denominacion: payload.denominacionNueva.trim(),
+        etiqueta_ypf: payload.etiquetaYpfRackNueva?.trim() || null,
         ubicacion_id: ubicacion.id,
         created_by: profile.id,
       })
@@ -91,7 +98,7 @@ export async function crearRelevamientoRackAction(formData: FormData): Promise<C
 
   const { data: rackRow, error: rackReadErr } = await supabase
     .from("racks")
-    .select("denominacion, ubicacion_id")
+    .select("denominacion, etiqueta_ypf, ubicacion_id")
     .eq("id", rackId)
     .single();
   if (rackReadErr || !rackRow) {
@@ -124,7 +131,12 @@ export async function crearRelevamientoRackAction(formData: FormData): Promise<C
         texto: l.texto.trim(),
         marca_modelo: l.marcaModelo.trim() || null,
         posicion_u: l.posicionU.trim() || null,
+        etiqueta_ypf: l.etiquetaYpf.trim() || null,
+        numero_serie: l.numeroSerie.trim() || null,
         cantidad: Number.isFinite(l.cantidad) && l.cantidad > 0 ? l.cantidad : 1,
+        consumo_promedio_w: Number.isFinite(l.consumoPromedioW) && (l.consumoPromedioW as number) > 0 ? l.consumoPromedioW : null,
+        consumo_max_w: Number.isFinite(l.consumoMaxW) && (l.consumoMaxW as number) > 0 ? l.consumoMaxW : null,
+        bocas_disponibles: Number.isFinite(l.bocasDisponibles) && (l.bocasDisponibles as number) >= 0 ? l.bocasDisponibles : null,
       })
       .select("id")
       .single();
@@ -173,19 +185,25 @@ export async function crearRelevamientoRackAction(formData: FormData): Promise<C
     return { success: false, error: `No se pudieron guardar las lecturas: ${lecturasErr.message}` };
   }
 
-  // Foto general del rack (opcional): registro + queda adjunta en el PDF.
-  // Reusa el bucket informe-fotos ya existente. Una foto que falla no debe
-  // tirar abajo todo el relevamiento.
-  let fotoGeneralBuffer: Buffer | null = null;
-  if (fotoGeneral instanceof File) {
-    fotoGeneralBuffer = Buffer.from(await fotoGeneral.arrayBuffer());
-    const fotoPath = `${profile.id}/racks/${relevamientoId}/general.jpg`;
+  // Fotos generales del rack (opcionales, hasta RACK_FOTO_GENERAL_MAX):
+  // registro + quedan adjuntas en el PDF — delantera/trasera u otros
+  // ángulos de detalle. Reusa el bucket informe-fotos ya existente. Una
+  // foto que falla no debe tirar abajo todo el relevamiento.
+  const fotosGeneralesBuffers: Buffer[] = [];
+  const fotosGeneralesPaths: string[] = [];
+  for (let i = 0; i < fotosGenerales.length; i++) {
+    const buffer = Buffer.from(await fotosGenerales[i].arrayBuffer());
+    const fotoPath = `${profile.id}/racks/${relevamientoId}/general-${i + 1}.jpg`;
     const { error: fotoUpErr } = await supabase.storage
       .from("informe-fotos")
-      .upload(fotoPath, fotoGeneralBuffer, { contentType: "image/jpeg", upsert: true });
+      .upload(fotoPath, buffer, { contentType: "image/jpeg", upsert: true });
     if (!fotoUpErr) {
-      await supabase.from("rack_relevamientos").update({ foto_general_url: fotoPath }).eq("id", relevamientoId);
+      fotosGeneralesBuffers.push(buffer);
+      fotosGeneralesPaths.push(fotoPath);
     }
+  }
+  if (fotosGeneralesPaths.length > 0) {
+    await supabase.from("rack_relevamientos").update({ fotos_generales_urls: fotosGeneralesPaths }).eq("id", relevamientoId);
   }
 
   // Logo de la empresa (cabecera del PDF), igual que el resto de los módulos.
@@ -205,6 +223,7 @@ export async function crearRelevamientoRackAction(formData: FormData): Promise<C
   const pdfBuffer = await renderRackPdf({
     numeroGeneracion,
     denominacion: rackRow.denominacion,
+    etiquetaYpf: rackRow.etiqueta_ypf,
     region: ubicacionRack.region,
     provincia: ubicacionRack.provincia,
     localidad: ubicacionRack.localidad,
@@ -213,7 +232,7 @@ export async function crearRelevamientoRackAction(formData: FormData): Promise<C
     oficina: ubicacionRack.oficina,
     fecha: payload.fecha,
     resumen,
-    fotoGeneralBuffer,
+    fotosGeneralesBuffers,
     lecturas: payload.lecturas.map((l) => ({
       numero: l.numero,
       categoriaEquipo: l.categoriaEquipo,
@@ -221,6 +240,7 @@ export async function crearRelevamientoRackAction(formData: FormData): Promise<C
       marcaModelo: l.marcaModelo || null,
       posicionU: l.posicionU || null,
       cantidad: Number.isFinite(l.cantidad) && l.cantidad > 0 ? l.cantidad : 1,
+      bocasDisponibles: l.bocasDisponibles,
       estado: l.estado || null,
       comentario: l.comentario || null,
     })),

@@ -14,6 +14,7 @@ export default async function NuevoMantenimientoPage() {
     supabase
       .from("tablero_circuitos")
       .select("id, tablero_id, numero, texto, amp_nominal, categoria_equipo, tipo_circuito")
+      .eq("estado", "activo")
       .order("numero"),
     fetchTodasLasUbicaciones(supabase),
   ]);

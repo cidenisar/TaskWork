@@ -34,6 +34,7 @@ interface ModuleConfig {
 const RELEVAMIENTO_GROUP: GroupOption[] = [
   { href: "/tableros/nuevo", label: "Tableros" },
   { href: "/racks/nuevo", label: "Comunicaciones" },
+  { href: "/torres-comunicacion/nuevo", label: "Torres de Comunicaciones" },
   { href: "/equipos/nuevo", label: "Equipos Individuales" },
 ];
 
@@ -75,6 +76,15 @@ const NAV_CONFIG: Record<string, ModuleConfig> = {
       { href: "/racks/historial", label: "Historial" },
     ],
   },
+  "torres-comunicacion": {
+    brand: "Relevamiento de Equipos",
+    backHref: "/relevamiento",
+    group: RELEVAMIENTO_GROUP,
+    tabs: [
+      { href: "/torres-comunicacion/nuevo", label: "Nuevo Relevamiento" },
+      { href: "/torres-comunicacion/historial", label: "Historial" },
+    ],
+  },
   equipos: {
     brand: "Relevamiento de Equipos",
     backHref: "/relevamiento",
@@ -88,12 +98,24 @@ const NAV_CONFIG: Record<string, ModuleConfig> = {
     brand: "Sitios",
     tabs: [{ href: "/ubicaciones", label: "Todos los Sitios" }],
   },
+  bajas: {
+    brand: "Bajas de Equipamiento",
+    tabs: [{ href: "/bajas/historial", label: "Historial" }],
+  },
+  "entregas-deposito": {
+    brand: "Entregas a Depósito",
+    tabs: [
+      { href: "/entregas-deposito/nueva", label: "Nueva Entrega" },
+      { href: "/entregas-deposito/historial", label: "Historial" },
+    ],
+  },
   estadisticas: {
     brand: "Estadísticas",
-    tabs: [
-      { href: "/estadisticas", label: "Resumen" },
-      { href: "/configuracion", label: "Configuración", gated: true },
-    ],
+    tabs: [{ href: "/estadisticas", label: "Resumen" }],
+  },
+  ayuda: {
+    brand: "Ayuda",
+    tabs: [],
   },
 };
 
@@ -109,12 +131,32 @@ export function AppShell({ profile, children }: { profile: Profile; children: Re
   const moduleKey = moduleKeyFor(pathname);
   const moduleConfig = moduleKey ? NAV_CONFIG[moduleKey] : null;
   const isHome = pathname === "/";
-  const brand = moduleConfig?.brand ?? (pathname === "/configuracion" ? "Configuración" : "Informes");
-  const backHref = moduleConfig?.backHref ?? "/";
-  const backLabel = moduleConfig?.backHref ? "Volver a Relevamiento de Equipos" : "Volver al inicio";
+  // Configuración vive entera bajo /configuracion/* pero son subrutas, no
+  // un moduleKey (moduleKeyFor la excluye a propósito) — se trata aparte en
+  // vez de sumar un NAV_CONFIG por sección: el hub vuelve al Panel (es la
+  // única puerta de entrada ahora, ver PanelNav) y cada subpágina vuelve al
+  // hub, un nivel por vez, mismo criterio que "Volver a Relevamiento".
+  const esConfigHub = pathname === "/configuracion";
+  const esConfigSubpagina = pathname.startsWith("/configuracion/");
+  const brand = moduleConfig?.brand ?? (esConfigHub || esConfigSubpagina ? "Configuración" : "Informes");
+  const backHref = moduleConfig?.backHref ?? (esConfigHub ? "/panel" : esConfigSubpagina ? "/configuracion" : "/");
+  const backLabel = moduleConfig?.backHref
+    ? "Volver a Relevamiento de Equipos"
+    : esConfigHub
+      ? "Volver al Panel"
+      : esConfigSubpagina
+        ? "Volver a Configuración"
+        : "Volver al inicio";
+  // Pantallas con mucho dato para visualizar (listas largas, tablas) — en
+  // pantalla ancha usan .app-wide en vez de los 800px fijos de siempre. Los
+  // historiales entran por ruta, no por módulo entero: las pantallas de
+  // carga (nuevo/mantenimiento) del mismo módulo son formularios angostos,
+  // no se benefician de más ancho.
+  const anchoCompleto =
+    moduleKey === "estadisticas" || moduleKey === "ubicaciones" || pathname.endsWith("/historial") || esConfigSubpagina;
 
   return (
-    <div className="app">
+    <div className={anchoCompleto ? "app app-wide" : "app"}>
       <div className="topbar">
         {!isHome ? (
           <Link href={backHref} className="back">
@@ -147,6 +189,9 @@ export function AppShell({ profile, children }: { profile: Profile; children: Re
           <span className="role-pill">{ROL_LABEL[profile.rol]}</span>
         </div>
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          <Link href="/ayuda" className="signout" style={{ textDecoration: "none" }}>
+            <Icon name="lightbulb" size={13} /> Ayuda
+          </Link>
           <Link href="/cuenta" className="signout" style={{ textDecoration: "none" }}>
             Mi cuenta
           </Link>

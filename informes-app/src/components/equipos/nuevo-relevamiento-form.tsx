@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { crearRelevamientoEquiposAction } from "@/app/(app)/equipos/nuevo/actions";
+import { crearRelevamientoEquiposAction, buscarEquiposEnDepositoAction, type EquipoEnDepositoResultado } from "@/app/(app)/equipos/nuevo/actions";
 import { reportarErrorCliente } from "@/lib/client-error-report";
 import { resizeImageToJpeg } from "@/lib/image-resize";
 import { ErrorNote, SuccessNote } from "@/components/notes";
@@ -19,6 +19,13 @@ import {
   calcularResumenEquipos,
   type EquipoItem,
 } from "./types";
+import {
+  TIPO_MONTAJE_OPCIONES,
+  TIPO_MONTAJE_LABEL,
+  RECURSO_ALTURA_LABEL,
+  calcularRecursoAltura,
+  type ConfigRecursoAltura,
+} from "@/lib/equipos/recurso-altura";
 
 interface LecturaState {
   estado: string;
@@ -26,16 +33,30 @@ interface LecturaState {
 }
 
 const LECTURA_VACIA: LecturaState = { estado: "", comentario: "" };
-const EQUIPO_NUEVO_BASE = { categoriaEquipo: "otro" as EquipoCategoria, marcaModelo: "", numeroSerie: "", cantidad: 1 };
+const EQUIPO_NUEVO_BASE = {
+  categoriaEquipo: "otro" as EquipoCategoria,
+  marcaModelo: "",
+  numeroSerie: "",
+  etiquetaYpf: "",
+  cantidad: 1,
+  consumoPromedioW: null as number | null,
+  consumoMaxW: null as number | null,
+  tipoMontaje: null,
+  alturaMontajeM: null,
+};
 
 export function NuevoRelevamientoEquiposForm({
   ubicaciones,
   provincias,
   equiposExistentesPorUbicacion,
+  puedeDeposito,
+  recursoAlturaConfig,
 }: {
   ubicaciones: Ubicacion[];
   provincias: string[];
   equiposExistentesPorUbicacion: Record<string, EquipoItem[]>;
+  puedeDeposito: boolean;
+  recursoAlturaConfig: ConfigRecursoAltura[];
 }) {
   const [provinciaFiltro, setProvinciaFiltro] = useState("");
   const [ubicacionId, setUbicacionId] = useState<string>(""); // "" = sin elegir, "__new" = crear
@@ -64,6 +85,10 @@ export function NuevoRelevamientoEquiposForm({
       if (fotoGeneralPreview) URL.revokeObjectURL(fotoGeneralPreview);
     };
   }, [fotoGeneralPreview]);
+  const [depositoQuery, setDepositoQuery] = useState("");
+  const [depositoResultados, setDepositoResultados] = useState<EquipoEnDepositoResultado[]>([]);
+  const [depositoBusy, setDepositoBusy] = useState(false);
+  const [depositoNote, setDepositoNote] = useState<string | null>(null);
 
   const resumen = useMemo(() => calcularResumenEquipos(equipos), [equipos]);
 
@@ -139,7 +164,10 @@ export function NuevoRelevamientoEquiposForm({
         categoriaEquipo: EquipoCategoria;
         marcaModelo: string;
         numeroSerie: string;
+        etiquetaYpf: string;
         identificado: boolean;
+        consumoPromedioW: number | null;
+        consumoMaxW: number | null;
       }[] = data.equipos ?? [];
       if (detectados.length === 0) {
         setIaNote(
@@ -157,7 +185,12 @@ export function NuevoRelevamientoEquiposForm({
           texto: d.texto,
           marcaModelo: d.marcaModelo,
           numeroSerie: d.numeroSerie,
+          etiquetaYpf: d.etiquetaYpf,
           cantidad: 1,
+          consumoPromedioW: d.consumoPromedioW,
+          consumoMaxW: d.consumoMaxW,
+          tipoMontaje: null,
+          alturaMontajeM: null,
           revisar: d.identificado !== true,
         })),
       ]);
@@ -176,6 +209,43 @@ export function NuevoRelevamientoEquiposForm({
     } finally {
       setIaBusy(false);
     }
+  }
+
+  async function buscarEnDeposito() {
+    setDepositoBusy(true);
+    setDepositoNote(null);
+    try {
+      const res = await buscarEquiposEnDepositoAction(depositoQuery);
+      setDepositoResultados(res);
+      if (res.length === 0) setDepositoNote("No se encontró equipo en depósito con esa búsqueda.");
+    } catch (err) {
+      setDepositoNote("No se pudo buscar en depósito.");
+      reportarErrorCliente(err instanceof Error ? err.message : "Error buscando equipo en depósito", "buscar-equipo-deposito");
+    } finally {
+      setDepositoBusy(false);
+    }
+  }
+
+  function agregarDesdeDeposito(item: EquipoEnDepositoResultado) {
+    if (equipos.some((e) => e.id === item.id)) return;
+    setEquipos((prev) => [
+      ...prev,
+      {
+        id: item.id,
+        categoriaEquipo: item.categoriaEquipo,
+        texto: item.texto,
+        marcaModelo: item.marcaModelo,
+        numeroSerie: item.numeroSerie,
+        etiquetaYpf: item.etiquetaYpf,
+        cantidad: item.cantidad,
+        consumoPromedioW: item.consumoPromedioW,
+        consumoMaxW: item.consumoMaxW,
+        tipoMontaje: item.tipoMontaje,
+        alturaMontajeM: item.alturaMontajeM,
+        desdeDeposito: true,
+      },
+    ]);
+    setDepositoResultados((prev) => prev.filter((d) => d.id !== item.id));
   }
 
   function agregarEquipo() {
@@ -248,9 +318,15 @@ export function NuevoRelevamientoEquiposForm({
               texto: e.texto.trim(),
               marcaModelo: e.marcaModelo.trim(),
               numeroSerie: e.numeroSerie.trim(),
+              etiquetaYpf: e.etiquetaYpf.trim(),
               cantidad: e.cantidad,
+              consumoPromedioW: e.consumoPromedioW,
+              consumoMaxW: e.consumoMaxW,
+              tipoMontaje: e.tipoMontaje,
+              alturaMontajeM: e.alturaMontajeM,
               estado: l.estado,
               comentario: l.comentario,
+              desdeDeposito: e.desdeDeposito ?? false,
             };
           }),
         }),
@@ -273,6 +349,9 @@ export function NuevoRelevamientoEquiposForm({
       }
       setSuccess({ relevamientoId: res.relevamientoId!, numeroGeneracion: res.numeroGeneracion!, pdfUrl: res.pdfUrl ?? null });
       setFotoGeneral(null);
+      setDepositoResultados([]);
+      setDepositoQuery("");
+      setDepositoNote(null);
     } catch (err) {
       const mensaje = err instanceof Error ? err.message : "Ocurrió un error inesperado guardando el relevamiento.";
       setError(mensaje);
@@ -463,6 +542,53 @@ export function NuevoRelevamientoEquiposForm({
             </div>
           )}
 
+          {puedeDeposito && (
+            <div style={{ border: "1.5px solid var(--field-border)", borderRadius: 8, padding: 12, marginBottom: 14 }}>
+              <div className="hint" style={{ margin: "0 0 8px" }}>
+                <Icon name="truck" size={13} /> ¿Instalás algo que estaba en depósito? Buscalo y agregalo — al guardar queda reactivado
+                y reubicado acá, cerrando el círculo con Entregas a Depósito.
+              </div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <input
+                  type="text"
+                  placeholder="Buscá por nombre, marca, serie o etiqueta YPF..."
+                  value={depositoQuery}
+                  onChange={(e) => setDepositoQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      void buscarEnDeposito();
+                    }
+                  }}
+                  disabled={submitting || depositoBusy}
+                  style={{ flex: 1, minWidth: 200 }}
+                />
+                <button type="button" className="btn btn-secondary btn-sm" onClick={() => void buscarEnDeposito()} disabled={submitting || depositoBusy}>
+                  <Icon name="search" size={13} /> {depositoBusy ? "Buscando..." : "Buscar en depósito"}
+                </button>
+              </div>
+              {depositoNote && <div className="hint" style={{ color: "var(--warn)", margin: "8px 0 0" }}>{depositoNote}</div>}
+              {depositoResultados.length > 0 && (
+                <div className="item-list" style={{ marginTop: 10 }}>
+                  {depositoResultados.map((d) => (
+                    <div className="list-item" key={d.id} style={{ alignItems: "center" }}>
+                      <div className="item-name">
+                        {CATEGORIA_EQUIPO_LABEL[d.categoriaEquipo]} — {d.texto}
+                        {d.marcaModelo ? ` · ${d.marcaModelo}` : ""}
+                        {d.numeroSerie ? ` · S/N ${d.numeroSerie}` : ""}
+                        {d.etiquetaYpf ? ` · YPF ${d.etiquetaYpf}` : ""}
+                        <div className="hist-meta">Depósito desde: {d.ubicacionLabel}</div>
+                      </div>
+                      <button type="button" className="btn btn-secondary btn-sm" onClick={() => agregarDesdeDeposito(d)} disabled={submitting}>
+                        <Icon name="plus" size={13} /> Agregar
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           {equipos.length > 0 && (
             <div
               style={{
@@ -547,6 +673,16 @@ export function NuevoRelevamientoEquiposForm({
                             disabled={submitting}
                           />
                         </div>
+                        <div className="field" style={{ marginBottom: 0, width: 110 }}>
+                          <label style={{ fontSize: 11 }}>Etiqueta YPF</label>
+                          <input
+                            type="text"
+                            placeholder="N° inventario"
+                            value={e.etiquetaYpf}
+                            onChange={(ev) => actualizarEquipo(i, { etiquetaYpf: ev.target.value })}
+                            disabled={submitting}
+                          />
+                        </div>
                         <div className="field" style={{ marginBottom: 0, width: 80 }}>
                           <label style={{ fontSize: 11 }}>Cantidad</label>
                           <input
@@ -557,17 +693,107 @@ export function NuevoRelevamientoEquiposForm({
                             disabled={submitting}
                           />
                         </div>
+                        <div className="field" style={{ marginBottom: 0, width: 100 }}>
+                          <label style={{ fontSize: 11 }}>Consumo prom. (W)</label>
+                          <input
+                            type="number"
+                            min={0}
+                            placeholder="IA / manual"
+                            value={e.consumoPromedioW ?? ""}
+                            onChange={(ev) => actualizarEquipo(i, { consumoPromedioW: ev.target.value === "" ? null : Number(ev.target.value) })}
+                            disabled={submitting}
+                          />
+                        </div>
+                        <div className="field" style={{ marginBottom: 0, width: 100 }}>
+                          <label style={{ fontSize: 11 }}>Consumo máx. (W)</label>
+                          <input
+                            type="number"
+                            min={0}
+                            placeholder="IA / manual"
+                            value={e.consumoMaxW ?? ""}
+                            onChange={(ev) => actualizarEquipo(i, { consumoMaxW: ev.target.value === "" ? null : Number(ev.target.value) })}
+                            disabled={submitting}
+                          />
+                        </div>
                         <button type="button" className="remove-btn" onClick={() => quitarEquipo(i)} disabled={submitting}>
                           <Icon name="x" size={12} />
                         </button>
                       </div>
+                      {e.categoriaEquipo === "camara_cctv" && (
+                        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-end" }}>
+                          <div className="field" style={{ marginBottom: 0, width: 150 }}>
+                            <label style={{ fontSize: 11 }}>
+                              Montaje <span className="opt">(opcional)</span>
+                            </label>
+                            <select
+                              value={e.tipoMontaje ?? ""}
+                              onChange={(ev) => actualizarEquipo(i, { tipoMontaje: (ev.target.value || null) as EquipoItem["tipoMontaje"] })}
+                              disabled={submitting}
+                            >
+                              <option value="">—</option>
+                              {TIPO_MONTAJE_OPCIONES.map((t) => (
+                                <option key={t} value={t}>
+                                  {TIPO_MONTAJE_LABEL[t]}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <div className="field" style={{ marginBottom: 0, width: 110 }}>
+                            <label style={{ fontSize: 11 }}>
+                              Altura (m) <span className="opt">(opcional)</span>
+                            </label>
+                            <input
+                              type="number"
+                              min={0}
+                              step="0.1"
+                              placeholder="Ej: 12"
+                              value={e.alturaMontajeM ?? ""}
+                              onChange={(ev) => actualizarEquipo(i, { alturaMontajeM: ev.target.value === "" ? null : Number(ev.target.value) })}
+                              disabled={submitting}
+                            />
+                          </div>
+                          {(() => {
+                            const recurso = calcularRecursoAltura(e.tipoMontaje, e.alturaMontajeM, recursoAlturaConfig);
+                            return recurso ? (
+                              <span className="chip">
+                                <Icon name="wrench" size={11} /> Recurso: {RECURSO_ALTURA_LABEL[recurso]}
+                              </span>
+                            ) : null;
+                          })()}
+                        </div>
+                      )}
                     </div>
                   ) : (
-                    <div className="item-name">
-                      {CATEGORIA_EQUIPO_LABEL[e.categoriaEquipo]} — {e.texto}
-                      {e.marcaModelo ? ` · ${e.marcaModelo}` : ""}
-                      {e.numeroSerie ? ` · S/N ${e.numeroSerie}` : ""}
-                      {e.cantidad > 1 ? ` · x${e.cantidad}` : ""}
+                    <div className="item-name" style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                      <span>
+                        {CATEGORIA_EQUIPO_LABEL[e.categoriaEquipo]} — {e.texto}
+                        {e.marcaModelo ? ` · ${e.marcaModelo}` : ""}
+                        {e.numeroSerie ? ` · S/N ${e.numeroSerie}` : ""}
+                        {e.etiquetaYpf ? ` · YPF ${e.etiquetaYpf}` : ""}
+                        {e.cantidad > 1 ? ` · x${e.cantidad}` : ""}
+                        {e.consumoPromedioW ? ` · ~${e.consumoPromedioW}W prom.` : ""}
+                        {e.consumoMaxW ? ` · ~${e.consumoMaxW}W máx.` : ""}
+                        {e.tipoMontaje ? ` · ${TIPO_MONTAJE_LABEL[e.tipoMontaje]}` : ""}
+                        {e.alturaMontajeM != null ? ` a ${e.alturaMontajeM}m` : ""}
+                      </span>
+                      {(() => {
+                        const recurso = calcularRecursoAltura(e.tipoMontaje, e.alturaMontajeM, recursoAlturaConfig);
+                        return recurso ? (
+                          <span className="chip">
+                            <Icon name="wrench" size={11} /> Recurso: {RECURSO_ALTURA_LABEL[recurso]}
+                          </span>
+                        ) : null;
+                      })()}
+                      {e.desdeDeposito && (
+                        <>
+                          <span className="chip">
+                            <Icon name="truck" size={11} /> Desde depósito
+                          </span>
+                          <button type="button" className="remove-btn" onClick={() => quitarEquipo(i)} disabled={submitting}>
+                            <Icon name="x" size={12} />
+                          </button>
+                        </>
+                      )}
                     </div>
                   )}
 

@@ -1,7 +1,12 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { obtenerUrlFotoMantenimientoAction, obtenerUrlPdfMedicionAction } from "@/app/(app)/tableros/historial/actions";
+import {
+  obtenerUrlFotoMantenimientoAction,
+  obtenerUrlPdfMedicionAction,
+  eliminarMedicionAction,
+  eliminarMantenimientoAction,
+} from "@/app/(app)/tableros/historial/actions";
 import { Icon } from "@/components/icon";
 import { TABLERO_EVENTO_LABEL, labelSubsistemas, type MantenimientoRow } from "./types";
 import type { TableroEventoTipo, TableroTipo } from "@/lib/database.types";
@@ -23,12 +28,16 @@ function fmtFecha(fecha: string) {
 }
 
 export function HistorialTableros({
-  mediciones,
-  mantenimientos,
+  mediciones: medicionesIniciales,
+  mantenimientos: mantenimientosIniciales,
+  esAdmin,
 }: {
   mediciones: HistorialMedicionRow[];
   mantenimientos: MantenimientoRow[];
+  esAdmin: boolean;
 }) {
+  const [mediciones, setMediciones] = useState(medicionesIniciales);
+  const [mantenimientos, setMantenimientos] = useState(mantenimientosIniciales);
   const [tab, setTab] = useState<"mediciones" | "mantenimientos">("mediciones");
   const [query, setQuery] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -52,7 +61,7 @@ export function HistorialTableros({
     );
   }, [mantenimientos, query]);
 
-  async function verDescargarPdf(id: string, numeroGeneracion: string) {
+  async function verPdf(id: string) {
     setBusyId(id);
     setNotice(null);
     const res = await obtenerUrlPdfMedicionAction(id);
@@ -61,15 +70,7 @@ export function HistorialTableros({
       setNotice(res.error || "No se pudo abrir el PDF.");
       return;
     }
-    const blob = await fetch(res.url).then((r) => r.blob());
-    const blobUrl = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = blobUrl;
-    a.download = res.filename || `${numeroGeneracion}.pdf`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(blobUrl);
+    window.open(res.url, "_blank", "noopener,noreferrer");
   }
 
   async function verFoto(id: string) {
@@ -82,6 +83,32 @@ export function HistorialTableros({
       return;
     }
     window.open(res.url, "_blank", "noopener,noreferrer");
+  }
+
+  async function eliminarMedicion(id: string, denominacion: string) {
+    if (!window.confirm(`¿Borrar definitivamente la medición de "${denominacion}"? Esto no se puede deshacer.`)) return;
+    setBusyId(id);
+    setNotice(null);
+    const res = await eliminarMedicionAction(id);
+    setBusyId(null);
+    if (!res.success) {
+      setNotice(res.error || "No se pudo borrar la medición.");
+      return;
+    }
+    setMediciones((prev) => prev.filter((m) => m.id !== id));
+  }
+
+  async function eliminarMantenimiento(id: string, denominacion: string) {
+    if (!window.confirm(`¿Borrar definitivamente el mantenimiento de "${denominacion}"? Esto no se puede deshacer.`)) return;
+    setBusyId(id);
+    setNotice(null);
+    const res = await eliminarMantenimientoAction(id);
+    setBusyId(null);
+    if (!res.success) {
+      setNotice(res.error || "No se pudo borrar el mantenimiento.");
+      return;
+    }
+    setMantenimientos((prev) => prev.filter((m) => m.id !== id));
   }
 
   return (
@@ -126,7 +153,7 @@ export function HistorialTableros({
           medicionesFiltradas.length === 0 ? (
             <div className="empty-note">No se encontraron mediciones ni relevamientos con esa búsqueda.</div>
           ) : (
-            <div>
+            <div className="list-grid">
               {medicionesFiltradas.map((m) => (
                 <div className={`hist-item${m.pdfDisponible ? "" : " archived"}`} key={m.id}>
                   <div className="info">
@@ -147,12 +174,23 @@ export function HistorialTableros({
                     <button
                       type="button"
                       className="icon-btn"
-                      title={m.pdfDisponible ? "Ver / descargar PDF" : "Sin PDF disponible"}
+                      title={m.pdfDisponible ? "Ver PDF" : "Sin PDF disponible"}
                       disabled={!m.pdfDisponible || busyId === m.id}
-                      onClick={() => verDescargarPdf(m.id, m.numeroGeneracion)}
+                      onClick={() => verPdf(m.id)}
                     >
-                      {busyId === m.id ? "…" : <Icon name="download" size={15} />}
+                      {busyId === m.id ? "…" : <Icon name="eye" size={15} />}
                     </button>
+                    {esAdmin && (
+                      <button
+                        type="button"
+                        className="icon-btn icon-btn-danger"
+                        title="Borrar medición"
+                        disabled={busyId === m.id}
+                        onClick={() => eliminarMedicion(m.id, m.denominacion)}
+                      >
+                        <Icon name="trash" size={15} />
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}
@@ -161,7 +199,7 @@ export function HistorialTableros({
         ) : mantenimientosFiltrados.length === 0 ? (
           <div className="empty-note">No se encontraron mantenimientos con esa búsqueda.</div>
         ) : (
-          <div>
+          <div className="list-grid">
             {mantenimientosFiltrados.map((m) => (
               <div className="hist-item" key={m.id}>
                 <div className="info">
@@ -193,6 +231,17 @@ export function HistorialTableros({
                   >
                     {busyId === m.id ? "…" : <Icon name="camera" size={15} />}
                   </button>
+                  {esAdmin && (
+                    <button
+                      type="button"
+                      className="icon-btn icon-btn-danger"
+                      title="Borrar mantenimiento"
+                      disabled={busyId === m.id}
+                      onClick={() => eliminarMantenimiento(m.id, m.tableroDenominacion)}
+                    >
+                      <Icon name="trash" size={15} />
+                    </button>
+                  )}
                 </div>
               </div>
             ))}

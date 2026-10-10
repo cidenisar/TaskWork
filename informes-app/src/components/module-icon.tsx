@@ -53,6 +53,20 @@ const ICON_PATHS: Record<string, React.ReactNode> = {
       <circle cx="15" cy="17" r="0.6" fill="currentColor" stroke="none" />
     </>
   ),
+  panel: (
+    <>
+      <rect x="3.5" y="4" width="17" height="12" rx="1.5" />
+      <path d="M8.5 20h7M12 16v4" />
+    </>
+  ),
+  "torre-comunicacion": (
+    <>
+      <path d="M12 2v20" />
+      <path d="M12 2 6 20M12 2l6 18" />
+      <path d="M8.3 12h7.4M9.5 8h5" />
+      <circle cx="12" cy="4" r="1" fill="currentColor" stroke="none" />
+    </>
+  ),
   ubicaciones: (
     <>
       <path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21Z" />
@@ -70,6 +84,79 @@ const ICON_PATHS: Record<string, React.ReactNode> = {
   equipos: (
     <>
       <path d="M13 2 7 13h4l-1 9 7-12h-4l1-8Z" />
+    </>
+  ),
+  bajas: (
+    <>
+      <path d="M3 8 12 3l9 5-9 5-9-5Z" />
+      <path d="M3 8v8l9 5 9-5V8" />
+      <path d="M12 13v8" />
+    </>
+  ),
+  deposito: (
+    <>
+      <rect x="2.5" y="8" width="11" height="8" rx="1.2" />
+      <path d="M13.5 11h3.3l3.2 3v2H20" />
+      <circle cx="6.5" cy="17.3" r="1.6" />
+      <circle cx="16" cy="17.3" r="1.6" />
+    </>
+  ),
+  empresa: (
+    <>
+      <rect x="5" y="3" width="14" height="18" rx="1.3" />
+      <path d="M9 7h2M13 7h2M9 11h2M13 11h2M9 15h2M13 15h2" />
+    </>
+  ),
+  usuarios: (
+    <>
+      <circle cx="9" cy="8" r="3" />
+      <path d="M3.5 20c0-3.3 2.5-6 5.5-6s5.5 2.7 5.5 6" />
+      <circle cx="17" cy="9" r="2.2" />
+      <path d="M14.8 14.3c1.9.6 3.2 2.7 3.2 5.7" />
+    </>
+  ),
+  catalogos: (
+    <>
+      <path d="M5 6h14M5 12h14M5 18h14" />
+    </>
+  ),
+  emails: (
+    <>
+      <rect x="3" y="5" width="18" height="14" rx="2" />
+      <path d="m4 6.5 8 6.5 8-6.5" />
+    </>
+  ),
+  almacenamiento: (
+    <>
+      <ellipse cx="12" cy="6" rx="7" ry="3" />
+      <path d="M5 6v6c0 1.7 3.1 3 7 3s7-1.3 7-3V6" />
+      <path d="M5 12v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6" />
+    </>
+  ),
+  "resumen-ia": (
+    <>
+      <path d="M12 3v4M12 17v4M3 12h4M17 12h4" />
+      <path d="M12 7a5 5 0 0 0 5 5 5 5 0 0 0-5 5 5 5 0 0 0-5-5 5 5 0 0 0 5-5Z" />
+    </>
+  ),
+  auditoria: (
+    <>
+      <path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z" />
+      <circle cx="12" cy="12" r="2.3" />
+    </>
+  ),
+  errores: (
+    <>
+      <path d="M12 3 2 20h20L12 3Z" />
+      <path d="M12 10v4" />
+      <circle cx="12" cy="17" r="0.6" fill="currentColor" stroke="none" />
+    </>
+  ),
+  "datos-prueba": (
+    <>
+      <path d="M5 7h14M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+      <path d="M7 7l1 13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1l1-13" />
+      <path d="M10 11v6M14 11v6" />
     </>
   ),
 };

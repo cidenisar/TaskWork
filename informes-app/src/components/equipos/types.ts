@@ -1,4 +1,4 @@
-import type { EquipoCategoria } from "@/lib/database.types";
+import type { EquipoCategoria, TipoMontajeCamara } from "@/lib/database.types";
 
 /** Máximo de fotos que se pueden mandar juntas a la lectura con IA (distintos equipos sueltos, o distintos ángulos del mismo). */
 export const EQUIPO_FOTO_IA_MAX = 7;
@@ -6,6 +6,7 @@ export const EQUIPO_FOTO_IA_MAX = 7;
 export const CATEGORIA_EQUIPO_OPCIONES: EquipoCategoria[] = [
   "ups",
   "banco_baterias",
+  "grupo_electrogeno",
   "camara_cctv",
   "control_acceso",
   "impresora",
@@ -17,6 +18,7 @@ export const CATEGORIA_EQUIPO_OPCIONES: EquipoCategoria[] = [
 export const CATEGORIA_EQUIPO_LABEL: Record<EquipoCategoria, string> = {
   ups: "UPS",
   banco_baterias: "Banco de baterías",
+  grupo_electrogeno: "Grupo electrógeno",
   camara_cctv: "Cámara CCTV",
   control_acceso: "Control de acceso",
   impresora: "Impresora",
@@ -35,6 +37,27 @@ export interface EquipoItem {
   marcaModelo: string;
   numeroSerie: string;
   cantidad: number;
+  /** Número de la etiqueta/chapa de inventario de YPF, si es legible — distinto del número de serie del fabricante. */
+  etiquetaYpf: string;
+  /**
+   * Consumo típico ESTIMADO por IA en Watts a partir de la marca/modelo
+   * (nunca una medición real) — en uso normal (`consumoPromedioW`) y
+   * pico/máximo (`consumoMaxW`, que puede acercarse al vatiaje nominal de
+   * la fuente del equipo sin ser necesariamente el mismo número). Null si
+   * todavía no se estimó, o la IA no reconoció el modelo con confianza
+   * suficiente.
+   */
+  consumoPromedioW: number | null;
+  consumoMaxW: number | null;
+  /**
+   * Dónde está montada y a qué altura real — solo tiene sentido para
+   * categoriaEquipo='camara_cctv' (en el resto de categorías queda null).
+   * Determina, junto con el catálogo admin de Configuración, qué recurso
+   * hace falta para el mantenimiento (escalera, andamio/manlift, grupo de
+   * altura) — nunca lo adivina la IA, lo carga el técnico a mano.
+   */
+  tipoMontaje: TipoMontajeCamara | null;
+  alturaMontajeM: number | null;
   /**
    * Solo transitorio en el form (no se persiste): true cuando lo cargó la
    * lectura de foto con IA sin encontrar una etiqueta/chapa legible, así el
@@ -42,6 +65,13 @@ export interface EquipoItem {
    * verificarlo/corregirlo antes de guardar.
    */
   revisar?: boolean;
+  /**
+   * Solo transitorio en el form (no se persiste como tal): true cuando este
+   * equipo se trajo desde depósito para instalarlo acá — la acción de
+   * guardado lo reactiva (estado vuelve a 'activo') y lo reubica en el
+   * sitio de esta instalación, en vez de solo registrar una lectura.
+   */
+  desdeDeposito?: boolean;
 }
 
 /** Resumen del equipamiento relevado — se muestra en pantalla mientras se carga y se imprime en el PDF. */

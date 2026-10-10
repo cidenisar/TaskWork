@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { crearRelevamientoRackAction } from "@/app/(app)/racks/nuevo/actions";
 import { reportarErrorCliente } from "@/lib/client-error-report";
 import { resizeImageToJpeg } from "@/lib/image-resize";
@@ -13,6 +13,7 @@ import type { Ubicacion } from "@/components/ubicaciones/types";
 import type { RackCategoriaEquipo } from "@/lib/database.types";
 import {
   RACK_FOTO_IA_MAX,
+  RACK_FOTO_GENERAL_MAX,
   CATEGORIA_EQUIPO_OPCIONES,
   CATEGORIA_EQUIPO_LABEL,
   ESTADO_OPCIONES,
@@ -27,7 +28,17 @@ interface LecturaState {
 }
 
 const LECTURA_VACIA: LecturaState = { estado: "", comentario: "" };
-const EQUIPO_NUEVO_BASE = { categoriaEquipo: "otro" as RackCategoriaEquipo, marcaModelo: "", posicionU: "", cantidad: 1 };
+const EQUIPO_NUEVO_BASE = {
+  categoriaEquipo: "otro" as RackCategoriaEquipo,
+  marcaModelo: "",
+  posicionU: "",
+  etiquetaYpf: "",
+  numeroSerie: "",
+  cantidad: 1,
+  consumoPromedioW: null as number | null,
+  consumoMaxW: null as number | null,
+  bocasDisponibles: null as number | null,
+};
 
 export function NuevoRelevamientoForm({
   racks,
@@ -47,6 +58,7 @@ export function NuevoRelevamientoForm({
   const [gps, setGps] = useState<GpsCapturado | null>(null);
   const [rackId, setRackId] = useState<string>(""); // "" = sin elegir, "__new" = crear
   const [denominacionNueva, setDenominacionNueva] = useState("");
+  const [etiquetaYpfRackNueva, setEtiquetaYpfRackNueva] = useState("");
   const [fecha, setFecha] = useState(() => new Date().toISOString().slice(0, 10));
   const [equipamiento, setEquipamiento] = useState<EquipamientoItem[]>([]);
   const [lecturas, setLecturas] = useState<Record<number, LecturaState>>({});
@@ -58,15 +70,25 @@ export function NuevoRelevamientoForm({
   const [iaNote, setIaNote] = useState<string | null>(null);
   const fotoCameraInputRef = useRef<HTMLInputElement>(null);
   const fotoGaleriaInputRef = useRef<HTMLInputElement>(null);
-  const [fotoGeneral, setFotoGeneral] = useState<File | null>(null);
+  const [fotosGenerales, setFotosGenerales] = useState<File[]>([]);
   const fotoGeneralCameraInputRef = useRef<HTMLInputElement>(null);
   const fotoGeneralGaleriaInputRef = useRef<HTMLInputElement>(null);
-  const fotoGeneralPreview = useMemo(() => (fotoGeneral ? URL.createObjectURL(fotoGeneral) : null), [fotoGeneral]);
-  useEffect(() => {
-    return () => {
-      if (fotoGeneralPreview) URL.revokeObjectURL(fotoGeneralPreview);
-    };
-  }, [fotoGeneralPreview]);
+  const escanearInputRef = useRef<HTMLInputElement>(null);
+  const [escaneando, setEscaneando] = useState<{ index: number; campo: "etiquetaYpf" | "numeroSerie" } | null>(null);
+  const [escaneandoBusy, setEscaneandoBusy] = useState(false);
+
+  function agregarFotosGenerales(files: File[]) {
+    if (files.length === 0) return;
+    setFotosGenerales((prev) => {
+      const disponibles = RACK_FOTO_GENERAL_MAX - prev.length;
+      if (disponibles <= 0) return prev;
+      return [...prev, ...files.slice(0, disponibles)];
+    });
+  }
+
+  function quitarFotoGeneral(i: number) {
+    setFotosGenerales((prev) => prev.filter((_, idx) => idx !== i));
+  }
 
   const resumen = useMemo(() => calcularResumenEquipamiento(equipamiento), [equipamiento]);
 
@@ -88,6 +110,7 @@ export function NuevoRelevamientoForm({
     setSuccess(null);
     setRackId("");
     setDenominacionNueva("");
+    setEtiquetaYpfRackNueva("");
     setEquipamiento([]);
     setLecturas({});
     if (id !== "__new") {
@@ -161,7 +184,11 @@ export function NuevoRelevamientoForm({
         categoriaEquipo: RackCategoriaEquipo;
         marcaModelo: string;
         posicionU: string;
+        etiquetaYpf: string;
+        numeroSerie: string;
         identificado: boolean;
+        consumoPromedioW: number | null;
+        consumoMaxW: number | null;
       }[] = data.equipos ?? [];
       if (detectados.length === 0) {
         setIaNote(
@@ -181,7 +208,12 @@ export function NuevoRelevamientoForm({
           texto: d.texto,
           marcaModelo: d.marcaModelo,
           posicionU: d.posicionU,
+          etiquetaYpf: d.etiquetaYpf,
+          numeroSerie: d.numeroSerie,
           cantidad: 1,
+          consumoPromedioW: d.consumoPromedioW,
+          consumoMaxW: d.consumoMaxW,
+          bocasDisponibles: null,
           revisar: d.identificado !== true,
         })),
       ]);
@@ -199,6 +231,43 @@ export function NuevoRelevamientoForm({
       reportarErrorCliente(err instanceof Error ? err.message : "Error leyendo fotos de rack con IA", "leer-foto-rack");
     } finally {
       setIaBusy(false);
+    }
+  }
+
+  const CAMPO_LABEL: Record<"etiquetaYpf" | "numeroSerie", string> = { etiquetaYpf: "la etiqueta YPF", numeroSerie: "el N° de serie" };
+
+  function iniciarEscaneo(index: number, campo: "etiquetaYpf" | "numeroSerie") {
+    setError(null);
+    setEscaneando({ index, campo });
+    escanearInputRef.current?.click();
+  }
+
+  async function onFotoEscaneada(file: File) {
+    const objetivo = escaneando;
+    if (!objetivo) return;
+    setEscaneandoBusy(true);
+    try {
+      const jpeg = await resizeImageToJpeg(file);
+      const fd = new FormData();
+      fd.append("foto", jpeg, "campo.jpg");
+      fd.append("campo", objetivo.campo);
+      const res = await fetch("/api/racks/leer-campo", { method: "POST", body: fd });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || "No se pudo leer la foto.");
+        return;
+      }
+      if (!data.valor) {
+        setError(`No se pudo leer ${CAMPO_LABEL[objetivo.campo]} en esa foto — probá de más cerca o con mejor luz.`);
+        return;
+      }
+      actualizarEquipo(objetivo.index, { [objetivo.campo]: data.valor } as Partial<EquipamientoItem>);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo leer la foto.");
+      reportarErrorCliente(err instanceof Error ? err.message : "Error escaneando campo de rack con IA", "leer-campo-rack");
+    } finally {
+      setEscaneandoBusy(false);
+      setEscaneando(null);
     }
   }
 
@@ -274,6 +343,7 @@ export function NuevoRelevamientoForm({
               : null,
           gps,
           denominacionNueva,
+          etiquetaYpfRackNueva: etiquetaYpfRackNueva.trim() || null,
           fecha,
           lecturas: equipamiento.map((e, i) => {
             const l = lecturas[i] ?? LECTURA_VACIA;
@@ -284,19 +354,24 @@ export function NuevoRelevamientoForm({
               texto: e.texto.trim(),
               marcaModelo: e.marcaModelo.trim(),
               posicionU: e.posicionU.trim(),
+              etiquetaYpf: e.etiquetaYpf.trim(),
+              numeroSerie: e.numeroSerie.trim(),
               cantidad: e.cantidad,
+              consumoPromedioW: e.consumoPromedioW,
+              consumoMaxW: e.consumoMaxW,
+              bocasDisponibles: e.bocasDisponibles,
               estado: l.estado,
               comentario: l.comentario,
             };
           }),
         }),
       );
-      if (fotoGeneral) {
+      for (let i = 0; i < fotosGenerales.length; i++) {
         try {
-          const jpeg = await resizeImageToJpeg(fotoGeneral);
-          fd.append("fotoGeneral", jpeg, "general.jpg");
+          const jpeg = await resizeImageToJpeg(fotosGenerales[i]);
+          fd.append("fotoGeneral", jpeg, `general-${i + 1}.jpg`);
         } catch (err) {
-          setError(err instanceof Error ? err.message : "No se pudo leer la foto general del rack.");
+          setError(err instanceof Error ? err.message : "No se pudo leer una de las fotos generales del rack.");
           return;
         }
       }
@@ -308,7 +383,7 @@ export function NuevoRelevamientoForm({
         return;
       }
       setSuccess({ relevamientoId: res.relevamientoId!, numeroGeneracion: res.numeroGeneracion!, pdfUrl: res.pdfUrl ?? null });
-      setFotoGeneral(null);
+      setFotosGenerales([]);
     } catch (err) {
       const mensaje = err instanceof Error ? err.message : "Ocurrió un error inesperado guardando el relevamiento.";
       setError(mensaje);
@@ -329,9 +404,10 @@ export function NuevoRelevamientoForm({
     setGps(null);
     setRackId("");
     setDenominacionNueva("");
+    setEtiquetaYpfRackNueva("");
     setEquipamiento([]);
     setLecturas({});
-    setFotoGeneral(null);
+    setFotosGenerales([]);
   }
 
   return (
@@ -381,18 +457,36 @@ export function NuevoRelevamientoForm({
             </select>
           </div>
           {rackId === "__new" && (
-            <div className="field">
-              <label>
-                Denominación <span className="req">*</span>
-              </label>
-              <input
-                type="text"
-                placeholder="Ej: Rack 1 - Transmisión"
-                value={denominacionNueva}
-                onChange={(e) => setDenominacionNueva(e.target.value)}
-                disabled={submitting}
-              />
-            </div>
+            <>
+              <div className="field">
+                <label>
+                  Denominación <span className="req">*</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ej: Rack 1 - Transmisión"
+                  value={denominacionNueva}
+                  onChange={(e) => setDenominacionNueva(e.target.value)}
+                  disabled={submitting}
+                />
+              </div>
+              <div className="field">
+                <label>
+                  Etiqueta YPF del rack <span className="opt">(opcional)</span>
+                </label>
+                <div className="hint" style={{ margin: "-2px 0 8px" }}>
+                  N° de inventario de YPF del rack en sí (para ServiceNow) — distinto de la etiqueta de cada equipo adentro.
+                </div>
+                <input
+                  type="text"
+                  placeholder="Ej: 123456"
+                  value={etiquetaYpfRackNueva}
+                  onChange={(e) => setEtiquetaYpfRackNueva(e.target.value)}
+                  disabled={submitting}
+                  style={{ maxWidth: 220 }}
+                />
+              </div>
+            </>
           )}
           <div className="field" style={{ marginTop: 16 }}>
             <label>
@@ -402,10 +496,11 @@ export function NuevoRelevamientoForm({
           </div>
           <div className="field" style={{ marginBottom: 0 }}>
             <label>
-              Foto general del rack <span className="opt">(opcional)</span>
+              Fotos generales del rack <span className="opt">(opcional)</span>
             </label>
             <div className="hint" style={{ margin: "-2px 0 8px" }}>
-              Queda guardada como registro y se imprime en el PDF de esta visita.
+              Hasta {RACK_FOTO_GENERAL_MAX} fotos (ej: parte delantera y trasera, u otros ángulos de detalle) — quedan guardadas como
+              registro y se imprimen en el PDF de esta visita.
             </div>
             <input
               ref={fotoGeneralCameraInputRef}
@@ -414,42 +509,51 @@ export function NuevoRelevamientoForm({
               capture="environment"
               style={{ display: "none" }}
               onChange={(e) => {
-                const file = e.target.files?.[0] ?? null;
+                const files = Array.from(e.target.files ?? []);
                 e.target.value = "";
-                if (file) setFotoGeneral(file);
+                agregarFotosGenerales(files);
               }}
             />
             <input
               ref={fotoGeneralGaleriaInputRef}
               type="file"
               accept="image/*"
+              multiple
               style={{ display: "none" }}
               onChange={(e) => {
-                const file = e.target.files?.[0] ?? null;
+                const files = Array.from(e.target.files ?? []);
                 e.target.value = "";
-                if (file) setFotoGeneral(file);
+                agregarFotosGenerales(files);
               }}
             />
-            {fotoGeneral && fotoGeneralPreview ? (
-              <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                {/* eslint-disable-next-line @next/next/no-img-element -- preview local, no vale la pena next/image acá */}
-                <img
-                  src={fotoGeneralPreview}
-                  alt=""
-                  style={{ width: 64, height: 64, objectFit: "cover", borderRadius: 8, border: "1px solid var(--field-border)" }}
-                />
-                <button type="button" className="btn btn-secondary btn-sm" onClick={() => setFotoGeneral(null)} disabled={submitting}>
-                  <Icon name="x" size={12} /> Quitar
-                </button>
-              </div>
-            ) : (
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                <button type="button" className="ai-btn" onClick={() => fotoGeneralCameraInputRef.current?.click()} disabled={submitting}>
-                  <Icon name="camera" size={13} /> Sacar foto
-                </button>
-                <button type="button" className="ai-btn" onClick={() => fotoGeneralGaleriaInputRef.current?.click()} disabled={submitting}>
-                  <Icon name="upload" size={13} /> Subir foto
-                </button>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: fotosGenerales.length ? 8 : 0 }}>
+              <button
+                type="button"
+                className="ai-btn"
+                onClick={() => fotoGeneralCameraInputRef.current?.click()}
+                disabled={submitting || fotosGenerales.length >= RACK_FOTO_GENERAL_MAX}
+              >
+                <Icon name="camera" size={13} /> Sacar foto ({fotosGenerales.length}/{RACK_FOTO_GENERAL_MAX})
+              </button>
+              <button
+                type="button"
+                className="ai-btn"
+                onClick={() => fotoGeneralGaleriaInputRef.current?.click()}
+                disabled={submitting || fotosGenerales.length >= RACK_FOTO_GENERAL_MAX}
+              >
+                <Icon name="upload" size={13} /> Subir foto
+              </button>
+            </div>
+            {fotosGenerales.length > 0 && (
+              <div className="chip-row" style={{ marginTop: 0 }}>
+                {fotosGenerales.map((f, i) => (
+                  <span className="chip" key={i}>
+                    Foto {i + 1}
+                    <button type="button" onClick={() => quitarFotoGeneral(i)} disabled={submitting} aria-label={`Quitar foto ${i + 1}`}>
+                      <Icon name="x" size={11} />
+                    </button>
+                  </span>
+                ))}
               </div>
             )}
           </div>
@@ -460,9 +564,9 @@ export function NuevoRelevamientoForm({
         <div className="card">
           <div className="section-label">Equipamiento</div>
           <div className="hint" style={{ margin: "-4px 0 12px" }}>
-            <Icon name="ai" size={13} /> Sacale hasta {RACK_FOTO_IA_MAX} fotos al rack (distintos ángulos o secciones) y la IA combina
-            todas para armar la lista de equipamiento sin repetir — clasifica categoría y marca/modelo, pero siempre revisala y corregí lo
-            que haga falta antes de guardar.
+            <Icon name="ai" size={13} /> Sacale hasta {RACK_FOTO_IA_MAX} fotos al rack — si tiene mucho equipamiento, sacá de frente Y de
+            atrás (las etiquetas y puertos no se ven todos desde un solo lado) — y la IA combina todas para armar la lista de equipamiento
+            sin repetir — clasifica categoría y marca/modelo, pero siempre revisala y corregí lo que haga falta antes de guardar.
           </div>
           <input
             ref={fotoCameraInputRef}
@@ -486,6 +590,18 @@ export function NuevoRelevamientoForm({
               const files = Array.from(e.target.files ?? []);
               e.target.value = "";
               agregarFotosIa(files);
+            }}
+          />
+          <input
+            ref={escanearInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            style={{ display: "none" }}
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              e.target.value = "";
+              if (file) void onFotoEscaneada(file);
             }}
           />
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: fotosIa.length ? 8 : 12 }}>
@@ -623,6 +739,60 @@ export function NuevoRelevamientoForm({
                             disabled={submitting}
                           />
                         </div>
+                        <div className="field" style={{ marginBottom: 0, width: 150 }}>
+                          <label style={{ fontSize: 11 }}>Etiqueta YPF</label>
+                          <div style={{ display: "flex", gap: 4 }}>
+                            <input
+                              type="text"
+                              placeholder="N° inventario"
+                              value={e.etiquetaYpf}
+                              onChange={(ev) => actualizarEquipo(i, { etiquetaYpf: ev.target.value })}
+                              disabled={submitting}
+                            />
+                            <button
+                              type="button"
+                              className="ai-btn"
+                              style={{ padding: "0 8px" }}
+                              onClick={() => iniciarEscaneo(i, "etiquetaYpf")}
+                              disabled={submitting || escaneandoBusy}
+                              aria-label="Escanear etiqueta YPF con la cámara"
+                              title="Escanear con la cámara"
+                            >
+                              {escaneandoBusy && escaneando?.index === i && escaneando.campo === "etiquetaYpf" ? (
+                                "..."
+                              ) : (
+                                <Icon name="camera" size={12} />
+                              )}
+                            </button>
+                          </div>
+                        </div>
+                        <div className="field" style={{ marginBottom: 0, width: 150 }}>
+                          <label style={{ fontSize: 11 }}>N° de serie</label>
+                          <div style={{ display: "flex", gap: 4 }}>
+                            <input
+                              type="text"
+                              placeholder="De fábrica"
+                              value={e.numeroSerie}
+                              onChange={(ev) => actualizarEquipo(i, { numeroSerie: ev.target.value })}
+                              disabled={submitting}
+                            />
+                            <button
+                              type="button"
+                              className="ai-btn"
+                              style={{ padding: "0 8px" }}
+                              onClick={() => iniciarEscaneo(i, "numeroSerie")}
+                              disabled={submitting || escaneandoBusy}
+                              aria-label="Escanear N° de serie con la cámara"
+                              title="Escanear con la cámara"
+                            >
+                              {escaneandoBusy && escaneando?.index === i && escaneando.campo === "numeroSerie" ? (
+                                "..."
+                              ) : (
+                                <Icon name="camera" size={12} />
+                              )}
+                            </button>
+                          </div>
+                        </div>
                         <div className="field" style={{ marginBottom: 0, width: 80 }}>
                           <label style={{ fontSize: 11 }}>Cantidad</label>
                           <input
@@ -630,6 +800,41 @@ export function NuevoRelevamientoForm({
                             min={1}
                             value={e.cantidad}
                             onChange={(ev) => actualizarEquipo(i, { cantidad: Math.max(1, Number(ev.target.value) || 1) })}
+                            disabled={submitting}
+                          />
+                        </div>
+                        <div className="field" style={{ marginBottom: 0, width: 100 }}>
+                          <label style={{ fontSize: 11 }}>Consumo prom. (W)</label>
+                          <input
+                            type="number"
+                            min={0}
+                            placeholder="IA / manual"
+                            value={e.consumoPromedioW ?? ""}
+                            onChange={(ev) => actualizarEquipo(i, { consumoPromedioW: ev.target.value === "" ? null : Number(ev.target.value) })}
+                            disabled={submitting}
+                          />
+                        </div>
+                        <div className="field" style={{ marginBottom: 0, width: 100 }}>
+                          <label style={{ fontSize: 11 }}>Consumo máx. (W)</label>
+                          <input
+                            type="number"
+                            min={0}
+                            placeholder="IA / manual"
+                            value={e.consumoMaxW ?? ""}
+                            onChange={(ev) => actualizarEquipo(i, { consumoMaxW: ev.target.value === "" ? null : Number(ev.target.value) })}
+                            disabled={submitting}
+                          />
+                        </div>
+                        <div className="field" style={{ marginBottom: 0, width: 100 }}>
+                          <label style={{ fontSize: 11 }}>Bocas disp.</label>
+                          <input
+                            type="number"
+                            min={0}
+                            placeholder="Opcional"
+                            value={e.bocasDisponibles ?? ""}
+                            onChange={(ev) =>
+                              actualizarEquipo(i, { bocasDisponibles: ev.target.value === "" ? null : Number(ev.target.value) })
+                            }
                             disabled={submitting}
                           />
                         </div>
@@ -643,7 +848,12 @@ export function NuevoRelevamientoForm({
                       {e.numero} — {e.texto} · {CATEGORIA_EQUIPO_LABEL[e.categoriaEquipo]}
                       {e.marcaModelo ? ` · ${e.marcaModelo}` : ""}
                       {e.posicionU ? ` · ${e.posicionU}` : ""}
+                      {e.etiquetaYpf ? ` · YPF ${e.etiquetaYpf}` : ""}
+                      {e.numeroSerie ? ` · S/N ${e.numeroSerie}` : ""}
                       {e.cantidad > 1 ? ` · x${e.cantidad}` : ""}
+                      {e.consumoPromedioW ? ` · ~${e.consumoPromedioW}W prom.` : ""}
+                      {e.consumoMaxW ? ` · ~${e.consumoMaxW}W máx.` : ""}
+                      {e.bocasDisponibles != null ? ` · ${e.bocasDisponibles} bocas disp.` : ""}
                     </div>
                   )}
 

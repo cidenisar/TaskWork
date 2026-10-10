@@ -2,26 +2,16 @@
 
 import { useState } from "react";
 import { SimpleCatalogTab, type SimpleCatalogItem } from "./catalogos/simple-catalog-tab";
-import { VehiculosTab, type VehiculoItem } from "./catalogos/vehiculos-tab";
-import { ServiceTab, type ServiceItem } from "./catalogos/service-tab";
-import { VencimientosTab } from "./catalogos/vencimientos-tab";
-import { Icon } from "@/components/icon";
+import { TorreTramosTab, type TramoTorreItem } from "./catalogos/torre-tramos-tab";
+import { RecursoAlturaTab, type RecursoAlturaItem } from "./catalogos/recurso-altura-tab";
 
-type TabId = "torres" | "clientes" | "vehiculos" | "vehservice" | "vehalertas" | "provincias" | "tipos" | "gastocat";
+type TabId = "torres" | "clientes" | "torrecomtramos" | "recursoaltura" | "provincias" | "tipos" | "gastocat";
 
 const TABS: { id: TabId; label: React.ReactNode }[] = [
-  { id: "torres", label: "Torres" },
+  { id: "torres", label: "Torres (cuadrillas)" },
   { id: "clientes", label: "Clientes" },
-  { id: "vehiculos", label: "Vehículos" },
-  { id: "vehservice", label: "Service" },
-  {
-    id: "vehalertas",
-    label: (
-      <>
-        Vencimientos <Icon name="ai" size={13} />
-      </>
-    ),
-  },
+  { id: "torrecomtramos", label: "Torres Comunic. (tramos)" },
+  { id: "recursoaltura", label: "Recurso por altura" },
   { id: "provincias", label: "Provincias" },
   { id: "tipos", label: "Tipos de Informe" },
   { id: "gastocat", label: "Categorías de Gasto" },
@@ -33,14 +23,15 @@ export interface CatalogosData {
   provincias: SimpleCatalogItem[];
   tiposInforme: SimpleCatalogItem[];
   categoriasGasto: SimpleCatalogItem[];
-  vehiculos: VehiculoItem[];
-  services: ServiceItem[];
+  tramosTorre: TramoTorreItem[];
+  recursoAltura: RecursoAlturaItem[];
 }
 
+/** Vehículos (alta, service, vencimientos) se trasladó a Panel de Supervisión → Vehículos — ver src/components/panel/vehiculos/. */
 export function CatalogosCard({ data }: { data: CatalogosData }) {
   const [tab, setTab] = useState<TabId>("torres");
-  const [vehiculos, setVehiculos] = useState(data.vehiculos);
-  const [services, setServices] = useState(data.services);
+  const [tramosTorre, setTramosTorre] = useState(data.tramosTorre);
+  const [recursoAltura, setRecursoAltura] = useState(data.recursoAltura);
 
   return (
     <div className="card">
@@ -69,11 +60,8 @@ export function CatalogosCard({ data }: { data: CatalogosData }) {
           hint="Estos clientes son los que aparecen sugeridos en el campo 'Cliente' de Informe Técnico."
         />
       )}
-      {tab === "vehiculos" && <VehiculosTab vehiculos={vehiculos} setVehiculos={setVehiculos} />}
-      {tab === "vehservice" && (
-        <ServiceTab services={services} setServices={setServices} vehiculos={vehiculos.map((v) => ({ id: v.id, patente: v.patente }))} />
-      )}
-      {tab === "vehalertas" && <VencimientosTab vehiculos={vehiculos} services={services} />}
+      {tab === "torrecomtramos" && <TorreTramosTab tramos={tramosTorre} setTramos={setTramosTorre} />}
+      {tab === "recursoaltura" && <RecursoAlturaTab items={recursoAltura} setItems={setRecursoAltura} />}
       {tab === "provincias" && (
         <SimpleCatalogTab
           tabla="catalogo_provincias"

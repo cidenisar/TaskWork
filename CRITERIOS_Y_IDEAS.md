@@ -51,6 +51,21 @@ server-side a "lo que ya tiene algo cargado encima" antes de mandarlo al
 cliente evita una lista enorme que es puro ruido para esa pantalla en
 particular.
 
+**Una misma entidad con dos orígenes posibles (uno ya existente en el
+sistema, otro en texto libre) comparte tabla y PDF, no una lógica
+separada por cada uno.** Pasó con "Entregas a Depósito" (Informes):
+podía ser un equipo que ya estaba cargado en un sitio, o material que
+nunca se registró (cables sueltos, repuestos). En vez de dos tablas o
+dos flujos paralelos, una sola tabla con una columna `origen` como
+discriminante (`equipo_existente` | `material_libre`), donde las
+columnas que no aplican a un origen quedan `null` — así ambos comparten
+el mismo número de generación, el mismo PDF, el mismo Historial y
+cualquier filtro por sitio (ej. `ubicacion_id`), sin if/else repetido en
+cada pantalla que los lista. El picker/resolver de "elegí uno existente
+o creá uno nuevo" que ya exista en el proyecto (en este caso el de
+Ubicación, con alta al vuelo) se reusa tal cual para el origen "libre",
+en vez de construir un formulario de alta paralelo.
+
 ## 2. Consultas a Supabase/Postgres
 
 **Nunca traer una tabla completa sin paginar.** Supabase/PostgREST corta en
@@ -75,6 +90,44 @@ la app por esto si la pantalla ya se refresca sola en algún momento
 razonable (foco, poll, etc.); alcanza con saberlo para no perder tiempo
 buscando un bug que no está en la política.
 
+**Una tabla de catálogo nueva necesita su propia columna `id` (uuid) como
+PK aunque tenga una clave natural obvia (un enum, un código) — no uses la
+clave natural como PK directa si en el proyecto hay algún helper genérico
+que asuma `id` en toda tabla.** Pasó en Informes: se creó
+`torre_tipo_largos` con `tipo_torre` (un enum de 4 valores) como primary
+key directa — parecía más simple, sin un `id` "de más". Rompió
+`tsc` en un helper totalmente aparte
+(`lib/admin/eliminar-registro.ts`, que borra cualquier fila por `id` para
+limpiar datos de prueba) porque ese helper tipa `tabla: keyof
+Database["Tables"]` y asume que **todas** las tablas tienen `id` — al
+faltarle a una, TypeScript angosta el tipo del argumento de `.eq()` a
+`never` para la unión completa. La corrección fue agregar `id uuid
+primary key default gen_random_uuid()` + `unique(tipo_torre)`, igual
+patrón que ya usaba `mantenimiento_intervalos` (`id` + `unique
+(tipo_equipo, categoria)`) — que resultó ser la convención real del
+proyecto, no cada tabla improvisando su propia PK. Antes de diseñarle una
+PK natural a una tabla nueva, revisar qué convención ya siguen las tablas
+similares (¿tienen `id` + `unique` en la clave natural, o la clave natural
+es la PK?) y copiarla, en vez de optimizar por "menos una columna".
+
+**Si `apply_migration`/`execute_sql` de las herramientas de Supabase se
+cuelgan (timeout) específicamente en un `DROP TABLE`, mientras que
+`CREATE TABLE`/`ALTER TABLE` en el mismo momento andan bien — no es un
+lock real, probablemente es la herramienta.** Pasó en Informes: un `DROP
+TABLE` se colgó 3 veces seguidas (con una tabla real y con una de prueba
+creada al toque para descartar que fuera algo propio de esa tabla en
+particular), mientras que crear la tabla de prueba y aplicar el resto de
+la migración (ALTER + CREATE TABLE + policies) anduvo normal. Antes de
+asumir "hay un lock" — confirmarlo de verdad con
+`select * from pg_locks where relation = 'public.mi_tabla'::regclass;` y
+`pg_stat_activity` (queries activas, no solo "idle") — si ninguna de las
+dos muestra nada bloqueando, es la herramienta, no la base. Salida
+pragmática: sacar el `DROP TABLE` de la migración, dejar la tabla
+huérfana (documentada en un comentario, sin RLS floja ni datos reales) y
+resolver el drop más tarde a mano o cuando la herramienta ande — no vale
+la pena perder más de 2-3 reintentos en un DDL que ya se demostró
+reproducible.
+
 ## 3. RLS (seguridad por fila)
 
 **Toda tabla con `.update()` desde el cliente necesita su policy de UPDATE
@@ -84,6 +137,29 @@ silencio. Puede pasar desapercibido durante meses si nada en la UI compara
 "¿se guardó lo que pedí guardar?". Checklist para cualquier tabla nueva:
 SELECT, INSERT, UPDATE y DELETE (los que apliquen) definidos desde el
 principio.
+
+**Este bug exacto (falta la policy de UPDATE en una tabla de
+"relevamiento") ya se había encontrado y arreglado una vez en este mismo
+proyecto — y volvió a aparecer en un módulo nuevo por copiar la migración
+de CREACIÓN original de otro módulo en vez de revisar el esquema vivo.**
+Pasó con "Torres de Comunicaciones" (Informes): se construyó mirando
+Racks, pero copiando el `create table rack_relevamientos` + sus policies
+tal como estaban en la migración original de Racks — que en su momento
+SÍ tenía este mismo bug, arreglado después en una migración de fix
+aparte (`..._fix_relevamiento_update_rls.sql`) que agregó la policy de
+UPDATE faltante a Tableros/Racks/Equipos. Esa migración de fix nunca se
+leyó al mirar "cómo está armado Racks", así que el módulo nuevo heredó el
+bug ya resuelto en el que se estaba inspirando. Síntoma real: el técnico
+cargó un relevamiento, el PDF y las fotos SÍ se subieron a Storage, pero
+la fila de la base nunca se enteró (UPDATE con 0 filas afectadas, sin
+error) — en el historial quedó como "Solo registro", sin poder ver ni
+PDF ni fotos, y hubo que recuperarlo con el mismo backfill manual que la
+vez anterior. Regla general: al construir un módulo nuevo mirando uno
+existente como referencia, no alcanza con leer SU MIGRACIÓN DE CREACIÓN
+— hay que revisar TODAS las migraciones posteriores que lo tocaron (o,
+más simple, listar el esquema/policies vivos de la tabla de referencia
+vía la herramienta de Supabase) para no reintroducir un bug que ya se
+había pagado una vez.
 
 **`upsert()` necesita policy de SELECT, aunque el diseño diga que nunca se
 lee esa tabla desde el cliente.** Un `upsert(..., { onConflict: "x" })` se
@@ -115,6 +191,42 @@ ANTES de cargar cualquier dato, y ante un error de esa verificación en sí,
 explícitamente: confirmar con un usuario de alcance angosto que RLS sola
 deja leer un registro fuera de su alcance (si lo deja, el gate de
 aplicación es la única protección real, no un refuerzo redundante).
+
+**Cuando un rol nuevo necesita escribir una tabla cuyo UPDATE es
+admin-only por RLS, no aflojar la policy — mover la decisión de rol al
+código y escribir con el cliente de service-role.** Pasó en Informes con
+"dar de baja equipamiento": `rack_equipamientos`/`equipos` tenían UPDATE
+`is_admin()`-only (a propósito, para que un técnico no edite equipamiento
+que cargó otro) y la feature nueva necesitaba que Supervisor también
+pudiera. Ensanchar la policy a `is_admin_or_supervisor()` hubiera abierto
+esas tablas a CUALQUIER update de un Supervisor, no solo al de esta
+acción puntual. En vez de eso: la Server Action valida el rol explícitamente
+al principio (antes de tocar la base), y de ahí en más usa el cliente de
+service-role (bypassea RLS) solo para ese flujo — la restricción de "quién
+puede" queda en el código de la acción, no en la tabla. Mismo criterio que
+el ítem de "alcance dentro de un rol" de más arriba: la policy de la tabla
+sigue siendo la barrera general (admin-only para ediciones libres), y el
+gate de aplicación es la excepción puntual y auditada para una acción
+específica — no al revés.
+
+El mismo criterio generaliza a un caso más sutil: cuando una acción de
+menor privilegio dispara, como EFECTO SECUNDARIO automático, la misma
+escritura que ya existe como una acción pública gateada a un rol mayor.
+Pasó en Informes con "Instalación" (abierta a cualquier técnico) cuyo
+sobrante de un remito genera sola una fila en `entregas_deposito` (tabla
+admin/supervisor-only por RLS, con su propia Server Action pública
+gateada a ese rol). La solución NO es llamar a la Server Action pública
+desde adentro (heredaría su gate y rechazaría al técnico) ni aflojar la
+policy de la tabla — es extraer la lógica de "crear la fila(s) + el PDF"
+a una función de librería compartida que recibe el cliente de Supabase
+como parámetro (normal o service-role, a elección de quien la llama), y
+que cada chamada decida: la acción pública la llama con el cliente normal
+(ya validó el rol mayor antes), el efecto secundario la llama con
+service-role (validó en código que esto es un efecto secundario legítimo
+de una acción de menor privilegio, no un acceso directo a la tabla). Así
+no se duplica el render del PDF ni el manejo de colisión del número de
+generación, y cada camino de entrada mantiene su propio control de
+acceso sin heredar el del otro.
 
 **Diagnosticar RLS con los logs reales y reproduciendo la consulta exacta —
 nunca a ciegas.** `edge_logs`/API logs (qué pedido llegó, con qué código) y
@@ -169,6 +281,32 @@ persona — la policy bloquea al nuevo dueño legítimo. Hace falta una
 función intermedia (`security definer`) que libere explícitamente la fila
 del dueño anterior antes de que el nuevo la reclame.
 
+**Job programado en Vercel sin infraestructura nueva: `vercel.json` +
+una ruta API protegida por secreto, nunca sin protección.** Para una
+tarea en background que tiene que correr sola (liberar storage viejo,
+mandar un resumen, lo que sea) en una app ya desplegada en Vercel, no
+hace falta sumar un worker/cola aparte: un `vercel.json` con `crons`
+apuntando a una ruta `GET` alcanza. Esa ruta **tiene que fallar cerrado**
+si falta el secreto (`CRON_SECRET` sin configurar → 500, nunca "corro
+igual sin chequear") y comparar el header `Authorization: Bearer
+<secreto>` que Vercel manda solo automáticamente — nunca conformarse con
+"nadie va a adivinar la URL".
+
+**Un job que borra algo "viejo" para liberar espacio: nunca borrar sin
+confirmar el backup primero, y entender qué es lo que realmente se
+ahorra.** Patrón de dos pasos, en ese orden exacto: 1) copiar el archivo a
+donde sea que viva el backup, 2) recién si esa copia devuelve éxito,
+borrar el original — si la copia falla, el original queda intacto, nunca
+"borro y después me fijo". Ojo con un error de diseño fácil de cometer acá:
+mover un archivo a OTRO bucket/carpeta **dentro del mismo proveedor y
+proyecto** no reduce el costo de storage si ese proveedor cobra por bytes
+totales del proyecto (es el caso de Supabase Storage) — da una separación
+prolija entre "activo" y "archivo" y un lugar seguro para recuperar algo,
+pero no es un ahorro real de plata; eso solo se logra sacando el dato del
+proveedor (otro proveedor externo, más barato para guardar en frío). Si el
+objetivo real es bajar el costo, no solo "ordenar", hay que decirlo
+explícito antes de elegir dónde va el backup.
+
 ## 5. Un módulo genérico con IA, en vez de uno por tipo
 
 Cuando el usuario necesita relevar/registrar cosas de **distintos tipos**
@@ -180,6 +318,147 @@ después es ampliar un enum, no crear tabla+migración+formulario nuevos.
 Reservar un módulo propio solo cuando la entidad es realmente un
 **contenedor** con estructura interna distinta (ej. un tablero con sus
 circuitos) — ahí sí se justifica.
+
+**"Identificar un objeto físico en una foto" y "transcribir una lista/tabla
+de un documento en papel" son dos prompts distintos — no reusar el mismo
+para los dos.** Pasó en Informes con el módulo "Instalación": además de
+fotos de los equipos instalados (igual prompt que ya existía, "¿qué es
+esto que veo?"), el usuario quería leer el remito en papel que entrega
+depósito (a veces manuscrito) para sacar una lista de materiales y
+cantidades esperadas. Usar el prompt de "identificar equipamiento" para
+eso da resultados raros — el modelo intenta clasificar el PAPEL como si
+fuera un objeto, en vez de leer su contenido como texto. El prompt para
+un documento tiene que decirlo explícito ("no estás identificando un
+objeto físico, estás transcribiendo una lista/tabla"), pedir los campos
+tal cual se leen (nunca reinterpretar o resumir), y devolver null/omitir
+una línea que no se entienda en vez de inventarla — mismo criterio de "no
+inventar" que el resto de los prompts de esta app, aplicado a texto en
+vez de a identificación visual.
+
+**Una IA que identifica un objeto real por foto puede, en el mismo
+pedido, estimar algo que no se ve en la imagen (consumo típico, vida
+útil, lo que sea) — pero hay que separarle explícitamente en el prompt
+cuál es cuál fuente.** Si se le pide "identificá marca/modelo" y
+"estimá el consumo" en el mismo turno sin aclarar la diferencia, el
+modelo puede mezclar "lo que veo en la foto" con "lo que sé en general de
+ese producto" y perder el criterio de cuándo decir que no sabe. Separarlo
+en el prompt ("el campo X viene de lo que ves en la imagen; el campo Y es
+tu estimación por conocimiento general del producto, no de la foto, devolvé
+null si el modelo no te resulta familiar") deja al modelo dar una
+estimación razonable sin inventar specs de un equipo que no reconoce.
+Para lo que ya estaba cargado antes de agregar un campo así (o donde no
+se pudo estimar en el momento), conviene un backfill aparte — un pedido de
+texto (sin fotos, más barato) sobre lo que falta, disparado a demanda, no
+automático en cada carga de página.
+
+**Un solo número para "consumo/capacidad/rendimiento estimado" de un
+equipo casi siempre esconde una ambigüedad entre dos magnitudes
+distintas — pedir SIEMPRE un par (típico/promedio y pico/máximo), nunca
+uno solo.** Pasó en la práctica, no es hipotético: pedirle a una IA "el
+consumo estimado en Watts" de una notebook con marca/modelo identificado
+devolvió 65W — que resultó ser el vatiaje de la FUENTE/CARGADOR (lo
+máximo que esa fuente puede entregar), no lo que la notebook consume la
+mayoría del tiempo en uso normal (mucho menos). La confusión es casi
+inevitable con un solo campo, porque la especificación más fácil de
+encontrar de un equipo (la de su fuente/placa/nameplate) es casi siempre
+un límite/capacidad, no un consumo típico real. El prompt tiene que
+pedir los dos valores por separado y explicarle la diferencia
+("promedio = consumo real típico, nunca el vatiaje nominal de la fuente
+si es mayor; máximo = el pico bajo la carga más alta posible, que sí
+puede acercarse al vatiaje de la fuente pero no es automáticamente el
+mismo número — max siempre >= promedio"). Esto generaliza más allá de
+consumo eléctrico: cualquier "estimá X" sobre un producto real tiene
+casi siempre una lectura de nameplate/spec-sheet (un límite o capacidad)
+y una lectura de uso real (lo que pasa la mayoría del tiempo) — nombrar
+ambas explícitamente en el prompt evita que el modelo devuelva la
+primera que encuentra pensando que responde la pregunta.
+
+**Para estimar una magnitud física que no se puede medir directo de una
+sola foto (altura, distancia, lo que sea) — buscar una unidad discreta y
+estandarizada que se pueda CONTAR en la imagen, y multiplicarla por un
+valor real configurado, en vez de pedirle a la IA que "calcule" la
+magnitud por fotogrametría o por su conocimiento general del valor
+estándar.** Surgió con la altura de una torre de comunicaciones: una sola
+foto sacada desde abajo no alcanza para fotogrametría real (no hay
+referencia de escala ni distancia conocida), así que inventar un número
+"calculado" ahí sería tan poco confiable como preguntarle el clima. Pero
+las torres se arman en TRAMOS modulares de largo estándar — eso sí es
+contable en una foto (una unión/brida visible entre secciones), así que
+el patrón queda: la IA clasifica el tipo de objeto y CUENTA unidades
+discretas visibles (marcando explícitamente si no está segura de haber
+visto el conjunto completo, igual criterio que "identificado" en el resto
+de la app) — el LARGO REAL de cada unidad sale de un catálogo chico
+configurado a mano (Configuración), nunca del "conocimiento general" de
+la IA sobre cuánto mide un tramo estándar (varía por fabricante/modelo,
+e inventarlo es la misma clase de error que preguntarle el clima en vez
+de usar una API real). Generaliza a cualquier "¿cuánto mide/pesa/vale X
+en total?" que se pueda descomponer en unidades contables × un valor
+real: preferir siempre esa descomposición antes que pedirle a una IA que
+estime la magnitud total de una.
+
+**Antes de armar un módulo nuevo para un pedido que "suena" distinto, revisar
+si ya existe uno con el mismo patrón de uso — puede que solo le falte una
+forma más de conseguir el ítem.** Pasó en Informes: el pedido era un
+"informe de instalación" (fotos + IA + lista con número de serie, para
+dejar constancia de qué se instaló) — sonaba a un módulo nuevo, paralelo a
+"Entregas a Depósito". Pero el módulo "Equipos Individuales" YA tenía
+exactamente ese patrón (fotos + IA + lista + alta de equipo en un sitio);
+lo único que faltaba era una tercera forma de poblar un ítem de la lista
+—además de "nuevo" y "ya existente en este sitio"— que fuera "viene de
+depósito de cualquier sitio", y que al guardar, en vez de crear una fila
+nueva, reactive (estado) y reubique (ubicación) la fila que ya existía.
+Construir el módulo paralelo hubiera duplicado la UI de fotos/IA/lista, el
+PDF y el Historial enteros para ganar solamente ese tercer origen. La
+pregunta a hacerse antes de diseñar un módulo nuevo: "¿el pedido es
+realmente una entidad distinta, o es el mismo patrón de carga con una
+fuente más para el ítem?" — si es lo segundo, extender el picker/origen
+del módulo existente es mucho más barato que levantar uno en paralelo.
+
+**Cuando la entidad nueva SÍ es un contenedor con estructura interna
+propia, el módulo aparte es la decisión correcta — pero si el nombre
+natural de esa entidad ya significa otra cosa en la app, hay que
+desambiguarlo en el código, no solo confiar en el contexto.** Pasó en
+Informes con "Torres de Comunicaciones" (antenas/radioenlaces montados en
+una torre física): el patrón correcto era un módulo propio mirando
+Racks (alta de la torre + equipamiento + relevamiento por visita, mismo
+criterio que la sección de arriba sobre contenedores con estructura
+propia). Pero la app ya usaba la palabra "torre" para un concepto
+completamente distinto y preexistente (la cuadrilla/turno de un técnico
+— `profiles.torre`, `catalogo_torres`, usado en Informe Técnico y
+Rendición de Gastos). Nombrar la tabla/tipo nuevo simplemente `torres`
+hubiera sido ambiguo para cualquiera que lea el código después (¿cuál
+"torre" es esta?) aunque en la UI el usuario nunca se confunda por el
+contexto. Se resolvió calificando el nombre en TODO el código del
+concepto nuevo (tablas `torres_comunicacion`/
+`torre_comunicacion_equipamientos`/etc., tipo
+`TorreComunicacionCategoriaEquipo`, ruta `/torres-comunicacion/...`) en
+vez de dejar que conviviera un `torres` ambiguo con el `catalogo_torres`
+ya existente. Regla general: antes de nombrar una entidad nueva, buscar
+si la palabra obvia ya está tomada en el dominio de la app (grep del
+término) — si lo está para un concepto no relacionado, calificar el
+nombre nuevo explícitamente desde la primera migración, aunque quede un
+poco más largo; es mucho más barato que renombrar después de que el
+nombre ambiguo se haya esparcido por tablas, tipos y rutas.
+
+**Seguimiento real del ítem de arriba, misma sesión:** el "módulo nuevo"
+que se armó esa vez (un standalone "Instalación", con remito + devolución
+automática — ver más abajo la sección de IA leyendo documentos) resultó
+ser TAMBIÉN una duplicación, una vez que el usuario lo probó de verdad:
+"Informe Técnico" ya era el lugar donde se documentaba cualquier visita
+de trabajo (técnicos, vehículos, fotos), e Instalación terminó siendo un
+segundo formulario para la MISMA visita. La corrección fue la misma
+lógica que el ítem de arriba, aplicada un nivel más arriba: en vez de un
+módulo aparte, una sección opcional ("+ Agregar materiales/equipos")
+DENTRO de Informe Técnico — reusando los mismos componentes de fotos+IA
++ remito que ya se habían escrito, solo cambiando dónde viven. Lección
+más general: la pregunta "¿esto es una entidad distinta o el mismo
+patrón con una fuente más?" no se responde una sola vez al diseñar — el
+uso real (no la intuición de diseño) es la prueba final, y vale la pena
+quedarse abierto a que la respuesta cambie apenas alguien lo prueba con
+un caso real, aunque eso signifique deshacer una decisión de hace pocas
+horas. Construir el módulo paralelo la primera vez no fue un error en
+sí — era la mejor decisión con la información de ese momento — pero
+tampoco hay que aferrarse a ella cuando el uso real dice otra cosa.
 
 ## 6. Avisos push (web)
 
@@ -236,6 +515,29 @@ código que decide cuándo llamar al envío?".
 
 ## 8. Proceso de debugging general
 
+- **Antes de escribir un archivo nuevo con un nombre "obvio" (el que
+  cualquiera elegiría para esa feature), revisar si ya existe uno con esa
+  ruta exacta — y si existe, LEERLO antes de escribir, nunca asumir que
+  está vacío o que es el que uno se imagina.** Pasó en Informes: al armar
+  un Plan de Mantenimiento nuevo (cross-módulo, para Racks/Equipos), se
+  escribió un archivo de acciones en
+  `configuracion/actions/mantenimiento.ts` sin revisar antes — ese
+  nombre YA estaba tomado por una feature completamente distinta y sin
+  relación ("vaciar datos de prueba", pensada como limpieza general de la
+  app antes de ir a producción), que quedó parcialmente borrada en el
+  momento. El error se notó recién por el `tsc` tirando un import roto en
+  otro componente — de no haber corrido el type-check, el archivo viejo
+  habría quedado perdido en silencio. Se corrigió restaurando el original
+  con `git checkout` y moviendo las funciones nuevas a un archivo con
+  nombre más específico (`mantenimiento-intervalos.ts`) en vez de
+  pelearse por el nombre genérico. Lección: "mantenimiento" (como antes
+  "torre") es una palabra que esta app ya usa para dos conceptos sin
+  relación — la regla general sigue siendo la misma que para nombrar una
+  tabla nueva (ver sección de Torres de Comunicaciones): antes de
+  escribir, listar el directorio/grepear el nombre candidato, y si ya
+  existe algo con ese nombre, LEERLO primero (la herramienta de escritura
+  puede no avisar si el archivo ya estaba trackeado por git y el diff
+  parcialmente se superpone).
 - **Un comentario que describe una intención no significa que esté
   implementada.** Un campo/columna puede tener un comentario correcto
   sobre para qué sirve (ej. "para que una unidad en el taller no se

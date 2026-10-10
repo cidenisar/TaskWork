@@ -185,14 +185,16 @@ export function ListaUbicaciones({ ubicaciones }: { ubicaciones: UbicacionRow[] 
           resultadosBusqueda.length === 0 ? (
             <div className="empty-note">No se encontraron ubicaciones con esa búsqueda.</div>
           ) : (
-            <div style={{ marginTop: 12 }}>{resultadosBusqueda.map(filaSitio)}</div>
+            <div className="list-grid" style={{ marginTop: 12 }}>
+              {resultadosBusqueda.map(filaSitio)}
+            </div>
           )
         ) : ubicaciones.length === 0 ? (
           <div className="empty-note">
             Todavía no hay ningún lugar con equipamiento relevado — aparecen acá apenas cargues un tablero, un rack o un equipo.
           </div>
         ) : !region ? (
-          <div style={{ marginTop: 12 }}>
+          <div className="list-grid" style={{ marginTop: 12 }}>
             {regiones.map(([r, lista]) => {
               const provinciasEnRegion = new Set(lista.map((u) => u.provincia)).size;
               const sitiosEnRegion = new Set(lista.map((u) => `${u.provincia}::${u.sitio}`)).size;
@@ -220,24 +222,26 @@ export function ListaUbicaciones({ ubicaciones }: { ubicaciones: UbicacionRow[] 
               <Icon name="chevron-right" size={13} style={{ transform: "rotate(180deg)" }} /> Todas las regiones
             </button>
             <div className="section-label">{region}</div>
-            {provinciasDeLaRegion.map(([p, lista]) => {
-              const sitiosEnProvincia = new Set(lista.map((u) => u.sitio)).size;
-              return (
-                <button type="button" key={p} className="hist-item" style={drillBtnStyle} onClick={() => setProvincia(p)}>
-                  <div className="info">
-                    <div className="hist-main">
-                      <div className="hist-title">{p}</div>
-                      <div className="hist-meta">
-                        {sitiosEnProvincia} sitio{sitiosEnProvincia === 1 ? "" : "s"}
+            <div className="list-grid">
+              {provinciasDeLaRegion.map(([p, lista]) => {
+                const sitiosEnProvincia = new Set(lista.map((u) => u.sitio)).size;
+                return (
+                  <button type="button" key={p} className="hist-item" style={drillBtnStyle} onClick={() => setProvincia(p)}>
+                    <div className="info">
+                      <div className="hist-main">
+                        <div className="hist-title">{p}</div>
+                        <div className="hist-meta">
+                          {sitiosEnProvincia} sitio{sitiosEnProvincia === 1 ? "" : "s"}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                  <div className="hist-actions" style={{ gap: 6 }}>
-                    <Icon name="chevron-right" size={15} />
-                  </div>
-                </button>
-              );
-            })}
+                    <div className="hist-actions" style={{ gap: 6 }}>
+                      <Icon name="chevron-right" size={15} />
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         ) : (
           <div style={{ marginTop: 12 }}>
@@ -247,7 +251,7 @@ export function ListaUbicaciones({ ubicaciones }: { ubicaciones: UbicacionRow[] 
             <div className="section-label">
               {region} · {provincia}
             </div>
-            {sitiosDeLaProvincia.map(filaSitio)}
+            <div className="list-grid">{sitiosDeLaProvincia.map(filaSitio)}</div>
           </div>
         )}
       </div>

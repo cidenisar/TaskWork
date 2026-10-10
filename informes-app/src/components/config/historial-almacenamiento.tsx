@@ -1,18 +1,23 @@
 "use client";
 
 import { useState } from "react";
-import { setUmbralAvisoAction, setRecordatorioSemanalAction } from "@/app/(app)/configuracion/actions/historial";
+import { setUmbralAvisoAction, setRecordatorioSemanalAction, setLiberacionAutomaticaAction } from "@/app/(app)/configuracion/actions/historial";
 import type { UmbralAviso } from "@/lib/database.types";
+
+const SEMANAS_POR_UMBRAL: Record<UmbralAviso, number> = { "20": 4, "50": 8, "100": 12 };
 
 export function HistorialAlmacenamientoCard({
   umbral: initialUmbral,
   recordatorio: initialRecordatorio,
+  liberacionAutomatica: initialLiberacionAutomatica,
 }: {
   umbral: UmbralAviso;
   recordatorio: boolean;
+  liberacionAutomatica: boolean;
 }) {
   const [umbral, setUmbral] = useState(initialUmbral);
   const [recordatorio, setRecordatorio] = useState(initialRecordatorio);
+  const [liberacionAutomatica, setLiberacionAutomatica] = useState(initialLiberacionAutomatica);
 
   async function changeUmbral(value: UmbralAviso) {
     setUmbral(value);
@@ -24,6 +29,12 @@ export function HistorialAlmacenamientoCard({
     setRecordatorio(next);
     const res = await setRecordatorioSemanalAction(next);
     if (!res.success) setRecordatorio(!next);
+  }
+  async function toggleLiberacionAutomatica() {
+    const next = !liberacionAutomatica;
+    setLiberacionAutomatica(next);
+    const res = await setLiberacionAutomaticaAction(next);
+    if (!res.success) setLiberacionAutomatica(!next);
   }
 
   return (
@@ -62,6 +73,20 @@ export function HistorialAlmacenamientoCard({
         </div>
         <label className="switch">
           <input type="checkbox" checked={recordatorio} onChange={toggleRecordatorio} />
+          <span className="slider"></span>
+        </label>
+      </div>
+      <div className="switch-row" style={{ paddingTop: 18 }}>
+        <div className="txt">
+          <b>Liberar archivos automáticamente</b>
+          <span>
+            Pasadas las {SEMANAS_POR_UMBRAL[umbral]} semanas del umbral elegido arriba, el PDF de los informes/relevamientos viejos se
+            mueve a un backup (dentro del mismo proyecto de Supabase, nunca se borra) y deja de estar disponible para descargar al
+            toque — el registro no se borra nunca. Las fotos, por ahora, no se tocan.
+          </span>
+        </div>
+        <label className="switch">
+          <input type="checkbox" checked={liberacionAutomatica} onChange={toggleLiberacionAutomatica} />
           <span className="slider"></span>
         </label>
       </div>

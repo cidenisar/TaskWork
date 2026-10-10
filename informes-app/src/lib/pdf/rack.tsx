@@ -27,6 +27,7 @@ export interface RackPdfLectura {
   marcaModelo: string | null;
   posicionU: string | null;
   cantidad: number;
+  bocasDisponibles: number | null;
   estado: string | null;
   comentario: string | null;
 }
@@ -34,6 +35,7 @@ export interface RackPdfLectura {
 export interface RackPdfProps {
   numeroGeneracion: string;
   denominacion: string;
+  etiquetaYpf: string | null;
   region: string;
   provincia: string;
   localidad: string | null;
@@ -43,13 +45,23 @@ export interface RackPdfProps {
   fecha: string;
   lecturas: RackPdfLectura[];
   resumen: ResumenEquipamiento;
-  fotoGeneralBuffer: Buffer | null;
+  fotosGeneralesBuffers: Buffer[] | null;
   logoBuffer: Buffer | null;
   appName: string;
   realizoNombre: string;
 }
 
-const W = { n: "5%", categoria: "14%", equipo: "22%", marca: "16%", posicion: "9%", cantidad: "7%", estado: "10%", comentario: "17%" };
+const W = {
+  n: "5%",
+  categoria: "13%",
+  equipo: "19%",
+  marca: "14%",
+  posicion: "8%",
+  cantidad: "6%",
+  bocas: "8%",
+  estado: "9%",
+  comentario: "18%",
+};
 
 export function RackPdf(props: RackPdfProps) {
   const {
@@ -64,10 +76,11 @@ export function RackPdf(props: RackPdfProps) {
     fecha,
     lecturas,
     resumen,
-    fotoGeneralBuffer,
+    fotosGeneralesBuffers,
     logoBuffer,
     appName,
     realizoNombre,
+    etiquetaYpf,
   } = props;
   const fechaLabel = formatFechaArg(fecha);
   const documentoLabel = "RELEVAMIENTO DE EQUIPAMIENTO";
@@ -91,6 +104,7 @@ export function RackPdf(props: RackPdfProps) {
         <View style={commonStyles.kvTable}>
           <KeyValueRow k="N° de Generación:" v={numeroGeneracion} />
           <KeyValueRow k="Rack:" v={denominacion} />
+          {etiquetaYpf && <KeyValueRow k="Etiqueta YPF:" v={etiquetaYpf} />}
           <KeyValueRow k="Sitio:" v={sitio} />
           {planta && <KeyValueRow k="Planta:" v={planta} />}
           {oficina && <KeyValueRow k="Oficina:" v={oficina} />}
@@ -112,11 +126,17 @@ export function RackPdf(props: RackPdfProps) {
           )}
         </View>
 
-        {fotoGeneralBuffer && (
+        {fotosGeneralesBuffers && fotosGeneralesBuffers.length > 0 && (
           <>
-            <Text style={commonStyles.sectionTitle}>Foto General del Rack</Text>
-            <View style={{ marginBottom: 6 }}>
-              <Image src={fotoGeneralBuffer} style={commonStyles.photo} />
+            <Text style={commonStyles.sectionTitle}>
+              Foto{fotosGeneralesBuffers.length === 1 ? "" : "s"} General{fotosGeneralesBuffers.length === 1 ? "" : "es"} del Rack
+            </Text>
+            <View style={commonStyles.photoGrid}>
+              {fotosGeneralesBuffers.map((buf, i) => (
+                <View style={commonStyles.photoCell} key={i} wrap={false}>
+                  <Image src={buf} style={commonStyles.photo} />
+                </View>
+              ))}
             </View>
           </>
         )}
@@ -130,6 +150,7 @@ export function RackPdf(props: RackPdfProps) {
             <Text style={[styles.th, { width: W.marca }]}>Marca/Modelo</Text>
             <Text style={[styles.th, { width: W.posicion }]}>Posición</Text>
             <Text style={[styles.th, { width: W.cantidad, textAlign: "right" }]}>Cant.</Text>
+            <Text style={[styles.th, { width: W.bocas, textAlign: "right" }]}>Bocas disp.</Text>
             <Text style={[styles.th, { width: W.estado }]}>Estado</Text>
             <Text style={[styles.th, { width: W.comentario }]}>Comentario</Text>
           </View>
@@ -141,6 +162,7 @@ export function RackPdf(props: RackPdfProps) {
               <Text style={[styles.td, { width: W.marca }]}>{l.marcaModelo || "—"}</Text>
               <Text style={[styles.td, { width: W.posicion }]}>{l.posicionU || "—"}</Text>
               <Text style={[styles.td, { width: W.cantidad, textAlign: "right" }]}>{l.cantidad}</Text>
+              <Text style={[styles.td, { width: W.bocas, textAlign: "right" }]}>{l.bocasDisponibles ?? "—"}</Text>
               <Text style={[styles.td, { width: W.estado }]}>{l.estado || "—"}</Text>
               <Text style={[styles.td, { width: W.comentario }]}>{l.comentario || "—"}</Text>
             </View>

@@ -13,6 +13,12 @@ const PATHS: Record<string, React.ReactNode> = {
       <path d="M8 11V7a4 4 0 0 1 8 0v4" />
     </>
   ),
+  calendar: (
+    <>
+      <rect x="4" y="5.5" width="16" height="14" rx="2" />
+      <path d="M4 10h16M8 3.5v3M16 3.5v3" />
+    </>
+  ),
   edit: (
     <>
       <path d="M4 20h4L18.5 9.5a1.5 1.5 0 0 0 0-2.12l-1.88-1.88a1.5 1.5 0 0 0-2.12 0L4 15v5Z" />
@@ -61,6 +67,14 @@ const PATHS: Record<string, React.ReactNode> = {
     <>
       <path d="M14.5 6.5a4 4 0 0 0-5.4 4.86L4 16.5V20h3.5l5.14-5.14A4 4 0 0 0 17.5 9.5" />
       <path d="m14.5 6.5 3-1 1 1-1 3-3 1-1-1Z" />
+    </>
+  ),
+  settings: (
+    <>
+      <path d="M4 7h10" />
+      <circle cx="17" cy="7" r="2" />
+      <path d="M20 17H10" />
+      <circle cx="7" cy="17" r="2" />
     </>
   ),
   check: <path d="m5 12.5 4.5 4.5L19.5 7" />,
@@ -187,6 +201,20 @@ const PATHS: Record<string, React.ReactNode> = {
   "arrow-left": <path d="M19 12H5m0 0 6-6m-6 6 6 6" />,
   "arrow-right": <path d="M5 12h14m0 0-6-6m6 6-6 6" />,
   plus: <path d="M12 5v14M5 12h14" />,
+  box: (
+    <>
+      <path d="M3 8 12 3l9 5-9 5-9-5Z" />
+      <path d="M3 8v8l9 5 9-5V8" />
+      <path d="M12 13v8" />
+    </>
+  ),
+  trash: (
+    <>
+      <path d="M5 7h14M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+      <path d="M7 7l1 13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1l1-13" />
+      <path d="M10 11v6M14 11v6" />
+    </>
+  ),
 };
 
 export type IconName = keyof typeof PATHS;

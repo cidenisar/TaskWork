@@ -10,10 +10,13 @@ export default async function NuevoRelevamientoPage() {
   const supabase = await createClient();
 
   const [racksRes, equipamientosRes, ubicaciones, provinciasRes] = await Promise.all([
-    supabase.from("racks").select("id, denominacion, ubicacion_id").order("denominacion"),
+    supabase.from("racks").select("id, denominacion, etiqueta_ypf, ubicacion_id").order("denominacion"),
     supabase
       .from("rack_equipamientos")
-      .select("id, rack_id, numero, categoria_equipo, texto, marca_modelo, posicion_u, cantidad")
+      .select(
+        "id, rack_id, numero, categoria_equipo, texto, marca_modelo, posicion_u, etiqueta_ypf, numero_serie, cantidad, consumo_promedio_w, consumo_max_w, bocas_disponibles",
+      )
+      .eq("estado", "activo")
       .order("numero"),
     fetchTodasLasUbicaciones(supabase),
     supabase.from("catalogo_provincias").select("nombre").order("nombre"),
@@ -32,7 +35,12 @@ export default async function NuevoRelevamientoPage() {
       texto: e.texto,
       marcaModelo: e.marca_modelo ?? "",
       posicionU: e.posicion_u ?? "",
+      etiquetaYpf: e.etiqueta_ypf ?? "",
+      numeroSerie: e.numero_serie ?? "",
       cantidad: e.cantidad,
+      consumoPromedioW: e.consumo_promedio_w,
+      consumoMaxW: e.consumo_max_w,
+      bocasDisponibles: e.bocas_disponibles,
     });
     equipamientoPorRack.set(e.rack_id, lista);
   }
@@ -44,6 +52,7 @@ export default async function NuevoRelevamientoPage() {
       return {
         id: r.id,
         denominacion: r.denominacion,
+        etiquetaYpf: r.etiqueta_ypf,
         ubicacionId: r.ubicacion_id,
         ubicacionLabel: labelUbicacion(ubicacion),
         equipamiento: equipamientoPorRack.get(r.id) ?? [],
