@@ -16,6 +16,7 @@ interface PayloadLectura {
   ampNominal: string;
   categoriaEquipo: TableroCategoriaEquipo;
   tipoCircuito: TableroTipoCircuito;
+  cuerpo: string;
   estado: string;
   corrienteF: string;
   corrienteR: string;
@@ -143,6 +144,7 @@ export async function crearMedicionTableroAction(formData: FormData): Promise<Cr
         amp_nominal: l.ampNominal.trim() || null,
         categoria_equipo: l.categoriaEquipo,
         tipo_circuito: l.tipoCircuito,
+        cuerpo: l.cuerpo.trim() || null,
       })
       .select("id")
       .single();

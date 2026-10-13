@@ -110,7 +110,7 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
     tableroIds.length > 0
       ? supabase
           .from("tablero_circuitos")
-          .select("id, tablero_id, numero, texto, categoria_equipo, tipo_circuito, amp_nominal, estado")
+          .select("id, tablero_id, numero, texto, categoria_equipo, tipo_circuito, amp_nominal, estado, cuerpo")
           .in("tablero_id", tableroIds)
           .order("numero")
       : { data: [] },
@@ -165,8 +165,14 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
   const medicionIds = [...ultimaMedicionPorTablero.values()].map((m) => m.id);
   const relevamientoRackIds = [...ultimoRelevamientoPorRack.values()];
   const relevamientoEquipoIds = [...ultimoRelevamientoEquipoPorUbicacion.values()];
+  // Mediciones ya vienen TODAS (no solo la última por tablero) — se reusan acá
+  // para sacar la fecha real de última visita por circuito/cuerpo, que puede
+  // venir de una visita más vieja que la última del tablero en general (un
+  // cuerpo que no se tocó en la visita más reciente).
+  const todasLasMedicionesIds = (medicionesRes.data ?? []).map((m) => m.id);
+  const fechaPorMedicionId = new Map((medicionesRes.data ?? []).map((m) => [m.id, m.fecha]));
 
-  const [lecturasTableroRes, lecturasRackRes, lecturasEquipoRes] = await Promise.all([
+  const [lecturasTableroRes, lecturasRackRes, lecturasEquipoRes, lecturasHistorialTableroRes] = await Promise.all([
     medicionIds.length > 0
       ? supabase
           .from("tablero_medicion_lecturas")
@@ -179,10 +185,24 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
     relevamientoEquipoIds.length > 0
       ? supabase.from("equipo_relevamiento_lecturas").select("equipo_id, estado, comentario").in("relevamiento_id", relevamientoEquipoIds)
       : { data: [] },
+    todasLasMedicionesIds.length > 0
+      ? supabase.from("tablero_medicion_lecturas").select("circuito_id, medicion_id").in("medicion_id", todasLasMedicionesIds)
+      : { data: [] },
   ]);
   const lecturaPorCircuito = new Map((lecturasTableroRes.data ?? []).map((l) => [l.circuito_id, l]));
   const lecturaPorEquipamiento = new Map((lecturasRackRes.data ?? []).map((l) => [l.equipamiento_id, l]));
   const lecturaPorEquipo = new Map((lecturasEquipoRes.data ?? []).map((l) => [l.equipo_id, l]));
+
+  // Última fecha real por circuito (puede ser de una visita anterior a la
+  // última del tablero) y, a partir de ahí, por cuerpo — nunca se persiste,
+  // se recalcula siempre de tablero_mediciones/tablero_medicion_lecturas.
+  const ultimaFechaPorCircuito = new Map<string, string>();
+  for (const l of lecturasHistorialTableroRes.data ?? []) {
+    const fecha = fechaPorMedicionId.get(l.medicion_id);
+    if (!fecha) continue;
+    const actual = ultimaFechaPorCircuito.get(l.circuito_id);
+    if (!actual || fecha > actual) ultimaFechaPorCircuito.set(l.circuito_id, fecha);
+  }
 
   const equipoIndividualIds = equipos.map((e) => e.id);
   const rackEquipoIds = equipamientos.map((e) => e.id);
@@ -215,6 +235,18 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
 
   const circuitosPorTablero = new Map<string, typeof circuitos>();
   for (const c of circuitos) circuitosPorTablero.set(c.tablero_id, [...(circuitosPorTablero.get(c.tablero_id) ?? []), c]);
+
+  // Última fecha de visita por cuerpo (clave tablero_id:cuerpo) — el máximo
+  // entre las últimas fechas de cada circuito de ese cuerpo.
+  const ultimaFechaPorCuerpo = new Map<string, string>();
+  for (const c of circuitos) {
+    if (!c.cuerpo) continue;
+    const fecha = ultimaFechaPorCircuito.get(c.id);
+    if (!fecha) continue;
+    const key = `${c.tablero_id}:${c.cuerpo}`;
+    const actual = ultimaFechaPorCuerpo.get(key);
+    if (!actual || fecha > actual) ultimaFechaPorCuerpo.set(key, fecha);
+  }
   const equipamientosPorRack = new Map<string, typeof equipamientos>();
   for (const e of equipamientos) equipamientosPorRack.set(e.rack_id, [...(equipamientosPorRack.get(e.rack_id) ?? []), e]);
 
@@ -315,6 +347,25 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
                 const circuitosDelTablero = circuitosPorTablero.get(t.id) ?? [];
                 const mostrarCorriente = circuitosDelTablero.some((c) => categoriaLlevaAmp(c.categoria_equipo));
                 const cantidadSecundarios = secundariosPorPadreId.get(t.id) ?? 0;
+                // Si el tablero tiene más de un cuerpo (puertas/compartimentos
+                // con circuitos relevados por separado), se agrupa la tabla
+                // por cuerpo, cada uno con su propia última fecha de visita —
+                // si nadie cargó cuerpo todavía, se muestra una sola tabla
+                // igual que antes.
+                const hayCuerpos = circuitosDelTablero.some((c) => c.cuerpo);
+                const gruposPorCuerpo = hayCuerpos
+                  ? (() => {
+                      const mapa = new Map<string, typeof circuitosDelTablero>();
+                      for (const c of circuitosDelTablero) {
+                        const key = c.cuerpo || "__sin_cuerpo";
+                        mapa.set(key, [...(mapa.get(key) ?? []), c]);
+                      }
+                      return [...mapa.entries()].map(([cuerpo, items]) => ({
+                        cuerpo: cuerpo === "__sin_cuerpo" ? null : cuerpo,
+                        circuitos: items,
+                      }));
+                    })()
+                  : [{ cuerpo: null, circuitos: circuitosDelTablero }];
                 return (
                   <details className="detalle-item" key={t.id}>
                     <summary>
@@ -343,63 +394,86 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
                         Sin circuitos/elementos cargados.
                       </div>
                     ) : (
-                      <div className="detalle-table-wrap">
-                        <table className="detalle-table">
-                          <thead>
-                            <tr>
-                              <th>N°</th>
-                              <th>Circuito/Elemento</th>
-                              <th>Categoría</th>
-                              <th>Estado</th>
-                              {mostrarCorriente && (
-                                <>
-                                  <th style={{ textAlign: "right" }}>Nominal</th>
-                                  <th style={{ textAlign: "right" }}>F</th>
-                                  <th style={{ textAlign: "right" }}>R</th>
-                                  <th style={{ textAlign: "right" }}>S</th>
-                                  <th style={{ textAlign: "right" }}>T</th>
-                                </>
-                              )}
-                              <th>Comentario</th>
-                              {(puedeBajas || puedeDeposito) && <th />}
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {circuitosDelTablero.map((c) => {
-                              const lectura = lecturaPorCircuito.get(c.id);
-                              const mideCorriente = itemMideCorriente(c.categoria_equipo, c.tipo_circuito, tipoEvento);
-                              return (
-                                <tr key={c.id}>
-                                  <td>{c.numero}</td>
-                                  <td>{c.texto}</td>
-                                  <td>{TABLERO_CATEGORIA_LABEL[c.categoria_equipo]}</td>
-                                  <td>{lectura?.estado || "—"}</td>
-                                  {mostrarCorriente && (
-                                    <>
-                                      <td style={{ textAlign: "right" }}>{c.amp_nominal || "—"}</td>
-                                      <td style={{ textAlign: "right" }}>{mideCorriente ? fmtCorriente(lectura?.corriente_f ?? null) : "—"}</td>
-                                      <td style={{ textAlign: "right" }}>{mideCorriente ? fmtCorriente(lectura?.corriente_r ?? null) : "—"}</td>
-                                      <td style={{ textAlign: "right" }}>{mideCorriente ? fmtCorriente(lectura?.corriente_s ?? null) : "—"}</td>
-                                      <td style={{ textAlign: "right" }}>{mideCorriente ? fmtCorriente(lectura?.corriente_t ?? null) : "—"}</td>
-                                    </>
-                                  )}
-                                  <td>{lectura?.comentario || "—"}</td>
-                                  {(puedeBajas || puedeDeposito) && (
-                                    <td>
-                                      <div style={{ display: "flex", gap: 6 }}>
-                                        {puedeBajas && <DarDeBajaButton tipoEquipo="tablero_circuito" equipoId={c.id} equipoTexto={c.texto} />}
-                                        {puedeDeposito && (
-                                          <EntregarADepositoButton tipoEquipo="tablero_circuito" equipoId={c.id} equipoTexto={c.texto} />
+                      gruposPorCuerpo.map((grupo, gi) => {
+                        const fechaCuerpo = grupo.cuerpo ? ultimaFechaPorCuerpo.get(`${t.id}:${grupo.cuerpo}`) : null;
+                        return (
+                          <div key={grupo.cuerpo ?? `sin-cuerpo-${gi}`} style={{ marginBottom: gi < gruposPorCuerpo.length - 1 ? 16 : 0 }}>
+                            {hayCuerpos && (
+                              <div className="hist-meta" style={{ margin: "0 14px 6px", fontWeight: 600 }}>
+                                {grupo.cuerpo ?? "Sin cuerpo asignado"}
+                                {fechaCuerpo ? ` · última visita ${fmtFecha(fechaCuerpo)}` : ""}
+                              </div>
+                            )}
+                            <div className="detalle-table-wrap">
+                              <table className="detalle-table">
+                                <thead>
+                                  <tr>
+                                    <th>N°</th>
+                                    <th>Circuito/Elemento</th>
+                                    <th>Categoría</th>
+                                    <th>Estado</th>
+                                    {mostrarCorriente && (
+                                      <>
+                                        <th style={{ textAlign: "right" }}>Nominal</th>
+                                        <th style={{ textAlign: "right" }}>F</th>
+                                        <th style={{ textAlign: "right" }}>R</th>
+                                        <th style={{ textAlign: "right" }}>S</th>
+                                        <th style={{ textAlign: "right" }}>T</th>
+                                      </>
+                                    )}
+                                    <th>Comentario</th>
+                                    {(puedeBajas || puedeDeposito) && <th />}
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {grupo.circuitos.map((c) => {
+                                    const lectura = lecturaPorCircuito.get(c.id);
+                                    const mideCorriente = itemMideCorriente(c.categoria_equipo, c.tipo_circuito, tipoEvento);
+                                    return (
+                                      <tr key={c.id}>
+                                        <td>{c.numero}</td>
+                                        <td>{c.texto}</td>
+                                        <td>{TABLERO_CATEGORIA_LABEL[c.categoria_equipo]}</td>
+                                        <td>{lectura?.estado || "—"}</td>
+                                        {mostrarCorriente && (
+                                          <>
+                                            <td style={{ textAlign: "right" }}>{c.amp_nominal || "—"}</td>
+                                            <td style={{ textAlign: "right" }}>
+                                              {mideCorriente ? fmtCorriente(lectura?.corriente_f ?? null) : "—"}
+                                            </td>
+                                            <td style={{ textAlign: "right" }}>
+                                              {mideCorriente ? fmtCorriente(lectura?.corriente_r ?? null) : "—"}
+                                            </td>
+                                            <td style={{ textAlign: "right" }}>
+                                              {mideCorriente ? fmtCorriente(lectura?.corriente_s ?? null) : "—"}
+                                            </td>
+                                            <td style={{ textAlign: "right" }}>
+                                              {mideCorriente ? fmtCorriente(lectura?.corriente_t ?? null) : "—"}
+                                            </td>
+                                          </>
                                         )}
-                                      </div>
-                                    </td>
-                                  )}
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
+                                        <td>{lectura?.comentario || "—"}</td>
+                                        {(puedeBajas || puedeDeposito) && (
+                                          <td>
+                                            <div style={{ display: "flex", gap: 6 }}>
+                                              {puedeBajas && (
+                                                <DarDeBajaButton tipoEquipo="tablero_circuito" equipoId={c.id} equipoTexto={c.texto} />
+                                              )}
+                                              {puedeDeposito && (
+                                                <EntregarADepositoButton tipoEquipo="tablero_circuito" equipoId={c.id} equipoTexto={c.texto} />
+                                              )}
+                                            </div>
+                                          </td>
+                                        )}
+                                      </tr>
+                                    );
+                                  })}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        );
+                      })
                     )}
                   </details>
                 );

@@ -74,6 +74,11 @@ export function NuevaMedicionForm({
   const [fecha, setFecha] = useState(() => new Date().toISOString().slice(0, 10));
   const [circuitos, setCircuitos] = useState<CircuitoItem[]>([]);
   const [lecturas, setLecturas] = useState<Record<number, LecturaState>>({});
+  // Contexto de "en qué cuerpo del tablero estoy parado ahora" — se lo suma
+  // automáticamente a los circuitos nuevos (manuales o detectados por IA) sin
+  // que la IA tenga que adivinarlo de la foto; el técnico lo cambia cuando
+  // pasa a relevar otro cuerpo/puerta del mismo gabinete.
+  const [cuerpoActual, setCuerpoActual] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<{ medicionId: string; numeroGeneracion: string; pdfUrl: string | null } | null>(null);
@@ -129,6 +134,7 @@ export function NuevaMedicionForm({
     setTableroPadreId("");
     setCircuitos([]);
     setLecturas({});
+    setCuerpoActual("");
     if (id !== "__new") {
       setLocalidadNueva("");
       setSitioNueva("");
@@ -140,6 +146,7 @@ export function NuevaMedicionForm({
   function elegirTablero(id: string) {
     setTableroId(id);
     setSuccess(null);
+    setCuerpoActual("");
     if (id === "__new") {
       setSubsistemasNuevo([]);
       setJerarquiaNueva("");
@@ -238,6 +245,7 @@ export function NuevaMedicionForm({
           ampNominal: d.ampNominal,
           categoriaEquipo: d.categoriaEquipo,
           tipoCircuito: d.tipoCircuito,
+          cuerpo: cuerpoActual.trim(),
           revisar: d.identificado !== true,
         })),
       ]);
@@ -273,7 +281,10 @@ export function NuevaMedicionForm({
 
   function agregarCircuito() {
     const siguienteNumero = circuitos.length ? Math.max(...circuitos.map((c) => c.numero)) + 1 : 1;
-    setCircuitos((prev) => [...prev, { id: null, numero: siguienteNumero, texto: "", ampNominal: "", ...CIRCUITO_NUEVO_BASE }]);
+    setCircuitos((prev) => [
+      ...prev,
+      { id: null, numero: siguienteNumero, texto: "", ampNominal: "", cuerpo: cuerpoActual.trim(), ...CIRCUITO_NUEVO_BASE },
+    ]);
   }
 
   function actualizarCircuito(i: number, patch: Partial<CircuitoItem>) {
@@ -361,6 +372,7 @@ export function NuevaMedicionForm({
               ampNominal: c.ampNominal.trim(),
               categoriaEquipo: c.categoriaEquipo,
               tipoCircuito: c.tipoCircuito,
+              cuerpo: c.cuerpo.trim(),
               estado: l.estado,
               corrienteF: l.corrienteF,
               corrienteR: l.corrienteR,
@@ -414,6 +426,7 @@ export function NuevaMedicionForm({
     setTableroPadreId("");
     setCircuitos([]);
     setLecturas({});
+    setCuerpoActual("");
     setFotoGeneral(null);
   }
 
@@ -660,6 +673,20 @@ export function NuevaMedicionForm({
             combina todas para armar la lista de elementos sin repetir — clasifica categoría y tipo de circuito, pero siempre revisala y
             corregí lo que haga falta antes de guardar.
           </div>
+          <div className="field" style={{ marginBottom: 12, maxWidth: 320 }}>
+            <label style={{ fontSize: 11 }}>Cuerpo actual (opcional)</label>
+            <input
+              type="text"
+              placeholder="Ej: Cuerpo 1 / Puerta exterior izq."
+              value={cuerpoActual}
+              onChange={(e) => setCuerpoActual(e.target.value)}
+              disabled={submitting}
+            />
+            <div className="hint" style={{ margin: "4px 0 0" }}>
+              Si el tablero tiene más de un cuerpo/puerta, indicá en cuál estás parado — se lo suma automáticamente a los
+              circuitos/elementos que cargues o leas con IA a partir de ahora.
+            </div>
+          </div>
           <input
             ref={fotoCameraInputRef}
             type="file"
@@ -828,6 +855,16 @@ export function NuevaMedicionForm({
                             />
                           </div>
                         )}
+                        <div className="field" style={{ marginBottom: 0, width: 140 }}>
+                          <label style={{ fontSize: 11 }}>Cuerpo</label>
+                          <input
+                            type="text"
+                            placeholder="Ej: Cuerpo 1"
+                            value={c.cuerpo}
+                            onChange={(e) => actualizarCircuito(i, { cuerpo: e.target.value })}
+                            disabled={submitting}
+                          />
+                        </div>
                         <button type="button" className="remove-btn" onClick={() => quitarCircuito(i)} disabled={submitting}>
                           <Icon name="x" size={12} />
                         </button>
@@ -838,6 +875,7 @@ export function NuevaMedicionForm({
                       {c.numero} — {c.texto} · {CATEGORIA_EQUIPO_LABEL[c.categoriaEquipo]}
                       {c.tipoCircuito !== "na" ? ` · ${TIPO_CIRCUITO_LABEL[c.tipoCircuito]}` : ""}
                       {categoriaLlevaAmp(c.categoriaEquipo) && c.ampNominal ? ` (${c.ampNominal})` : ""}
+                      {c.cuerpo ? ` · ${c.cuerpo}` : ""}
                     </div>
                   )}
 

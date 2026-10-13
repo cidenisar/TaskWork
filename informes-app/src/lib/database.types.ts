@@ -310,6 +310,7 @@ export type TableroCircuitoRow = {
   tipo_circuito: TableroTipoCircuito;
   orden: number;
   estado: EstadoEquipamiento;
+  cuerpo: string | null;
   created_at: string;
 }
 

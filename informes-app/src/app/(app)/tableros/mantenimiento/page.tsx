@@ -31,6 +31,7 @@ export default async function NuevoMantenimientoPage() {
       ampNominal: c.amp_nominal ?? "",
       categoriaEquipo: c.categoria_equipo,
       tipoCircuito: c.tipo_circuito,
+      cuerpo: "",
     });
     circuitosPorTablero.set(c.tablero_id, lista);
   }

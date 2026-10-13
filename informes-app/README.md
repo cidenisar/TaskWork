@@ -1564,3 +1564,33 @@ general que salió de esto.
     cargada en los tableros reales). Igual límite que el resto de los
     campos de alta de esta app: solo se carga al crear el tablero, no
     hay edición de un tablero ya existente todavía.
+
+- **Tableros: campo "Cuerpo" por circuito, para gabinetes con más de un
+  cuerpo/puerta.** Un tablero físico puede tener varios cuerpos (ej. uno
+  de 220V/24V, otro de control de acceso, otro de CCTV, cada uno con su
+  propia puerta) — esto es distinto de la jerarquía Principal/Secundario
+  (que son tableros físicamente separados que se alimentan entre sí, no
+  compartimentos del mismo gabinete). Ahora cada circuito/elemento puede
+  llevar, opcionalmente, en qué cuerpo está (texto libre, ej. "Cuerpo 1" o
+  "Puerta control de acceso").
+  - **Columna nueva**: `tablero_circuitos.cuerpo` (text, nullable).
+  - **Carga en el form** (`nueva-medicion-form.tsx`): un campo "Cuerpo
+    actual" arriba de la sección de circuitos marca en qué cuerpo está
+    parado el técnico — se lo suma automáticamente a los circuitos que
+    cargue a mano o que detecte la lectura con IA a partir de ese momento,
+    sin que la IA tenga que adivinarlo de la foto. También hay un campo
+    "Cuerpo" editable por fila, para corregir un circuito puntual sin
+    tener que cambiar el contexto general. Igual límite que el resto de
+    los campos de alta: solo se carga al dar de alta el circuito, no hay
+    edición de uno ya existente.
+  - **Última fecha de visita por cuerpo, nunca persistida**: en la ficha
+    de Sitio, si un tablero tiene circuitos con cuerpo cargado, la tabla
+    de circuitos se agrupa por cuerpo y cada grupo muestra su propia
+    "última visita" — calculada en el momento a partir del historial
+    COMPLETO de `tablero_mediciones`/`tablero_medicion_lecturas` (no solo
+    la medición más reciente del tablero en general), porque un cuerpo
+    puede no haberse tocado en la última visita pero sí en una anterior.
+    Si ningún circuito del tablero tiene cuerpo cargado todavía, se
+    muestra la tabla sin agrupar, igual que antes. Esto también sirve
+    como indicio de que se hizo alguna modificación en ese cuerpo del
+    tablero (nueva fecha ⇒ hubo actividad ahí).

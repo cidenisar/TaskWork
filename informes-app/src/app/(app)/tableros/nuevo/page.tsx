@@ -13,7 +13,7 @@ export default async function NuevaMedicionPage() {
     supabase.from("tableros").select("id, subsistemas, denominacion, ubicacion_id").order("denominacion"),
     supabase
       .from("tablero_circuitos")
-      .select("id, tablero_id, numero, texto, amp_nominal, categoria_equipo, tipo_circuito")
+      .select("id, tablero_id, numero, texto, amp_nominal, categoria_equipo, tipo_circuito, cuerpo")
       .eq("estado", "activo")
       .order("numero"),
     fetchTodasLasUbicaciones(supabase),
@@ -33,6 +33,7 @@ export default async function NuevaMedicionPage() {
       ampNominal: c.amp_nominal ?? "",
       categoriaEquipo: c.categoria_equipo,
       tipoCircuito: c.tipo_circuito,
+      cuerpo: c.cuerpo ?? "",
     });
     circuitosPorTablero.set(c.tablero_id, lista);
   }

@@ -136,6 +136,13 @@ export interface CircuitoItem {
   categoriaEquipo: TableroCategoriaEquipo;
   tipoCircuito: TableroTipoCircuito;
   /**
+   * Cuerpo físico del tablero (gabinete/puerta) al que pertenece este
+   * circuito — un tablero con varios cuerpos tiene contenido y fecha de
+   * visita distintos por cuerpo. Solo se puede cargar al dar de alta el
+   * circuito, igual criterio que el resto de los campos de alta.
+   */
+  cuerpo: string;
+  /**
    * Solo transitorio en el form (no se persiste): true cuando lo cargó la
    * lectura de foto con IA sin encontrar una etiqueta legible, así el
    * técnico sabe que el texto es una descripción visual y conviene
