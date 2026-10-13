@@ -669,9 +669,9 @@ export function NuevaMedicionForm({
         <div className="card">
           <div className="section-label">Circuitos / Elementos</div>
           <div className="hint" style={{ margin: "-4px 0 12px" }}>
-            <Icon name="ai" size={13} /> Sacale hasta {TABLERO_FOTO_IA_MAX} fotos al tablero (distintos ángulos o secciones) y la IA
-            combina todas para armar la lista de elementos sin repetir — clasifica categoría y tipo de circuito, pero siempre revisala y
-            corregí lo que haga falta antes de guardar.
+            <Icon name="ai" size={13} /> Sacale hasta {TABLERO_FOTO_IA_MAX} fotos al tablero (distintos ángulos o secciones — si tiene
+            varios cuerpos, sacale varias a cada uno) y la IA combina todas para armar la lista de elementos sin repetir — clasifica
+            categoría y tipo de circuito, pero siempre revisala y corregí lo que haga falta antes de guardar.
           </div>
           <div className="field" style={{ marginBottom: 12, maxWidth: 320 }}>
             <label style={{ fontSize: 11 }}>Cuerpo actual (opcional)</label>

@@ -1,7 +1,14 @@
 import type { TableroCategoriaEquipo, TableroEventoTipo, TableroJerarquia, TableroTipo, TableroTipoCircuito } from "@/lib/database.types";
 
-/** Máximo de fotos que se pueden mandar juntas a la lectura con IA de un tablero (distintos ángulos/secciones del mismo gabinete). */
-export const TABLERO_FOTO_IA_MAX = 7;
+/**
+ * Máximo de fotos que se pueden mandar juntas a la lectura con IA de un
+ * tablero (distintos ángulos/secciones del mismo gabinete). Un tablero con
+ * varios cuerpos (ver campo `cuerpo` de `CircuitoItem`) necesita varias
+ * fotos por cuerpo para cubrirlo entero, no solo una del conjunto — mismo
+ * techo que Racks/Torres (`RACK_FOTO_IA_MAX`/`TORRE_FOTO_IA_MAX`), que ya
+ * tienen el mismo problema de "contenedor con varias secciones".
+ */
+export const TABLERO_FOTO_IA_MAX = 14;
 
 export const TABLERO_JERARQUIA_OPCIONES: TableroJerarquia[] = ["principal", "secundario"];
 

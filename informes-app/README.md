@@ -1594,6 +1594,11 @@ general que salió de esto.
     muestra la tabla sin agrupar, igual que antes. Esto también sirve
     como indicio de que se hizo alguna modificación en ese cuerpo del
     tablero (nueva fecha ⇒ hubo actividad ahí).
+  - **`TABLERO_FOTO_IA_MAX` subido de 7 a 14**: un tablero con varios
+    cuerpos necesita varias fotos por cuerpo para cubrirlo entero, no
+    una sola del conjunto — mismo techo que ya usan Racks y Torres de
+    Comunicaciones (`RACK_FOTO_IA_MAX`/`TORRE_FOTO_IA_MAX`), que son los
+    otros "contenedores con varias secciones" de la app.
 
 - **Tableros: botón "Registrar mantenimiento" por circuito en la ficha de
   Sitio, para no tener que remedir todo el tablero por una revisión
