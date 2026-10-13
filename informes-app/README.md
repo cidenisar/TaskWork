@@ -1594,3 +1594,39 @@ general que salió de esto.
     muestra la tabla sin agrupar, igual que antes. Esto también sirve
     como indicio de que se hizo alguna modificación en ese cuerpo del
     tablero (nueva fecha ⇒ hubo actividad ahí).
+
+- **Tableros: botón "Registrar mantenimiento" por circuito en la ficha de
+  Sitio, para no tener que remedir todo el tablero por una revisión
+  puntual.** Surgió de una confusión real al usar la app: "relevar"
+  (dar de alta tableros/racks/equipos la primera vez) y "volver a algo
+  que ya relevé para revisarlo/modificarlo" son dos momentos distintos,
+  y antes de este cambio Tableros los mezclaba — cada vez que entrabas a
+  "Nueva Medición" sobre un tablero existente, el formulario precargaba
+  TODOS sus circuitos, así que una visita para revisar un solo circuito
+  terminaba generando una lectura "de hoy" para circuitos que ni se
+  tocaron, pisando la fecha real de los demás (incluida la de "última
+  visita por cuerpo" de más arriba).
+  - **No se construyó nada nuevo para esto** — Tableros ya tenía, desde
+    antes, un registro de mantenimiento separado de la Medición
+    (`tablero_mantenimientos`, con fecha + descripción + circuito
+    afectado opcional + próximo mantenimiento a mano, sin PDF ni grilla
+    de corriente, usado hasta ahora solo desde la pantalla aparte
+    `/tableros/mantenimiento`). Meterlo en el mismo esquema que ya usan
+    Racks/Equipos Individuales (`mantenimientos_equipamiento` +
+    checklist) hubiera sido la duplicación que
+    `CRITERIOS_Y_IDEAS.md` pide evitar — ese esquema excluye Tableros a
+    propósito por este mismo motivo. En cambio, se agregó un botón
+    (`RegistrarMantenimientoCircuitoButton`) en cada fila de circuito de
+    la ficha de Sitio que abre el mismo registro de siempre
+    (`tablero_mantenimientos`, vía `crearMantenimientoAction`) con
+    tablero y circuito ya fijados por la fila — no hace falta volver a
+    elegirlos como en la pantalla aparte.
+  - **La "última fecha" por circuito/cuerpo ahora también mira estos
+    registros**, no solo `tablero_mediciones` — una revisión puntual
+    (sin remedir nada) actualiza la fecha de ESE circuito igual que una
+    medición nueva, tomando la más reciente entre las dos fuentes.
+  - **Alcance, a propósito**: la Medición/Relevamiento completa (con
+    corriente y PDF) sigue existiendo tal cual para cuando corresponde
+    remedir de verdad — este botón es la vía liviana para el día a día
+    de "fui, revisé/cambié algo puntual", sin forzar a resubir todo el
+    tablero para que quede un registro.

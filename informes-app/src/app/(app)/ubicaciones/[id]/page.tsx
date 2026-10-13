@@ -24,6 +24,7 @@ import { EntregarADepositoButton } from "@/components/deposito/entregar-boton";
 import { VerComprobanteEntregaBoton } from "@/components/deposito/ver-comprobante-boton";
 import { MOTIVO_ENTREGA_LABEL, CONDICION_LABEL, TIPO_EQUIPO_LABEL as TIPO_EQUIPO_DEPOSITO_LABEL } from "@/components/deposito/types";
 import { RegistrarMantenimientoButton } from "@/components/mantenimiento/registrar-mantenimiento-button";
+import { RegistrarMantenimientoCircuitoButton } from "@/components/tableros/registrar-mantenimiento-circuito-button";
 import { ProgramarMantenimientoButton } from "@/components/mantenimiento/programar-mantenimiento-button";
 
 function fmtFecha(fecha: string) {
@@ -172,7 +173,7 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
   const todasLasMedicionesIds = (medicionesRes.data ?? []).map((m) => m.id);
   const fechaPorMedicionId = new Map((medicionesRes.data ?? []).map((m) => [m.id, m.fecha]));
 
-  const [lecturasTableroRes, lecturasRackRes, lecturasEquipoRes, lecturasHistorialTableroRes] = await Promise.all([
+  const [lecturasTableroRes, lecturasRackRes, lecturasEquipoRes, lecturasHistorialTableroRes, mantenimientosTableroRes] = await Promise.all([
     medicionIds.length > 0
       ? supabase
           .from("tablero_medicion_lecturas")
@@ -188,6 +189,12 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
     todasLasMedicionesIds.length > 0
       ? supabase.from("tablero_medicion_lecturas").select("circuito_id, medicion_id").in("medicion_id", todasLasMedicionesIds)
       : { data: [] },
+    // Log de mantenimiento por circuito (tablero_mantenimientos) — una
+    // revisión/modificación puntual sin remedir todo el tablero cuenta
+    // tanto como una medición para la "última fecha" real de ese circuito.
+    tableroIds.length > 0
+      ? supabase.from("tablero_mantenimientos").select("circuito_id, fecha").in("tablero_id", tableroIds).not("circuito_id", "is", null)
+      : { data: [] },
   ]);
   const lecturaPorCircuito = new Map((lecturasTableroRes.data ?? []).map((l) => [l.circuito_id, l]));
   const lecturaPorEquipamiento = new Map((lecturasRackRes.data ?? []).map((l) => [l.equipamiento_id, l]));
@@ -202,6 +209,11 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
     if (!fecha) continue;
     const actual = ultimaFechaPorCircuito.get(l.circuito_id);
     if (!actual || fecha > actual) ultimaFechaPorCircuito.set(l.circuito_id, fecha);
+  }
+  for (const m of mantenimientosTableroRes.data ?? []) {
+    if (!m.circuito_id) continue;
+    const actual = ultimaFechaPorCircuito.get(m.circuito_id);
+    if (!actual || m.fecha > actual) ultimaFechaPorCircuito.set(m.circuito_id, m.fecha);
   }
 
   const equipoIndividualIds = equipos.map((e) => e.id);
@@ -422,7 +434,7 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
                                       </>
                                     )}
                                     <th>Comentario</th>
-                                    {(puedeBajas || puedeDeposito) && <th />}
+                                    <th />
                                   </tr>
                                 </thead>
                                 <tbody>
@@ -453,18 +465,17 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
                                           </>
                                         )}
                                         <td>{lectura?.comentario || "—"}</td>
-                                        {(puedeBajas || puedeDeposito) && (
-                                          <td>
-                                            <div style={{ display: "flex", gap: 6 }}>
-                                              {puedeBajas && (
-                                                <DarDeBajaButton tipoEquipo="tablero_circuito" equipoId={c.id} equipoTexto={c.texto} />
-                                              )}
-                                              {puedeDeposito && (
-                                                <EntregarADepositoButton tipoEquipo="tablero_circuito" equipoId={c.id} equipoTexto={c.texto} />
-                                              )}
-                                            </div>
-                                          </td>
-                                        )}
+                                        <td>
+                                          <div style={{ display: "flex", gap: 6 }}>
+                                            <RegistrarMantenimientoCircuitoButton tableroId={t.id} circuitoId={c.id} circuitoTexto={c.texto} />
+                                            {puedeBajas && (
+                                              <DarDeBajaButton tipoEquipo="tablero_circuito" equipoId={c.id} equipoTexto={c.texto} />
+                                            )}
+                                            {puedeDeposito && (
+                                              <EntregarADepositoButton tipoEquipo="tablero_circuito" equipoId={c.id} equipoTexto={c.texto} />
+                                            )}
+                                          </div>
+                                        </td>
                                       </tr>
                                     );
                                   })}
