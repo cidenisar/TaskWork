@@ -10,12 +10,14 @@ import { VerPdfLink } from "@/components/ver-pdf-link";
 import { obtenerUrlPdfMedicionAction } from "@/app/(app)/tableros/historial/actions";
 import { UbicacionFields, type GpsCapturado } from "@/components/ubicaciones/ubicacion-fields";
 import type { Ubicacion } from "@/components/ubicaciones/types";
-import type { TableroCategoriaEquipo, TableroEventoTipo, TableroTipo, TableroTipoCircuito } from "@/lib/database.types";
+import type { TableroCategoriaEquipo, TableroEventoTipo, TableroJerarquia, TableroTipo, TableroTipoCircuito } from "@/lib/database.types";
 import {
   TABLERO_TIPOS,
   TABLERO_TIPO_LABEL,
   TABLERO_EVENTO_LABEL,
   TABLERO_FOTO_IA_MAX,
+  TABLERO_JERARQUIA_OPCIONES,
+  TABLERO_JERARQUIA_LABEL,
   CATEGORIA_EQUIPO_OPCIONES,
   CATEGORIA_EQUIPO_LABEL,
   TIPO_CIRCUITO_OPCIONES,
@@ -66,6 +68,8 @@ export function NuevaMedicionForm({
   const [tableroId, setTableroId] = useState<string>(""); // "" = sin elegir, "__new" = crear
   const [subsistemasNuevo, setSubsistemasNuevo] = useState<TableroTipo[]>([]);
   const [denominacionNueva, setDenominacionNueva] = useState("");
+  const [jerarquiaNueva, setJerarquiaNueva] = useState<TableroJerarquia | "">("");
+  const [tableroPadreId, setTableroPadreId] = useState("");
   const [tipoEventoElegido, setTipoEventoElegido] = useState<TableroEventoTipo>("medicion");
   const [fecha, setFecha] = useState(() => new Date().toISOString().slice(0, 10));
   const [circuitos, setCircuitos] = useState<CircuitoItem[]>([]);
@@ -121,6 +125,8 @@ export function NuevaMedicionForm({
     setTableroId("");
     setSubsistemasNuevo([]);
     setDenominacionNueva("");
+    setJerarquiaNueva("");
+    setTableroPadreId("");
     setCircuitos([]);
     setLecturas({});
     if (id !== "__new") {
@@ -136,6 +142,8 @@ export function NuevaMedicionForm({
     setSuccess(null);
     if (id === "__new") {
       setSubsistemasNuevo([]);
+      setJerarquiaNueva("");
+      setTableroPadreId("");
       setCircuitos([]);
       setLecturas({});
       return;
@@ -341,6 +349,8 @@ export function NuevaMedicionForm({
           gps,
           tableroId: tableroId === "__new" ? null : tableroId,
           denominacionNueva,
+          jerarquiaNueva: jerarquiaNueva || null,
+          tableroPadreId: jerarquiaNueva === "secundario" && tableroPadreId ? tableroPadreId : null,
           fecha,
           lecturas: circuitos.map((c, i) => {
             const l = lecturas[i] ?? LECTURA_VACIA;
@@ -400,6 +410,8 @@ export function NuevaMedicionForm({
     setTableroId("");
     setSubsistemasNuevo([]);
     setDenominacionNueva("");
+    setJerarquiaNueva("");
+    setTableroPadreId("");
     setCircuitos([]);
     setLecturas({});
     setFotoGeneral(null);
@@ -504,6 +516,44 @@ export function NuevaMedicionForm({
                   ))}
                 </div>
               </div>
+              <div className="field">
+                <label>
+                  Jerarquía <span className="opt">(opcional)</span>
+                </label>
+                <div className="hint" style={{ margin: "-2px 0 8px" }}>
+                  Para poder relacionar un tablero secundario con el principal (o con otro secundario) del que depende, y más adelante
+                  ir viendo cómo se reparten las cargas.
+                </div>
+                <div className="tech-form-grid" style={{ gridTemplateColumns: "repeat(2, 1fr)" }}>
+                  {TABLERO_JERARQUIA_OPCIONES.map((j) => (
+                    <button
+                      key={j}
+                      type="button"
+                      className={`btn ${jerarquiaNueva === j ? "btn-primary" : "btn-secondary"}`}
+                      onClick={() => setJerarquiaNueva((prev) => (prev === j ? "" : j))}
+                      disabled={submitting}
+                    >
+                      {TABLERO_JERARQUIA_LABEL[j]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {jerarquiaNueva === "secundario" && (
+                <div className="field">
+                  <label>
+                    Asociado a <span className="opt">(opcional — el tablero principal o secundario del que depende)</span>
+                  </label>
+                  <select value={tableroPadreId} onChange={(e) => setTableroPadreId(e.target.value)} disabled={submitting}>
+                    <option value="">Sin identificar todavía</option>
+                    {tablerosFiltrados.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.denominacion}
+                        {t.jerarquia ? ` (${TABLERO_JERARQUIA_LABEL[t.jerarquia]})` : ""}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </>
           )}
           {tieneEnergia && (

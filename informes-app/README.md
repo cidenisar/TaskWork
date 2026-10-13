@@ -1533,3 +1533,34 @@ general que salió de esto.
       Service. El alta manual de la pestaña Gestión sigue existiendo tal
       cual estaba, como alternativa más rápida cuando no hace falta el
       detalle de fotos.
+
+- **Tableros: jerarquía Principal/Secundario, para ir armando la relación
+  de cargas.** Al dar de alta un tablero nuevo (Relevamiento de Equipos →
+  Tableros) ahora se puede marcar, de forma opcional, si es **Principal**
+  o **Secundario** — y si es Secundario, a qué tablero está **asociado**
+  (puede ser un Principal u OTRO Secundario, para armar una cadena, no
+  solo dos niveles). El picker de "Asociado a" lista los tableros que ya
+  existen en esa misma ubicación.
+  - **Columnas nuevas** en `tableros`: `jerarquia`
+    (`tablero_jerarquia`: `'principal' | 'secundario'`, nullable — un
+    tablero sin clasificar sigue funcionando exactamente igual que
+    antes, no se fuerza a clasificar todo de una) y `tablero_padre_id`
+    (self-reference a `tableros.id`). Un `check` en la base impide que
+    un tablero tenga `tablero_padre_id` sin estar marcado `secundario`.
+    Como el padre solo puede ser un tablero que YA existía al crear este
+    (se elige de una lista de tableros existentes, nunca se puede crear
+    los dos juntos apuntándose entre sí), no hace falta una validación
+    extra contra ciclos — la cadena solo puede construirse hacia atrás.
+  - **Se ve en la ficha de Sitio**: cada tablero muestra su jerarquía si
+    la tiene, y según el caso "Asociado a: {denominación del tablero
+    del que depende}" (Secundario) o "N secundario(s)" (Principal, solo
+    si tiene al menos uno) — así de un vistazo se ve qué tableros
+    alimentan a cuáles.
+  - **Alcance, a propósito**: por ahora es solo la relación (quién
+    depende de quién) y el conteo — todavía no suma la corriente/carga
+    real de los circuitos de los secundarios hacia el principal (eso ya
+    se mide por tablero en Mediciones, sumarlo hacia arriba en la
+    jerarquía es un paso natural siguiente una vez que la relación esté
+    cargada en los tableros reales). Igual límite que el resto de los
+    campos de alta de esta app: solo se carga al crear el tablero, no
+    hay edición de un tablero ya existente todavía.

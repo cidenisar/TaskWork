@@ -1,7 +1,14 @@
-import type { TableroCategoriaEquipo, TableroEventoTipo, TableroTipo, TableroTipoCircuito } from "@/lib/database.types";
+import type { TableroCategoriaEquipo, TableroEventoTipo, TableroJerarquia, TableroTipo, TableroTipoCircuito } from "@/lib/database.types";
 
 /** Máximo de fotos que se pueden mandar juntas a la lectura con IA de un tablero (distintos ángulos/secciones del mismo gabinete). */
 export const TABLERO_FOTO_IA_MAX = 7;
+
+export const TABLERO_JERARQUIA_OPCIONES: TableroJerarquia[] = ["principal", "secundario"];
+
+export const TABLERO_JERARQUIA_LABEL: Record<TableroJerarquia, string> = {
+  principal: "Principal",
+  secundario: "Secundario",
+};
 
 export const TABLERO_TIPOS: TableroTipo[] = ["energia", "cctv", "control_acceso"];
 
@@ -144,6 +151,8 @@ export interface TableroConCircuitos {
   ubicacionId: string;
   ubicacionLabel: string;
   circuitos: CircuitoItem[];
+  jerarquia?: TableroJerarquia | null;
+  tableroPadreId?: string | null;
 }
 
 export interface MantenimientoRow {

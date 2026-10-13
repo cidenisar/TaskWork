@@ -70,6 +70,7 @@ export type TipoEquipoBaja = "tablero_circuito" | "rack_equipamiento" | "equipo_
 /** Dónde está instalada una cámara/domo (Equipos Individuales) — determina junto con la altura qué recurso hace falta para el mantenimiento. */
 export type TipoMontajeCamara = "torre" | "columna" | "poste" | "pared" | "techo" | "otro";
 export type RecursoAlturaMantenimiento = "escalera" | "andamio_manlift" | "grupo_altura";
+export type TableroJerarquia = "principal" | "secundario";
 
 /** Helper para darle a cada tabla la forma que espera postgrest-js (incluye Relationships). */
 type Tbl<
@@ -291,6 +292,10 @@ export type TableroRow = {
   subsistemas: TableroTipo[];
   denominacion: string;
   ubicacion_id: string;
+  /** Principal/Secundario — null = sin clasificar. Base para sumar cargas de secundarios hacia su principal más adelante. */
+  jerarquia: TableroJerarquia | null;
+  /** El tablero del que "cuelga" este (puede ser un principal u OTRO secundario — una cadena). Solo tiene sentido cuando jerarquia='secundario'. */
+  tablero_padre_id: string | null;
   created_by: string | null;
   created_at: string;
 }

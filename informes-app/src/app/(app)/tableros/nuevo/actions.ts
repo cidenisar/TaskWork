@@ -7,7 +7,7 @@ import { renderTableroPdf } from "@/lib/pdf/render";
 import { buildTableroFilename } from "@/lib/pdf/filename";
 import { resolverUbicacionId, tagGpsSiFalta, type PayloadUbicacionNueva, type PayloadGps } from "@/lib/ubicaciones/resolver";
 import { calcularResumenEquipamiento, itemMideCorriente } from "@/components/tableros/types";
-import type { TableroCategoriaEquipo, TableroEventoTipo, TableroTipo, TableroTipoCircuito } from "@/lib/database.types";
+import type { TableroCategoriaEquipo, TableroEventoTipo, TableroJerarquia, TableroTipo, TableroTipoCircuito } from "@/lib/database.types";
 
 interface PayloadLectura {
   circuitoId: string | null;
@@ -32,6 +32,8 @@ export interface CrearMedicionPayload {
   gps: PayloadGps | null;
   tableroId: string | null;
   denominacionNueva: string;
+  jerarquiaNueva: TableroJerarquia | null;
+  tableroPadreId: string | null;
   fecha: string;
   lecturas: PayloadLectura[];
 }
@@ -93,6 +95,8 @@ export async function crearMedicionTableroAction(formData: FormData): Promise<Cr
         subsistemas: payload.subsistemas,
         denominacion: payload.denominacionNueva.trim(),
         ubicacion_id: ubicacion.id,
+        jerarquia: payload.jerarquiaNueva,
+        tablero_padre_id: payload.jerarquiaNueva === "secundario" ? payload.tableroPadreId : null,
         created_by: profile.id,
       })
       .select("id")

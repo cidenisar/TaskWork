@@ -9,6 +9,7 @@ import {
   itemMideCorriente,
   labelSubsistemas,
   CATEGORIA_EQUIPO_LABEL as TABLERO_CATEGORIA_LABEL,
+  TABLERO_JERARQUIA_LABEL,
 } from "@/components/tableros/types";
 import { calcularResumenEquipamiento as calcularResumenRacks, CATEGORIA_EQUIPO_LABEL as RACK_CATEGORIA_LABEL } from "@/components/racks/types";
 import { calcularResumenEquipos, CATEGORIA_EQUIPO_LABEL as EQUIPO_CATEGORIA_LABEL } from "@/components/equipos/types";
@@ -63,7 +64,11 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
   }
 
   const [tablerosRes, racksRes, equiposRes, informesRes, rendicionesRes] = await Promise.all([
-    supabase.from("tableros").select("id, denominacion, subsistemas, ubicacion_id").in("ubicacion_id", siblingIds).order("denominacion"),
+    supabase
+      .from("tableros")
+      .select("id, denominacion, subsistemas, ubicacion_id, jerarquia, tablero_padre_id")
+      .in("ubicacion_id", siblingIds)
+      .order("denominacion"),
     supabase.from("racks").select("id, denominacion, etiqueta_ypf, ubicacion_id").in("ubicacion_id", siblingIds).order("denominacion"),
     supabase
       .from("equipos")
@@ -86,6 +91,11 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
       .order("fecha", { ascending: false }),
   ]);
   const tableros = tablerosRes.data ?? [];
+  const denominacionPorTableroId = new Map(tableros.map((t) => [t.id, t.denominacion]));
+  const secundariosPorPadreId = new Map<string, number>();
+  for (const t of tableros) {
+    if (t.tablero_padre_id) secundariosPorPadreId.set(t.tablero_padre_id, (secundariosPorPadreId.get(t.tablero_padre_id) ?? 0) + 1);
+  }
   const racks = racksRes.data ?? [];
   // Un equipo dado de baja o entregado a depósito ya no es equipamiento
   // activo del sitio — se muestra aparte, en sus propias secciones (que leen
@@ -304,6 +314,7 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
                 const tipoEvento = ultimaMedicionPorTablero.get(t.id)?.tipoEvento ?? "medicion";
                 const circuitosDelTablero = circuitosPorTablero.get(t.id) ?? [];
                 const mostrarCorriente = circuitosDelTablero.some((c) => categoriaLlevaAmp(c.categoria_equipo));
+                const cantidadSecundarios = secundariosPorPadreId.get(t.id) ?? 0;
                 return (
                   <details className="detalle-item" key={t.id}>
                     <summary>
@@ -314,6 +325,14 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
                             {hayVariasPlantas ? `${labelPorUbicacionId.get(t.ubicacion_id)} · ` : ""}
                             {labelSubsistemas(t.subsistemas)}
                             {fecha ? ` · último relevamiento ${fmtFecha(fecha)}` : ""}
+                            {t.jerarquia ? ` · ${TABLERO_JERARQUIA_LABEL[t.jerarquia]}` : ""}
+                            {t.jerarquia === "secundario" &&
+                              (t.tablero_padre_id
+                                ? ` · Asociado a: ${denominacionPorTableroId.get(t.tablero_padre_id) ?? "—"}`
+                                : " · Sin tablero asociado identificado")}
+                            {t.jerarquia === "principal" &&
+                              cantidadSecundarios > 0 &&
+                              ` · ${cantidadSecundarios} secundario${cantidadSecundarios === 1 ? "" : "s"}`}
                           </div>
                         </div>
                       </div>
