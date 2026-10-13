@@ -10,6 +10,9 @@ import type { TableroCategoriaEquipo, TableroEventoTipo, TableroJerarquia, Table
  */
 export const TABLERO_FOTO_IA_MAX = 14;
 
+/** Máximo de fotos generales que se guardan como evidencia de una visita (una por cuerpo, u otros ángulos de detalle). */
+export const TABLERO_FOTO_GENERAL_MAX = 4;
+
 export const TABLERO_JERARQUIA_OPCIONES: TableroJerarquia[] = ["principal", "secundario"];
 
 export const TABLERO_JERARQUIA_LABEL: Record<TableroJerarquia, string> = {

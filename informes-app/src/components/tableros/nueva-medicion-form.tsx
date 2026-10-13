@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { crearMedicionTableroAction } from "@/app/(app)/tableros/nuevo/actions";
 import { reportarErrorCliente } from "@/lib/client-error-report";
 import { resizeImageToJpeg } from "@/lib/image-resize";
@@ -16,6 +16,7 @@ import {
   TABLERO_TIPO_LABEL,
   TABLERO_EVENTO_LABEL,
   TABLERO_FOTO_IA_MAX,
+  TABLERO_FOTO_GENERAL_MAX,
   TABLERO_JERARQUIA_OPCIONES,
   TABLERO_JERARQUIA_LABEL,
   CATEGORIA_EQUIPO_OPCIONES,
@@ -87,15 +88,22 @@ export function NuevaMedicionForm({
   const [iaNote, setIaNote] = useState<string | null>(null);
   const fotoCameraInputRef = useRef<HTMLInputElement>(null);
   const fotoGaleriaInputRef = useRef<HTMLInputElement>(null);
-  const [fotoGeneral, setFotoGeneral] = useState<File | null>(null);
+  const [fotosGenerales, setFotosGenerales] = useState<File[]>([]);
   const fotoGeneralCameraInputRef = useRef<HTMLInputElement>(null);
   const fotoGeneralGaleriaInputRef = useRef<HTMLInputElement>(null);
-  const fotoGeneralPreview = useMemo(() => (fotoGeneral ? URL.createObjectURL(fotoGeneral) : null), [fotoGeneral]);
-  useEffect(() => {
-    return () => {
-      if (fotoGeneralPreview) URL.revokeObjectURL(fotoGeneralPreview);
-    };
-  }, [fotoGeneralPreview]);
+
+  function agregarFotosGenerales(files: File[]) {
+    if (files.length === 0) return;
+    setFotosGenerales((prev) => {
+      const disponibles = TABLERO_FOTO_GENERAL_MAX - prev.length;
+      if (disponibles <= 0) return prev;
+      return [...prev, ...files.slice(0, disponibles)];
+    });
+  }
+
+  function quitarFotoGeneral(i: number) {
+    setFotosGenerales((prev) => prev.filter((_, idx) => idx !== i));
+  }
 
   // El Tablero solo se puede elegir/crear una vez que hay una Ubicación
   // elegida — un tablero nuevo siempre pertenece a la ubicación seleccionada,
@@ -383,12 +391,12 @@ export function NuevaMedicionForm({
           }),
         }),
       );
-      if (fotoGeneral) {
+      for (let i = 0; i < fotosGenerales.length; i++) {
         try {
-          const jpeg = await resizeImageToJpeg(fotoGeneral);
-          fd.append("fotoGeneral", jpeg, "general.jpg");
+          const jpeg = await resizeImageToJpeg(fotosGenerales[i]);
+          fd.append("fotoGeneral", jpeg, `general-${i + 1}.jpg`);
         } catch (err) {
-          setError(err instanceof Error ? err.message : "No se pudo leer la foto general del tablero.");
+          setError(err instanceof Error ? err.message : "No se pudo leer una de las fotos generales del tablero.");
           return;
         }
       }
@@ -400,7 +408,7 @@ export function NuevaMedicionForm({
         return;
       }
       setSuccess({ medicionId: res.medicionId!, numeroGeneracion: res.numeroGeneracion!, pdfUrl: res.pdfUrl ?? null });
-      setFotoGeneral(null);
+      setFotosGenerales([]);
     } catch (err) {
       const mensaje = err instanceof Error ? err.message : "Ocurrió un error inesperado guardando la medición.";
       setError(mensaje);
@@ -427,7 +435,7 @@ export function NuevaMedicionForm({
     setCircuitos([]);
     setLecturas({});
     setCuerpoActual("");
-    setFotoGeneral(null);
+    setFotosGenerales([]);
   }
 
   return (
@@ -601,10 +609,11 @@ export function NuevaMedicionForm({
           </div>
           <div className="field" style={{ marginBottom: 0 }}>
             <label>
-              Foto general del tablero <span className="opt">(opcional)</span>
+              Fotos generales del tablero <span className="opt">(opcional)</span>
             </label>
             <div className="hint" style={{ margin: "-2px 0 8px" }}>
-              Queda guardada como registro y se imprime en el PDF de esta visita.
+              Hasta {TABLERO_FOTO_GENERAL_MAX} fotos (ej: una por cada cuerpo, u otros ángulos de detalle) — quedan guardadas como
+              registro y se imprimen en el PDF de esta visita.
             </div>
             <input
               ref={fotoGeneralCameraInputRef}
@@ -613,52 +622,51 @@ export function NuevaMedicionForm({
               capture="environment"
               style={{ display: "none" }}
               onChange={(e) => {
-                const file = e.target.files?.[0] ?? null;
+                const files = Array.from(e.target.files ?? []);
                 e.target.value = "";
-                if (file) setFotoGeneral(file);
+                agregarFotosGenerales(files);
               }}
             />
             <input
               ref={fotoGeneralGaleriaInputRef}
               type="file"
               accept="image/*"
+              multiple
               style={{ display: "none" }}
               onChange={(e) => {
-                const file = e.target.files?.[0] ?? null;
+                const files = Array.from(e.target.files ?? []);
                 e.target.value = "";
-                if (file) setFotoGeneral(file);
+                agregarFotosGenerales(files);
               }}
             />
-            {fotoGeneral && fotoGeneralPreview ? (
-              <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                {/* eslint-disable-next-line @next/next/no-img-element -- preview local, no vale la pena next/image acá */}
-                <img
-                  src={fotoGeneralPreview}
-                  alt=""
-                  style={{ width: 64, height: 64, objectFit: "cover", borderRadius: 8, border: "1px solid var(--field-border)" }}
-                />
-                <button type="button" className="btn btn-secondary btn-sm" onClick={() => setFotoGeneral(null)} disabled={submitting}>
-                  <Icon name="x" size={12} /> Quitar
-                </button>
-              </div>
-            ) : (
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                <button
-                  type="button"
-                  className="ai-btn"
-                  onClick={() => fotoGeneralCameraInputRef.current?.click()}
-                  disabled={submitting}
-                >
-                  <Icon name="camera" size={13} /> Sacar foto
-                </button>
-                <button
-                  type="button"
-                  className="ai-btn"
-                  onClick={() => fotoGeneralGaleriaInputRef.current?.click()}
-                  disabled={submitting}
-                >
-                  <Icon name="upload" size={13} /> Subir foto
-                </button>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: fotosGenerales.length ? 8 : 0 }}>
+              <button
+                type="button"
+                className="ai-btn"
+                onClick={() => fotoGeneralCameraInputRef.current?.click()}
+                disabled={submitting || fotosGenerales.length >= TABLERO_FOTO_GENERAL_MAX}
+              >
+                <Icon name="camera" size={13} /> Sacar foto ({fotosGenerales.length}/{TABLERO_FOTO_GENERAL_MAX})
+              </button>
+              <button
+                type="button"
+                className="ai-btn"
+                onClick={() => fotoGeneralGaleriaInputRef.current?.click()}
+                disabled={submitting || fotosGenerales.length >= TABLERO_FOTO_GENERAL_MAX}
+              >
+                <Icon name="upload" size={13} /> Subir foto
+              </button>
+            </div>
+            {fotosGenerales.length > 0 && (
+              <div className="chip-row" style={{ marginTop: 0 }}>
+                {fotosGenerales.map((f, i) => (
+                  <span className="chip" key={i}>
+                    Foto {i + 1}
+                    <button type="button" onClick={() => quitarFotoGeneral(i)} disabled={submitting} aria-label={`Quitar foto ${i + 1}`}>
+                      <Icon name="x" size={11} />
+                    </button>
+                  </span>
+                ))}
               </div>
             )}
           </div>

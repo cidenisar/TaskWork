@@ -56,7 +56,7 @@ export async function eliminarMedicionAction(medicionId: string): Promise<Elimin
 
   const { data: medicion } = await service
     .from("tablero_mediciones")
-    .select("pdf_url, foto_general_url, numero_generacion")
+    .select("pdf_url, foto_general_url, fotos_generales_urls, numero_generacion")
     .eq("id", medicionId)
     .single();
 
@@ -68,6 +68,7 @@ export async function eliminarMedicionAction(medicionId: string): Promise<Elimin
     [
       { bucket: "informes-pdf", path: medicion?.pdf_url ?? null },
       { bucket: "informe-fotos", path: medicion?.foto_general_url ?? null },
+      ...(medicion?.fotos_generales_urls ?? []).map((path) => ({ bucket: "informe-fotos", path })),
     ],
     `Eliminó la medición de tablero ${medicion?.numero_generacion ?? medicionId}`,
   );

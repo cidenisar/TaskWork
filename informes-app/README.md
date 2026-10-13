@@ -1599,6 +1599,19 @@ general que salió de esto.
     una sola del conjunto — mismo techo que ya usan Racks y Torres de
     Comunicaciones (`RACK_FOTO_IA_MAX`/`TORRE_FOTO_IA_MAX`), que son los
     otros "contenedores con varias secciones" de la app.
+  - **"Foto general del tablero" pasa de una sola a hasta
+    `TABLERO_FOTO_GENERAL_MAX` (4) fotos** — esta es la foto de registro
+    que queda adjunta al PDF de la visita (distinta de las fotos que
+    lee la IA para armar la lista de circuitos), y con varios cuerpos
+    una sola no alcanza para dejar constancia de cada uno. Mismo
+    criterio que ya usan Racks (`fotos_generales_urls`), Entregas a
+    Depósito y el remito de Informe Técnico: columna nueva
+    `tablero_mediciones.fotos_generales_urls` (`text[]`), la columna
+    vieja `foto_general_url` queda huérfana (el `DROP COLUMN` se cuelga
+    en esta sesión vía las herramientas de Supabase, documentado en la
+    migración) pero su limpieza al eliminar una medición se mantiene
+    por si quedó algún dato viejo. El PDF ahora imprime una grilla con
+    todas las fotos cargadas, no solo una.
 
 - **Tableros: botón "Registrar mantenimiento" por circuito en la ficha de
   Sitio, para no tener que remedir todo el tablero por una revisión

@@ -65,7 +65,7 @@ export async function crearMedicionTableroAction(formData: FormData): Promise<Cr
   } catch {
     return { success: false, error: "Faltan datos de la medición." };
   }
-  const fotoGeneral = formData.get("fotoGeneral");
+  const fotosGenerales = formData.getAll("fotoGeneral").filter((f): f is File => f instanceof File);
 
   if (!payload.lecturas.length) {
     return { success: false, error: "El tablero no tiene circuitos/elementos cargados." };
@@ -204,19 +204,25 @@ export async function crearMedicionTableroAction(formData: FormData): Promise<Cr
     return { success: false, error: `No se pudieron guardar las lecturas: ${lecturasErr.message}` };
   }
 
-  // Foto general del tablero (opcional): registro + queda adjunta en el PDF.
-  // Reusa el bucket informe-fotos ya existente, no hace falta storage nuevo.
-  // Una foto que falla no debe tirar abajo toda la medición.
-  let fotoGeneralBuffer: Buffer | null = null;
-  if (fotoGeneral instanceof File) {
-    fotoGeneralBuffer = Buffer.from(await fotoGeneral.arrayBuffer());
-    const fotoPath = `${profile.id}/tableros/${medicionId}/general.jpg`;
+  // Fotos generales del tablero (opcionales, hasta TABLERO_FOTO_GENERAL_MAX):
+  // registro + quedan adjuntas en el PDF — una por cada cuerpo, u otros
+  // ángulos de detalle. Reusa el bucket informe-fotos ya existente. Una
+  // foto que falla no debe tirar abajo toda la medición.
+  const fotosGeneralesBuffers: Buffer[] = [];
+  const fotosGeneralesPaths: string[] = [];
+  for (let i = 0; i < fotosGenerales.length; i++) {
+    const buffer = Buffer.from(await fotosGenerales[i].arrayBuffer());
+    const fotoPath = `${profile.id}/tableros/${medicionId}/general-${i + 1}.jpg`;
     const { error: fotoUpErr } = await supabase.storage
       .from("informe-fotos")
-      .upload(fotoPath, fotoGeneralBuffer, { contentType: "image/jpeg", upsert: true });
+      .upload(fotoPath, buffer, { contentType: "image/jpeg", upsert: true });
     if (!fotoUpErr) {
-      await supabase.from("tablero_mediciones").update({ foto_general_url: fotoPath }).eq("id", medicionId);
+      fotosGeneralesBuffers.push(buffer);
+      fotosGeneralesPaths.push(fotoPath);
     }
+  }
+  if (fotosGeneralesPaths.length > 0) {
+    await supabase.from("tablero_mediciones").update({ fotos_generales_urls: fotosGeneralesPaths }).eq("id", medicionId);
   }
 
   // Logo de la empresa (cabecera del PDF), igual que Informe Técnico/Rendición.
@@ -246,7 +252,7 @@ export async function crearMedicionTableroAction(formData: FormData): Promise<Cr
     oficina: ubicacionTablero.oficina,
     fecha: payload.fecha,
     resumen,
-    fotoGeneralBuffer,
+    fotosGeneralesBuffers,
     lecturas: payload.lecturas.map((l) => {
       const mideCorriente = itemMideCorriente(l.categoriaEquipo, l.tipoCircuito, payload.tipoEvento);
       return {

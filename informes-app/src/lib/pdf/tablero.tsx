@@ -55,7 +55,7 @@ export interface TableroPdfProps {
   fecha: string;
   lecturas: TableroPdfLectura[];
   resumen: ResumenEquipamiento;
-  fotoGeneralBuffer: Buffer | null;
+  fotosGeneralesBuffers: Buffer[] | null;
   logoBuffer: Buffer | null;
   appName: string;
   realizoNombre: string;
@@ -88,7 +88,7 @@ export function TableroPdf(props: TableroPdfProps) {
     fecha,
     lecturas,
     resumen,
-    fotoGeneralBuffer,
+    fotosGeneralesBuffers,
     logoBuffer,
     appName,
     realizoNombre,
@@ -146,11 +146,17 @@ export function TableroPdf(props: TableroPdfProps) {
           )}
         </View>
 
-        {fotoGeneralBuffer && (
+        {fotosGeneralesBuffers && fotosGeneralesBuffers.length > 0 && (
           <>
-            <Text style={commonStyles.sectionTitle}>Foto General del Tablero</Text>
-            <View style={{ marginBottom: 6 }}>
-              <Image src={fotoGeneralBuffer} style={commonStyles.photo} />
+            <Text style={commonStyles.sectionTitle}>
+              Foto{fotosGeneralesBuffers.length === 1 ? "" : "s"} General{fotosGeneralesBuffers.length === 1 ? "" : "es"} del Tablero
+            </Text>
+            <View style={commonStyles.photoGrid}>
+              {fotosGeneralesBuffers.map((buf, i) => (
+                <View style={commonStyles.photoCell} key={i} wrap={false}>
+                  <Image src={buf} style={commonStyles.photo} />
+                </View>
+              ))}
             </View>
           </>
         )}
