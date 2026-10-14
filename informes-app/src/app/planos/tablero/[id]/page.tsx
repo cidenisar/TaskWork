@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { createServiceRoleClient } from "@/lib/supabase/server";
+import { getCurrentProfile } from "@/lib/auth";
 import { labelSubsistemas, TABLERO_EVENTO_LABEL } from "@/components/tableros/types";
 import { agruparPorCuerpo, construirUnifilar, type UnifilarCircuito } from "@/lib/tableros/unifilar";
 
@@ -31,6 +32,13 @@ function labelUbicacionBasica(u: { oficina: string | null; planta: string | null
  * se muestra un PDF viejo guardado) para que el QR nunca quede
  * desactualizado, aunque se cargue o edite un circuito después de la
  * última medición.
+ *
+ * Si quien escanea está LOGUEADO en la app (mismo navegador con sesión
+ * activa), además de lo público se muestran accesos directos para cargar
+ * una medición o un mantenimiento con este tablero ya preseleccionado —
+ * el QR pasa de ser "solo para mirar" a un atajo real al pie del equipo.
+ * Para el visitante sin sesión no cambia nada: `getCurrentProfile()` nunca
+ * redirige, así que esta página sigue sirviendo igual sin login.
  */
 export default async function PlanoTableroPublicoPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -39,23 +47,26 @@ export default async function PlanoTableroPublicoPage({ params }: { params: Prom
   const { data: tablero } = await service.from("tableros").select("id, denominacion, subsistemas, ubicacion_id").eq("id", id).single();
   if (!tablero) notFound();
 
-  const [{ data: ubicacion }, { data: circuitosRes }, { data: calibreRes }, { data: medicion }] = await Promise.all([
-    service.from("ubicaciones").select("region, provincia, localidad, sitio, planta, oficina").eq("id", tablero.ubicacion_id).single(),
-    service
-      .from("tablero_circuitos")
-      .select("numero, texto, categoria_equipo, tipo_circuito, amp_nominal, cuerpo")
-      .eq("tablero_id", id)
-      .eq("estado", "activo")
-      .order("numero"),
-    service.from("catalogo_calibre_cable").select("amperaje_max, calibre_mm2"),
-    service
-      .from("tablero_mediciones")
-      .select("id, fecha, numero_generacion, tipo_evento, pdf_url, dxf_url")
-      .eq("tablero_id", id)
-      .order("fecha", { ascending: false })
-      .limit(1)
-      .maybeSingle(),
-  ]);
+  const [{ data: ubicacion }, { data: circuitosRes }, { data: calibreRes }, { data: medicion }, { data: mantenimiento }, profile] =
+    await Promise.all([
+      service.from("ubicaciones").select("region, provincia, localidad, sitio, planta, oficina").eq("id", tablero.ubicacion_id).single(),
+      service
+        .from("tablero_circuitos")
+        .select("numero, texto, categoria_equipo, tipo_circuito, amp_nominal, cuerpo")
+        .eq("tablero_id", id)
+        .eq("estado", "activo")
+        .order("numero"),
+      service.from("catalogo_calibre_cable").select("amperaje_max, calibre_mm2"),
+      service
+        .from("tablero_mediciones")
+        .select("id, fecha, numero_generacion, tipo_evento, pdf_url, dxf_url")
+        .eq("tablero_id", id)
+        .order("fecha", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      service.from("tablero_mantenimientos").select("fecha, descripcion").eq("tablero_id", id).order("fecha", { ascending: false }).limit(1).maybeSingle(),
+      getCurrentProfile(),
+    ]);
 
   const configCalibre = (calibreRes ?? []).map((c) => ({ amperajeMax: Number(c.amperaje_max), calibreMm2: Number(c.calibre_mm2) }));
   const circuitos: UnifilarCircuito[] = (circuitosRes ?? []).map((c) => ({
@@ -90,16 +101,38 @@ export default async function PlanoTableroPublicoPage({ params }: { params: Prom
         </div>
 
         <div className="card">
+          <div className="section-label">Estado</div>
+          <div className="grid2">
+            <div>
+              <div className="hint" style={{ margin: 0 }}>Última visita</div>
+              <div>
+                {medicion
+                  ? `${fmtFecha(medicion.fecha)} (${TABLERO_EVENTO_LABEL[medicion.tipo_evento]}, ${medicion.numero_generacion})`
+                  : "Sin registrar"}
+              </div>
+            </div>
+            <div>
+              <div className="hint" style={{ margin: 0 }}>Último mantenimiento</div>
+              <div>{mantenimiento ? fmtFecha(mantenimiento.fecha) : "Sin registrar"}</div>
+            </div>
+          </div>
+          {profile && (
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
+              <a className="btn btn-primary btn-sm" href={`/tableros/nuevo?tableroId=${id}`}>
+                Cargar medición nueva acá
+              </a>
+              <a className="btn btn-secondary btn-sm" href={`/tableros/mantenimiento?tableroId=${id}`}>
+                Registrar mantenimiento acá
+              </a>
+            </div>
+          )}
+        </div>
+
+        <div className="card">
           <div className="section-label">Esquema Unifilar</div>
           <div className="hint" style={{ margin: "0 0 10px" }}>
             Esquema simplificado a partir de los circuitos relevados — no es un plano a escala. Calibre/color de cable según catálogo
             configurado y cableado de instalación típica para lo que no lleva térmica.
-            {medicion && (
-              <>
-                {" "}
-                Última visita: {fmtFecha(medicion.fecha)} ({TABLERO_EVENTO_LABEL[medicion.tipo_evento]}, {medicion.numero_generacion}).
-              </>
-            )}
           </div>
           {unifilar.commands.length === 0 ? (
             <div className="empty-note">Este tablero todavía no tiene circuitos relevados.</div>

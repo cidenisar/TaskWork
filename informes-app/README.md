@@ -1771,3 +1771,32 @@ general que salió de esto.
     bien tanto en preview de Vercel como en producción. Hay un botón
     "Descargar QR del plano" en la ficha de Sitio, dentro de cada
     tablero.
+
+- **Tableros: el mismo QR del plano, ahora también como atajo a la acción
+  cuando quien escanea está logueado.** Idea del usuario: el QR pegado en
+  el tablero ya sirve para "mirar" sin login — faltaba que también
+  sirviera para "actuar" cuando el que escanea es un técnico con sesión
+  abierta. No hace falta un segundo QR ni una URL distinta: es la misma
+  página `/planos/tablero/[id]` la que se adapta.
+  - **Cómo se entera de que hay sesión, sin romper el acceso sin login**:
+    llama a `getCurrentProfile()` (nunca `requireProfile()`, que
+    redirige a `/login`) — si no hay sesión sigue mostrando exactamente
+    lo mismo que antes; si la hay, suma dos botones.
+  - **Estado siempre visible**: arriba del esquema, "Última visita" y
+    "Último mantenimiento" (de `tablero_mantenimientos`, el más
+    reciente) — esto se muestra para cualquiera, con o sin sesión, no es
+    información sensible.
+  - **Accesos directos, solo si hay sesión**: "Cargar medición nueva
+    acá" y "Registrar mantenimiento acá", que llevan a
+    `/tableros/nuevo?tableroId=X` y `/tableros/mantenimiento?tableroId=X`
+    con el tablero ya preseleccionado — el técnico está parado frente al
+    gabinete, no tiene sentido hacerlo buscar sitio → tablero de nuevo a
+    mano. Ambos formularios ahora aceptan ese parámetro opcional
+    (`tableroIdInicial`) y, si no viene o no matchea ningún tablero,
+    funcionan exactamente igual que antes (selección manual).
+  - **Pendiente, a propósito todavía no implementado**: generalizar este
+    mismo patrón (visor público + QR + atajo logueado) a Racks y Equipos
+    Individuales — queda planteado para un próximo incremento, porque
+    esos tipos no tienen un "plano" como el unifilar y conviene pensar
+    qué mostrarles en su lugar (resumen de equipamiento en vez de
+    esquema).

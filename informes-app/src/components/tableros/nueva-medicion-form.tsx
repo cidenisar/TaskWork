@@ -53,27 +53,36 @@ export function NuevaMedicionForm({
   tableros,
   ubicaciones,
   provincias,
+  tableroIdInicial,
 }: {
   tableros: TableroConCircuitos[];
   ubicaciones: Ubicacion[];
   provincias: string[];
+  tableroIdInicial?: string | null;
 }) {
+  // Si se llega acá desde el QR del tablero (deep-link con ?tableroId=), se
+  // preselecciona tanto la ubicación como el tablero — el técnico ya está
+  // parado frente al equipo, no tiene sentido pedirle que lo busque de nuevo.
+  const tableroInicial = useMemo(
+    () => (tableroIdInicial ? tableros.find((t) => t.id === tableroIdInicial) ?? null : null),
+    [tableros, tableroIdInicial],
+  );
   const [provinciaFiltro, setProvinciaFiltro] = useState("");
-  const [ubicacionId, setUbicacionId] = useState<string>(""); // "" = sin elegir, "__new" = crear
+  const [ubicacionId, setUbicacionId] = useState<string>(tableroInicial?.ubicacionId ?? ""); // "" = sin elegir, "__new" = crear
   const [localidadNueva, setLocalidadNueva] = useState("");
   const [sitioNueva, setSitioNueva] = useState("");
   const [plantaNueva, setPlantaNueva] = useState("");
   const [oficinaNueva, setOficinaNueva] = useState("");
   const [gps, setGps] = useState<GpsCapturado | null>(null);
   const [filtroSubsistemas, setFiltroSubsistemas] = useState<TableroTipo[]>([]);
-  const [tableroId, setTableroId] = useState<string>(""); // "" = sin elegir, "__new" = crear
+  const [tableroId, setTableroId] = useState<string>(tableroInicial?.id ?? ""); // "" = sin elegir, "__new" = crear
   const [subsistemasNuevo, setSubsistemasNuevo] = useState<TableroTipo[]>([]);
   const [denominacionNueva, setDenominacionNueva] = useState("");
   const [jerarquiaNueva, setJerarquiaNueva] = useState<TableroJerarquia | "">("");
   const [tableroPadreId, setTableroPadreId] = useState("");
   const [tipoEventoElegido, setTipoEventoElegido] = useState<TableroEventoTipo>("medicion");
   const [fecha, setFecha] = useState(() => new Date().toISOString().slice(0, 10));
-  const [circuitos, setCircuitos] = useState<CircuitoItem[]>([]);
+  const [circuitos, setCircuitos] = useState<CircuitoItem[]>(tableroInicial ? [...tableroInicial.circuitos] : []);
   const [lecturas, setLecturas] = useState<Record<number, LecturaState>>({});
   // Contexto de "en qué cuerpo del tablero estoy parado ahora" — se lo suma
   // automáticamente a los circuitos nuevos (manuales o detectados por IA) sin

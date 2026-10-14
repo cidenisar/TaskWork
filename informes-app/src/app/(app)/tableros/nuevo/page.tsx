@@ -5,8 +5,9 @@ import { labelUbicacion } from "@/components/ubicaciones/types";
 import type { TableroConCircuitos } from "@/components/tableros/types";
 import { fetchTodasLasUbicaciones } from "@/lib/ubicaciones/fetch-todas";
 
-export default async function NuevaMedicionPage() {
+export default async function NuevaMedicionPage({ searchParams }: { searchParams: Promise<{ tableroId?: string }> }) {
   await requireProfile();
+  const { tableroId } = await searchParams;
   const supabase = await createClient();
 
   const [tablerosRes, circuitosRes, ubicaciones, provinciasRes] = await Promise.all([
@@ -55,7 +56,7 @@ export default async function NuevaMedicionPage() {
 
   return (
     <div>
-      <NuevaMedicionForm tableros={tableros} ubicaciones={ubicaciones} provincias={provincias} />
+      <NuevaMedicionForm tableros={tableros} ubicaciones={ubicaciones} provincias={provincias} tableroIdInicial={tableroId ?? null} />
     </div>
   );
 }
