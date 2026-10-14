@@ -66,7 +66,16 @@ export interface PanelMantenimientos {
   kpis: KpisMantenimiento;
 }
 
-export async function getPanelMantenimientos(supabase: Supabase): Promise<PanelMantenimientos> {
+/**
+ * Cómputo crudo de items (sin clima) — separado de getPanelMantenimientos
+ * para que otras pantallas (ej. Vista General) puedan calcular quién está
+ * vencido por sitio sin pagar el costo de la API de clima, que solo tiene
+ * sentido para la lista completa del Plan de Mantenimiento. Devuelve los
+ * items YA ordenados por urgencia (vencido primero) — un consumidor que
+ * solo necesita "el peor item por sitio" puede quedarse con el primero que
+ * vea de cada ubicacionId.
+ */
+export async function computarItemsMantenimiento(supabase: Supabase): Promise<PanelMantenimientoItem[]> {
   const [
     ubicaciones,
     intervalosRes,
@@ -98,7 +107,7 @@ export async function getPanelMantenimientos(supabase: Supabase): Promise<PanelM
   for (const i of intervalosRes.data ?? []) {
     frecuenciaPorCategoria.set(`${i.tipo_equipo}:${i.categoria}`, i.frecuencia_dias);
   }
-  if (frecuenciaPorCategoria.size === 0) return { items: [], kpis: calcularKpisMantenimiento([]) };
+  if (frecuenciaPorCategoria.size === 0) return [];
 
   const ubicacionPorId = new Map(ubicaciones.map((u) => [u.id, u]));
   const rackIdUbicacion = new Map((racksRes.data ?? []).map((r) => [r.id, r.ubicacion_id]));
@@ -172,13 +181,21 @@ export async function getPanelMantenimientos(supabase: Supabase): Promise<PanelM
     agregarItem("sala", s.id, s.denominacion, s.tipo_construccion, s.ubicacion_id);
   }
 
-  const kpis = calcularKpisMantenimiento(items);
-
   items.sort((a, b) => ORDEN_URGENCIA[a.urgencia] - ORDEN_URGENCIA[b.urgencia]);
+  return items;
+}
+
+export async function getPanelMantenimientos(supabase: Supabase): Promise<PanelMantenimientos> {
+  const items = await computarItemsMantenimiento(supabase);
+  const kpis = calcularKpisMantenimiento(items);
   const recortados = items.slice(0, MAX_ITEMS);
 
   // Clima: solo para los sitios de los ítems vencidos/próximos/nunca (los
-  // "ok" no necesitan la pregunta todavía), y solo si el sitio tiene GPS cargado.
+  // "ok" no necesitan la pregunta todavía), y solo si el sitio tiene GPS
+  // cargado. ubicacionPorId es local a computarItemsMantenimiento — se
+  // vuelve a traer acá (fetchTodasLasUbicaciones ya pagina, es barato) en
+  // vez de exponerlo desde ahí solo para este uso puntual.
+  const ubicacionPorId = new Map((await fetchTodasLasUbicaciones(supabase)).map((u) => [u.id, u]));
   const sitiosRelevantes = new Map<string, { lat: number; lng: number }>();
   for (const item of recortados) {
     if (item.urgencia === "ok") continue;

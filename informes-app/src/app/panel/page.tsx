@@ -1,23 +1,74 @@
 import { createClient } from "@/lib/supabase/server";
 import { getPanelOverview } from "@/lib/panel/overview";
+import { filtrarSitios, agruparPor, localidadKey, type FiltrosJerarquia } from "@/lib/panel/jerarquia";
 import { BarList } from "@/components/estadisticas/bar-list";
-import { SitiosTable } from "@/components/panel/sitios-table";
+import { JerarquiaBreadcrumb } from "@/components/panel/jerarquia-breadcrumb";
+import { JerarquiaNodos } from "@/components/panel/jerarquia-nodos";
+import { JerarquiaSitioPicker } from "@/components/panel/jerarquia-sitio-picker";
+import { SitioDetalleCard } from "@/components/panel/sitio-detalle-card";
 
 function fmtHoy(): string {
   return new Date().toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
 }
 
-export default async function PanelPage() {
+interface PanelSearchParams {
+  region?: string;
+  provincia?: string;
+  localidad?: string;
+  sitio?: string;
+  id?: string;
+}
+
+/**
+ * Vista General ya no es una tabla plana de sitios — es un drill-down por
+ * la jerarquía de Ubicaciones (región → provincia → localidad → sitio),
+ * un nivel por vez con breadcrumb, usando los filtros de la URL
+ * (searchParams). Cada nivel intermedio agrega lo que cuelga debajo
+ * (consumo, cantidad de sitios/equipamiento, mantenimiento vencido, última
+ * visita); el nivel final muestra el detalle de un sitio puntual. Todo lo
+ * demás (KPIs, Equipamiento por módulo, Vencimientos de flota) se queda
+ * como un resumen global — los vencimientos de técnicos/vehículos no están
+ * atados a un sitio, no se pueden repartir por zona.
+ */
+export default async function PanelPage({ searchParams }: { searchParams: Promise<PanelSearchParams> }) {
+  const sp = await searchParams;
   const supabase = await createClient();
   const overview = await getPanelOverview(supabase);
   const { kpis, equipoPorModulo, sitios, vencimientos } = overview;
+
+  const filtros: FiltrosJerarquia = { region: sp.region, provincia: sp.provincia, localidad: sp.localidad, sitio: sp.sitio };
+  const filtrados = filtrarSitios(sitios, filtros);
+
+  let contenido: React.ReactNode;
+  if (filtros.sitio) {
+    const candidato = sp.id ? filtrados.find((s) => s.id === sp.id) : filtrados.length === 1 ? filtrados[0] : undefined;
+    if (candidato) {
+      contenido = <SitioDetalleCard sitio={candidato} />;
+    } else if (filtrados.length === 0) {
+      contenido = <div className="empty-note">No se encontró equipamiento para este sitio.</div>;
+    } else {
+      contenido = <JerarquiaSitioPicker sitios={filtrados} filtros={filtros} />;
+    }
+  } else {
+    const paramSiguiente: keyof FiltrosJerarquia = !filtros.region ? "region" : !filtros.provincia ? "provincia" : !filtros.localidad ? "localidad" : "sitio";
+    const clave =
+      paramSiguiente === "region"
+        ? (s: (typeof filtrados)[number]) => s.region
+        : paramSiguiente === "provincia"
+          ? (s: (typeof filtrados)[number]) => s.provincia
+          : paramSiguiente === "localidad"
+            ? localidadKey
+            : (s: (typeof filtrados)[number]) => s.sitioNombre;
+    const nodos = agruparPor(filtrados, clave);
+    contenido = <JerarquiaNodos nodos={nodos} filtrosBase={filtros} paramSiguiente={paramSiguiente} />;
+  }
 
   return (
     <div>
       <div className="panel-topbar">
         <div>
           <h1>Vista general</h1>
-          <p>Sitios, consumo y vencimientos de un vistazo</p>
+          <p>Zonas, sitios, consumo y vencimientos de un vistazo</p>
         </div>
         <div className="panel-topbar-meta">{fmtHoy()}</div>
       </div>
@@ -39,30 +90,25 @@ export default async function PanelPage() {
           <div className="kpi-value" style={{ color: kpis.vencimientosProximos > 0 ? "var(--warn)" : undefined }}>
             {kpis.vencimientosProximos}
           </div>
-          <div className="kpi-label">Vencimientos próximos/vencidos</div>
+          <div className="kpi-label">Vencimientos de flota próximos/vencidos</div>
         </div>
       </div>
 
       <div className="panel-grid-2">
         <div className="card">
           <div className="panel-card-title">
-            <h2>Sitios y su consumo</h2>
+            <h2>Sitios por zona</h2>
             <span className="panel-card-count">
-              {sitios.length} sitio{sitios.length === 1 ? "" : "s"}
-              {kpis.consumoTotalW != null && ` · ${kpis.consumoTotalW.toLocaleString("es-AR")} W estimados en total`}
+              {kpis.totalSitios} sitio{kpis.totalSitios === 1 ? "" : "s"}
+              {kpis.consumoTotalW != null && ` · ${Math.round(kpis.consumoTotalW).toLocaleString("es-AR")} W estimados en total`}
             </span>
           </div>
-          {sitios.length === 0 ? (
-            <div className="empty-note">Todavía no hay equipamiento cargado en ningún sitio.</div>
-          ) : (
-            <>
-              <div className="hint" style={{ margin: "-4px 0 10px" }}>
-                Ordenado por consumo estimado — es lo que la IA estimó al identificar marca/modelo de cada equipo, no una medición real;
-                los equipos sin marca/modelo reconocido no suman al total.
-              </div>
-              <SitiosTable sitios={sitios} />
-            </>
-          )}
+          <div className="hint" style={{ margin: "-4px 0 10px" }}>
+            El consumo es lo que la IA estimó al identificar marca/modelo de cada equipo, no una medición real — los equipos sin
+            marca/modelo reconocido no suman al total.
+          </div>
+          <JerarquiaBreadcrumb filtros={filtros} />
+          {contenido}
         </div>
 
         <div>
@@ -77,7 +123,7 @@ export default async function PanelPage() {
 
           <div className="card" style={{ marginTop: 16 }}>
             <div className="panel-card-title">
-              <h2>Vencimientos</h2>
+              <h2>Vencimientos de flota</h2>
               <span className="panel-card-count">próximos {"≤"} 60 días o vencidos</span>
             </div>
             {vencimientos.length === 0 ? (

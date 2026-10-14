@@ -1,6 +1,7 @@
 import type { createClient } from "@/lib/supabase/server";
 import { fetchTodasLasUbicaciones } from "@/lib/ubicaciones/fetch-todas";
 import { labelUbicacion } from "@/components/ubicaciones/types";
+import { computarItemsMantenimiento, type PanelMantenimientoItem } from "./mantenimientos";
 
 type Supabase = Awaited<ReturnType<typeof createClient>>;
 
@@ -18,16 +19,35 @@ export interface PanelEquipoPorModulo {
   cantidad: number;
 }
 
+/** Resumen del ítem de mantenimiento más urgente de un sitio — ver mezclarMasUrgente. */
+export interface PanelSitioMantenimiento {
+  tipoEquipoLabel: string;
+  texto: string;
+  categoriaLabel: string;
+  urgencia: PanelMantenimientoItem["urgencia"];
+  mensaje: string;
+}
+
 export interface PanelSitioResumen {
   id: string;
   label: string;
+  region: string;
   provincia: string;
+  localidad: string | null;
+  /** Nombre crudo del nivel "sitio" de la Ubicación (sin planta/oficina) — se usa para agrupar en la jerarquía de Vista General. */
+  sitioNombre: string;
   total: number;
   porModulo: Record<string, number>;
   /** Suma de consumo_promedio_w * cantidad de lo que tiene ese dato estimado por IA — null si ningún equipo del sitio lo tiene. */
   consumoW: number | null;
   /** Cuántos equipos de este sitio (de los que SÍ suman al total) no tienen consumo estimado — para no mostrar el total como si fuera completo. */
   equiposSinConsumo: number;
+  /** Fecha (ISO, YYYY-MM-DD) de la visita más reciente registrada en este sitio — relevamiento de cualquier módulo o un mantenimiento cargado. Null si nunca se registró ninguna. */
+  ultimaVisita: string | null;
+  /** true si al menos un equipo de este sitio tiene el Plan de Mantenimiento vencido. */
+  mantenimientoVencido: boolean;
+  /** El ítem de mantenimiento más urgente del sitio (vencido > nunca > próximo > ok) — null si no hay ningún equipo con intervalo configurado acá. */
+  masUrgente: PanelSitioMantenimiento | null;
 }
 
 export type UrgenciaVencimiento = "vencido" | "proximo" | "normal";
@@ -49,8 +69,7 @@ export interface PanelOverview {
 
 /** Ventana para considerar un vencimiento "próximo" (además de los ya vencidos, que siempre se muestran). */
 const VENTANA_VENCIMIENTOS_DIAS = 60;
-/** Tope de filas en las listas del panel — es un resumen para supervisión, no un reemplazo del Historial/ficha de Sitio de cada módulo. */
-const MAX_SITIOS = 40;
+/** Tope de filas en la lista de vencimientos del panel — es un resumen, no un reemplazo de Panel → Vehículos → Vencimientos. */
 const MAX_VENCIMIENTOS = 25;
 
 function diasRestantes(fechaIso: string, hoy: Date): number {
@@ -63,13 +82,20 @@ function urgenciaDe(dias: number): UrgenciaVencimiento {
   return "normal";
 }
 
+export function masReciente(a: string | null, b: string | null | undefined): string | null {
+  if (!b) return a;
+  if (!a) return b;
+  return b > a ? b : a;
+}
+
 /**
- * Agrega, en una sola carga, lo que un Supervisor/Administrador necesita ver
- * de un vistazo: cuántos sitios tienen algo cargado y cuánto, y qué
- * vencimientos (DNI/licencia de técnicos, tarjeta verde/RTO de vehículos)
- * están vencidos o se acercan. No reemplaza el Historial de cada módulo ni
- * la ficha de Sitio (que sí muestran el detalle fila por fila) — es el
- * resumen ejecutivo que hoy no existía en ningún lado.
+ * Agrega, en una sola carga, todo lo que un Supervisor/Administrador
+ * necesita ver de un vistazo: consumo y última visita por sitio (para la
+ * jerarquía región → provincia → localidad → sitio de Vista General),
+ * vencimientos de técnicos/vehículos, y qué está pasando con el Plan de
+ * Mantenimiento en cada sitio. No reemplaza el Historial de cada módulo
+ * ni la ficha de Sitio (que sí muestran el detalle fila por fila) — es el
+ * resumen ejecutivo.
  */
 export async function getPanelOverview(supabase: Supabase): Promise<PanelOverview> {
   const hoy = new Date();
@@ -78,24 +104,36 @@ export async function getPanelOverview(supabase: Supabase): Promise<PanelOvervie
     ubicaciones,
     tablerosRes,
     tableroCircuitosRes,
+    tableroMedicionesRes,
     racksRes,
     rackEquipamientosRes,
+    rackRelevamientosRes,
     torresRes,
     torreEquipamientosRes,
+    torreRelevamientosRes,
     equiposRes,
+    equipoRelevamientosRes,
+    salasRes,
     profilesRes,
     vehiculosRes,
+    itemsMantenimiento,
   ] = await Promise.all([
     fetchTodasLasUbicaciones(supabase),
     supabase.from("tableros").select("id, ubicacion_id"),
     supabase.from("tablero_circuitos").select("tablero_id").eq("estado", "activo"),
+    supabase.from("tablero_mediciones").select("tablero_id, fecha"),
     supabase.from("racks").select("id, ubicacion_id"),
     supabase.from("rack_equipamientos").select("rack_id, cantidad, consumo_promedio_w").eq("estado", "activo"),
+    supabase.from("rack_relevamientos").select("rack_id, fecha"),
     supabase.from("torres_comunicacion").select("id, ubicacion_id"),
     supabase.from("torre_comunicacion_equipamientos").select("torre_id, cantidad, consumo_promedio_w").eq("estado", "activo"),
+    supabase.from("torre_comunicacion_relevamientos").select("torre_id, fecha"),
     supabase.from("equipos").select("ubicacion_id, cantidad, consumo_promedio_w").eq("estado", "activo"),
+    supabase.from("equipo_relevamientos").select("ubicacion_id, fecha"),
+    supabase.from("salas").select("ubicacion_id, created_at").eq("estado", "activo"),
     supabase.from("profiles").select("nombre_completo, rol, activo, dni_vencimiento, licencia_conducir_vencimiento"),
     supabase.from("catalogo_vehiculos").select("patente, vencimiento_tarjeta_verde, vencimiento_rto"),
+    computarItemsMantenimiento(supabase),
   ]);
 
   const ubicacionPorId = new Map(ubicaciones.map((u) => [u.id, u]));
@@ -105,10 +143,11 @@ export async function getPanelOverview(supabase: Supabase): Promise<PanelOvervie
 
   // Total por sitio y por módulo — una sola pasada por cada tabla de
   // equipamiento, sumando `cantidad` donde existe (un circuito de tablero
-  // siempre cuenta 1, no tiene ese campo). En el mismo pasaje se acumula el
-  // consumo estimado (consumo_promedio_w * cantidad) donde el módulo lo
-  // tiene — Tableros no entra: ahí ya se mide corriente real en vez de
-  // estimar consumo por IA, es otro tipo de dato.
+  // o una sala siempre cuentan 1, no tienen ese campo). En el mismo pasaje
+  // se acumula el consumo estimado (consumo_promedio_w * cantidad) donde el
+  // módulo lo tiene — Tableros y Salas no entran: ahí no hay consumo
+  // estimado por IA (Tableros mide corriente real; Salas es el ambiente en
+  // sí, no un equipo con consumo propio).
   const totalPorSitio = new Map<string, Record<string, number>>();
   const consumoWPorSitio = new Map<string, number>();
   const sinConsumoPorSitio = new Map<string, number>();
@@ -117,7 +156,7 @@ export async function getPanelOverview(supabase: Supabase): Promise<PanelOvervie
     const actual = totalPorSitio.get(ubicacionId) ?? {};
     actual[modulo] = (actual[modulo] ?? 0) + cantidad;
     totalPorSitio.set(ubicacionId, actual);
-    if (consumoPromedioW === undefined) return; // el módulo (Tableros) no tiene este dato en absoluto
+    if (consumoPromedioW === undefined) return; // el módulo (Tableros/Salas) no tiene este dato en absoluto
     if (consumoPromedioW != null && consumoPromedioW > 0) {
       consumoWPorSitio.set(ubicacionId, (consumoWPorSitio.get(ubicacionId) ?? 0) + consumoPromedioW * cantidad);
     } else {
@@ -139,6 +178,33 @@ export async function getPanelOverview(supabase: Supabase): Promise<PanelOvervie
     const cantidad = Number.isFinite(e.cantidad) && e.cantidad > 0 ? e.cantidad : 1;
     sumar(e.ubicacion_id, "Equipos Individuales", cantidad, e.consumo_promedio_w);
   }
+  for (const s of salasRes.data ?? []) {
+    sumar(s.ubicacion_id, "Salas", 1);
+  }
+
+  // Última visita por sitio: la fecha más reciente entre un relevamiento/
+  // medición de cualquier módulo, el alta de una sala, o un mantenimiento
+  // cargado — da una idea de "hace cuánto no se pisa" sin tener que entrar
+  // al historial de cada módulo por separado.
+  const ultimaVisitaPorSitio = new Map<string, string>();
+  function registrarVisita(ubicacionId: string | undefined, fecha: string | null | undefined) {
+    if (!ubicacionId || !fecha) return;
+    ultimaVisitaPorSitio.set(ubicacionId, masReciente(ultimaVisitaPorSitio.get(ubicacionId) ?? null, fecha)!);
+  }
+  for (const m of tableroMedicionesRes.data ?? []) registrarVisita(tableroIdUbicacion.get(m.tablero_id), m.fecha);
+  for (const r of rackRelevamientosRes.data ?? []) registrarVisita(rackIdUbicacion.get(r.rack_id), r.fecha);
+  for (const r of torreRelevamientosRes.data ?? []) registrarVisita(torreIdUbicacion.get(r.torre_id), r.fecha);
+  for (const r of equipoRelevamientosRes.data ?? []) registrarVisita(r.ubicacion_id, r.fecha);
+  for (const s of salasRes.data ?? []) registrarVisita(s.ubicacion_id, s.created_at?.slice(0, 10));
+  for (const item of itemsMantenimiento) registrarVisita(item.ubicacionId, item.ultimaFecha);
+
+  // Mantenimiento: itemsMantenimiento ya viene ordenado por urgencia
+  // (vencido primero, ver computarItemsMantenimiento) — el primero que se
+  // vea de cada ubicacionId es, por construcción, el más urgente de ese sitio.
+  const masUrgentePorSitio = new Map<string, PanelMantenimientoItem>();
+  for (const item of itemsMantenimiento) {
+    if (!masUrgentePorSitio.has(item.ubicacionId)) masUrgentePorSitio.set(item.ubicacionId, item);
+  }
 
   const equipoPorModuloMap = new Map<string, number>();
   let totalEquipamiento = 0;
@@ -152,17 +218,31 @@ export async function getPanelOverview(supabase: Supabase): Promise<PanelOvervie
     for (const [modulo, cantidad] of Object.entries(porModulo)) {
       equipoPorModuloMap.set(modulo, (equipoPorModuloMap.get(modulo) ?? 0) + cantidad);
     }
+    const masUrgente = masUrgentePorSitio.get(ubicacionId) ?? null;
     sitios.push({
       id: ubicacionId,
       label: labelUbicacion(ubicacion),
+      region: ubicacion.region,
       provincia: ubicacion.provincia,
+      localidad: ubicacion.localidad,
+      sitioNombre: ubicacion.sitio,
       total,
       porModulo,
       consumoW: consumoWPorSitio.get(ubicacionId) ?? null,
       equiposSinConsumo: sinConsumoPorSitio.get(ubicacionId) ?? 0,
+      ultimaVisita: ultimaVisitaPorSitio.get(ubicacionId) ?? null,
+      mantenimientoVencido: masUrgente?.urgencia === "vencido",
+      masUrgente: masUrgente
+        ? {
+            tipoEquipoLabel: masUrgente.tipoEquipoLabel,
+            texto: masUrgente.texto,
+            categoriaLabel: masUrgente.categoriaLabel,
+            urgencia: masUrgente.urgencia,
+            mensaje: masUrgente.mensaje,
+          }
+        : null,
     });
   }
-  sitios.sort((a, b) => (b.consumoW ?? -1) - (a.consumoW ?? -1));
 
   const equipoPorModulo: PanelEquipoPorModulo[] = [...equipoPorModuloMap.entries()]
     .map(([modulo, cantidad]) => ({ modulo, cantidad }))
@@ -171,7 +251,8 @@ export async function getPanelOverview(supabase: Supabase): Promise<PanelOvervie
   // Vencimientos: técnicos (DNI/licencia) + vehículos (tarjeta verde/RTO) —
   // misma ventana de urgencia para los cuatro, ordenados del más urgente al
   // menos urgente. Un vencimiento sin fecha cargada no aparece (no es un
-  // "vencido", es un dato que todavía no se completó).
+  // "vencido", es un dato que todavía no se completó). No se puede repartir
+  // por zona/sitio: ni técnicos ni vehículos están atados a una Ubicación.
   const vencimientos: PanelVencimiento[] = [];
   for (const p of profilesRes.data ?? []) {
     if (!p.activo) continue;
@@ -223,7 +304,7 @@ export async function getPanelOverview(supabase: Supabase): Promise<PanelOvervie
       consumoTotalW,
     },
     equipoPorModulo,
-    sitios: sitios.slice(0, MAX_SITIOS),
+    sitios,
     vencimientos: vencimientosRelevantes.slice(0, MAX_VENCIMIENTOS),
   };
 }

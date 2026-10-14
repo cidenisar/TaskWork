@@ -2000,3 +2000,48 @@ general que salió de esto.
   de autoedición) y un botón "Subir foto"/"Cambiar foto" por usuario en
   Configuración → Usuarios — útil cuando alguien todavía no cargó la
   suya o hay que corregirla.
+
+- **Vista General rediseñada: drill-down por región → provincia →
+  localidad → sitio, en vez de una tabla plana.** Pedido explícito del
+  usuario, ida y vuelta de preguntas antes de programar (zonificación a
+  usar, navegación, qué agregar por nivel, si Salas/Torres cuentan). La
+  vieja tabla "Sitios y su consumo" (una fila por sitio, hasta 40,
+  ordenada por consumo) se reemplaza por completo.
+  - **Navegación con breadcrumb**, un nivel a la vez, vía `searchParams`
+    de `/panel` (`?region=...&provincia=...&localidad=...&sitio=...`) —
+    sin JavaScript de cliente, son links `<Link>` normales de Next.js.
+    Un nodo sin ningún sitio con equipamiento debajo directamente no
+    aparece en la lista.
+  - **`región` es la zonificación de cuadrillas YPF que ya estaba
+    cargada** (`ubicaciones.region`: NOA/NEA/SUR) — el usuario confirmó
+    que es esa, aunque agrupa provincias que geográficamente no son NOA
+    (ej. Mendoza). No se inventó ninguna regionalización nueva.
+  - **Cada nodo intermedio agrega lo que cuelga debajo**: cantidad de
+    sitios, cantidad total de equipamiento, consumo estimado, cantidad
+    de sitios con el Plan de Mantenimiento vencido, y fecha de la visita
+    más reciente a cualquier sitio del grupo.
+  - **El nivel final (un sitio puntual)** muestra el conteo por módulo
+    (Racks/Tableros/Equipos Individuales/Torres/Salas, salteando los que
+    están en 0), el consumo del sitio, su última visita, y el ítem de
+    mantenimiento más urgente si tiene alguno vencido — con un link a la
+    ficha completa de Ubicación.
+  - **Cuando un mismo "sitio" tiene más de una Ubicación cargada**
+    (varias plantas/oficinas de un mismo complejo, ej. varias filas para
+    "Refinería Luján de Cuyo") se muestra un selector intermedio para
+    elegir cuál — se salta solo si hay una única coincidencia.
+  - **"Salas" se suma por primera vez** al conteo de equipamiento/módulos
+    de esta pantalla (antes `getPanelOverview` no las traía en absoluto).
+  - **"Última visita" y "mantenimiento vencido" reusan el mismo cálculo
+    del Plan de Mantenimiento** (`calcularEstadoMantenimiento`) — se
+    extrajo `computarItemsMantenimiento()` de
+    `lib/panel/mantenimientos.ts` (antes todo vivía adentro de
+    `getPanelMantenimientos`) para que Vista General pueda calcular el
+    estado por sitio sin pagar el costo de la consulta de clima, que
+    solo tiene sentido para la lista completa del Plan.
+  - **Los vencimientos de técnicos/vehículos siguen siendo un KPI
+    global**, arriba de todo — no se pueden repartir por zona porque no
+    están atados a ninguna Ubicación.
+  - Validado con `tsc`/`eslint`/`build` y, además, contra los datos
+    reales del proyecto (consulta SQL directa) para confirmar que la
+    jerarquía agrupa bien incluso el caso real de un sitio con el mismo
+    nombre repetido en más de una Ubicación.
