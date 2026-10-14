@@ -15,6 +15,8 @@ import { ErrorNote } from "@/components/notes";
 import { reportarErrorCliente } from "@/lib/client-error-report";
 import { resizeImageToJpeg } from "@/lib/image-resize";
 import type { MaterialInformeItem, RemitoItem } from "./materiales-types";
+import type { HallazgoInspeccionIa } from "@/lib/inspeccion-ia/types";
+import type { EstadoChecklist } from "@/lib/database.types";
 
 const STEPS: WizardStep[] = [
   { title: "Información General", sub: "Datos básicos del informe" },
@@ -25,10 +27,12 @@ const STEPS: WizardStep[] = [
 
 export function InformeTecnicoWizard({
   catalogos,
+  catalogoHallazgos,
   logoUrl,
   emails,
 }: {
   catalogos: CatalogosInforme;
+  catalogoHallazgos: { id: string; texto: string }[];
   logoUrl: string | null;
   emails: EmailDestinatario[];
 }) {
@@ -42,6 +46,13 @@ export function InformeTecnicoWizard({
   const [remitoFotos, setRemitoFotos] = useState<File[]>([]);
   const [remitoNumero, setRemitoNumero] = useState("");
   const [remitoItems, setRemitoItems] = useState<RemitoItem[]>([]);
+  // Arranca con el catálogo completo sin evaluar (estado null) — el técnico
+  // puede marcarlos a mano aunque no use la lectura con IA; cada lectura IA
+  // sugiere un estado que igual queda a confirmar/corregir acá (mismo
+  // criterio que Tableros).
+  const [hallazgos, setHallazgos] = useState<HallazgoInspeccionIa[]>(
+    () => catalogoHallazgos.map((h) => ({ itemId: h.id, texto: h.texto, estado: null, comentario: "" })),
+  );
   const [selectedEmails, setSelectedEmails] = useState<Set<string>>(
     () => new Set(emails.filter((e) => e.activo).map((e) => e.email)),
   );
@@ -69,6 +80,12 @@ export function InformeTecnicoWizard({
       else next.add(email);
       return next;
     });
+  }
+  function setEstadoHallazgo(itemId: string, estado: EstadoChecklist) {
+    setHallazgos((prev) => prev.map((h) => (h.itemId === itemId ? { ...h, estado } : h)));
+  }
+  function setComentarioHallazgo(itemId: string, comentario: string) {
+    setHallazgos((prev) => prev.map((h) => (h.itemId === itemId ? { ...h, comentario } : h)));
   }
 
   function validateStep1(): string | null {
@@ -128,6 +145,9 @@ export function InformeTecnicoWizard({
             cantidadEsperada: r.cantidadEsperada,
             cantidadSobrante: r.cantidadSobrante,
           })),
+          hallazgos: hallazgos
+            .filter((h) => h.estado !== null)
+            .map((h) => ({ itemId: h.itemId, estado: h.estado, comentario: h.comentario.trim() })),
         }),
       );
       imagenes.forEach((img, i) => fd.append(`imagen_${i}`, img.blob, `foto-${i}.jpg`));
@@ -184,6 +204,9 @@ export function InformeTecnicoWizard({
             setRemitoNumero,
             remitoItems,
             setRemitoItems,
+            hallazgos,
+            setEstadoHallazgo,
+            setComentarioHallazgo,
           }}
         />
       )}
@@ -199,6 +222,7 @@ export function InformeTecnicoWizard({
           materiales={materiales}
           remitoNumero={remitoNumero}
           remitoItems={remitoItems}
+          hallazgos={hallazgos}
           emails={emails}
           selectedEmails={selectedEmails}
           onToggleEmail={toggleEmail}

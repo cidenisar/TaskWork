@@ -3,6 +3,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { REMITO_FOTO_MAX } from "@/components/informe-tecnico/materiales-types";
+import { instruccionInspeccionIa, INSTRUCCION_RESPUESTA_HALLAZGOS, parseHallazgosDetectados } from "@/lib/inspeccion-ia/prompt";
 
 /**
  * Lee hasta REMITO_FOTO_MAX fotos del remito en papel que entrega el
@@ -70,6 +71,18 @@ export async function POST(req: NextRequest) {
         "borrosa/incompleta: combiná todo en una sola lista, sin duplicar una línea que aparezca en más de una foto."
       : "";
 
+  // Catálogo configurable de Inspección IA (Configuración → Catálogos,
+  // módulo "informe_tecnico") — se evalúa contra las mismas fotos del
+  // remito, además de transcribir las líneas. Si no hay ningún ítem
+  // cargado, se le pide a la IA una lista vacía.
+  const { data: catalogoHallazgos } = await supabase
+    .from("catalogo_inspeccion_ia")
+    .select("id, texto")
+    .eq("modulo", "informe_tecnico")
+    .order("orden");
+  const hallazgosItems = catalogoHallazgos ?? [];
+  const instruccionHallazgos = instruccionInspeccionIa(hallazgosItems);
+
   try {
     const client = new Anthropic();
     const response = await client.messages.create({
@@ -88,9 +101,11 @@ export async function POST(req: NextRequest) {
         '- "cantidad": el número de esa línea si está escrito (columna de cantidad/cant./unid.). Si no hay un número para esa línea, ' +
         "usá 1.\n\n" +
         "No inventes líneas que no estén en el remito, y no completes de memoria algo que la foto no deja ver con claridad. Si la " +
-        "foto no muestra ningún remito o lista legible, devolvé un array vacío en \"items\".\n\n" +
+        "foto no muestra ningún remito o lista legible, devolvé un array vacío en \"items\"." +
+        `${instruccionHallazgos}\n\n` +
         'Respondé ÚNICAMENTE con un JSON válido: {"remitoNumero": string | null, "items": [{"descripcion": string, "cantidad": ' +
-        "number}]}, sin texto antes ni después, sin bloque de código markdown.",
+        `number}], "hallazgos": [...]} donde ${INSTRUCCION_RESPUESTA_HALLAZGOS}, sin texto antes ni después, sin bloque de código ` +
+        "markdown.",
       messages: [
         {
           role: "user",
@@ -114,7 +129,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "No se pudo leer el remito." }, { status: 502 });
     }
 
-    let parsed: { remitoNumero: string | null; items: LineaDetectada[] };
+    let parsed: { remitoNumero: string | null; items: LineaDetectada[]; hallazgos?: unknown[] };
     try {
       const match = textBlock.text.match(/\{[\s\S]*\}/);
       parsed = JSON.parse(match ? match[0] : textBlock.text);
@@ -136,6 +151,7 @@ export async function POST(req: NextRequest) {
           descripcion: String(it.descripcion).trim().slice(0, 160),
           cantidad: Number.isFinite(it.cantidad) && it.cantidad > 0 ? Math.round(it.cantidad) : 1,
         })),
+      hallazgos: parseHallazgosDetectados(parsed.hallazgos, hallazgosItems),
     });
   } catch (err) {
     const detalle = err instanceof Error ? err.message : String(err);

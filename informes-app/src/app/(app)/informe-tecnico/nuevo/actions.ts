@@ -8,7 +8,7 @@ import { buildInformeTecnicoFilename } from "@/lib/pdf/filename";
 import { resolverUbicacionId, tagGpsSiFalta, type PayloadGps } from "@/lib/ubicaciones/resolver";
 import { crearEntregaDepositoLote, type MaterialLoteDeposito } from "@/lib/deposito/crear-lote";
 import { CATEGORIA_EQUIPO_LABEL } from "@/components/equipos/types";
-import type { EquipoCategoria } from "@/lib/database.types";
+import type { EquipoCategoria, EstadoChecklist } from "@/lib/database.types";
 
 interface PayloadTecnico {
   nombre: string;
@@ -41,6 +41,11 @@ interface PayloadRemitoItem {
   cantidadEsperada: number;
   cantidadSobrante: number;
 }
+interface PayloadHallazgo {
+  itemId: string;
+  estado: EstadoChecklist;
+  comentario: string;
+}
 interface Payload {
   titulo: string;
   fecha: string;
@@ -67,6 +72,7 @@ interface Payload {
   materiales: PayloadMaterial[];
   remitoNumero: string | null;
   remitoItems: PayloadRemitoItem[];
+  hallazgos?: PayloadHallazgo[];
 }
 
 /**
@@ -278,6 +284,20 @@ export async function crearInformeTecnicoAction(formData: FormData): Promise<Cre
     if (error) return { success: false, error: `No se pudieron guardar los vehículos: ${error.message}` };
   }
 
+  // Inspección IA (opcional): solo los ítems que el técnico confirmó/corrigió
+  // (estado no nulo) — ver catalogo_inspeccion_ia (modulo="informe_tecnico").
+  if (payload.hallazgos && payload.hallazgos.length > 0) {
+    await supabase.from("inspeccion_ia_hallazgos").insert(
+      payload.hallazgos.map((h) => ({
+        modulo: "informe_tecnico" as const,
+        registro_id: informeId!,
+        item_id: h.itemId,
+        estado: h.estado,
+        comentario: h.comentario.trim() || null,
+      })),
+    );
+  }
+
   // Imágenes: subir a Storage, insertar la fila y guardar el buffer para el PDF.
   const imagenesPdf: { buffer: Buffer; lat: number | null; lon: number | null; accuracyM: number | null }[] = [];
   for (let i = 0; i < payload.imagenes.length; i++) {
@@ -461,6 +481,22 @@ export async function crearInformeTecnicoAction(formData: FormData): Promise<Cre
     .map((s) => s.trim())
     .filter(Boolean);
 
+  const hallazgosConfirmados = (payload.hallazgos ?? []).filter((h) => h.estado);
+  let hallazgosPdf: { texto: string; estado: EstadoChecklist; comentario: string | null }[] = [];
+  if (hallazgosConfirmados.length > 0) {
+    const { data: hallazgosCatalogo } = await supabase
+      .from("catalogo_inspeccion_ia")
+      .select("id, texto")
+      .in(
+        "id",
+        hallazgosConfirmados.map((h) => h.itemId),
+      );
+    const textoPorId = new Map((hallazgosCatalogo ?? []).map((h) => [h.id, h.texto]));
+    hallazgosPdf = hallazgosConfirmados
+      .map((h) => ({ texto: textoPorId.get(h.itemId), estado: h.estado, comentario: h.comentario.trim() || null }))
+      .filter((h): h is { texto: string; estado: EstadoChecklist; comentario: string | null } => !!h.texto);
+  }
+
   const pdfBuffer = await renderInformeTecnicoPdf({
     numeroGeneracion,
     titulo: payload.titulo.trim(),
@@ -488,6 +524,7 @@ export async function crearInformeTecnicoAction(formData: FormData): Promise<Cre
     remitoNumero: payload.remitoNumero,
     remitoItems: payload.remitoItems,
     remitoFotoBuffers,
+    hallazgos: hallazgosPdf,
     entregaDepositoNumeroGeneracion,
     logoBuffer,
     appName: "Informe Técnico App",

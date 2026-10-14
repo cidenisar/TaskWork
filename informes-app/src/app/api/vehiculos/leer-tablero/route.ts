@@ -3,6 +3,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { VEHICULO_TABLERO_FOTO_MAX } from "@/components/panel/vehiculos/alta-types";
+import { instruccionInspeccionIa, INSTRUCCION_RESPUESTA_HALLAZGOS, parseHallazgosDetectados } from "@/lib/inspeccion-ia/prompt";
 
 /**
  * Lee fotos del TABLERO/odómetro de un vehículo para completar el
@@ -54,6 +55,17 @@ export async function POST(req: NextRequest) {
     })),
   );
 
+  // Mismo catálogo/módulo "vehiculos" que leer-exterior — un ítem del
+  // catálogo puede ser checkable desde la foto del tablero (ej. "tarjeta
+  // verde visible") aunque no se vea desde afuera del vehículo.
+  const { data: catalogoHallazgos } = await supabase
+    .from("catalogo_inspeccion_ia")
+    .select("id, texto")
+    .eq("modulo", "vehiculos")
+    .order("orden");
+  const hallazgosItems = catalogoHallazgos ?? [];
+  const instruccionHallazgos = instruccionInspeccionIa(hallazgosItems);
+
   try {
     const client = new Anthropic();
     const response = await client.messages.create({
@@ -68,9 +80,10 @@ export async function POST(req: NextRequest) {
         '"84,500 km"). Esto es crítico: si el display está apagado, borroso, con reflejo, cortado, o no podés leer CADA dígito con ' +
         'certeza, devolvé null — NUNCA completes ni redondees dígitos que no podés leer, un kilometraje mal leído es peor que uno vacío.\n' +
         '- "identificado": true solo si "kilometraje" viene de una lectura completa y clara de todos los dígitos, false en cualquier ' +
-        "otro caso (incluido cuando devolviste null).\n\n" +
-        'Respondé ÚNICAMENTE con un JSON válido: un objeto {"kilometraje": number | null, "identificado": boolean}, sin texto antes ni ' +
-        "después, sin bloque de código markdown.",
+        "otro caso (incluido cuando devolviste null)." +
+        `${instruccionHallazgos}\n\n` +
+        'Respondé ÚNICAMENTE con un JSON válido: un objeto {"kilometraje": number | null, "identificado": boolean, "hallazgos": [...]} ' +
+        `donde ${INSTRUCCION_RESPUESTA_HALLAZGOS}. Sin texto antes ni después, sin bloque de código markdown.`,
       messages: [
         {
           role: "user",
@@ -91,7 +104,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "No se pudo leer la foto." }, { status: 502 });
     }
 
-    let detectado: TableroDetectado;
+    let detectado: TableroDetectado & { hallazgos?: unknown[] };
     try {
       const match = textBlock.text.match(/\{[\s\S]*\}/);
       detectado = JSON.parse(match ? match[0] : textBlock.text);
@@ -103,6 +116,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       kilometraje: Number.isFinite(detectado.kilometraje) && (detectado.kilometraje as number) >= 0 ? Math.round(detectado.kilometraje as number) : null,
       identificado: detectado.identificado === true,
+      hallazgos: parseHallazgosDetectados(detectado.hallazgos, hallazgosItems),
     });
   } catch (err) {
     const detalle = err instanceof Error ? err.message : String(err);

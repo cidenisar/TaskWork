@@ -15,6 +15,8 @@ export interface VehiculoItem {
   /** Estado general (rayones/roturas) y foto cargados al dar de alta con el flujo de fotos — null si se agregó por el alta manual de acá abajo. */
   estadoAlta?: string | null;
   tieneDaniosAlta?: boolean | null;
+  /** Cantidad de ítems de Inspección IA detectados ("no_ok") al dar de alta — undefined/0 si no se detectó ninguno. */
+  hallazgosNoOk?: number;
 }
 
 export function VehiculosTab({

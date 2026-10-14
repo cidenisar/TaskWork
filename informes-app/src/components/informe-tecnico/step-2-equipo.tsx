@@ -7,6 +7,8 @@ import { Icon } from "@/components/icon";
 import { AutocompleteInput } from "@/components/ui/autocomplete-input";
 import { MaterialesSection } from "./materiales-section";
 import type { MaterialInformeItem, RemitoItem } from "./materiales-types";
+import type { HallazgoInspeccionIa } from "@/lib/inspeccion-ia/types";
+import type { EstadoChecklist } from "@/lib/database.types";
 
 export interface MaterialesStepProps {
   tieneUbicacion: boolean;
@@ -18,6 +20,9 @@ export interface MaterialesStepProps {
   setRemitoNumero: Dispatch<SetStateAction<string>>;
   remitoItems: RemitoItem[];
   setRemitoItems: Dispatch<SetStateAction<RemitoItem[]>>;
+  hallazgos: HallazgoInspeccionIa[];
+  setEstadoHallazgo: (itemId: string, estado: EstadoChecklist) => void;
+  setComentarioHallazgo: (itemId: string, comentario: string) => void;
 }
 
 export function Step2Equipo({
@@ -181,6 +186,9 @@ export function Step2Equipo({
                 setRemitoNumero={materialesProps.setRemitoNumero}
                 remitoItems={materialesProps.remitoItems}
                 setRemitoItems={materialesProps.setRemitoItems}
+                hallazgos={materialesProps.hallazgos}
+                onEstadoHallazgo={materialesProps.setEstadoHallazgo}
+                onComentarioHallazgo={materialesProps.setComentarioHallazgo}
                 disabled={false}
               />
               {materialesProps.materiales.length === 0 && materialesProps.remitoItems.length === 0 && (

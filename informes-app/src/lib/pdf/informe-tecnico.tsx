@@ -1,5 +1,7 @@
 import { Document, Page, Text, View, Image, StyleSheet } from "@react-pdf/renderer";
 import { BORDER, commonStyles, KeyValueRow, PdfHeader, PdfFooter } from "./common";
+import { HALLAZGO_ESTADO_LABEL } from "@/lib/inspeccion-ia/types";
+import type { EstadoChecklist } from "@/lib/database.types";
 
 /**
  * Replica el layout de "Informe Tecnico - Diseño PDF.pdf" (ver spec sección 11):
@@ -57,6 +59,12 @@ export interface InformePdfRemitoItem {
   cantidadSobrante: number;
 }
 
+export interface InformeHallazgo {
+  texto: string;
+  estado: EstadoChecklist;
+  comentario: string | null;
+}
+
 export interface InformePdfProps {
   numeroGeneracion: string;
   titulo: string;
@@ -77,6 +85,7 @@ export interface InformePdfProps {
   remitoNumero: string | null;
   remitoItems: InformePdfRemitoItem[];
   remitoFotoBuffers: Buffer[] | null;
+  hallazgos: InformeHallazgo[];
   entregaDepositoNumeroGeneracion: string | null;
   logoBuffer: Buffer | null;
   appName: string;
@@ -104,6 +113,7 @@ export function InformeTecnicoPdf(props: InformePdfProps) {
     remitoNumero,
     remitoItems,
     remitoFotoBuffers,
+    hallazgos,
     entregaDepositoNumeroGeneracion,
     logoBuffer,
     appName,
@@ -220,6 +230,34 @@ export function InformeTecnicoPdf(props: InformePdfProps) {
                   <Text style={[styles.td, { width: W_REM.descripcion }]}>{r.descripcion}</Text>
                   <Text style={[styles.td, { width: W_REM.esperada, textAlign: "right" }]}>{r.cantidadEsperada}</Text>
                   <Text style={[styles.td, { width: W_REM.sobrante, textAlign: "right" }]}>{r.cantidadSobrante || "—"}</Text>
+                </View>
+              ))}
+            </View>
+          </>
+        )}
+
+        {hallazgos.length > 0 && (
+          <>
+            <Text style={commonStyles.sectionTitle}>Inspección IA</Text>
+            <View style={styles.table}>
+              <View style={styles.headRow} fixed>
+                <Text style={[styles.th, { width: "40%" }]}>Ítem</Text>
+                <Text style={[styles.th, { width: "15%" }]}>Estado</Text>
+                <Text style={[styles.th, { width: "45%" }]}>Comentario</Text>
+              </View>
+              {hallazgos.map((h, i) => (
+                <View style={i === hallazgos.length - 1 ? styles.rowLast : styles.row} key={i} wrap={false}>
+                  <Text style={[styles.td, { width: "40%" }]}>{h.texto}</Text>
+                  <Text
+                    style={[
+                      styles.td,
+                      { width: "15%" },
+                      h.estado === "no_ok" ? { fontFamily: "Helvetica-Bold" } : {},
+                    ]}
+                  >
+                    {HALLAZGO_ESTADO_LABEL[h.estado]}
+                  </Text>
+                  <Text style={[styles.td, { width: "45%" }]}>{h.comentario || "—"}</Text>
                 </View>
               ))}
             </View>

@@ -364,7 +364,7 @@ export type TableroMedicionLecturaRow = {
 }
 
 /** Qué módulo de relevamiento con IA tiene cargado este ítem/resultado de Inspección IA (ver ModuloInspeccionIa). */
-export type ModuloInspeccionIa = "tableros" | "racks" | "equipos" | "torres";
+export type ModuloInspeccionIa = "tableros" | "racks" | "equipos" | "torres" | "vehiculos" | "informe_tecnico";
 
 /** Catálogo admin-configurable de qué revisar en las fotos de un módulo, además de lo que esa IA ya identifica (ver EstadoChecklist). */
 export type CatalogoInspeccionIaRow = {

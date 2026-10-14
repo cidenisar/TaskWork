@@ -6,6 +6,7 @@ import { renderInformeTecnicoPdf } from "@/lib/pdf/render";
 import { buildInformeTecnicoFilename } from "@/lib/pdf/filename";
 import { resolverUbicacionId, tagGpsSiFalta, type PayloadGps } from "@/lib/ubicaciones/resolver";
 import { CATEGORIA_EQUIPO_LABEL } from "@/components/equipos/types";
+import type { EstadoChecklist } from "@/lib/database.types";
 
 interface PayloadTecnico {
   nombre: string;
@@ -235,6 +236,29 @@ export async function actualizarInformeTecnicoAction(
     if (blob) remitoFotoBuffers.push(Buffer.from(await blob.arrayBuffer()));
   }
 
+  // Inspección IA: esta pantalla no tiene UI para editar los hallazgos (fuera
+  // de alcance) — igual criterio que materiales/remito arriba: se recuperan
+  // los ya guardados para que la regeneración del PDF no pierda esa sección.
+  const { data: hallazgosRows } = await supabase
+    .from("inspeccion_ia_hallazgos")
+    .select("item_id, estado, comentario")
+    .eq("modulo", "informe_tecnico")
+    .eq("registro_id", informeId);
+  let hallazgosPdf: { texto: string; estado: EstadoChecklist; comentario: string | null }[] = [];
+  if (hallazgosRows && hallazgosRows.length > 0) {
+    const { data: hallazgosCatalogo } = await supabase
+      .from("catalogo_inspeccion_ia")
+      .select("id, texto")
+      .in(
+        "id",
+        hallazgosRows.map((h) => h.item_id),
+      );
+    const textoPorId = new Map((hallazgosCatalogo ?? []).map((h) => [h.id, h.texto]));
+    hallazgosPdf = hallazgosRows
+      .map((h) => ({ texto: textoPorId.get(h.item_id), estado: h.estado, comentario: h.comentario }))
+      .filter((h): h is { texto: string; estado: EstadoChecklist; comentario: string | null } => !!h.texto);
+  }
+
   const { data: config } = await supabase.from("config_general").select("logo_empresa_url").eq("id", 1).single();
   let logoBuffer: Buffer | null = null;
   if (config?.logo_empresa_url) {
@@ -283,6 +307,7 @@ export async function actualizarInformeTecnicoAction(
     // persisten y se mantienen.
     remitoItems: [],
     remitoFotoBuffers,
+    hallazgos: hallazgosPdf,
     entregaDepositoNumeroGeneracion: informeActual.entrega_deposito_numero_generacion,
     logoBuffer,
     appName: "Informe Técnico App",

@@ -120,6 +120,11 @@ export function FlotaVehiculos({
                           <Icon name="warning" size={11} /> Con daños al alta
                         </span>
                       )}
+                      {!!v.hallazgosNoOk && (
+                        <span className="venc-badge warn">
+                          <Icon name="warning" size={11} /> {v.hallazgosNoOk}
+                        </span>
+                      )}
                     </div>
                     {v.estadoAlta && <div className="item-sub">Estado al alta: {v.estadoAlta}</div>}
                     <div className="item-sub">

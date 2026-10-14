@@ -12,7 +12,9 @@ import {
   type MaterialInformeItem,
   type RemitoItem,
 } from "./materiales-types";
-import type { EquipoCategoria } from "@/lib/database.types";
+import type { EquipoCategoria, EstadoChecklist } from "@/lib/database.types";
+import { mezclarHallazgos, type HallazgoInspeccionIa } from "@/lib/inspeccion-ia/types";
+import { HallazgosInspeccionIaSection } from "@/components/inspeccion-ia/hallazgos-section";
 
 /**
  * Sección opcional de "Materiales/equipos" dentro de Informe Técnico — no
@@ -33,6 +35,9 @@ export function MaterialesSection({
   setRemitoNumero,
   remitoItems,
   setRemitoItems,
+  hallazgos,
+  onEstadoHallazgo,
+  onComentarioHallazgo,
   disabled,
 }: {
   materiales: MaterialInformeItem[];
@@ -43,6 +48,9 @@ export function MaterialesSection({
   setRemitoNumero: Dispatch<SetStateAction<string>>;
   remitoItems: RemitoItem[];
   setRemitoItems: Dispatch<SetStateAction<RemitoItem[]>>;
+  hallazgos: HallazgoInspeccionIa[];
+  onEstadoHallazgo: (itemId: string, estado: EstadoChecklist) => void;
+  onComentarioHallazgo: (itemId: string, comentario: string) => void;
   disabled: boolean;
 }) {
   const [fotosIa, setFotosIa] = useState<File[]>([]);
@@ -217,8 +225,21 @@ export function MaterialesSection({
         ...prev,
         ...detectados.map((d) => ({ descripcion: d.descripcion, cantidadEsperada: d.cantidad, cantidadSobrante: 0 })),
       ]);
+      const hallazgosNuevos: HallazgoInspeccionIa[] = data.hallazgos ?? [];
+      let hallazgosDetectadosAhora = 0;
+      if (hallazgosNuevos.length > 0) {
+        const combinados = mezclarHallazgos(hallazgos, hallazgosNuevos);
+        hallazgosDetectadosAhora = combinados.filter((h) => h.estado === "no_ok").length;
+        combinados.forEach((h) => {
+          onEstadoHallazgo(h.itemId, h.estado as EstadoChecklist);
+          onComentarioHallazgo(h.itemId, h.comentario);
+        });
+      }
       setRemitoNote(
         `Se leyeron ${detectados.length} línea${detectados.length === 1 ? "" : "s"} del remito desde ${exitosas} foto${exitosas === 1 ? "" : "s"} — revisalas antes de guardar.` +
+          (hallazgosDetectadosAhora > 0
+            ? ` ⚠ Se detectaron ${hallazgosDetectadosAhora} hallazgo${hallazgosDetectadosAhora === 1 ? "" : "s"} de inspección — revisalos más abajo.`
+            : "") +
           (fallidas.length > 0 ? ` (${fallidas.length} foto${fallidas.length === 1 ? "" : "s"} no se pudo leer: ${primerError})` : ""),
       );
       setRemitoFotos(fallidas);
@@ -317,6 +338,13 @@ export function MaterialesSection({
             <span>{remitoNote}</span>
           </div>
         )}
+
+        <HallazgosInspeccionIaSection
+          hallazgos={hallazgos}
+          onEstado={onEstadoHallazgo}
+          onComentario={onComentarioHallazgo}
+          disabled={disabled}
+        />
 
         <div className="field" style={{ marginBottom: 12, maxWidth: 260 }}>
           <label style={{ fontSize: 11 }}>N° de Remito</label>

@@ -1886,10 +1886,12 @@ general que salió de esto.
   no solo seguridad eléctrica) y se llevó a **Tableros, Racks, Equipos
   Individuales y Torres de Comunicación** — los 4 módulos que ya leen
   fotos con Claude Vision para identificar lo suyo (circuitos,
-  equipamiento de rack, equipo suelto, tramos/altura de torre). Quedan
-  deliberadamente afuera **Vehículos** (lector de patente/km) e **Informe
-  Técnico** (lector de remito): esos extraen un dato puntual, no inspeccionan
-  una lista de elementos en un gabinete/rack — un caso de uso distinto.
+  equipamiento de rack, equipo suelto, tramos/altura de torre). En esta
+  primera vuelta quedaron deliberadamente afuera **Vehículos** (lector de
+  patente/km) e **Informe Técnico** (lector de remito) por extraer un dato
+  puntual en vez de inspeccionar una lista de elementos — pero el usuario
+  pidió extenderlo igual a esos dos (ver más abajo, "Inspección IA
+  extendida").
   - **Un solo catálogo + una sola tabla de resultados, escaneados por
     `modulo`** (`catalogo_inspeccion_ia` / `inspeccion_ia_hallazgos`,
     `modulo` = `"tableros" | "racks" | "equipos" | "torres"`, texto libre
@@ -1930,3 +1932,32 @@ general que salió de esto.
   círculo girando (`<Spinner>`, `src/components/spinner.tsx`) en vez del
   ícono fijo mientras esperan la respuesta — antes el botón quedaba
   deshabilitado sin ningún indicador visual de que algo estaba en curso.
+
+- **Inspección IA extendida a Vehículos e Informe Técnico.** El usuario
+  pidió "extender" la generalización de arriba también a los 2 módulos
+  que habían quedado afuera a propósito — mismo núcleo compartido
+  (`src/lib/inspeccion-ia/`, `<HallazgosInspeccionIaSection>`), sin
+  tocar nada de Tableros/Racks/Equipos/Torres.
+  - **Vehículos** (`modulo="vehiculos"`): el catálogo se evalúa contra
+    AMBOS lotes de fotos del alta (`/api/vehiculos/leer-exterior` y
+    `/api/vehiculos/leer-tablero`, cada uno evalúa la misma lista contra
+    sus propias fotos) y los resultados se combinan con el mismo
+    `mezclarHallazgos` que ya usan los lotes múltiples de los otros
+    módulos. Como `catalogo_vehiculos` no tiene `created_by` (el alta con
+    fotos ya es Admin-only), el RLS de inserción para este módulo
+    valida `is_admin()` directo en vez de dueño-por-registro — único caso
+    de los 6 módulos con ese criterio. Al no generar PDF, el resultado se
+    muestra como un badge "⚠ N" en la Flota (Panel → Vehículos) cuando
+    hay hallazgos detectados.
+  - **Informe Técnico** (`modulo="informe_tecnico"`): se evalúa en
+    `/api/informe-tecnico/leer-remito` contra la foto del remito. Único
+    módulo con un wizard de varios pasos en vez de un formulario de una
+    pantalla — el estado de hallazgos vive en `wizard.tsx` (mismo nivel
+    que `remitoItems`), se edita dentro de la sección de materiales
+    (`materiales-section.tsx`) y se persiste junto con el resto del
+    informe al confirmar el paso final. Se imprime en el PDF
+    (`lib/pdf/informe-tecnico.tsx`). La pantalla de **edición
+    post-generación** (`/informe-tecnico/editar/[id]`) no suma UI para
+    tocar los hallazgos (fuera de alcance, igual límite que materiales/
+    remito ahí) pero sí recupera los ya guardados al regenerar el PDF,
+    para que una edición no los borre de un informe existente.

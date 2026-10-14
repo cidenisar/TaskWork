@@ -9,6 +9,9 @@ import { ErrorNote, SuccessNote } from "@/components/notes";
 import { Icon } from "@/components/icon";
 import { Spinner } from "@/components/spinner";
 import { VEHICULO_EXTERIOR_FOTO_MAX, VEHICULO_TABLERO_FOTO_MAX } from "./alta-types";
+import { mezclarHallazgos, type HallazgoInspeccionIa } from "@/lib/inspeccion-ia/types";
+import { HallazgosInspeccionIaSection } from "@/components/inspeccion-ia/hallazgos-section";
+import type { EstadoChecklist } from "@/lib/database.types";
 
 interface ExteriorLectura {
   patente: string;
@@ -17,11 +20,13 @@ interface ExteriorLectura {
   tieneDanios: boolean | null;
   identificadoPatente: boolean;
   identificadoMarca: boolean;
+  hallazgos?: HallazgoInspeccionIa[];
 }
 
 interface TableroLectura {
   kilometraje: number | null;
   identificado: boolean;
+  hallazgos?: HallazgoInspeccionIa[];
 }
 
 /**
@@ -34,7 +39,7 @@ interface TableroLectura {
  * editables de abajo, que son los que realmente se guardan (la IA nunca
  * escribe directo a la base).
  */
-export function NuevoVehiculoForm() {
+export function NuevoVehiculoForm({ catalogoHallazgos }: { catalogoHallazgos: { id: string; texto: string }[] }) {
   const router = useRouter();
 
   const [fotosExterior, setFotosExterior] = useState<File[]>([]);
@@ -64,6 +69,22 @@ export function NuevoVehiculoForm() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+
+  // Mismo catálogo evaluado desde los dos lotes de fotos (exterior y
+  // tablero) — arranca sin evaluar (estado null) y cada lectura con IA va
+  // sumando resultados al mismo estado vía mezclarHallazgos, igual criterio
+  // que un relevamiento multi-foto en otros módulos.
+  const [hallazgos, setHallazgos] = useState<HallazgoInspeccionIa[]>(
+    () => catalogoHallazgos.map((h) => ({ itemId: h.id, texto: h.texto, estado: null, comentario: "" })),
+  );
+
+  function setEstadoHallazgo(itemId: string, estado: EstadoChecklist) {
+    setHallazgos((prev) => prev.map((h) => (h.itemId === itemId ? { ...h, estado } : h)));
+  }
+
+  function setComentarioHallazgo(itemId: string, comentario: string) {
+    setHallazgos((prev) => prev.map((h) => (h.itemId === itemId ? { ...h, comentario } : h)));
+  }
 
   function agregarFotos(set: React.Dispatch<React.SetStateAction<File[]>>, max: number, files: File[]) {
     if (files.length === 0) return;
@@ -96,6 +117,9 @@ export function NuevoVehiculoForm() {
       if (data.tieneDanios != null) setTieneDanios(data.tieneDanios);
       setRevisarPatente(data.identificadoPatente !== true);
       setRevisarMarca(data.identificadoMarca !== true);
+      if (data.hallazgos && data.hallazgos.length > 0) {
+        setHallazgos(mezclarHallazgos(hallazgos, data.hallazgos));
+      }
       setNotaExterior("Listo — revisá los datos antes de guardar, sobre todo si quedaron marcados para revisar.");
       setFotoExteriorGuardar(fotosExterior[0]);
       setFotosExterior([]);
@@ -125,6 +149,9 @@ export function NuevoVehiculoForm() {
       }
       if (data.kilometraje != null) setKm(String(data.kilometraje));
       setRevisarKm(data.identificado !== true);
+      if (data.hallazgos && data.hallazgos.length > 0) {
+        setHallazgos(mezclarHallazgos(hallazgos, data.hallazgos));
+      }
       setNotaTablero(
         data.kilometraje != null
           ? "Listo — revisá el kilometraje antes de guardar."
@@ -151,7 +178,16 @@ export function NuevoVehiculoForm() {
       const fd = new FormData();
       fd.append(
         "payload",
-        JSON.stringify({ patente, marcaModelo, kilometrajeActual: km, estadoGeneral, tieneDanios }),
+        JSON.stringify({
+          patente,
+          marcaModelo,
+          kilometrajeActual: km,
+          estadoGeneral,
+          tieneDanios,
+          hallazgos: hallazgos
+            .filter((h) => h.estado !== null)
+            .map((h) => ({ itemId: h.itemId, estado: h.estado, comentario: h.comentario.trim() })),
+        }),
       );
       if (fotoExteriorGuardar) fd.append("fotoExterior", await resizeImageToJpeg(fotoExteriorGuardar), "exterior.jpg");
       if (fotoTableroGuardar) fd.append("fotoTablero", await resizeImageToJpeg(fotoTableroGuardar), "tablero.jpg");
@@ -348,6 +384,14 @@ export function NuevoVehiculoForm() {
         <div className="hint" style={{ margin: "-2px 0 12px" }}>
           Estos son los que se guardan — revisá y corregí lo que haga falta antes de dar de alta.
         </div>
+
+        <HallazgosInspeccionIaSection
+          hallazgos={hallazgos}
+          onEstado={setEstadoHallazgo}
+          onComentario={setComentarioHallazgo}
+          disabled={submitting}
+        />
+
         <div className="tech-form-grid">
           <div className="field" style={{ marginBottom: 0 }}>
             <label>

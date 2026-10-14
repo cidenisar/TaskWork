@@ -3,6 +3,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { VEHICULO_EXTERIOR_FOTO_MAX } from "@/components/panel/vehiculos/alta-types";
+import { instruccionInspeccionIa, INSTRUCCION_RESPUESTA_HALLAZGOS, parseHallazgosDetectados } from "@/lib/inspeccion-ia/prompt";
 
 /**
  * Lee fotos del EXTERIOR de un vehículo (patente, marca/modelo, estado
@@ -58,6 +59,19 @@ export async function POST(req: NextRequest) {
     })),
   );
 
+  // Catálogo configurable de Inspección IA (Configuración → Catálogos,
+  // módulo "vehiculos") — se evalúa contra estas mismas fotos del exterior,
+  // además de patente/marca/estado. Es el mismo catálogo que evalúa
+  // leer-tablero (un ítem puede ser checkable desde cualquiera de los dos
+  // lotes de fotos), y los resultados se combinan en el form con mezclarHallazgos.
+  const { data: catalogoHallazgos } = await supabase
+    .from("catalogo_inspeccion_ia")
+    .select("id, texto")
+    .eq("modulo", "vehiculos")
+    .order("orden");
+  const hallazgosItems = catalogoHallazgos ?? [];
+  const instruccionHallazgos = instruccionInspeccionIa(hallazgosItems);
+
   try {
     const client = new Anthropic();
     const response = await client.messages.create({
@@ -84,10 +98,11 @@ export async function POST(req: NextRequest) {
         'explícitamente (ej. "Sin daños visibles, buen estado general"). Nunca lo dejes vacío — siempre hay algo que describir sobre lo ' +
         "que se ve.\n" +
         '- "tieneDanios": true si describiste algún rayón/abolladura/rotura/daño visible en "estadoGeneral", false si el vehículo se ve ' +
-        "en buen estado sin daños visibles, null solo si la foto no muestra la carrocería lo suficientemente clara como para evaluarlo.\n\n" +
+        "en buen estado sin daños visibles, null solo si la foto no muestra la carrocería lo suficientemente clara como para evaluarlo." +
+        `${instruccionHallazgos}\n\n` +
         'Respondé ÚNICAMENTE con un JSON válido: un objeto {"patente": string, "marcaModelo": string, "estadoGeneral": string, ' +
-        '"tieneDanios": boolean | null, "identificadoPatente": boolean, "identificadoMarca": boolean}, sin texto antes ni después, sin ' +
-        "bloque de código markdown.",
+        '"tieneDanios": boolean | null, "identificadoPatente": boolean, "identificadoMarca": boolean, "hallazgos": [...]} donde ' +
+        `${INSTRUCCION_RESPUESTA_HALLAZGOS}. Sin texto antes ni después, sin bloque de código markdown.`,
       messages: [
         {
           role: "user",
@@ -114,7 +129,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "No se pudo leer la foto." }, { status: 502 });
     }
 
-    let detectado: ExteriorDetectado;
+    let detectado: ExteriorDetectado & { hallazgos?: unknown[] };
     try {
       const match = textBlock.text.match(/\{[\s\S]*\}/);
       detectado = JSON.parse(match ? match[0] : textBlock.text);
@@ -130,6 +145,7 @@ export async function POST(req: NextRequest) {
       tieneDanios: detectado.tieneDanios === true ? true : detectado.tieneDanios === false ? false : null,
       identificadoPatente: detectado.identificadoPatente === true,
       identificadoMarca: detectado.identificadoMarca === true,
+      hallazgos: parseHallazgosDetectados(detectado.hallazgos, hallazgosItems),
     });
   } catch (err) {
     const detalle = err instanceof Error ? err.message : String(err);

@@ -17,6 +17,8 @@ type TabId =
   | "iaracks"
   | "iaequipos"
   | "iatorres"
+  | "iavehiculos"
+  | "iainformetecnico"
   | "provincias"
   | "tipos"
   | "gastocat";
@@ -31,6 +33,8 @@ const TABS: { id: TabId; label: React.ReactNode }[] = [
   { id: "iaracks", label: "Inspección IA — Racks" },
   { id: "iaequipos", label: "Inspección IA — Equipos" },
   { id: "iatorres", label: "Inspección IA — Torres" },
+  { id: "iavehiculos", label: "Inspección IA — Vehículos" },
+  { id: "iainformetecnico", label: "Inspección IA — Informe Técnico" },
   { id: "provincias", label: "Provincias" },
   { id: "tipos", label: "Tipos de Informe" },
   { id: "gastocat", label: "Categorías de Gasto" },
@@ -51,6 +55,8 @@ export interface CatalogosData {
   inspeccionIaRacks: InspeccionIaItem[];
   inspeccionIaEquipos: InspeccionIaItem[];
   inspeccionIaTorres: InspeccionIaItem[];
+  inspeccionIaVehiculos: InspeccionIaItem[];
+  inspeccionIaInformeTecnico: InspeccionIaItem[];
 }
 
 /** Vehículos (alta, service, vencimientos) se trasladó a Panel de Supervisión → Vehículos — ver src/components/panel/vehiculos/. */
@@ -94,6 +100,8 @@ export function CatalogosCard({ data }: { data: CatalogosData }) {
       {tab === "iaracks" && <InspeccionIaTab modulo="racks" items={data.inspeccionIaRacks} />}
       {tab === "iaequipos" && <InspeccionIaTab modulo="equipos" items={data.inspeccionIaEquipos} />}
       {tab === "iatorres" && <InspeccionIaTab modulo="torres" items={data.inspeccionIaTorres} />}
+      {tab === "iavehiculos" && <InspeccionIaTab modulo="vehiculos" items={data.inspeccionIaVehiculos} />}
+      {tab === "iainformetecnico" && <InspeccionIaTab modulo="informe_tecnico" items={data.inspeccionIaInformeTecnico} />}
       {tab === "provincias" && (
         <SimpleCatalogTab
           tabla="catalogo_provincias"

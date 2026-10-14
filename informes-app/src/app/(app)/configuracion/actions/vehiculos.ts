@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireAdmin } from "@/lib/auth";
 import { logAudit } from "@/lib/config/audit";
 import type { ConfigActionResult } from "./empresa";
+import type { EstadoChecklist } from "@/lib/database.types";
 
 interface VehiculoPayload {
   patente: string;
@@ -148,6 +149,7 @@ interface AltaVehiculoPayload {
   kilometrajeActual: string;
   estadoGeneral: string;
   tieneDanios: boolean | null;
+  hallazgos?: { itemId: string; estado: EstadoChecklist; comentario: string }[];
 }
 
 export interface AltaVehiculoResult extends ConfigActionResult {
@@ -201,6 +203,20 @@ export async function altaVehiculoConFotosAction(formData: FormData): Promise<Al
     const path = `${vehiculo.id}/alta-tablero.jpg`;
     const { error: upErr } = await supabase.storage.from("vehiculo-docs").upload(path, buffer, { contentType: "image/jpeg", upsert: true });
     if (!upErr) await supabase.from("catalogo_vehiculos").update({ foto_tablero_url: path }).eq("id", vehiculo.id);
+  }
+
+  // Inspección IA (opcional): solo los ítems que el Admin confirmó/corrigió
+  // (estado no nulo) — ver catalogo_inspeccion_ia (modulo="vehiculos").
+  if (payload.hallazgos && payload.hallazgos.length > 0) {
+    await supabase.from("inspeccion_ia_hallazgos").insert(
+      payload.hallazgos.map((h) => ({
+        modulo: "vehiculos" as const,
+        registro_id: vehiculo.id,
+        item_id: h.itemId,
+        estado: h.estado,
+        comentario: h.comentario.trim() || null,
+      })),
+    );
   }
 
   await logAudit(supabase, profile, `Dio de alta el vehículo "${patente}" con fotos (IA)`);
