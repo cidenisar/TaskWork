@@ -9,7 +9,13 @@ import { resolverUbicacionId, tagGpsSiFalta, type PayloadUbicacionNueva, type Pa
 import { calcularResumenEquipos } from "@/components/equipos/types";
 import { puedeGestionarDeposito } from "@/lib/types";
 import { labelUbicacion } from "@/components/ubicaciones/types";
-import type { EquipoCategoria, TipoMontajeCamara } from "@/lib/database.types";
+import type { EquipoCategoria, EstadoChecklist, TipoMontajeCamara } from "@/lib/database.types";
+
+interface PayloadHallazgo {
+  itemId: string;
+  estado: EstadoChecklist;
+  comentario: string;
+}
 
 interface PayloadLectura {
   equipoId: string | null;
@@ -35,6 +41,7 @@ export interface CrearRelevamientoEquiposPayload {
   gps: PayloadGps | null;
   fecha: string;
   lecturas: PayloadLectura[];
+  hallazgos?: PayloadHallazgo[];
 }
 
 export interface CrearRelevamientoEquiposResult {
@@ -187,6 +194,20 @@ export async function crearRelevamientoEquiposAction(formData: FormData): Promis
     return { success: false, error: `No se pudieron guardar las lecturas: ${lecturasErr.message}` };
   }
 
+  // Inspección IA (opcional): solo los ítems que el técnico confirmó/corrigió
+  // (estado no nulo) — ver catalogo_inspeccion_ia (modulo="equipos").
+  if (payload.hallazgos && payload.hallazgos.length > 0) {
+    await supabase.from("inspeccion_ia_hallazgos").insert(
+      payload.hallazgos.map((h) => ({
+        modulo: "equipos" as const,
+        registro_id: relevamientoId!,
+        item_id: h.itemId,
+        estado: h.estado,
+        comentario: h.comentario.trim() || null,
+      })),
+    );
+  }
+
   // Foto general (opcional): registro + queda adjunta en el PDF. Reusa el
   // bucket informe-fotos, igual criterio que Tableros/Racks.
   let fotoGeneralBuffer: Buffer | null = null;
@@ -215,6 +236,22 @@ export async function crearRelevamientoEquiposAction(formData: FormData): Promis
 
   const resumen = calcularResumenEquipos(payload.lecturas);
 
+  const hallazgosConfirmados = (payload.hallazgos ?? []).filter((h) => h.estado);
+  let hallazgosPdf: { texto: string; estado: EstadoChecklist; comentario: string | null }[] = [];
+  if (hallazgosConfirmados.length > 0) {
+    const { data: hallazgosCatalogo } = await supabase
+      .from("catalogo_inspeccion_ia")
+      .select("id, texto")
+      .in(
+        "id",
+        hallazgosConfirmados.map((h) => h.itemId),
+      );
+    const textoPorId = new Map((hallazgosCatalogo ?? []).map((h) => [h.id, h.texto]));
+    hallazgosPdf = hallazgosConfirmados
+      .map((h) => ({ texto: textoPorId.get(h.itemId), estado: h.estado, comentario: h.comentario.trim() || null }))
+      .filter((h): h is { texto: string; estado: EstadoChecklist; comentario: string | null } => !!h.texto);
+  }
+
   const pdfBuffer = await renderEquipoPdf({
     numeroGeneracion,
     region: ubicacionRow.region,
@@ -226,6 +263,7 @@ export async function crearRelevamientoEquiposAction(formData: FormData): Promis
     fecha: payload.fecha,
     resumen,
     fotoGeneralBuffer,
+    hallazgos: hallazgosPdf,
     lecturas: payload.lecturas.map((l) => ({
       categoriaEquipo: l.categoriaEquipo,
       texto: l.texto,

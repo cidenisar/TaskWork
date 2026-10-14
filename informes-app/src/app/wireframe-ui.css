@@ -1483,6 +1483,21 @@ textarea {
   opacity: 0.6;
   cursor: default;
 }
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.spinner {
+  display: inline-block;
+  width: 13px;
+  height: 13px;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
 .link-btn {
   background: none;
   border: none;

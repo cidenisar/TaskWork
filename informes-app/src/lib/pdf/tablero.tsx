@@ -3,11 +3,11 @@ import { BORDER, commonStyles, KeyValueRow, PdfHeader, PdfFooter, formatFechaArg
 import {
   CATEGORIA_EQUIPO_LABEL,
   TABLERO_EVENTO_LABEL,
-  HALLAZGO_ESTADO_LABEL,
   itemMideCorriente,
   labelSubsistemas,
   type ResumenEquipamiento,
 } from "@/components/tableros/types";
+import { HALLAZGO_ESTADO_LABEL } from "@/lib/inspeccion-ia/types";
 import type { UnifilarDrawing } from "@/lib/tableros/unifilar";
 import type { EstadoChecklist, TableroCategoriaEquipo, TableroEventoTipo, TableroTipo, TableroTipoCircuito } from "@/lib/database.types";
 
@@ -216,10 +216,10 @@ export function TableroPdf(props: TableroPdfProps) {
 
         {hallazgos.length > 0 && (
           <>
-            <Text style={commonStyles.sectionTitle}>Hallazgos de Seguridad</Text>
+            <Text style={commonStyles.sectionTitle}>Inspección IA</Text>
             <View style={styles.table}>
               <View style={styles.headRow} fixed>
-                <Text style={[styles.th, { width: "40%" }]}>Hallazgo</Text>
+                <Text style={[styles.th, { width: "40%" }]}>Ítem</Text>
                 <Text style={[styles.th, { width: "15%" }]}>Estado</Text>
                 <Text style={[styles.th, { width: "45%" }]}>Comentario</Text>
               </View>

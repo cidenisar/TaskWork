@@ -7,6 +7,7 @@ import { reportarErrorCliente } from "@/lib/client-error-report";
 import { resizeImageToJpeg } from "@/lib/image-resize";
 import { ErrorNote, SuccessNote } from "@/components/notes";
 import { Icon } from "@/components/icon";
+import { Spinner } from "@/components/spinner";
 import { VEHICULO_EXTERIOR_FOTO_MAX, VEHICULO_TABLERO_FOTO_MAX } from "./alta-types";
 
 interface ExteriorLectura {
@@ -236,7 +237,7 @@ export function NuevoVehiculoForm() {
           </button>
           {fotosExterior.length > 0 && (
             <button type="button" className="ai-btn" onClick={() => void leerExterior()} disabled={submitting || leyendoExterior}>
-              <Icon name="ai" size={13} /> {leyendoExterior ? "Leyendo..." : `Leer con IA (${fotosExterior.length})`}
+              {leyendoExterior ? <Spinner /> : <Icon name="ai" size={13} />} {leyendoExterior ? "Leyendo..." : `Leer con IA (${fotosExterior.length})`}
             </button>
           )}
         </div>
@@ -314,7 +315,7 @@ export function NuevoVehiculoForm() {
           </button>
           {fotosTablero.length > 0 && (
             <button type="button" className="ai-btn" onClick={() => void leerTablero()} disabled={submitting || leyendoTablero}>
-              <Icon name="ai" size={13} /> {leyendoTablero ? "Leyendo..." : `Leer con IA (${fotosTablero.length})`}
+              {leyendoTablero ? <Spinner /> : <Icon name="ai" size={13} />} {leyendoTablero ? "Leyendo..." : `Leer con IA (${fotosTablero.length})`}
             </button>
           )}
         </div>

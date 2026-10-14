@@ -1453,16 +1453,30 @@ general que salió de esto.
   - **Torre → siempre Grupo de altura**, sin importar la altura real —
     es una decisión organizacional (equipo especializado), no una
     cuestión de metros.
-  - **Columna / Poste / Pared / Techo → según la altura real** contra un
-    umbral configurable: hasta el umbral, Escalera; por encima, Andamio/
-    manlift.
-  - **Catálogo admin-configurable** (`catalogo_recurso_altura`, tab
-    "Recurso por altura" dentro de Configuración → Catálogos): una fila
-    fija por tipo de montaje, con "Recurso fijo" (ignora la altura, ya
-    viene marcado así para Torre) o un umbral en metros — un Admin ajusta
-    los números reales de su operación sin tocar código. Valores
-    semilla razonables (4m para columna/poste/pared, 3m para techo) hasta
-    que se ajusten.
+  - **Columna / Poste / Pared / Techo → según la altura real** contra
+    **bandas configurables** (no un único umbral fijo): una lista
+    ascendente de "hasta X metros → este recurso" por tipo de montaje —
+    se resuelve con la primera banda cuyo "hasta" cubre la altura real; si
+    ninguna la cubre, no se muestra recurso (nunca se inventa uno fuera de
+    lo configurado, mismo criterio que el calibre de cable).
+  - **Catálogo admin-configurable, en dos partes** (tab "Recurso por
+    altura" dentro de Configuración → Catálogos):
+    - **Nombres de recurso abiertos** (`catalogo_tipos_recurso_altura`,
+      reusa el componente genérico de catálogo simple): ya no es un enum
+      Postgres fijo (`escalera`/`andamio_manlift`/`grupo_altura`) — un
+      Admin agrega un recurso nuevo (ej. "Andamóvil", pedido real de
+      usuario) sin deploy. Viene semilla con Escalera, Andamio/Manlift,
+      Grupo de altura y Andamóvil.
+    - **Bandas por tipo de montaje** (`catalogo_recurso_altura_bandas`):
+      por cada tipo de montaje con "Recurso fijo" vacío, se edita la
+      lista de bandas (altura hasta + recurso, elegido del catálogo de
+      nombres de arriba) — agregar/quitar filas sin tocar código. Torre
+      sigue siendo "Recurso fijo = Grupo de altura" siempre (columna
+      `recurso_fijo`, ahora texto libre en vez de enum).
+    - La migración que separó el viejo umbral único en bandas preservó el
+      comportamiento existente 1:1 (insertó automáticamente dos bandas por
+      fila: el umbral viejo → Escalera, y un techo alto → Andamio/Manlift)
+      — nada cambió para quien no vuelva a tocar la configuración.
   - **Se ve en 3 lugares**: en el propio formulario de relevamiento (chip
     "Recurso: ..." en vivo mientras se completa Montaje/Altura), en la
     ficha de Sitio (columna "Montaje" de la tabla de Equipos
@@ -1862,37 +1876,57 @@ general que salió de esto.
     y en el generador de programación automática — aparece en el Plan de
     Mantenimiento exactamente igual que Racks y Equipos Individuales.
 
-- **Tableros: Hallazgos de Seguridad al leer la foto con IA.** Pedido del
-  usuario: ya que la IA lee la foto del tablero para identificar
-  circuitos, que también revise cosas de seguridad/estado del gabinete
-  (ej. "¿la térmica bypaseada tiene candado?") — y que la lista de qué
-  revisar sea configurable, "como el checklist".
-  - **Catálogo abierto, mismo criterio que el checklist de
-    mantenimiento** (`catalogo_hallazgos_seguridad_tablero`, tab propio
-    en Configuración → Catálogos): un Admin agrega/quita ítems sin tocar
-    código. Viene precargado con 10 hallazgos realmente verificables
-    desde una foto (térmica bypaseada sin candado, doble conexión en un
-    borne, cables pelados, espacios sin tapa ciega, marcas de quemado,
-    tierra ausente, puerta/cerradura rota, cartel de riesgo ausente,
-    cableado desordenado, corrosión/humedad) — pensados junto al usuario
-    en esta misma conversación, no inventados solos.
-  - **Reusa el mismo estado de 3 valores que el checklist de
-    mantenimiento** (`ok`/`no_ok`/`no_aplica`, en vez de inventar un
-    enum nuevo): "no_ok" = se detectó el hallazgo (hay un problema).
-  - **La IA evalúa cada ítem del catálogo contra las mismas fotos** que
-    ya manda para identificar circuitos (`/api/tableros/leer-foto`, un
-    solo pedido) y propone un estado + comentario por ítem — el técnico
-    SIEMPRE confirma o corrige antes de guardar, la IA nunca escribe
-    directo a la base (mismo principio que toda la lectura de fotos de
-    esta app). Si el catálogo está vacío, no se le pide nada a la IA y
-    el formulario no muestra la sección.
-  - **Se combinan resultados entre varias lecturas de fotos** (ej. una
-    tanda por cuerpo del tablero): una vez que una tanda detecta un
-    hallazgo ("no_ok"), se mantiene aunque una tanda posterior no lo
-    vea — nunca se "limpia" un hallazgo real porque la siguiente foto no
-    lo mostraba (`mezclarHallazgos()` en `components/tableros/types.ts`).
-  - **Persiste en `tablero_medicion_hallazgos`** (solo los ítems que el
-    técnico efectivamente confirmó, igual criterio que el checklist de
-    mantenimiento — un ítem nunca tocado no se guarda) y se imprime como
-    una sección "Hallazgos de Seguridad" en el PDF de la medición, con
-    los detectados ("no_ok") resaltados en negrita.
+- **Inspección IA: "Hallazgos de Seguridad" generalizado a los 4 módulos
+  con identificación por IA.** Pedido del usuario a partir de la primera
+  entrega (solo Tableros): "me gustaría habilitar esta opción a todo lo
+  que usa la identificación con IA, para poder agregar que busque algo
+  más sin tener que volver a programar" — y que se le cambie el nombre.
+  Se rebautizó **Inspección IA** (quedó más genérico que "Hallazgos de
+  Seguridad" ya que ahora un Admin puede cargar cualquier cosa a revisar,
+  no solo seguridad eléctrica) y se llevó a **Tableros, Racks, Equipos
+  Individuales y Torres de Comunicación** — los 4 módulos que ya leen
+  fotos con Claude Vision para identificar lo suyo (circuitos,
+  equipamiento de rack, equipo suelto, tramos/altura de torre). Quedan
+  deliberadamente afuera **Vehículos** (lector de patente/km) e **Informe
+  Técnico** (lector de remito): esos extraen un dato puntual, no inspeccionan
+  una lista de elementos en un gabinete/rack — un caso de uso distinto.
+  - **Un solo catálogo + una sola tabla de resultados, escaneados por
+    `modulo`** (`catalogo_inspeccion_ia` / `inspeccion_ia_hallazgos`,
+    `modulo` = `"tableros" | "racks" | "equipos" | "torres"`, texto libre
+    — mismo criterio que `mantenimiento_checklist_items.categoria`: no
+    hay un enum Postgres único que sirva para relevamientos tan
+    distintos) en vez de una tabla por módulo — reemplazan las tablas
+    específicas de Tableros de la primera entrega
+    (`catalogo_hallazgos_seguridad_tablero` /
+    `tablero_medicion_hallazgos`, migradas 1:1 y eliminadas). Tab propio
+    por módulo en Configuración → Catálogos ("Inspección IA — Tableros/
+    Racks/Equipos/Torres"), mismo componente genérico para los 4.
+  - **Núcleo compartido** (`src/lib/inspeccion-ia/`,
+    `src/components/inspeccion-ia/`): tipo de resultado, helper de fusión
+    entre tandas de fotos (`mezclarHallazgos` — un "no_ok" detectado se
+    mantiene aunque una tanda posterior no lo vea, igual criterio que la
+    primera entrega), el bloque de instrucción para el prompt de la IA
+    (`instruccionInspeccionIa`) y el validador de la respuesta cruda
+    contra el catálogo real (`parseHallazgosDetectados` — nunca deja
+    pasar un id inventado ni un estado inválido), y el bloque de
+    formulario (`<HallazgosInspeccionIaSection>`) — los 4 módulos
+    reusan exactamente lo mismo, ningún módulo reimplementa esta lógica.
+  - **Mismo patrón en los 4 módulos**: su `/api/<modulo>/leer-foto` le
+    suma al mismo pedido de IA (una sola llamada, no una aparte) la
+    evaluación del catálogo de su módulo contra las mismas fotos; el
+    formulario de alta muestra la sección "Inspección IA" con los
+    resultados para que el técnico confirme/corrija (nunca se guarda sin
+    pasar por ahí); al guardar, los ítems confirmados quedan en
+    `inspeccion_ia_hallazgos` con el `modulo` correspondiente y se
+    imprimen en el PDF del relevamiento (tabla Ítem/Estado/Comentario).
+  - **Si el catálogo de un módulo está vacío, no se le pide nada extra a
+    la IA** y el formulario no muestra la sección — cero costo/riesgo
+    para un módulo que un Admin todavía no configuró.
+
+- **Spinner mientras la IA está procesando una foto.** A pedido de uso
+  real: los botones "Leer con IA"/"Procesar fotos con IA" de los 5
+  lugares que leen fotos (Tableros, Racks, Equipos, Torres de
+  Comunicación y las dos lecturas de Vehículos) ahora muestran un
+  círculo girando (`<Spinner>`, `src/components/spinner.tsx`) en vez del
+  ícono fijo mientras esperan la respuesta — antes el botón quedaba
+  deshabilitado sin ningún indicador visual de que algo estaba en curso.

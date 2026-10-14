@@ -14,7 +14,7 @@ import {
 import { calcularResumenEquipamiento as calcularResumenRacks, CATEGORIA_EQUIPO_LABEL as RACK_CATEGORIA_LABEL } from "@/components/racks/types";
 import { calcularResumenEquipos, CATEGORIA_EQUIPO_LABEL as EQUIPO_CATEGORIA_LABEL } from "@/components/equipos/types";
 import { SALA_TIPO_CONSTRUCCION_LABEL } from "@/components/salas/types";
-import { calcularRecursoAltura, TIPO_MONTAJE_LABEL, RECURSO_ALTURA_LABEL, type ConfigRecursoAltura } from "@/lib/equipos/recurso-altura";
+import { calcularRecursoAltura, TIPO_MONTAJE_LABEL, construirConfigRecursoAltura } from "@/lib/equipos/recurso-altura";
 import { EstimarConsumoButton } from "@/components/ubicaciones/estimar-consumo-button";
 import { estimarConsumoRacksAction, estimarConsumoEquiposAction } from "../actions";
 import { puedeGestionarBajas, puedeGestionarDeposito } from "@/lib/types";
@@ -228,13 +228,14 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
   const rackEquipoIds = equipamientos.map((e) => e.id);
   const salaIds = salas.map((s) => s.id);
   const idsConMantenimiento = [...rackEquipoIds, ...equipoIndividualIds, ...salaIds];
-  const [programacionesRes, tecnicosRes, checklistItemsRes, recursoAlturaRes, mantenimientosSalaRes] = await Promise.all([
+  const [programacionesRes, tecnicosRes, checklistItemsRes, recursoAlturaRes, recursoAlturaBandasRes, mantenimientosSalaRes] = await Promise.all([
     idsConMantenimiento.length > 0
       ? supabase.from("mantenimiento_programaciones").select("tipo_equipo, equipo_id, fecha_programada, asignado_a, nota, motivo").in("equipo_id", idsConMantenimiento)
       : { data: [] },
     supabase.from("profiles").select("id, nombre_completo").eq("activo", true).order("nombre_completo"),
     supabase.from("mantenimiento_checklist_items").select("id, tipo_equipo, categoria, texto").order("orden"),
-    supabase.from("catalogo_recurso_altura").select("tipo_montaje, recurso_fijo, umbral_escalera_m"),
+    supabase.from("catalogo_recurso_altura").select("tipo_montaje, recurso_fijo"),
+    supabase.from("catalogo_recurso_altura_bandas").select("tipo_montaje, altura_hasta_m, recurso"),
     salaIds.length > 0
       ? supabase
           .from("mantenimientos_equipamiento")
@@ -248,11 +249,7 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
   for (const m of mantenimientosSalaRes.data ?? []) {
     if (!ultimaFechaPorSala.has(m.equipo_id)) ultimaFechaPorSala.set(m.equipo_id, m.fecha);
   }
-  const recursoAlturaConfig: ConfigRecursoAltura[] = (recursoAlturaRes.data ?? []).map((r) => ({
-    tipoMontaje: r.tipo_montaje,
-    recursoFijo: r.recurso_fijo,
-    umbralEscaleraM: r.umbral_escalera_m,
-  }));
+  const recursoAlturaConfig = construirConfigRecursoAltura(recursoAlturaRes.data ?? [], recursoAlturaBandasRes.data ?? []);
   const programacionPorEquipo = new Map(
     (programacionesRes.data ?? []).map((p) => [
       `${p.tipo_equipo}:${p.equipo_id}`,
@@ -704,7 +701,7 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
                               {e.altura_montaje_m != null ? ` · ${e.altura_montaje_m}m` : ""}
                               {recurso && (
                                 <div className="hist-meta">
-                                  <Icon name="wrench" size={11} /> {RECURSO_ALTURA_LABEL[recurso]}
+                                  <Icon name="wrench" size={11} /> {recurso}
                                 </div>
                               )}
                             </>

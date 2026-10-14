@@ -19,7 +19,7 @@ export default async function NuevaMedicionPage({ searchParams }: { searchParams
       .order("numero"),
     fetchTodasLasUbicaciones(supabase),
     supabase.from("catalogo_provincias").select("nombre").order("nombre"),
-    supabase.from("catalogo_hallazgos_seguridad_tablero").select("id, texto").order("orden"),
+    supabase.from("catalogo_inspeccion_ia").select("id, texto").eq("modulo", "tableros").order("orden"),
   ]);
 
   const ubicacionesPorId = new Map(ubicaciones.map((u) => [u.id, u]));

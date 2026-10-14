@@ -1,4 +1,4 @@
-import type { EstadoChecklist, TableroCategoriaEquipo, TableroEventoTipo, TableroJerarquia, TableroTipo, TableroTipoCircuito } from "@/lib/database.types";
+import type { TableroCategoriaEquipo, TableroEventoTipo, TableroJerarquia, TableroTipo, TableroTipoCircuito } from "@/lib/database.types";
 
 /**
  * Máximo de fotos que se pueden mandar juntas a la lectura con IA de un
@@ -224,50 +224,6 @@ export function calcularResumenEquipamiento(
   return { total: items.length, circuitos220vMono, circuitos380vTri, porCategoria };
 }
 
-/**
- * Hallazgo de seguridad evaluado contra el catálogo configurable
- * (`catalogo_hallazgos_seguridad_tablero`) al leer la foto del tablero con
- * IA — reusa el mismo estado de 3 valores que el checklist de
- * mantenimiento (ok/no_ok/no_aplica): "no_ok" = se detectó el hallazgo.
- * `estado: null` = todavía no se evaluó (ni la IA ni el técnico a mano) —
- * esos ítems no se guardan si el técnico no los toca, igual criterio que
- * el checklist de mantenimiento.
- */
-export interface HallazgoSeguridad {
-  itemId: string;
-  texto: string;
-  estado: EstadoChecklist | null;
-  comentario: string;
-}
-
-export const HALLAZGO_ESTADO_LABEL: Record<EstadoChecklist, string> = {
-  ok: "Sin novedad",
-  no_ok: "Hallazgo detectado",
-  no_aplica: "No se pudo evaluar",
-};
-
-/**
- * El técnico puede leer varias tandas de fotos con IA (ej. una por cuerpo
- * del tablero) — cada tanda vuelve a evaluar el catálogo COMPLETO contra
- * esas fotos en particular, así que hay que combinar resultados en vez de
- * pisarlos: una vez que una tanda detecta un hallazgo ("no_ok"), se
- * mantiene aunque una tanda posterior (de otra parte del tablero) no lo
- * vea — nunca se "limpia" un hallazgo real porque la siguiente foto no lo
- * mostraba. Fuera de ese caso, se prioriza el resultado más informativo
- * (cualquiera sobre null/"no_aplica").
- */
-export function mezclarHallazgos(previos: HallazgoSeguridad[], nuevos: HallazgoSeguridad[]): HallazgoSeguridad[] {
-  const porId = new Map(previos.map((h) => [h.itemId, h]));
-  for (const nuevo of nuevos) {
-    const previo = porId.get(nuevo.itemId);
-    if (!previo) {
-      porId.set(nuevo.itemId, nuevo);
-      continue;
-    }
-    if (previo.estado === "no_ok") continue; // ya detectado — se mantiene, nunca se pisa
-    if (previo.estado === null || previo.estado === "no_aplica" || nuevo.estado === "no_ok") {
-      porId.set(nuevo.itemId, nuevo);
-    }
-  }
-  return [...porId.values()];
-}
+// Inspección IA (hallazgos evaluados contra el catálogo configurable del
+// módulo, más allá de los circuitos) vive en src/lib/inspeccion-ia/types.ts
+// — es compartida por los 4 módulos que usan identificación con IA.

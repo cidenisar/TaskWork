@@ -1,4 +1,4 @@
-import type { TipoMontajeCamara, RecursoAlturaMantenimiento } from "@/lib/database.types";
+import type { TipoMontajeCamara } from "@/lib/database.types";
 
 export const TIPO_MONTAJE_OPCIONES: TipoMontajeCamara[] = ["torre", "columna", "poste", "pared", "techo", "otro"];
 
@@ -11,40 +11,56 @@ export const TIPO_MONTAJE_LABEL: Record<TipoMontajeCamara, string> = {
   otro: "Otro",
 };
 
-export const RECURSO_ALTURA_OPCIONES: RecursoAlturaMantenimiento[] = ["escalera", "andamio_manlift", "grupo_altura"];
-
-export const RECURSO_ALTURA_LABEL: Record<RecursoAlturaMantenimiento, string> = {
-  escalera: "Escalera",
-  andamio_manlift: "Andamio / manlift",
-  grupo_altura: "Grupo de altura",
-};
+export interface BandaRecursoAltura {
+  alturaHastaM: number;
+  recurso: string;
+}
 
 export interface ConfigRecursoAltura {
   tipoMontaje: TipoMontajeCamara;
-  recursoFijo: RecursoAlturaMantenimiento | null;
-  umbralEscaleraM: number | null;
+  /** Ignora la altura — ej. Torre siempre necesita el mismo recurso, no es una decisión de cuántos metros. */
+  recursoFijo: string | null;
+  /** Bandas ascendentes "hasta tantos metros, tal recurso" — mismo criterio que catalogo_calibre_cable. */
+  bandas: BandaRecursoAltura[];
 }
 
 /**
  * Qué recurso hace falta para hacer el mantenimiento de una cámara/domo
  * según dónde está montada y a qué altura real — nunca inventado por IA,
  * sale de un catálogo admin-configurable (Configuración → Catálogos →
- * Recurso por altura). "recursoFijo" (ej. torre → grupo de altura) ignora
- * la altura: un trabajo en torre siempre necesita el equipo especializado,
- * no es una decisión de cuántos metros. Sin "recursoFijo", se decide por
- * "umbralEscaleraM": hasta esa altura inclusive, Escalera; por encima,
- * Andamio/Manlift. Devuelve null cuando falta el tipo de montaje, la
- * altura, o no hay regla configurada todavía para ese tipo de montaje.
+ * Recurso por altura), con el nombre del recurso en sí también abierto
+ * (catalogo_tipos_recurso_altura — un Admin puede sumar uno nuevo, ej.
+ * "Andamóvil", sin tocar código). "recursoFijo" ignora la altura; sin él,
+ * se busca la banda más chica cuyo alturaHastaM alcance a cubrir la altura
+ * real. Devuelve null cuando falta el tipo de montaje, la altura, o no hay
+ * ninguna banda configurada que llegue tan alto (nunca se inventa un
+ * recurso para una altura sin regla).
  */
 export function calcularRecursoAltura(
   tipoMontaje: TipoMontajeCamara | null,
   alturaM: number | null,
   config: ConfigRecursoAltura[],
-): RecursoAlturaMantenimiento | null {
+): string | null {
   if (!tipoMontaje) return null;
   const cfg = config.find((c) => c.tipoMontaje === tipoMontaje);
   if (!cfg) return null;
   if (cfg.recursoFijo) return cfg.recursoFijo;
-  if (alturaM == null || cfg.umbralEscaleraM == null) return null;
-  return alturaM <= cfg.umbralEscaleraM ? "escalera" : "andamio_manlift";
+  if (alturaM == null) return null;
+  const ordenadas = [...cfg.bandas].sort((a, b) => a.alturaHastaM - b.alturaHastaM);
+  const banda = ordenadas.find((b) => b.alturaHastaM >= alturaM);
+  return banda ? banda.recurso : null;
+}
+
+/** Arma la config completa (por tipo de montaje) a partir de las dos tablas crudas — mismo shape que necesitan todos los que leen catalogo_recurso_altura/_bandas. */
+export function construirConfigRecursoAltura(
+  fijos: { tipo_montaje: TipoMontajeCamara; recurso_fijo: string | null }[],
+  bandas: { tipo_montaje: TipoMontajeCamara; altura_hasta_m: number; recurso: string }[],
+): ConfigRecursoAltura[] {
+  return TIPO_MONTAJE_OPCIONES.map((tipoMontaje) => ({
+    tipoMontaje,
+    recursoFijo: fijos.find((f) => f.tipo_montaje === tipoMontaje)?.recurso_fijo ?? null,
+    bandas: bandas
+      .filter((b) => b.tipo_montaje === tipoMontaje)
+      .map((b) => ({ alturaHastaM: Number(b.altura_hasta_m), recurso: b.recurso })),
+  }));
 }

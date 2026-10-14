@@ -2,23 +2,25 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { agregarHallazgoSeguridadAction, quitarHallazgoSeguridadAction } from "@/app/(app)/configuracion/actions/hallazgos-seguridad-tablero";
+import { agregarItemInspeccionIaAction, quitarItemInspeccionIaAction } from "@/app/(app)/configuracion/actions/inspeccion-ia";
 import { Icon } from "@/components/icon";
+import type { ModuloInspeccionIa } from "@/lib/database.types";
 
-export interface HallazgoSeguridadItem {
+export interface InspeccionIaItem {
   id: string;
   orden: number;
   texto: string;
 }
 
 /**
- * Catálogo de qué revisar en la foto del tablero además de los circuitos
- * (ej. "Térmica bypaseada sin candado") — la IA evalúa cada ítem contra
- * las fotos al leerlas (ver /api/tableros/leer-foto), el técnico confirma
- * o corrige en el formulario. Igual criterio que el checklist de
- * mantenimiento: catálogo abierto, un Admin agrega/quita sin tocar código.
+ * Tab de Configuración → Catálogos para un módulo de Inspección IA — mismo
+ * componente para los 4 módulos (Tableros, Racks, Equipos, Torres), cada
+ * uno con su propio catálogo filtrado por `modulo`. Un Admin agrega/quita
+ * ítems sin tocar código; la IA de ese módulo los evalúa contra las mismas
+ * fotos que ya usa para identificar lo suyo (ver /api/<modulo>/leer-foto),
+ * el técnico siempre confirma o corrige antes de guardar.
  */
-export function HallazgosSeguridadTab({ items: initialItems }: { items: HallazgoSeguridadItem[] }) {
+export function InspeccionIaTab({ modulo, items: initialItems }: { modulo: ModuloInspeccionIa; items: InspeccionIaItem[] }) {
   const router = useRouter();
   const [items, setItems] = useState(initialItems);
   const [texto, setTexto] = useState("");
@@ -29,7 +31,7 @@ export function HallazgosSeguridadTab({ items: initialItems }: { items: Hallazgo
     if (!texto.trim()) return;
     setBusy(true);
     setError(null);
-    const res = await agregarHallazgoSeguridadAction(texto);
+    const res = await agregarItemInspeccionIaAction(modulo, texto);
     setBusy(false);
     if (!res.success) {
       setError(res.error || "No se pudo agregar.");
@@ -42,7 +44,7 @@ export function HallazgosSeguridadTab({ items: initialItems }: { items: Hallazgo
   async function quitar(id: string) {
     setBusy(true);
     setError(null);
-    const res = await quitarHallazgoSeguridadAction(id);
+    const res = await quitarItemInspeccionIaAction(modulo, id);
     setBusy(false);
     if (!res.success) {
       setError(res.error || "No se pudo quitar.");
@@ -56,14 +58,14 @@ export function HallazgosSeguridadTab({ items: initialItems }: { items: Hallazgo
   return (
     <div>
       <div className="hint" style={{ margin: "0 0 12px" }}>
-        <Icon name="warning" size={13} /> Esta lista es la que la IA evalúa contra las fotos al leer un tablero (Nueva Medición) — el
-        técnico siempre confirma o corrige el resultado antes de guardar, nunca se guarda directo.
+        <Icon name="warning" size={13} /> Esta lista es la que la IA evalúa contra las fotos al leer este módulo — el técnico siempre
+        confirma o corrige el resultado antes de guardar, nunca se guarda directo.
       </div>
       <div className="detalle-table-wrap">
         <table className="detalle-table">
           <thead>
             <tr>
-              <th>Hallazgo a revisar</th>
+              <th>Ítem a revisar</th>
               <th style={{ width: 60 }} />
             </tr>
           </thead>
@@ -71,7 +73,7 @@ export function HallazgosSeguridadTab({ items: initialItems }: { items: Hallazgo
             {ordenados.length === 0 ? (
               <tr>
                 <td colSpan={2} className="empty-note">
-                  Todavía no hay hallazgos configurados.
+                  Todavía no hay ítems configurados.
                 </td>
               </tr>
             ) : (
@@ -79,7 +81,7 @@ export function HallazgosSeguridadTab({ items: initialItems }: { items: Hallazgo
                 <tr key={i.id}>
                   <td>{i.texto}</td>
                   <td>
-                    <button type="button" className="remove-btn" onClick={() => quitar(i.id)} disabled={busy} aria-label="Quitar hallazgo">
+                    <button type="button" className="remove-btn" onClick={() => quitar(i.id)} disabled={busy} aria-label="Quitar ítem">
                       <Icon name="x" size={12} />
                     </button>
                   </td>
@@ -90,7 +92,7 @@ export function HallazgosSeguridadTab({ items: initialItems }: { items: Hallazgo
         </table>
       </div>
       <div className="field" style={{ marginTop: 10, marginBottom: 0 }}>
-        <label style={{ fontSize: 12 }}>Nuevo hallazgo a revisar</label>
+        <label style={{ fontSize: 12 }}>Nuevo ítem a revisar</label>
         <input
           type="text"
           placeholder="Ej: Térmica bypaseada/puenteada sin candado de bloqueo"
@@ -100,7 +102,7 @@ export function HallazgosSeguridadTab({ items: initialItems }: { items: Hallazgo
         />
       </div>
       <button type="button" className="btn btn-secondary btn-sm" onClick={agregar} disabled={busy || !texto.trim()} style={{ marginTop: 10 }}>
-        + Agregar hallazgo
+        + Agregar ítem
       </button>
       {error && (
         <div className="error-text" style={{ marginTop: 8 }}>

@@ -6,6 +6,7 @@ import { reportarErrorCliente } from "@/lib/client-error-report";
 import { resizeImageToJpeg } from "@/lib/image-resize";
 import { ErrorNote, SuccessNote } from "@/components/notes";
 import { Icon } from "@/components/icon";
+import { Spinner } from "@/components/spinner";
 import { VerPdfLink } from "@/components/ver-pdf-link";
 import { obtenerUrlPdfRelevamientoEquiposAction } from "@/app/(app)/equipos/historial/actions";
 import { UbicacionFields, type GpsCapturado } from "@/components/ubicaciones/ubicacion-fields";
@@ -19,13 +20,10 @@ import {
   calcularResumenEquipos,
   type EquipoItem,
 } from "./types";
-import {
-  TIPO_MONTAJE_OPCIONES,
-  TIPO_MONTAJE_LABEL,
-  RECURSO_ALTURA_LABEL,
-  calcularRecursoAltura,
-  type ConfigRecursoAltura,
-} from "@/lib/equipos/recurso-altura";
+import { TIPO_MONTAJE_OPCIONES, TIPO_MONTAJE_LABEL, calcularRecursoAltura, type ConfigRecursoAltura } from "@/lib/equipos/recurso-altura";
+import { mezclarHallazgos, type HallazgoInspeccionIa } from "@/lib/inspeccion-ia/types";
+import { HallazgosInspeccionIaSection } from "@/components/inspeccion-ia/hallazgos-section";
+import type { EstadoChecklist } from "@/lib/database.types";
 
 interface LecturaState {
   estado: string;
@@ -51,12 +49,14 @@ export function NuevoRelevamientoEquiposForm({
   equiposExistentesPorUbicacion,
   puedeDeposito,
   recursoAlturaConfig,
+  catalogoHallazgos,
 }: {
   ubicaciones: Ubicacion[];
   provincias: string[];
   equiposExistentesPorUbicacion: Record<string, EquipoItem[]>;
   puedeDeposito: boolean;
   recursoAlturaConfig: ConfigRecursoAltura[];
+  catalogoHallazgos: { id: string; texto: string }[];
 }) {
   const [provinciaFiltro, setProvinciaFiltro] = useState("");
   const [ubicacionId, setUbicacionId] = useState<string>(""); // "" = sin elegir, "__new" = crear
@@ -89,6 +89,12 @@ export function NuevoRelevamientoEquiposForm({
   const [depositoResultados, setDepositoResultados] = useState<EquipoEnDepositoResultado[]>([]);
   const [depositoBusy, setDepositoBusy] = useState(false);
   const [depositoNote, setDepositoNote] = useState<string | null>(null);
+  // Arranca con el catálogo completo sin evaluar (estado null) — el técnico
+  // puede marcarlos a mano aunque no use la lectura con IA; cada lectura IA
+  // sugiere un estado que igual queda a confirmar/corregir acá.
+  const [hallazgos, setHallazgos] = useState<HallazgoInspeccionIa[]>(
+    () => catalogoHallazgos.map((h) => ({ itemId: h.id, texto: h.texto, estado: null, comentario: "" })),
+  );
 
   const resumen = useMemo(() => calcularResumenEquipos(equipos), [equipos]);
 
@@ -127,6 +133,14 @@ export function NuevoRelevamientoEquiposForm({
 
   function quitarFotoIa(i: number) {
     setFotosIa((prev) => prev.filter((_, idx) => idx !== i));
+  }
+
+  function setEstadoHallazgo(itemId: string, estado: EstadoChecklist) {
+    setHallazgos((prev) => prev.map((h) => (h.itemId === itemId ? { ...h, estado } : h)));
+  }
+
+  function setComentarioHallazgo(itemId: string, comentario: string) {
+    setHallazgos((prev) => prev.map((h) => (h.itemId === itemId ? { ...h, comentario } : h)));
   }
 
   async function leerFotosConIa() {
@@ -194,12 +208,22 @@ export function NuevoRelevamientoEquiposForm({
           revisar: d.identificado !== true,
         })),
       ]);
+      const hallazgosNuevos: HallazgoInspeccionIa[] = data.hallazgos ?? [];
+      let hallazgosDetectadosAhora = 0;
+      if (hallazgosNuevos.length > 0) {
+        const combinados = mezclarHallazgos(hallazgos, hallazgosNuevos);
+        hallazgosDetectadosAhora = combinados.filter((h) => h.estado === "no_ok").length;
+        setHallazgos(combinados);
+      }
       const sinEtiqueta = detectados.filter((d) => d.identificado !== true).length;
       setIaNote(
         `Se identificaron ${detectados.length} equipo${detectados.length === 1 ? "" : "s"} desde ${exitosas} foto${exitosas === 1 ? "" : "s"}` +
           (sinEtiqueta > 0
             ? ` — ${sinEtiqueta} sin etiqueta legible, marcados para revisar (la IA describió y clasificó lo que vio, pero no adivina el nombre/serie sin una etiqueta física).`
             : " — revisá la categoría/marca/serie antes de guardar.") +
+          (hallazgosDetectadosAhora > 0
+            ? ` ⚠ Se detectaron ${hallazgosDetectadosAhora} hallazgo${hallazgosDetectadosAhora === 1 ? "" : "s"} de Inspección IA — revisalos más abajo.`
+            : "") +
           (fallidas.length > 0 ? ` (${fallidas.length} foto${fallidas.length === 1 ? "" : "s"} no se pudo leer: ${primerError})` : ""),
       );
       setFotosIa(fallidas);
@@ -329,6 +353,9 @@ export function NuevoRelevamientoEquiposForm({
               desdeDeposito: e.desdeDeposito ?? false,
             };
           }),
+          hallazgos: hallazgos
+            .filter((h) => h.estado !== null)
+            .map((h) => ({ itemId: h.itemId, estado: h.estado, comentario: h.comentario.trim() })),
         }),
       );
       if (fotoGeneral) {
@@ -519,7 +546,7 @@ export function NuevoRelevamientoEquiposForm({
             </button>
             {fotosIa.length > 0 && (
               <button type="button" className="ai-btn" onClick={() => void leerFotosConIa()} disabled={submitting || iaBusy}>
-                <Icon name="ai" size={13} />{" "}
+                {iaBusy ? <Spinner /> : <Icon name="ai" size={13} />}{" "}
                 {iaBusy ? "Procesando..." : `Procesar ${fotosIa.length} foto${fotosIa.length === 1 ? "" : "s"} con IA`}
               </button>
             )}
@@ -541,6 +568,13 @@ export function NuevoRelevamientoEquiposForm({
               <span>{iaNote}</span>
             </div>
           )}
+
+          <HallazgosInspeccionIaSection
+            hallazgos={hallazgos}
+            onEstado={setEstadoHallazgo}
+            onComentario={setComentarioHallazgo}
+            disabled={submitting}
+          />
 
           {puedeDeposito && (
             <div style={{ border: "1.5px solid var(--field-border)", borderRadius: 8, padding: 12, marginBottom: 14 }}>
@@ -756,7 +790,7 @@ export function NuevoRelevamientoEquiposForm({
                             const recurso = calcularRecursoAltura(e.tipoMontaje, e.alturaMontajeM, recursoAlturaConfig);
                             return recurso ? (
                               <span className="chip">
-                                <Icon name="wrench" size={11} /> Recurso: {RECURSO_ALTURA_LABEL[recurso]}
+                                <Icon name="wrench" size={11} /> Recurso: {recurso}
                               </span>
                             ) : null;
                           })()}
@@ -780,7 +814,7 @@ export function NuevoRelevamientoEquiposForm({
                         const recurso = calcularRecursoAltura(e.tipoMontaje, e.alturaMontajeM, recursoAlturaConfig);
                         return recurso ? (
                           <span className="chip">
-                            <Icon name="wrench" size={11} /> Recurso: {RECURSO_ALTURA_LABEL[recurso]}
+                            <Icon name="wrench" size={11} /> Recurso: {recurso}
                           </span>
                         ) : null;
                       })()}

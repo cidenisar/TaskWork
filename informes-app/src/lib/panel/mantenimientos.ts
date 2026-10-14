@@ -7,7 +7,7 @@ import {
   TIPO_EQUIPO_MANTENIMIENTO_LABEL,
   MOTIVO_REPROGRAMACION_LABEL,
 } from "@/lib/mantenimiento/types";
-import { calcularRecursoAltura, RECURSO_ALTURA_LABEL, type ConfigRecursoAltura } from "@/lib/equipos/recurso-altura";
+import { calcularRecursoAltura, construirConfigRecursoAltura } from "@/lib/equipos/recurso-altura";
 import { getPronosticosPorSitio, type PronosticoSitio } from "@/lib/panel/clima";
 import type { TipoEquipoMantenimiento, TipoMontajeCamara } from "@/lib/database.types";
 
@@ -78,6 +78,7 @@ export async function getPanelMantenimientos(supabase: Supabase): Promise<PanelM
     programacionesRes,
     tecnicosRes,
     recursoAlturaRes,
+    recursoAlturaBandasRes,
   ] = await Promise.all([
     fetchTodasLasUbicaciones(supabase),
     supabase.from("mantenimiento_intervalos").select("tipo_equipo, categoria, frecuencia_dias"),
@@ -88,13 +89,10 @@ export async function getPanelMantenimientos(supabase: Supabase): Promise<PanelM
     supabase.from("mantenimientos_equipamiento").select("tipo_equipo, equipo_id, fecha").order("fecha", { ascending: false }),
     supabase.from("mantenimiento_programaciones").select("tipo_equipo, equipo_id, fecha_programada, asignado_a, origen, motivo"),
     supabase.from("profiles").select("id, nombre_completo"),
-    supabase.from("catalogo_recurso_altura").select("tipo_montaje, recurso_fijo, umbral_escalera_m"),
+    supabase.from("catalogo_recurso_altura").select("tipo_montaje, recurso_fijo"),
+    supabase.from("catalogo_recurso_altura_bandas").select("tipo_montaje, altura_hasta_m, recurso"),
   ]);
-  const recursoAlturaConfig: ConfigRecursoAltura[] = (recursoAlturaRes.data ?? []).map((r) => ({
-    tipoMontaje: r.tipo_montaje,
-    recursoFijo: r.recurso_fijo,
-    umbralEscaleraM: r.umbral_escalera_m,
-  }));
+  const recursoAlturaConfig = construirConfigRecursoAltura(recursoAlturaRes.data ?? [], recursoAlturaBandasRes.data ?? []);
 
   const frecuenciaPorCategoria = new Map<string, number>();
   for (const i of intervalosRes.data ?? []) {
@@ -157,10 +155,7 @@ export async function getPanelMantenimientos(supabase: Supabase): Promise<PanelM
       esProgramada: programacion != null,
       programacionEsManual: programacion?.origen === "manual",
       motivoLabel: programacion?.motivo ? MOTIVO_REPROGRAMACION_LABEL[programacion.motivo] : null,
-      recursoAlturaLabel: (() => {
-        const recurso = calcularRecursoAltura(tipoMontaje, alturaMontajeM, recursoAlturaConfig);
-        return recurso ? RECURSO_ALTURA_LABEL[recurso] : null;
-      })(),
+      recursoAlturaLabel: calcularRecursoAltura(tipoMontaje, alturaMontajeM, recursoAlturaConfig),
       asignadoNombre: programacion?.asignadoA ? (nombrePorTecnico.get(programacion.asignadoA) ?? null) : null,
       clima: null,
     });

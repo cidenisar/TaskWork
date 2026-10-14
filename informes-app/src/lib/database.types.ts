@@ -78,7 +78,8 @@ export type TipoEquipoMantenimiento = "rack_equipamiento" | "equipo_individual" 
 export type SalaTipoConstruccion = "sala_interior" | "shelter" | "container" | "otro";
 /** Dónde está instalada una cámara/domo (Equipos Individuales) — determina junto con la altura qué recurso hace falta para el mantenimiento. */
 export type TipoMontajeCamara = "torre" | "columna" | "poste" | "pared" | "techo" | "otro";
-export type RecursoAlturaMantenimiento = "escalera" | "andamio_manlift" | "grupo_altura";
+/** Nombre libre tomado de catalogo_tipos_recurso_altura — ya no es un enum fijo, un Admin puede agregar uno nuevo (ej. "Andamóvil"). */
+export type RecursoAlturaMantenimiento = string;
 export type TableroJerarquia = "principal" | "secundario";
 
 /** Helper para darle a cada tabla la forma que espera postgrest-js (incluye Relationships). */
@@ -362,18 +363,23 @@ export type TableroMedicionLecturaRow = {
   comentario: string | null;
 }
 
-/** Catálogo admin-configurable de qué revisar en la foto del tablero además de los circuitos (ver EstadoChecklist). */
-export type CatalogoHallazgoSeguridadTableroRow = {
+/** Qué módulo de relevamiento con IA tiene cargado este ítem/resultado de Inspección IA (ver ModuloInspeccionIa). */
+export type ModuloInspeccionIa = "tableros" | "racks" | "equipos" | "torres";
+
+/** Catálogo admin-configurable de qué revisar en las fotos de un módulo, además de lo que esa IA ya identifica (ver EstadoChecklist). */
+export type CatalogoInspeccionIaRow = {
   id: string;
+  modulo: ModuloInspeccionIa;
   orden: number;
   texto: string;
   created_by: string | null;
   created_at: string;
 }
 
-export type TableroMedicionHallazgoRow = {
+export type InspeccionIaHallazgoRow = {
   id: string;
-  medicion_id: string;
+  modulo: ModuloInspeccionIa;
+  registro_id: string;
   item_id: string;
   estado: EstadoChecklist;
   comentario: string | null;
@@ -557,9 +563,25 @@ export type CatalogoRecursoAlturaRow = {
   id: string;
   tipo_montaje: TipoMontajeCamara;
   recurso_fijo: RecursoAlturaMantenimiento | null;
-  umbral_escalera_m: number | null;
   updated_by: string | null;
   updated_at: string;
+}
+
+/** Catálogo abierto de nombres de recurso (Escalera, Andamio/Manlift, Grupo de altura, Andamóvil, ...) — SimpleCatalogTab (id, nombre). */
+export type CatalogoTipoRecursoAlturaRow = {
+  id: string;
+  nombre: string;
+  created_at: string;
+}
+
+/** Banda "hasta tantos metros, tal recurso" por tipo de montaje — mismo criterio que catalogo_calibre_cable. */
+export type CatalogoRecursoAlturaBandaRow = {
+  id: string;
+  tipo_montaje: TipoMontajeCamara;
+  altura_hasta_m: number;
+  recurso: string;
+  created_by: string | null;
+  created_at: string;
 }
 
 export type CatalogoCalibreCableRow = {
@@ -861,15 +883,15 @@ export interface Database {
           Pick<TableroMantenimientoRow, "tablero_id" | "fecha" | "descripcion" | "created_by">,
         Partial<TableroMantenimientoRow>
       >;
-      catalogo_hallazgos_seguridad_tablero: Tbl<
-        CatalogoHallazgoSeguridadTableroRow,
-        Partial<CatalogoHallazgoSeguridadTableroRow> & Pick<CatalogoHallazgoSeguridadTableroRow, "texto">,
-        Partial<CatalogoHallazgoSeguridadTableroRow>
+      catalogo_inspeccion_ia: Tbl<
+        CatalogoInspeccionIaRow,
+        Partial<CatalogoInspeccionIaRow> & Pick<CatalogoInspeccionIaRow, "modulo" | "texto">,
+        Partial<CatalogoInspeccionIaRow>
       >;
-      tablero_medicion_hallazgos: Tbl<
-        TableroMedicionHallazgoRow,
-        Partial<TableroMedicionHallazgoRow> & Pick<TableroMedicionHallazgoRow, "medicion_id" | "item_id" | "estado">,
-        Partial<TableroMedicionHallazgoRow>
+      inspeccion_ia_hallazgos: Tbl<
+        InspeccionIaHallazgoRow,
+        Partial<InspeccionIaHallazgoRow> & Pick<InspeccionIaHallazgoRow, "modulo" | "registro_id" | "item_id" | "estado">,
+        Partial<InspeccionIaHallazgoRow>
       >;
       racks: Tbl<RackRow, Partial<RackRow> & Pick<RackRow, "denominacion" | "ubicacion_id">, Partial<RackRow>>;
       ubicaciones: Tbl<UbicacionRow, Partial<UbicacionRow> & Pick<UbicacionRow, "provincia" | "sitio">, Partial<UbicacionRow>>;
@@ -921,6 +943,16 @@ export interface Database {
         CatalogoRecursoAlturaRow,
         Partial<CatalogoRecursoAlturaRow> & Pick<CatalogoRecursoAlturaRow, "tipo_montaje">,
         Partial<CatalogoRecursoAlturaRow>
+      >;
+      catalogo_tipos_recurso_altura: Tbl<
+        CatalogoTipoRecursoAlturaRow,
+        Partial<CatalogoTipoRecursoAlturaRow> & Pick<CatalogoTipoRecursoAlturaRow, "nombre">,
+        Partial<CatalogoTipoRecursoAlturaRow>
+      >;
+      catalogo_recurso_altura_bandas: Tbl<
+        CatalogoRecursoAlturaBandaRow,
+        Partial<CatalogoRecursoAlturaBandaRow> & Pick<CatalogoRecursoAlturaBandaRow, "tipo_montaje" | "altura_hasta_m" | "recurso">,
+        Partial<CatalogoRecursoAlturaBandaRow>
       >;
       catalogo_calibre_cable: Tbl<
         CatalogoCalibreCableRow,

@@ -7,7 +7,13 @@ import { renderTorreComunicacionPdf } from "@/lib/pdf/render";
 import { buildTorreComunicacionFilename } from "@/lib/pdf/filename";
 import { resolverUbicacionId, tagGpsSiFalta, type PayloadUbicacionNueva, type PayloadGps } from "@/lib/ubicaciones/resolver";
 import { calcularResumenEquipamientoTorre } from "@/components/torres-comunicacion/types";
-import type { TorreComunicacionCategoriaEquipo, TorreTipo } from "@/lib/database.types";
+import type { EstadoChecklist, TorreComunicacionCategoriaEquipo, TorreTipo } from "@/lib/database.types";
+
+interface PayloadHallazgo {
+  itemId: string;
+  estado: EstadoChecklist;
+  comentario: string;
+}
 
 interface PayloadLectura {
   equipamientoId: string | null;
@@ -35,6 +41,7 @@ export interface CrearRelevamientoTorreComunicacionPayload {
   alturaEstimadaMNueva: number | null;
   fecha: string;
   lecturas: PayloadLectura[];
+  hallazgos?: PayloadHallazgo[];
 }
 
 export interface CrearRelevamientoTorreComunicacionResult {
@@ -185,6 +192,20 @@ export async function crearRelevamientoTorreComunicacionAction(formData: FormDat
     return { success: false, error: `No se pudieron guardar las lecturas: ${lecturasErr.message}` };
   }
 
+  // Inspección IA (opcional): solo los ítems que el técnico confirmó/corrigió
+  // (estado no nulo) — ver catalogo_inspeccion_ia (modulo="torres").
+  if (payload.hallazgos && payload.hallazgos.length > 0) {
+    await supabase.from("inspeccion_ia_hallazgos").insert(
+      payload.hallazgos.map((h) => ({
+        modulo: "torres" as const,
+        registro_id: relevamientoId!,
+        item_id: h.itemId,
+        estado: h.estado,
+        comentario: h.comentario.trim() || null,
+      })),
+    );
+  }
+
   // Fotos generales de la torre (opcionales, hasta TORRE_FOTO_GENERAL_MAX):
   // registro + quedan adjuntas en el PDF. Reusa el bucket informe-fotos ya
   // existente. Una foto que falla no debe tirar abajo todo el relevamiento.
@@ -219,6 +240,22 @@ export async function crearRelevamientoTorreComunicacionAction(formData: FormDat
 
   const resumen = calcularResumenEquipamientoTorre(payload.lecturas);
 
+  const hallazgosConfirmados = (payload.hallazgos ?? []).filter((h) => h.estado);
+  let hallazgosPdf: { texto: string; estado: EstadoChecklist; comentario: string | null }[] = [];
+  if (hallazgosConfirmados.length > 0) {
+    const { data: hallazgosCatalogo } = await supabase
+      .from("catalogo_inspeccion_ia")
+      .select("id, texto")
+      .in(
+        "id",
+        hallazgosConfirmados.map((h) => h.itemId),
+      );
+    const textoPorId = new Map((hallazgosCatalogo ?? []).map((h) => [h.id, h.texto]));
+    hallazgosPdf = hallazgosConfirmados
+      .map((h) => ({ texto: textoPorId.get(h.itemId), estado: h.estado, comentario: h.comentario.trim() || null }))
+      .filter((h): h is { texto: string; estado: EstadoChecklist; comentario: string | null } => !!h.texto);
+  }
+
   const pdfBuffer = await renderTorreComunicacionPdf({
     numeroGeneracion,
     denominacion: torreRow.denominacion,
@@ -234,6 +271,7 @@ export async function crearRelevamientoTorreComunicacionAction(formData: FormDat
     fecha: payload.fecha,
     resumen,
     fotosGeneralesBuffers,
+    hallazgos: hallazgosPdf,
     lecturas: payload.lecturas.map((l) => ({
       numero: l.numero,
       categoriaEquipo: l.categoriaEquipo,

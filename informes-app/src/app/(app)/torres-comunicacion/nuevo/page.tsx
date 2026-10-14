@@ -9,7 +9,7 @@ export default async function NuevoRelevamientoTorreComunicacionPage() {
   await requireProfile();
   const supabase = await createClient();
 
-  const [torresRes, equipamientosRes, ubicaciones, provinciasRes, largosTramoRes] = await Promise.all([
+  const [torresRes, equipamientosRes, ubicaciones, provinciasRes, largosTramoRes, hallazgosRes] = await Promise.all([
     supabase.from("torres_comunicacion").select("id, denominacion, tipo_torre, tramos_contados, altura_estimada_m, ubicacion_id").order("denominacion"),
     supabase
       .from("torre_comunicacion_equipamientos")
@@ -19,6 +19,7 @@ export default async function NuevoRelevamientoTorreComunicacionPage() {
     fetchTodasLasUbicaciones(supabase),
     supabase.from("catalogo_provincias").select("nombre").order("nombre"),
     supabase.from("torre_tipo_largos").select("tipo_torre, largo_tramo_m"),
+    supabase.from("catalogo_inspeccion_ia").select("id, texto").eq("modulo", "torres").order("orden"),
   ]);
 
   const ubicacionesPorId = new Map(ubicaciones.map((u) => [u.id, u]));
@@ -26,6 +27,7 @@ export default async function NuevoRelevamientoTorreComunicacionPage() {
   const largosTramoM = Object.fromEntries((largosTramoRes.data ?? []).map((l) => [l.tipo_torre, Number(l.largo_tramo_m)])) as Partial<
     Record<NonNullable<TorreConEquipamiento["tipoTorre"]>, number>
   >;
+  const catalogoHallazgos = hallazgosRes.data ?? [];
 
   const equipamientoPorTorre = new Map<string, TorreConEquipamiento["equipamiento"]>();
   for (const e of equipamientosRes.data ?? []) {
@@ -64,7 +66,13 @@ export default async function NuevoRelevamientoTorreComunicacionPage() {
 
   return (
     <div>
-      <NuevoRelevamientoForm torres={torres} ubicaciones={ubicaciones} provincias={provincias} largosTramoM={largosTramoM} />
+      <NuevoRelevamientoForm
+        torres={torres}
+        ubicaciones={ubicaciones}
+        provincias={provincias}
+        largosTramoM={largosTramoM}
+        catalogoHallazgos={catalogoHallazgos}
+      />
     </div>
   );
 }

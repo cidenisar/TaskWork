@@ -4,6 +4,7 @@ import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { CATEGORIA_EQUIPO_OPCIONES, CATEGORIA_EQUIPO_LABEL, TORRE_FOTO_IA_MAX, TIPO_TORRE_OPCIONES, TIPO_TORRE_LABEL } from "@/components/torres-comunicacion/types";
 import type { TorreComunicacionCategoriaEquipo, TorreTipo } from "@/lib/database.types";
+import { instruccionInspeccionIa, INSTRUCCION_RESPUESTA_HALLAZGOS, parseHallazgosDetectados } from "@/lib/inspeccion-ia/prompt";
 
 /**
  * Lee hasta TORRE_FOTO_IA_MAX fotos de una torre de comunicaciones con
@@ -83,6 +84,17 @@ export async function POST(req: NextRequest) {
     })),
   );
 
+  // Catálogo configurable de Inspección IA (Configuración → Catálogos,
+  // módulo "torres") — se evalúa contra las mismas fotos, además de
+  // identificar equipamiento. Si no hay ningún ítem cargado, se le pide a la
+  // IA una lista vacía (nunca se inventa hallazgos fuera del catálogo).
+  const { data: catalogoHallazgos } = await supabase
+    .from("catalogo_inspeccion_ia")
+    .select("id, texto")
+    .eq("modulo", "torres")
+    .order("orden");
+  const hallazgosItems = catalogoHallazgos ?? [];
+
   const contextoFotos =
     imagenes.length > 1
       ? ` Te paso ${imagenes.length} fotos de la MISMA torre (pueden ser ángulos distintos, alturas distintas, fotos tomadas desde ` +
@@ -90,6 +102,8 @@ export async function POST(req: NextRequest) {
         "equipamiento: si el mismo equipo físico aparece en más de una foto, contalo una sola vez (usá la foto donde se vea más claro " +
         "para completar texto/marca/altura), y numerá de forma correlativa el conjunto combinado, no cada foto por separado."
       : "";
+
+  const instruccionHallazgos = instruccionInspeccionIa(hallazgosItems);
 
   try {
     const client = new Anthropic();
@@ -139,11 +153,12 @@ export async function POST(req: NextRequest) {
         "por otro equipamiento/vegetación, sin corte en la foto antes de la punta). false en cualquier otro caso, incluyendo cuando " +
         '"tramosContados" es null.\n' +
         "Esto es para una ESTIMACIÓN de altura (tramos × largo de tramo estándar, que se aplica después con un valor real configurado, " +
-        "no algo que vos calcules) — nunca inventes un conteo que no puedas justificar por lo que ves en la foto.\n\n" +
+        "no algo que vos calcules) — nunca inventes un conteo que no puedas justificar por lo que ves en la foto." +
+        `${instruccionHallazgos}\n\n` +
         'Respondé ÚNICAMENTE con un JSON válido: {"equipos": [{"numero": number, "texto": string, "categoriaEquipo": string, ' +
         '"marcaModelo": string, "alturaM": string, "etiquetaYpf": string, "identificado": boolean, "consumoPromedioW": number | null, ' +
-        '"consumoMaxW": number | null}], "torre": {"tipoTorre": string, "tramosContados": number | null, "tramosConfiable": boolean}}, ' +
-        "sin texto antes ni después, sin bloque de código markdown.",
+        '"consumoMaxW": number | null}], "torre": {"tipoTorre": string, "tramosContados": number | null, "tramosConfiable": boolean}, ' +
+        `"hallazgos": [...]} donde ${INSTRUCCION_RESPUESTA_HALLAZGOS}. Sin texto antes ni después, sin bloque de código markdown.`,
       messages: [
         {
           role: "user",
@@ -170,7 +185,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "No se pudo leer la foto." }, { status: 502 });
     }
 
-    let parsed: { equipos?: EquipoDetectado[]; torre?: TorreDetectada };
+    let parsed: { equipos?: EquipoDetectado[]; torre?: TorreDetectada; hallazgos?: unknown[] };
     try {
       const match = textBlock.text.match(/\{[\s\S]*\}/);
       parsed = JSON.parse(match ? match[0] : textBlock.text);
@@ -208,6 +223,7 @@ export async function POST(req: NextRequest) {
           torre && Number.isFinite(torre.tramosContados) && (torre.tramosContados as number) > 0 ? Math.round(torre.tramosContados as number) : null,
         tramosConfiable: torre?.tramosConfiable === true,
       },
+      hallazgos: parseHallazgosDetectados(parsed.hallazgos, hallazgosItems),
     });
   } catch (err) {
     const detalle = err instanceof Error ? err.message : String(err);

@@ -4,13 +4,13 @@ import { NuevoRelevamientoEquiposForm } from "@/components/equipos/nuevo-relevam
 import type { EquipoItem } from "@/components/equipos/types";
 import { fetchTodasLasUbicaciones } from "@/lib/ubicaciones/fetch-todas";
 import { puedeGestionarDeposito } from "@/lib/types";
-import type { ConfigRecursoAltura } from "@/lib/equipos/recurso-altura";
+import { construirConfigRecursoAltura } from "@/lib/equipos/recurso-altura";
 
 export default async function NuevoRelevamientoEquiposPage() {
   const profile = await requireProfile();
   const supabase = await createClient();
 
-  const [equiposRes, ubicaciones, provinciasRes, recursoAlturaRes] = await Promise.all([
+  const [equiposRes, ubicaciones, provinciasRes, recursoAlturaRes, recursoAlturaBandasRes, hallazgosRes] = await Promise.all([
     supabase
       .from("equipos")
       .select(
@@ -20,15 +20,14 @@ export default async function NuevoRelevamientoEquiposPage() {
       .order("texto"),
     fetchTodasLasUbicaciones(supabase),
     supabase.from("catalogo_provincias").select("nombre").order("nombre"),
-    supabase.from("catalogo_recurso_altura").select("tipo_montaje, recurso_fijo, umbral_escalera_m"),
+    supabase.from("catalogo_recurso_altura").select("tipo_montaje, recurso_fijo"),
+    supabase.from("catalogo_recurso_altura_bandas").select("tipo_montaje, altura_hasta_m, recurso"),
+    supabase.from("catalogo_inspeccion_ia").select("id, texto").eq("modulo", "equipos").order("orden"),
   ]);
 
   const provincias = (provinciasRes.data ?? []).map((p) => p.nombre);
-  const recursoAlturaConfig: ConfigRecursoAltura[] = (recursoAlturaRes.data ?? []).map((r) => ({
-    tipoMontaje: r.tipo_montaje,
-    recursoFijo: r.recurso_fijo,
-    umbralEscaleraM: r.umbral_escalera_m,
-  }));
+  const recursoAlturaConfig = construirConfigRecursoAltura(recursoAlturaRes.data ?? [], recursoAlturaBandasRes.data ?? []);
+  const catalogoHallazgos = hallazgosRes.data ?? [];
 
   const equiposPorUbicacion = new Map<string, EquipoItem[]>();
   for (const e of equiposRes.data ?? []) {
@@ -58,6 +57,7 @@ export default async function NuevoRelevamientoEquiposPage() {
         equiposExistentesPorUbicacion={equiposExistentesPorUbicacion}
         puedeDeposito={puedeGestionarDeposito(profile.rol)}
         recursoAlturaConfig={recursoAlturaConfig}
+        catalogoHallazgos={catalogoHallazgos}
       />
     </div>
   );

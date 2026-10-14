@@ -11,6 +11,7 @@ import {
   TABLERO_FOTO_IA_MAX,
 } from "@/components/tableros/types";
 import type { TableroCategoriaEquipo, TableroTipo, TableroTipoCircuito } from "@/lib/database.types";
+import { instruccionInspeccionIa, INSTRUCCION_RESPUESTA_HALLAZGOS, parseHallazgosDetectados } from "@/lib/inspeccion-ia/prompt";
 
 /** Solo térmicas/disyuntores tienen una palanca cuya posición física dice el estado. */
 const CATEGORIAS_CON_PALANCA: TableroCategoriaEquipo[] = ["termica", "disyuntor"];
@@ -41,14 +42,6 @@ interface CircuitoDetectado {
   identificado: boolean;
   estadoDetectado: string | null;
 }
-
-interface HallazgoDetectado {
-  itemId: string;
-  estado: string;
-  comentario: string;
-}
-
-const ESTADOS_HALLAZGO = ["ok", "no_ok", "no_aplica"] as const;
 
 const CATEGORIAS_TEXTO = CATEGORIA_EQUIPO_OPCIONES.map((c) => `"${c}" (${CATEGORIA_EQUIPO_LABEL[c]})`).join(", ");
 const TIPOS_CIRCUITO_TEXTO = TIPO_CIRCUITO_OPCIONES.map((t) => `"${t}" (${TIPO_CIRCUITO_LABEL[t]})`).join(", ");
@@ -106,13 +99,14 @@ export async function POST(req: NextRequest) {
     })),
   );
 
-  // Catálogo configurable de hallazgos de seguridad (Configuración →
-  // Catálogos) — se evalúa contra las mismas fotos, además de identificar
-  // circuitos. Si no hay ninguno cargado, se le pide a la IA una lista
-  // vacía (nunca se inventa hallazgos que no estén en el catálogo).
+  // Catálogo configurable de Inspección IA (Configuración → Catálogos,
+  // módulo "tableros") — se evalúa contra las mismas fotos, además de
+  // identificar circuitos. Si no hay ningún ítem cargado, se le pide a la
+  // IA una lista vacía (nunca se inventa hallazgos fuera del catálogo).
   const { data: catalogoHallazgos } = await supabase
-    .from("catalogo_hallazgos_seguridad_tablero")
+    .from("catalogo_inspeccion_ia")
     .select("id, texto")
+    .eq("modulo", "tableros")
     .order("orden");
   const hallazgosItems = catalogoHallazgos ?? [];
 
@@ -128,20 +122,7 @@ export async function POST(req: NextRequest) {
         "amperaje/categoría), y numerá de forma correlativa el conjunto combinado, no cada foto por separado."
       : "";
 
-  const instruccionHallazgos =
-    hallazgosItems.length > 0
-      ? "\n\nADEMÁS de los circuitos, revisá estas fotos buscando específicamente estos hallazgos de seguridad/estado del gabinete " +
-        "(catálogo configurado por un Administrador):\n" +
-        hallazgosItems.map((h) => `- id "${h.id}": ${h.texto}`).join("\n") +
-        '\n\nPara CADA ítem de esa lista (sin excepción, incluilos todos aunque no encuentres nada) devolvé un objeto {"itemId": ' +
-        'string, "estado": string, "comentario": string} donde:\n' +
-        '- "itemId": el id EXACTO del ítem tal cual te lo pasé.\n' +
-        '- "estado": "no_ok" si lo que describe el ítem SE VE en la foto (hallazgo detectado — hay un problema), "ok" si se puede ' +
-        'ver la zona relevante y el hallazgo NO está presente, "no_aplica" si la foto no permite evaluarlo (ángulo, obstruido, ' +
-        "borroso, o esa parte del tablero no aparece en ninguna foto). Nunca inventes un \"no_ok\" que no puedas justificar por lo " +
-        "que ves.\n" +
-        '- "comentario": una frase corta justificando el estado (qué viste, o por qué no se pudo evaluar). Nunca vacío.'
-      : "";
+  const instruccionHallazgos = instruccionInspeccionIa(hallazgosItems);
 
   try {
     const client = new Anthropic();
@@ -180,9 +161,8 @@ export async function POST(req: NextRequest) {
         `${instruccionHallazgos}\n\n` +
         'Respondé ÚNICAMENTE con un JSON válido: un objeto {"circuitos": [...], "hallazgos": [...]} donde "circuitos" es un array de ' +
         'objetos {"numero": number, "texto": string, "ampNominal": string, "categoriaEquipo": string, "tipoCircuito": string, ' +
-        '"identificado": boolean, "estadoDetectado": string | null} y "hallazgos" es un array de objetos {"itemId": string, "estado": ' +
-        'string, "comentario": string} (array VACÍO [] si no te pasé ningún ítem de hallazgos para evaluar). Sin texto antes ni ' +
-        "después, sin bloque de código markdown.",
+        `"identificado": boolean, "estadoDetectado": string | null} y ${INSTRUCCION_RESPUESTA_HALLAZGOS}. Sin texto antes ni después, ` +
+        "sin bloque de código markdown.",
       messages: [
         {
           role: "user",
@@ -209,7 +189,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "No se pudo leer la foto." }, { status: 502 });
     }
 
-    let resultado: { circuitos: CircuitoDetectado[]; hallazgos?: HallazgoDetectado[] };
+    let resultado: { circuitos: CircuitoDetectado[]; hallazgos?: unknown[] };
     try {
       const match = textBlock.text.match(/\{[\s\S]*\}/);
       resultado = JSON.parse(match ? match[0] : textBlock.text);
@@ -226,9 +206,6 @@ export async function POST(req: NextRequest) {
     const categoriasValidas = new Set<string>(CATEGORIA_EQUIPO_OPCIONES);
     const tiposCircuitoValidos = new Set<string>(TIPO_CIRCUITO_OPCIONES);
     const estadosPalancaValidos = new Set<string>(ESTADOS_PALANCA);
-    const estadosHallazgoValidos = new Set<string>(ESTADOS_HALLAZGO);
-    const hallazgosItemsPorId = new Map(hallazgosItems.map((h) => [h.id, h.texto]));
-    const hallazgosDetectados = Array.isArray(resultado?.hallazgos) ? resultado.hallazgos : [];
 
     return NextResponse.json({
       circuitos: circuitos
@@ -249,16 +226,7 @@ export async function POST(req: NextRequest) {
             estadoDetectado,
           };
         }),
-      // Solo ítems que REALMENTE estén en el catálogo (nunca un id inventado) y con un estado válido —
-      // un ítem del catálogo sin verdicto utilizable de la IA directamente no aparece (el form lo deja en blanco).
-      hallazgos: hallazgosDetectados
-        .filter((h) => h && hallazgosItemsPorId.has(h.itemId) && typeof h.estado === "string" && estadosHallazgoValidos.has(h.estado))
-        .map((h) => ({
-          itemId: h.itemId,
-          texto: hallazgosItemsPorId.get(h.itemId)!,
-          estado: h.estado,
-          comentario: typeof h.comentario === "string" ? h.comentario.trim().slice(0, 300) : "",
-        })),
+      hallazgos: parseHallazgosDetectados(resultado?.hallazgos, hallazgosItems),
     });
   } catch (err) {
     const detalle = err instanceof Error ? err.message : String(err);

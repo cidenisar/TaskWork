@@ -6,6 +6,7 @@ import { reportarErrorCliente } from "@/lib/client-error-report";
 import { resizeImageToJpeg } from "@/lib/image-resize";
 import { ErrorNote, SuccessNote } from "@/components/notes";
 import { Icon } from "@/components/icon";
+import { Spinner } from "@/components/spinner";
 import { VerPdfLink } from "@/components/ver-pdf-link";
 import { obtenerUrlPdfRelevamientoAction } from "@/app/(app)/torres-comunicacion/historial/actions";
 import { UbicacionFields, type GpsCapturado } from "@/components/ubicaciones/ubicacion-fields";
@@ -23,6 +24,9 @@ import {
   type EquipamientoTorreItem,
   type TorreConEquipamiento,
 } from "./types";
+import { mezclarHallazgos, type HallazgoInspeccionIa } from "@/lib/inspeccion-ia/types";
+import { HallazgosInspeccionIaSection } from "@/components/inspeccion-ia/hallazgos-section";
+import type { EstadoChecklist } from "@/lib/database.types";
 
 function recalcularAlturaEstimada(
   tipo: TorreTipo | null,
@@ -56,11 +60,13 @@ export function NuevoRelevamientoForm({
   ubicaciones,
   provincias,
   largosTramoM,
+  catalogoHallazgos,
 }: {
   torres: TorreConEquipamiento[];
   ubicaciones: Ubicacion[];
   provincias: string[];
   largosTramoM: Partial<Record<TorreTipo, number>>;
+  catalogoHallazgos: { id: string; texto: string }[];
 }) {
   const [provinciaFiltro, setProvinciaFiltro] = useState("");
   const [ubicacionId, setUbicacionId] = useState<string>(""); // "" = sin elegir, "__new" = crear
@@ -89,6 +95,12 @@ export function NuevoRelevamientoForm({
   const [fotosGenerales, setFotosGenerales] = useState<File[]>([]);
   const fotoGeneralCameraInputRef = useRef<HTMLInputElement>(null);
   const fotoGeneralGaleriaInputRef = useRef<HTMLInputElement>(null);
+  // Arranca con el catálogo completo sin evaluar (estado null) — el técnico
+  // puede marcarlos a mano aunque no use la lectura con IA; cada lectura IA
+  // sugiere un estado que igual queda a confirmar/corregir acá.
+  const [hallazgos, setHallazgos] = useState<HallazgoInspeccionIa[]>(
+    () => catalogoHallazgos.map((h) => ({ itemId: h.id, texto: h.texto, estado: null, comentario: "" })),
+  );
 
   function agregarFotosGenerales(files: File[]) {
     if (files.length === 0) return;
@@ -166,6 +178,14 @@ export function NuevoRelevamientoForm({
     setFotosIa((prev) => prev.filter((_, idx) => idx !== i));
   }
 
+  function setEstadoHallazgo(itemId: string, estado: EstadoChecklist) {
+    setHallazgos((prev) => prev.map((h) => (h.itemId === itemId ? { ...h, estado } : h)));
+  }
+
+  function setComentarioHallazgo(itemId: string, comentario: string) {
+    setHallazgos((prev) => prev.map((h) => (h.itemId === itemId ? { ...h, comentario } : h)));
+  }
+
   async function leerFotosConIa() {
     if (fotosIa.length === 0) return;
     setIaBusy(true);
@@ -239,12 +259,22 @@ export function NuevoRelevamientoForm({
           revisar: d.identificado !== true,
         })),
       ]);
+      const hallazgosNuevos: HallazgoInspeccionIa[] = data.hallazgos ?? [];
+      let hallazgosDetectadosAhora = 0;
+      if (hallazgosNuevos.length > 0) {
+        const combinados = mezclarHallazgos(hallazgos, hallazgosNuevos);
+        hallazgosDetectadosAhora = combinados.filter((h) => h.estado === "no_ok").length;
+        setHallazgos(combinados);
+      }
       const sinEtiqueta = detectados.filter((d) => d.identificado !== true).length;
       setIaNote(
         `Se agregaron ${detectados.length} equipo${detectados.length === 1 ? "" : "s"} desde ${exitosas} foto${exitosas === 1 ? "" : "s"}` +
           (sinEtiqueta > 0
             ? ` — ${sinEtiqueta} sin etiqueta legible, marcados para revisar (la IA describió y clasificó lo que vio, pero no adivina el nombre del equipo sin una etiqueta física).`
             : " — revisá la categoría/marca antes de guardar.") +
+          (hallazgosDetectadosAhora > 0
+            ? ` ⚠ Se detectaron ${hallazgosDetectadosAhora} hallazgo${hallazgosDetectadosAhora === 1 ? "" : "s"} de seguridad — revisalos más abajo.`
+            : "") +
           (fallidas.length > 0 ? ` (${fallidas.length} foto${fallidas.length === 1 ? "" : "s"} no se pudo leer: ${primerError})` : ""),
       );
       setFotosIa(fallidas);
@@ -361,6 +391,9 @@ export function NuevoRelevamientoForm({
               comentario: l.comentario,
             };
           }),
+          hallazgos: hallazgos
+            .filter((h) => h.estado !== null)
+            .map((h) => ({ itemId: h.itemId, estado: h.estado, comentario: h.comentario.trim() })),
         }),
       );
       for (let i = 0; i < fotosGenerales.length; i++) {
@@ -657,7 +690,7 @@ export function NuevoRelevamientoForm({
             </button>
             {fotosIa.length > 0 && (
               <button type="button" className="ai-btn" onClick={() => void leerFotosConIa()} disabled={submitting || iaBusy}>
-                <Icon name="ai" size={13} />{" "}
+                {iaBusy ? <Spinner /> : <Icon name="ai" size={13} />}{" "}
                 {iaBusy ? "Procesando..." : `Procesar ${fotosIa.length} foto${fotosIa.length === 1 ? "" : "s"} con IA`}
               </button>
             )}
@@ -679,6 +712,13 @@ export function NuevoRelevamientoForm({
               <span>{iaNote}</span>
             </div>
           )}
+
+          <HallazgosInspeccionIaSection
+            hallazgos={hallazgos}
+            onEstado={setEstadoHallazgo}
+            onComentario={setComentarioHallazgo}
+            disabled={submitting}
+          />
 
           {equipamiento.length > 0 && (
             <div

@@ -9,7 +9,7 @@ export default async function NuevoRelevamientoPage() {
   await requireProfile();
   const supabase = await createClient();
 
-  const [racksRes, equipamientosRes, ubicaciones, provinciasRes] = await Promise.all([
+  const [racksRes, equipamientosRes, ubicaciones, provinciasRes, hallazgosRes] = await Promise.all([
     supabase.from("racks").select("id, denominacion, etiqueta_ypf, ubicacion_id").order("denominacion"),
     supabase
       .from("rack_equipamientos")
@@ -20,10 +20,12 @@ export default async function NuevoRelevamientoPage() {
       .order("numero"),
     fetchTodasLasUbicaciones(supabase),
     supabase.from("catalogo_provincias").select("nombre").order("nombre"),
+    supabase.from("catalogo_inspeccion_ia").select("id, texto").eq("modulo", "racks").order("orden"),
   ]);
 
   const ubicacionesPorId = new Map(ubicaciones.map((u) => [u.id, u]));
   const provincias = (provinciasRes.data ?? []).map((p) => p.nombre);
+  const catalogoHallazgos = hallazgosRes.data ?? [];
 
   const equipamientoPorRack = new Map<string, RackConEquipamiento["equipamiento"]>();
   for (const e of equipamientosRes.data ?? []) {
@@ -62,7 +64,7 @@ export default async function NuevoRelevamientoPage() {
 
   return (
     <div>
-      <NuevoRelevamientoForm racks={racks} ubicaciones={ubicaciones} provincias={provincias} />
+      <NuevoRelevamientoForm racks={racks} ubicaciones={ubicaciones} provincias={provincias} catalogoHallazgos={catalogoHallazgos} />
     </div>
   );
 }

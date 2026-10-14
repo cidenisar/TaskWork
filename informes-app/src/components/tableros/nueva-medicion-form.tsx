@@ -6,6 +6,7 @@ import { reportarErrorCliente } from "@/lib/client-error-report";
 import { resizeImageToJpeg } from "@/lib/image-resize";
 import { ErrorNote, SuccessNote } from "@/components/notes";
 import { Icon } from "@/components/icon";
+import { Spinner } from "@/components/spinner";
 import { VerPdfLink } from "@/components/ver-pdf-link";
 import { obtenerUrlPdfMedicionAction } from "@/app/(app)/tableros/historial/actions";
 import { UbicacionFields, type GpsCapturado } from "@/components/ubicaciones/ubicacion-fields";
@@ -29,12 +30,11 @@ import {
   fasesMedicion,
   labelSubsistemas,
   calcularResumenEquipamiento,
-  mezclarHallazgos,
-  HALLAZGO_ESTADO_LABEL,
   type CircuitoItem,
   type TableroConCircuitos,
-  type HallazgoSeguridad,
 } from "./types";
+import { mezclarHallazgos, type HallazgoInspeccionIa } from "@/lib/inspeccion-ia/types";
+import { HallazgosInspeccionIaSection } from "@/components/inspeccion-ia/hallazgos-section";
 import type { EstadoChecklist } from "@/lib/database.types";
 
 interface LecturaState {
@@ -109,7 +109,7 @@ export function NuevaMedicionForm({
   // Arranca con el catálogo completo sin evaluar (estado null) — el técnico
   // puede marcarlos a mano aunque no use la lectura con IA; cada lectura IA
   // sugiere un estado que igual queda a confirmar/corregir acá.
-  const [hallazgos, setHallazgos] = useState<HallazgoSeguridad[]>(
+  const [hallazgos, setHallazgos] = useState<HallazgoInspeccionIa[]>(
     () => catalogoHallazgos.map((h) => ({ itemId: h.id, texto: h.texto, estado: null, comentario: "" })),
   );
 
@@ -295,7 +295,7 @@ export function NuevaMedicionForm({
         });
         return next;
       });
-      const hallazgosNuevos: HallazgoSeguridad[] = data.hallazgos ?? [];
+      const hallazgosNuevos: HallazgoInspeccionIa[] = data.hallazgos ?? [];
       let hallazgosDetectadosAhora = 0;
       if (hallazgosNuevos.length > 0) {
         const combinados = mezclarHallazgos(hallazgos, hallazgosNuevos);
@@ -780,7 +780,7 @@ export function NuevaMedicionForm({
             </button>
             {fotosIa.length > 0 && (
               <button type="button" className="ai-btn" onClick={() => void leerFotosConIa()} disabled={submitting || iaBusy}>
-                <Icon name="ai" size={13} />{" "}
+                {iaBusy ? <Spinner /> : <Icon name="ai" size={13} />}{" "}
                 {iaBusy ? "Procesando..." : `Procesar ${fotosIa.length} foto${fotosIa.length === 1 ? "" : "s"} con IA`}
               </button>
             )}
@@ -803,52 +803,12 @@ export function NuevaMedicionForm({
             </div>
           )}
 
-          {hallazgos.length > 0 && (
-            <div className="field">
-              <label>
-                Hallazgos de seguridad <span className="opt">(revisá y confirmá)</span>
-              </label>
-              <div className="hint" style={{ margin: "-2px 0 8px" }}>
-                Se completan al leer fotos con IA — confirmá o corregí cada uno antes de guardar (catálogo editable en Configuración).
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {hallazgos.map((h) => (
-                  <div
-                    key={h.itemId}
-                    style={{
-                      border: `1px solid ${h.estado === "no_ok" ? "var(--warn)" : "var(--field-border)"}`,
-                      borderRadius: 8,
-                      padding: 8,
-                    }}
-                  >
-                    <div style={{ fontSize: 12.5, marginBottom: 6 }}>{h.texto}</div>
-                    <div style={{ display: "flex", gap: 4, marginBottom: h.comentario ? 6 : 0, flexWrap: "wrap" }}>
-                      {(Object.keys(HALLAZGO_ESTADO_LABEL) as EstadoChecklist[]).map((estado) => (
-                        <button
-                          key={estado}
-                          type="button"
-                          className={`btn btn-sm ${h.estado === estado ? "btn-primary" : "btn-secondary"}`}
-                          onClick={() => setEstadoHallazgo(h.itemId, estado)}
-                          disabled={submitting}
-                        >
-                          {HALLAZGO_ESTADO_LABEL[estado]}
-                        </button>
-                      ))}
-                    </div>
-                    {h.estado && (
-                      <input
-                        type="text"
-                        placeholder="Comentario (opcional)"
-                        value={h.comentario}
-                        onChange={(e) => setComentarioHallazgo(h.itemId, e.target.value)}
-                        disabled={submitting}
-                      />
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+          <HallazgosInspeccionIaSection
+            hallazgos={hallazgos}
+            onEstado={setEstadoHallazgo}
+            onComentario={setComentarioHallazgo}
+            disabled={submitting}
+          />
 
           {circuitos.length > 0 && (
             <div

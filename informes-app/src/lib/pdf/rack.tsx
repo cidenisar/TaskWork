@@ -1,7 +1,8 @@
 import { Document, Page, Text, View, Image, StyleSheet } from "@react-pdf/renderer";
 import { BORDER, commonStyles, KeyValueRow, PdfHeader, PdfFooter, formatFechaArg } from "./common";
 import { CATEGORIA_EQUIPO_LABEL, type ResumenEquipamiento } from "@/components/racks/types";
-import type { RackCategoriaEquipo } from "@/lib/database.types";
+import { HALLAZGO_ESTADO_LABEL } from "@/lib/inspeccion-ia/types";
+import type { EstadoChecklist, RackCategoriaEquipo } from "@/lib/database.types";
 
 /**
  * Relevamiento de Equipamiento — inventario de un rack en un sitio/sala/
@@ -32,6 +33,12 @@ export interface RackPdfLectura {
   comentario: string | null;
 }
 
+export interface RackPdfHallazgo {
+  texto: string;
+  estado: EstadoChecklist;
+  comentario: string | null;
+}
+
 export interface RackPdfProps {
   numeroGeneracion: string;
   denominacion: string;
@@ -46,6 +53,7 @@ export interface RackPdfProps {
   lecturas: RackPdfLectura[];
   resumen: ResumenEquipamiento;
   fotosGeneralesBuffers: Buffer[] | null;
+  hallazgos: RackPdfHallazgo[];
   logoBuffer: Buffer | null;
   appName: string;
   realizoNombre: string;
@@ -77,6 +85,7 @@ export function RackPdf(props: RackPdfProps) {
     lecturas,
     resumen,
     fotosGeneralesBuffers,
+    hallazgos,
     logoBuffer,
     appName,
     realizoNombre,
@@ -135,6 +144,34 @@ export function RackPdf(props: RackPdfProps) {
               {fotosGeneralesBuffers.map((buf, i) => (
                 <View style={commonStyles.photoCell} key={i} wrap={false}>
                   <Image src={buf} style={commonStyles.photo} />
+                </View>
+              ))}
+            </View>
+          </>
+        )}
+
+        {hallazgos.length > 0 && (
+          <>
+            <Text style={commonStyles.sectionTitle}>Inspección IA</Text>
+            <View style={styles.table}>
+              <View style={styles.headRow} fixed>
+                <Text style={[styles.th, { width: "40%" }]}>Ítem</Text>
+                <Text style={[styles.th, { width: "15%" }]}>Estado</Text>
+                <Text style={[styles.th, { width: "45%" }]}>Comentario</Text>
+              </View>
+              {hallazgos.map((h, i) => (
+                <View style={i === hallazgos.length - 1 ? styles.rowLast : styles.row} key={i} wrap={false}>
+                  <Text style={[styles.td, { width: "40%" }]}>{h.texto}</Text>
+                  <Text
+                    style={[
+                      styles.td,
+                      { width: "15%" },
+                      h.estado === "no_ok" ? { fontFamily: "Helvetica-Bold" } : {},
+                    ]}
+                  >
+                    {HALLAZGO_ESTADO_LABEL[h.estado]}
+                  </Text>
+                  <Text style={[styles.td, { width: "45%" }]}>{h.comentario || "—"}</Text>
                 </View>
               ))}
             </View>

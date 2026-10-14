@@ -4,6 +4,7 @@ import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { CATEGORIA_EQUIPO_OPCIONES, CATEGORIA_EQUIPO_LABEL, EQUIPO_FOTO_IA_MAX } from "@/components/equipos/types";
 import type { EquipoCategoria } from "@/lib/database.types";
+import { instruccionInspeccionIa, INSTRUCCION_RESPUESTA_HALLAZGOS, parseHallazgosDetectados } from "@/lib/inspeccion-ia/prompt";
 
 /**
  * Lee hasta EQUIPO_FOTO_IA_MAX fotos de equipamiento suelto (no dentro de un
@@ -80,6 +81,18 @@ export async function POST(req: NextRequest) {
     })),
   );
 
+  // Catálogo configurable de Inspección IA (Configuración → Catálogos,
+  // módulo "equipos") — se evalúa contra las mismas fotos, además de
+  // identificar el equipamiento. Si no hay ningún ítem cargado, se le pide a
+  // la IA una lista vacía (nunca se inventa hallazgos fuera del catálogo).
+  const { data: catalogoHallazgos } = await supabase
+    .from("catalogo_inspeccion_ia")
+    .select("id, texto")
+    .eq("modulo", "equipos")
+    .order("orden");
+  const hallazgosItems = catalogoHallazgos ?? [];
+  const instruccionHallazgos = instruccionInspeccionIa(hallazgosItems);
+
   const contextoFotos =
     imagenes.length > 1
       ? ` Te paso ${imagenes.length} fotos — pueden ser de equipos DISTINTOS relevados en la misma visita (ej. un UPS y un par de ` +
@@ -135,10 +148,12 @@ export async function POST(req: NextRequest) {
         "los dos si no viste marca/modelo legible, o si la marca/modelo no te resulta nada familiar — nunca inventes un número para " +
         "un equipo que no podés justificar de ninguna forma.\n\n" +
         "No inventes equipos que no estén en la foto, y no adivines una marca/modelo/serie/etiqueta que no puedas justificar por lo " +
-        'que ves — pero "texto" y "categoriaEquipo" son obligatorios en todos los casos, con tu mejor estimación visual si hace falta.\n\n' +
-        'Respondé ÚNICAMENTE con un JSON válido: un array de objetos {"texto": string, "categoriaEquipo": string, "marcaModelo": ' +
-        'string, "numeroSerie": string, "etiquetaYpf": string, "identificado": boolean, "consumoPromedioW": number | null, ' +
-        '"consumoMaxW": number | null}, sin texto antes ni después, sin bloque de código markdown.',
+        'que ves — pero "texto" y "categoriaEquipo" son obligatorios en todos los casos, con tu mejor estimación visual si hace falta.' +
+        `${instruccionHallazgos}\n\n` +
+        'Respondé ÚNICAMENTE con un JSON válido: un objeto {"equipos": [...], "hallazgos": [...]} donde "equipos" es un array de ' +
+        'objetos {"texto": string, "categoriaEquipo": string, "marcaModelo": string, "numeroSerie": string, "etiquetaYpf": string, ' +
+        `"identificado": boolean, "consumoPromedioW": number | null, "consumoMaxW": number | null} y ${INSTRUCCION_RESPUESTA_HALLAZGOS}. ` +
+        "Sin texto antes ni después, sin bloque de código markdown.",
       messages: [
         {
           role: "user",
@@ -165,15 +180,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "No se pudo leer la foto." }, { status: 502 });
     }
 
-    let equipos: EquipoDetectado[];
+    let resultado: { equipos: EquipoDetectado[]; hallazgos?: unknown[] };
     try {
-      const match = textBlock.text.match(/\[[\s\S]*\]/);
-      equipos = JSON.parse(match ? match[0] : textBlock.text);
+      const match = textBlock.text.match(/\{[\s\S]*\}/);
+      resultado = JSON.parse(match ? match[0] : textBlock.text);
     } catch {
       await logDiagnostico(supabase, profile.id, "leer-foto: la respuesta no fue JSON parseable", textBlock.text);
       return NextResponse.json({ error: "La IA no devolvió una lista reconocible — probá con otra foto o cargá el equipo a mano." }, { status: 502 });
     }
-    if (!Array.isArray(equipos) || equipos.length === 0) {
+    const equipos = Array.isArray(resultado?.equipos) ? resultado.equipos : [];
+    if (equipos.length === 0) {
       await logDiagnostico(supabase, profile.id, "leer-foto: la IA devolvió una lista vacía", textBlock.text);
       return NextResponse.json({ error: "No se detectó ningún equipo en la foto." }, { status: 200 });
     }
@@ -193,6 +209,7 @@ export async function POST(req: NextRequest) {
           consumoPromedioW: Number.isFinite(e.consumoPromedioW) && (e.consumoPromedioW as number) > 0 ? (e.consumoPromedioW as number) : null,
           consumoMaxW: Number.isFinite(e.consumoMaxW) && (e.consumoMaxW as number) > 0 ? (e.consumoMaxW as number) : null,
         })),
+      hallazgos: parseHallazgosDetectados(resultado?.hallazgos, hallazgosItems),
     });
   } catch (err) {
     const detalle = err instanceof Error ? err.message : String(err);

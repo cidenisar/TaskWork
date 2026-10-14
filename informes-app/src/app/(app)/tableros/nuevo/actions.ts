@@ -213,12 +213,13 @@ export async function crearMedicionTableroAction(formData: FormData): Promise<Cr
     return { success: false, error: `No se pudieron guardar las lecturas: ${lecturasErr.message}` };
   }
 
-  // Hallazgos de seguridad (opcional): solo los que el técnico confirmó/corrigió
-  // (estado no nulo) — ver catalogo_hallazgos_seguridad_tablero.
+  // Inspección IA (opcional): solo los ítems que el técnico confirmó/corrigió
+  // (estado no nulo) — ver catalogo_inspeccion_ia (modulo="tableros").
   if (payload.hallazgos && payload.hallazgos.length > 0) {
-    await supabase.from("tablero_medicion_hallazgos").insert(
+    await supabase.from("inspeccion_ia_hallazgos").insert(
       payload.hallazgos.map((h) => ({
-        medicion_id: medicionId!,
+        modulo: "tableros" as const,
+        registro_id: medicionId!,
         item_id: h.itemId,
         estado: h.estado,
         comentario: h.comentario.trim() || null,
@@ -279,7 +280,7 @@ export async function crearMedicionTableroAction(formData: FormData): Promise<Cr
   let hallazgosPdf: { texto: string; estado: EstadoChecklist; comentario: string | null }[] = [];
   if (hallazgosConfirmados.length > 0) {
     const { data: hallazgosCatalogo } = await supabase
-      .from("catalogo_hallazgos_seguridad_tablero")
+      .from("catalogo_inspeccion_ia")
       .select("id, texto")
       .in(
         "id",

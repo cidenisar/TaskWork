@@ -3,11 +3,23 @@
 import { useState } from "react";
 import { SimpleCatalogTab, type SimpleCatalogItem } from "./catalogos/simple-catalog-tab";
 import { TorreTramosTab, type TramoTorreItem } from "./catalogos/torre-tramos-tab";
-import { RecursoAlturaTab, type RecursoAlturaItem } from "./catalogos/recurso-altura-tab";
+import { RecursoAlturaTab, type RecursoAlturaItem, type BandaRecursoAlturaItem } from "./catalogos/recurso-altura-tab";
 import { CalibreCableTab, type CalibreCableItem } from "./catalogos/calibre-cable-tab";
-import { HallazgosSeguridadTab, type HallazgoSeguridadItem } from "./catalogos/hallazgos-seguridad-tab";
+import { InspeccionIaTab, type InspeccionIaItem } from "./catalogos/inspeccion-ia-tab";
 
-type TabId = "torres" | "clientes" | "torrecomtramos" | "recursoaltura" | "calibrecable" | "hallazgosseguridad" | "provincias" | "tipos" | "gastocat";
+type TabId =
+  | "torres"
+  | "clientes"
+  | "torrecomtramos"
+  | "recursoaltura"
+  | "calibrecable"
+  | "iatableros"
+  | "iaracks"
+  | "iaequipos"
+  | "iatorres"
+  | "provincias"
+  | "tipos"
+  | "gastocat";
 
 const TABS: { id: TabId; label: React.ReactNode }[] = [
   { id: "torres", label: "Torres (cuadrillas)" },
@@ -15,7 +27,10 @@ const TABS: { id: TabId; label: React.ReactNode }[] = [
   { id: "torrecomtramos", label: "Torres Comunic. (tramos)" },
   { id: "recursoaltura", label: "Recurso por altura" },
   { id: "calibrecable", label: "Calibre de cable" },
-  { id: "hallazgosseguridad", label: "Hallazgos de seguridad" },
+  { id: "iatableros", label: "Inspección IA — Tableros" },
+  { id: "iaracks", label: "Inspección IA — Racks" },
+  { id: "iaequipos", label: "Inspección IA — Equipos" },
+  { id: "iatorres", label: "Inspección IA — Torres" },
   { id: "provincias", label: "Provincias" },
   { id: "tipos", label: "Tipos de Informe" },
   { id: "gastocat", label: "Categorías de Gasto" },
@@ -29,15 +44,19 @@ export interface CatalogosData {
   categoriasGasto: SimpleCatalogItem[];
   tramosTorre: TramoTorreItem[];
   recursoAltura: RecursoAlturaItem[];
+  recursoAlturaBandas: BandaRecursoAlturaItem[];
+  tiposRecursoAltura: SimpleCatalogItem[];
   calibreCable: CalibreCableItem[];
-  hallazgosSeguridad: HallazgoSeguridadItem[];
+  inspeccionIaTableros: InspeccionIaItem[];
+  inspeccionIaRacks: InspeccionIaItem[];
+  inspeccionIaEquipos: InspeccionIaItem[];
+  inspeccionIaTorres: InspeccionIaItem[];
 }
 
 /** Vehículos (alta, service, vencimientos) se trasladó a Panel de Supervisión → Vehículos — ver src/components/panel/vehiculos/. */
 export function CatalogosCard({ data }: { data: CatalogosData }) {
   const [tab, setTab] = useState<TabId>("torres");
   const [tramosTorre, setTramosTorre] = useState(data.tramosTorre);
-  const [recursoAltura, setRecursoAltura] = useState(data.recursoAltura);
 
   return (
     <div className="card">
@@ -67,9 +86,14 @@ export function CatalogosCard({ data }: { data: CatalogosData }) {
         />
       )}
       {tab === "torrecomtramos" && <TorreTramosTab tramos={tramosTorre} setTramos={setTramosTorre} />}
-      {tab === "recursoaltura" && <RecursoAlturaTab items={recursoAltura} setItems={setRecursoAltura} />}
+      {tab === "recursoaltura" && (
+        <RecursoAlturaTab items={data.recursoAltura} bandas={data.recursoAlturaBandas} tiposRecurso={data.tiposRecursoAltura} />
+      )}
       {tab === "calibrecable" && <CalibreCableTab items={data.calibreCable} />}
-      {tab === "hallazgosseguridad" && <HallazgosSeguridadTab items={data.hallazgosSeguridad} />}
+      {tab === "iatableros" && <InspeccionIaTab modulo="tableros" items={data.inspeccionIaTableros} />}
+      {tab === "iaracks" && <InspeccionIaTab modulo="racks" items={data.inspeccionIaRacks} />}
+      {tab === "iaequipos" && <InspeccionIaTab modulo="equipos" items={data.inspeccionIaEquipos} />}
+      {tab === "iatorres" && <InspeccionIaTab modulo="torres" items={data.inspeccionIaTorres} />}
       {tab === "provincias" && (
         <SimpleCatalogTab
           tabla="catalogo_provincias"
