@@ -12,6 +12,8 @@ export const CATEGORIA_EQUIPO_OPCIONES: EquipoCategoria[] = [
   "impresora",
   "telefonia",
   "climatizacion",
+  "fuente",
+  "switch",
   "otro",
 ];
 
@@ -24,6 +26,8 @@ export const CATEGORIA_EQUIPO_LABEL: Record<EquipoCategoria, string> = {
   impresora: "Impresora",
   telefonia: "Telefonía",
   climatizacion: "Climatización",
+  fuente: "Fuente/Rectificador",
+  switch: "Switch",
   otro: "Otro",
 };
 

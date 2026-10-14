@@ -60,6 +60,8 @@ export type EquipoCategoria =
   | "impresora"
   | "telefonia"
   | "climatizacion"
+  | "fuente"
+  | "switch"
   | "otro";
 export type EstadoEquipamiento = "activo" | "baja" | "en_deposito";
 export type OrigenEntregaDeposito = "equipo_existente" | "material_libre";
