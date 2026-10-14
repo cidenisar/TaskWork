@@ -325,6 +325,7 @@ export type TableroMedicionRow = {
   pdf_generado_at: string | null;
   foto_general_url: string | null;
   fotos_generales_urls: string[] | null;
+  dxf_url: string | null;
   created_at: string;
 }
 

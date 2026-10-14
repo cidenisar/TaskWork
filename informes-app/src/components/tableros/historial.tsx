@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import {
   obtenerUrlFotoMantenimientoAction,
   obtenerUrlPdfMedicionAction,
+  obtenerUrlDxfMedicionAction,
   eliminarMedicionAction,
   eliminarMantenimientoAction,
 } from "@/app/(app)/tableros/historial/actions";
@@ -20,6 +21,7 @@ export interface HistorialMedicionRow {
   denominacion: string;
   ubicacionLabel: string;
   pdfDisponible: boolean;
+  dxfDisponible: boolean;
 }
 
 function fmtFecha(fecha: string) {
@@ -68,6 +70,18 @@ export function HistorialTableros({
     setBusyId(null);
     if (!res.url) {
       setNotice(res.error || "No se pudo abrir el PDF.");
+      return;
+    }
+    window.open(res.url, "_blank", "noopener,noreferrer");
+  }
+
+  async function descargarDxf(id: string) {
+    setBusyId(id);
+    setNotice(null);
+    const res = await obtenerUrlDxfMedicionAction(id);
+    setBusyId(null);
+    if (!res.url) {
+      setNotice(res.error || "No se pudo descargar el DXF.");
       return;
     }
     window.open(res.url, "_blank", "noopener,noreferrer");
@@ -179,6 +193,15 @@ export function HistorialTableros({
                       onClick={() => verPdf(m.id)}
                     >
                       {busyId === m.id ? "…" : <Icon name="eye" size={15} />}
+                    </button>
+                    <button
+                      type="button"
+                      className="icon-btn"
+                      title={m.dxfDisponible ? "Descargar DXF (esquema unifilar)" : "Sin DXF disponible"}
+                      disabled={!m.dxfDisponible || busyId === m.id}
+                      onClick={() => descargarDxf(m.id)}
+                    >
+                      {busyId === m.id ? "…" : <Icon name="download" size={15} />}
                     </button>
                     {esAdmin && (
                       <button

@@ -1671,7 +1671,45 @@ general que salió de esto.
   - **Editable en Configuración → Catálogos** (`CalibreCableTab`): agregar
     o quitar bandas, sin fórmula ni "edición en el lugar" — una banda mal
     cargada se borra y se recarga.
-  - **Todavía no está conectado a nada**: ni al formulario de Medición,
-    ni al PDF, ni hay esquema unifilar ni DXF todavía — eso es el
-    próximo incremento, que va a buscar en esta tabla el calibre según
-    el `ampNominal` ya cargado en cada circuito con térmica/disyuntor.
+  - **Ya conectado** (ver el siguiente ítem): el esquema unifilar que se
+    genera en cada medición busca en esta tabla el calibre según el
+    `ampNominal` ya cargado en cada circuito con térmica/disyuntor.
+
+- **Tableros: esquema unifilar por cuerpo, embebido en el PDF + descargable
+  en DXF.** Se genera automáticamente en cada Medición/Relevamiento, a
+  partir de los circuitos ya relevados — nunca un plano a escala real
+  (eso necesitaría fotogrametría desde la foto, que no es confiable con
+  una sola toma, mismo criterio que la altura de torres): es un esquema
+  simplificado tipo diagrama de bloques — una barra vertical por cuerpo,
+  cada térmica/disyuntor ramificando en fila con su número, categoría,
+  amperaje y el calibre de cable que le corresponde según
+  `catalogo_calibre_cable`.
+  - **Una sola fuente de verdad para PDF y DXF** (`lib/tableros/
+    unifilar.ts`): `construirUnifilar()` arma una lista de "draw
+    commands" abstractos (líneas, rectángulos, texto, en un sistema de
+    coordenadas propio) a partir de los circuitos agrupados por cuerpo
+    — ni React ni DXF se mezclan acá, es la única lógica de layout. El
+    PDF (`lib/pdf/tablero.tsx`) los renderiza con los primitivos `Svg`/
+    `Line`/`Rect`/`Text` de `@react-pdf/renderer` (primera vez que se
+    usan en la app — hasta ahora todos los PDF eran tablas/texto). El
+    DXF (`lib/dxf/writer.ts`) los convierte a un archivo DXF ASCII
+    R12 mínimo (secciones HEADER + ENTITIES, solo `LINE`/`LWPOLYLINE`/
+    `TEXT`) escrito a mano — no se sumó una librería de terceros para
+    esto, el formato es texto plano simple y AutoCAD lo abre sin
+    problema. El eje Y se invierte al escribir el DXF porque CAD usa
+    origen abajo-a-la-izquierda y el modelo (como el PDF) usa origen
+    arriba-a-la-izquierda.
+  - **Dónde se genera y se descarga**: `tableros/nuevo/actions.ts` arma
+    el dibujo en el momento de guardar la medición (mismo criterio que
+    el resto del PDF — es una foto de esa visita, no algo que se
+    recalcule después) y sube el `.dxf` al mismo bucket `informes-pdf`
+    que ya usa el PDF (columna nueva `tablero_mediciones.dxf_url`).
+    Historial de Tableros tiene un botón nuevo ("Descargar DXF", ícono
+    de descarga) al lado de "Ver PDF", con el mismo patrón de URL
+    firmada en el momento del click que ya usa el PDF — y
+    `eliminarMedicionAction` ahora también borra el DXF del storage al
+    borrar una medición.
+  - **Alcance, a propósito**: esto es el esquema eléctrico en sí — el
+    visor público con QR para pegar en el tablero físico (mencionado
+    como idea en la sección de arriba) todavía no está implementado, es
+    el próximo paso de esta misma idea.

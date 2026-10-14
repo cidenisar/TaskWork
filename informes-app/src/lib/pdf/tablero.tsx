@@ -1,4 +1,4 @@
-import { Document, Page, Text, View, Image, StyleSheet } from "@react-pdf/renderer";
+import { Document, Page, Text, View, Image, StyleSheet, Svg, Line, Rect } from "@react-pdf/renderer";
 import { BORDER, commonStyles, KeyValueRow, PdfHeader, PdfFooter, formatFechaArg } from "./common";
 import {
   CATEGORIA_EQUIPO_LABEL,
@@ -7,6 +7,7 @@ import {
   labelSubsistemas,
   type ResumenEquipamiento,
 } from "@/components/tableros/types";
+import type { UnifilarDrawing } from "@/lib/tableros/unifilar";
 import type { TableroCategoriaEquipo, TableroEventoTipo, TableroTipo, TableroTipoCircuito } from "@/lib/database.types";
 
 /**
@@ -56,6 +57,7 @@ export interface TableroPdfProps {
   lecturas: TableroPdfLectura[];
   resumen: ResumenEquipamiento;
   fotosGeneralesBuffers: Buffer[] | null;
+  unifilar: UnifilarDrawing | null;
   logoBuffer: Buffer | null;
   appName: string;
   realizoNombre: string;
@@ -89,6 +91,7 @@ export function TableroPdf(props: TableroPdfProps) {
     lecturas,
     resumen,
     fotosGeneralesBuffers,
+    unifilar,
     logoBuffer,
     appName,
     realizoNombre,
@@ -157,6 +160,47 @@ export function TableroPdf(props: TableroPdfProps) {
                   <Image src={buf} style={commonStyles.photo} />
                 </View>
               ))}
+            </View>
+          </>
+        )}
+
+        {unifilar && unifilar.commands.length > 0 && (
+          <>
+            <Text style={commonStyles.sectionTitle}>Esquema Unifilar</Text>
+            <Text style={{ fontSize: 7, color: "#555", marginBottom: 4 }}>
+              Esquema simplificado a partir de los circuitos relevados — no es un plano a escala. Calibre de cable según catálogo
+              configurado (verificar contra la norma vigente).
+            </Text>
+            <View style={{ position: "relative", width: unifilar.width, height: unifilar.height, marginBottom: 8 }} wrap={false}>
+              <Svg width={unifilar.width} height={unifilar.height}>
+                {unifilar.commands.map((cmd, i) => {
+                  if (cmd.type === "line") {
+                    return <Line key={i} x1={cmd.x1} y1={cmd.y1} x2={cmd.x2} y2={cmd.y2} stroke="#1a1a1a" strokeWidth={0.75} />;
+                  }
+                  if (cmd.type === "rect") {
+                    return (
+                      <Rect key={i} x={cmd.x} y={cmd.y} width={cmd.width} height={cmd.height} stroke="#1a1a1a" strokeWidth={0.75} fill="none" />
+                    );
+                  }
+                  return null;
+                })}
+              </Svg>
+              {unifilar.commands.map((cmd, i) =>
+                cmd.type === "text" ? (
+                  <Text
+                    key={`t${i}`}
+                    style={{
+                      position: "absolute",
+                      left: cmd.x,
+                      top: cmd.y - cmd.size,
+                      fontSize: cmd.size,
+                      fontFamily: cmd.bold ? "Helvetica-Bold" : "Helvetica",
+                    }}
+                  >
+                    {cmd.text}
+                  </Text>
+                ) : null,
+              )}
             </View>
           </>
         )}

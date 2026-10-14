@@ -7,6 +7,8 @@ import { renderTableroPdf } from "@/lib/pdf/render";
 import { buildTableroFilename } from "@/lib/pdf/filename";
 import { resolverUbicacionId, tagGpsSiFalta, type PayloadUbicacionNueva, type PayloadGps } from "@/lib/ubicaciones/resolver";
 import { calcularResumenEquipamiento, itemMideCorriente } from "@/components/tableros/types";
+import { construirUnifilar, agruparPorCuerpo } from "@/lib/tableros/unifilar";
+import { drawCommandsToDxf } from "@/lib/dxf/writer";
 import type { TableroCategoriaEquipo, TableroEventoTipo, TableroJerarquia, TableroTipo, TableroTipoCircuito } from "@/lib/database.types";
 
 interface PayloadLectura {
@@ -239,6 +241,20 @@ export async function crearMedicionTableroAction(formData: FormData): Promise<Cr
 
   const resumen = calcularResumenEquipamiento(payload.lecturas);
 
+  const { data: calibreRes } = await supabase.from("catalogo_calibre_cable").select("amperaje_max, calibre_mm2");
+  const configCalibre = (calibreRes ?? []).map((c) => ({ amperajeMax: Number(c.amperaje_max), calibreMm2: Number(c.calibre_mm2) }));
+  const circuitosPorCuerpo = agruparPorCuerpo(
+    payload.lecturas.map((l) => ({
+      numero: l.numero,
+      texto: l.texto,
+      categoriaEquipo: l.categoriaEquipo,
+      tipoCircuito: l.tipoCircuito,
+      ampNominal: l.ampNominal || null,
+      cuerpo: l.cuerpo.trim() || null,
+    })),
+  );
+  const unifilar = construirUnifilar(circuitosPorCuerpo, configCalibre);
+
   const pdfBuffer = await renderTableroPdf({
     numeroGeneracion,
     subsistemas: tableroRow.subsistemas,
@@ -253,6 +269,7 @@ export async function crearMedicionTableroAction(formData: FormData): Promise<Cr
     fecha: payload.fecha,
     resumen,
     fotosGeneralesBuffers,
+    unifilar,
     lecturas: payload.lecturas.map((l) => {
       const mideCorriente = itemMideCorriente(l.categoriaEquipo, l.tipoCircuito, payload.tipoEvento);
       return {
@@ -289,6 +306,20 @@ export async function crearMedicionTableroAction(formData: FormData): Promise<Cr
     await supabase.from("tablero_mediciones").update({ pdf_url: pdfPath, pdf_generado_at: new Date().toISOString() }).eq("id", medicionId);
     const { data: signed } = await supabase.storage.from("informes-pdf").createSignedUrl(pdfPath, 60 * 60);
     pdfUrl = signed?.signedUrl ?? null;
+  }
+
+  // Esquema unifilar en DXF (mismo contenido que la sección del PDF, para
+  // abrir en AutoCAD) — una falla acá no debe tirar abajo la medición, que
+  // ya quedó guardada con su PDF.
+  if (unifilar.commands.length > 0) {
+    const dxfBuffer = drawCommandsToDxf(unifilar.commands, unifilar.height);
+    const dxfPath = `${profile.id}/tableros/${medicionId}/plano.dxf`;
+    const { error: dxfUpErr } = await supabase.storage
+      .from("informes-pdf")
+      .upload(dxfPath, dxfBuffer, { contentType: "application/dxf", upsert: true });
+    if (!dxfUpErr) {
+      await supabase.from("tablero_mediciones").update({ dxf_url: dxfPath }).eq("id", medicionId);
+    }
   }
 
   return { success: true, medicionId: medicionId!, numeroGeneracion, pdfUrl };
