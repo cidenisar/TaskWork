@@ -1,5 +1,5 @@
-import { CATEGORIA_EQUIPO_LABEL, TIPO_CIRCUITO_LABEL, categoriaLlevaAmp } from "@/components/tableros/types";
-import { calcularCalibreCable, parseAmperaje, type ConfigCalibreCable } from "./calibre-cable";
+import { CATEGORIA_EQUIPO_LABEL, TIPO_CIRCUITO_LABEL } from "@/components/tableros/types";
+import { calcularCalibreCircuito, parseAmperaje, type ConfigCalibreCable } from "./calibre-cable";
 import type { TableroCategoriaEquipo, TableroTipoCircuito } from "@/lib/database.types";
 
 export interface UnifilarCircuito {
@@ -90,7 +90,7 @@ export function construirUnifilar(
       commands.push({ type: "line", x1: BREAKER_X + BREAKER_SIZE, y1: yFila, x2: TEXTO_X - 4, y2: yFila });
 
       const amperaje = parseAmperaje(c.ampNominal);
-      const calibre = categoriaLlevaAmp(c.categoriaEquipo) ? calcularCalibreCable(amperaje, configCalibre) : null;
+      const calibre = calcularCalibreCircuito(c.categoriaEquipo, c.tipoCircuito, c.ampNominal, configCalibre);
       const partes = [`${c.numero} — ${c.texto}`, CATEGORIA_EQUIPO_LABEL[c.categoriaEquipo]];
       if (c.tipoCircuito !== "na") partes.push(TIPO_CIRCUITO_LABEL[c.tipoCircuito]);
       if (amperaje) partes.push(`${amperaje}A`);

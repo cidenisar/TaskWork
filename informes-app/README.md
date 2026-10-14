@@ -1713,3 +1713,16 @@ general que salió de esto.
     visor público con QR para pegar en el tablero físico (mencionado
     como idea en la sección de arriba) todavía no está implementado, es
     el próximo paso de esta misma idea.
+  - **Calibre fijo para lo que no lleva térmica**: cámaras, lectoras,
+    cerraduras, inyectores PoE y la alimentación de bornera no tienen un
+    amperaje medido que buscar en `catalogo_calibre_cable` — es cableado
+    de instalación típica que no varía por sitio/proyecto (24V/12V DC,
+    control/datos). `calcularCalibreCircuito()` (en
+    `lib/tableros/calibre-cable.ts`) es el punto único que decide: térmica/
+    disyuntor va por el catálogo (amperaje real); el resto va por un valor
+    fijo hardcodeado por categoría, o un genérico para cualquier circuito
+    24vdc/12vdc si la categoría no tiene uno propio. A diferencia del
+    catálogo (que depende de la norma y por eso es editable), esto queda
+    directamente en el código a propósito — no hace falta una tabla para
+    un valor que siempre es el mismo; se ajusta ahí mismo si no coincide
+    con el criterio real de YPF.
