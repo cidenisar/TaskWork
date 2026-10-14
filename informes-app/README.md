@@ -1737,3 +1737,37 @@ general que salió de esto.
     varía por sitio — quedan hardcodeados a propósito, no hace falta una
     tabla para un valor que siempre es el mismo. El color ahora se
     imprime junto al calibre en cada fila del unifilar.
+
+- **Tableros: visor público del plano con QR, para pegar en el tablero
+  físico y dejar de imprimir papel.** Cierra la idea del unifilar: ahora
+  hay una página (`/planos/tablero/[id]`) que cualquiera puede abrir
+  escaneando un QR o entrando al link, sin login — pensada para que el
+  técnico (propio o contratista) escanee el cartel pegado en el gabinete
+  y vea el esquema actualizado desde el celular, o desde una PC.
+  - **Por qué sin login, a propósito**: a este sitio YPF ya no entra
+    cualquiera — el acceso a la planta está controlado y requiere estar
+    autorizado, así que pedir login de la app encima sería duplicar una
+    barrera que ya existe físicamente. La protección real es el link en
+    sí: el id en la URL es un UUID de `tableros.id`, imposible de
+    adivinar — mismo modelo que "cualquiera con el link" de Google Docs.
+  - **Qué muestra, a propósito acotado**: SOLO el esquema unifilar de ESE
+    tablero (recalculado en vivo desde los circuitos actuales, nunca un
+    PDF viejo guardado — así el QR nunca queda desactualizado) + links
+    para ver el PDF completo o descargar el DXF de la última visita.
+    Nunca la ficha de sitio completa — nada de GPS, otros equipos,
+    vehículos ni datos de técnicos.
+  - **Cómo se protege sin aflojar RLS para el resto de la app**: la
+    página vive FUERA del grupo `(app)` (que exige login en su
+    `layout.tsx`) y usa el cliente service-role en el servidor, con el
+    código mismo limitando qué toca — las tablas (`tableros`,
+    `tablero_circuitos`, `tablero_mediciones`, `catalogo_calibre_cable`)
+    siguen con su RLS normal para el resto de la app, nada se afloja a
+    nivel base. El PDF/DXF de storage sigue privado: el link de descarga
+    se firma en el momento, en el propio render de la página.
+  - **El QR en sí** (`/api/tableros/[id]/qr`, con la librería `qrcode`)
+    SÍ requiere login — es la acción de "generarlo para imprimir", no el
+    visor público. Codifica la URL del visor construida con el host real
+    del request (nunca una variable de entorno a mano), así que apunta
+    bien tanto en preview de Vercel como en producción. Hay un botón
+    "Descargar QR del plano" en la ficha de Sitio, dentro de cada
+    tablero.

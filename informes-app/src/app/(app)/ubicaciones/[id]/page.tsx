@@ -401,6 +401,14 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
                       </div>
                       <Icon name="chevron-right" size={15} className="detalle-chevron" />
                     </summary>
+                    <div style={{ margin: "0 14px 10px" }}>
+                      <a className="btn btn-secondary btn-sm" href={`/api/tableros/${t.id}/qr`}>
+                        <Icon name="download" size={13} /> Descargar QR del plano
+                      </a>
+                      <div className="hint" style={{ margin: "4px 0 0" }}>
+                        Para pegar en el tablero físico — al escanearlo se ve el esquema unifilar siempre actualizado, sin login.
+                      </div>
+                    </div>
                     {circuitosDelTablero.length === 0 ? (
                       <div className="empty-note" style={{ margin: "0 14px 14px" }}>
                         Sin circuitos/elementos cargados.
