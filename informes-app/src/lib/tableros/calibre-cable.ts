@@ -25,47 +25,58 @@ export function calcularCalibreCable(amperaje: number | null, config: ConfigCali
   return fila ? fila.calibreMm2 : null;
 }
 
+export interface CalibreResultado {
+  calibreMm2: number | null;
+  colores: string | null;
+}
+
 /**
- * Para circuitos que no llevan térmica (cámaras, lectoras, cerraduras,
- * inyectores PoE, alimentación de bornera) el calibre no depende de un
- * amperaje medido — es el cableado de instalación típica para ese tipo de
- * elemento, que no varía por sitio/proyecto. A diferencia de
- * catalogo_calibre_cable (que sí depende de la norma/método de instalación
- * de cada obra y por eso es editable en Configuración), esto queda
- * hardcodeado a propósito — no hace falta una tabla para un valor que
- * siempre es el mismo. Ajustá estos números acá mismo si no coinciden con
- * el criterio real que usa YPF.
+ * Calibre y color de cable fijos — valores reales tal como los pasó el
+ * usuario (no un default inventado), para cableado que no depende de un
+ * amperaje medido:
+ * - Todo lo que se alimenta de 12V o 24V: 1,5mm², rojo y negro.
+ * - Conexión de la fuente hacia las bornes CON FUSIBLE: 2,5mm², rojo y negro.
+ * - Conexión del banco de batería de 24V: 4mm², rojo y negro.
+ * - Datos de control de acceso (lectora/cerradura): 1mm², blanco.
+ * A diferencia de catalogo_calibre_cable (que depende de la norma/método de
+ * instalación de cada obra y por eso es editable en Configuración), esto
+ * queda hardcodeado a propósito — es cableado de instalación típica que no
+ * varía por sitio.
  */
-const CALIBRE_FIJO_POR_CATEGORIA: Partial<Record<TableroCategoriaEquipo, number>> = {
-  camara: 1.5,
-  lectora: 1.5,
-  cerradura: 1.5,
-  inyector_poe: 1.5,
-  bornera: 2.5,
-  bornera_fusible: 2.5,
+const CALIBRE_FIJO_POR_CATEGORIA: Partial<Record<TableroCategoriaEquipo, CalibreResultado>> = {
+  bornera_fusible: { calibreMm2: 2.5, colores: "Rojo/Negro" },
+  bateria: { calibreMm2: 4, colores: "Rojo/Negro" },
+  lectora: { calibreMm2: 1, colores: "Blanco" },
+  cerradura: { calibreMm2: 1, colores: "Blanco" },
 };
 
 /** 24V/12V DC genérico cuando la categoría no tiene un valor fijo propio arriba. */
-const CALIBRE_FIJO_DC = 1.5;
+const CALIBRE_FIJO_DC: CalibreResultado = { calibreMm2: 1.5, colores: "Rojo/Negro" };
+
+/** Código de colores real (220V: fase marrón, neutro celeste; 380V: R marrón, S negro, T rojo, N celeste) — el calibre en sí sigue saliendo del amperaje medido. */
+const COLORES_220V = "F:Marrón · N:Celeste";
+const COLORES_380V = "R:Marrón · S:Negro · T:Rojo · N:Celeste";
 
 /**
- * Punto único para determinar el calibre de un circuito del unifilar:
- * térmica/disyuntor va por amperaje medido (banda configurable); el resto
- * va por el valor fijo de instalación típica (por categoría, o genérico
- * para 24V/12V DC); si ninguno aplica, no se muestra calibre — nunca se
- * inventa.
+ * Punto único para determinar calibre y color de un circuito del unifilar:
+ * térmica/disyuntor va por amperaje medido (banda configurable) + color
+ * según fase; el resto va por el valor fijo de instalación típica (por
+ * categoría, o genérico para 24V/12V DC); si ninguno aplica, no se muestra
+ * nada — nunca se inventa.
  */
 export function calcularCalibreCircuito(
   categoriaEquipo: TableroCategoriaEquipo,
   tipoCircuito: TableroTipoCircuito,
   ampNominal: string | null,
   config: ConfigCalibreCable[],
-): number | null {
+): CalibreResultado {
   if (categoriaLlevaAmp(categoriaEquipo)) {
-    return calcularCalibreCable(parseAmperaje(ampNominal), config);
+    const calibreMm2 = calcularCalibreCable(parseAmperaje(ampNominal), config);
+    const colores = tipoCircuito === "220v_mono" ? COLORES_220V : tipoCircuito === "380v_tri" ? COLORES_380V : null;
+    return { calibreMm2, colores };
   }
   const fijo = CALIBRE_FIJO_POR_CATEGORIA[categoriaEquipo];
-  if (fijo != null) return fijo;
+  if (fijo) return fijo;
   if (tipoCircuito === "24vdc" || tipoCircuito === "12vdc") return CALIBRE_FIJO_DC;
-  return null;
+  return { calibreMm2: null, colores: null };
 }

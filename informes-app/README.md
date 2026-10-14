@@ -1713,16 +1713,27 @@ general que salió de esto.
     visor público con QR para pegar en el tablero físico (mencionado
     como idea en la sección de arriba) todavía no está implementado, es
     el próximo paso de esta misma idea.
-  - **Calibre fijo para lo que no lleva térmica**: cámaras, lectoras,
-    cerraduras, inyectores PoE y la alimentación de bornera no tienen un
-    amperaje medido que buscar en `catalogo_calibre_cable` — es cableado
-    de instalación típica que no varía por sitio/proyecto (24V/12V DC,
-    control/datos). `calcularCalibreCircuito()` (en
-    `lib/tableros/calibre-cable.ts`) es el punto único que decide: térmica/
-    disyuntor va por el catálogo (amperaje real); el resto va por un valor
-    fijo hardcodeado por categoría, o un genérico para cualquier circuito
-    24vdc/12vdc si la categoría no tiene uno propio. A diferencia del
-    catálogo (que depende de la norma y por eso es editable), esto queda
-    directamente en el código a propósito — no hace falta una tabla para
-    un valor que siempre es el mismo; se ajusta ahí mismo si no coincide
-    con el criterio real de YPF.
+  - **Calibre y color fijos para lo que no lleva térmica — valores reales,
+    no estimados.** Una primera versión de esto salió con números
+    inventados por error (iba contra el criterio de "nunca inventar" que
+    sigue toda la app) — se corrigió con los valores reales que dio el
+    usuario, y ahora `calcularCalibreCircuito()` (en
+    `lib/tableros/calibre-cable.ts`) devuelve calibre **y** color:
+    - Todo lo que se alimenta de 12V o 24V: **1,5mm², rojo y negro**
+      (cualquier circuito `tipo_circuito` 24vdc/12vdc que no tenga un
+      valor propio más específico abajo).
+    - Conexión de la fuente hacia las bornes **con fusible**
+      (`bornera_fusible`): **2,5mm², rojo y negro**.
+    - Conexión del banco de batería de 24V (`bateria`): **4mm², rojo y
+      negro**.
+    - Datos de control de acceso (`lectora`/`cerradura`): **1mm², blanco**.
+    - 220V (circuitos con térmica, calibre real por el catálogo de
+      amperaje): color **fase marrón, neutro celeste**.
+    - 380V (circuitos con térmica, calibre real por el catálogo de
+      amperaje): color **R marrón, S negro, T rojo, N celeste**.
+    Igual que antes: térmica/disyuntor sigue yendo por
+    `catalogo_calibre_cable` (amperaje real, editable); todo lo demás usa
+    estos valores fijos porque son cableado de instalación típica que no
+    varía por sitio — quedan hardcodeados a propósito, no hace falta una
+    tabla para un valor que siempre es el mismo. El color ahora se
+    imprime junto al calibre en cada fila del unifilar.

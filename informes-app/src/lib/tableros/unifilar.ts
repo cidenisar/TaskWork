@@ -31,7 +31,7 @@ const BUS_X = MARGEN + 14;
 const BREAKER_X = BUS_X + 30;
 const BREAKER_SIZE = 9;
 const TEXTO_X = BREAKER_X + BREAKER_SIZE + 10;
-const MAX_CHARS_TEXTO = 58;
+const MAX_CHARS_TEXTO = 72;
 
 function truncar(s: string, max: number): string {
   return s.length > max ? `${s.slice(0, max - 1)}…` : s;
@@ -90,11 +90,12 @@ export function construirUnifilar(
       commands.push({ type: "line", x1: BREAKER_X + BREAKER_SIZE, y1: yFila, x2: TEXTO_X - 4, y2: yFila });
 
       const amperaje = parseAmperaje(c.ampNominal);
-      const calibre = calcularCalibreCircuito(c.categoriaEquipo, c.tipoCircuito, c.ampNominal, configCalibre);
+      const { calibreMm2, colores } = calcularCalibreCircuito(c.categoriaEquipo, c.tipoCircuito, c.ampNominal, configCalibre);
       const partes = [`${c.numero} — ${c.texto}`, CATEGORIA_EQUIPO_LABEL[c.categoriaEquipo]];
       if (c.tipoCircuito !== "na") partes.push(TIPO_CIRCUITO_LABEL[c.tipoCircuito]);
       if (amperaje) partes.push(`${amperaje}A`);
-      if (calibre) partes.push(`${calibre}mm²`);
+      if (calibreMm2) partes.push(`${calibreMm2}mm²`);
+      if (colores) partes.push(colores);
       commands.push({
         type: "text",
         x: TEXTO_X,
