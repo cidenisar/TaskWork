@@ -17,7 +17,7 @@ export function SitioDetalleCard({ sitio }: { sitio: PanelSitioResumen }) {
   return (
     <div>
       <div className="item-name" style={{ fontSize: 16, marginBottom: 10 }}>
-        {sitio.label}
+        {sitio.nombreFino}
       </div>
 
       <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>

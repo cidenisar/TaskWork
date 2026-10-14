@@ -1,6 +1,6 @@
 import type { createClient } from "@/lib/supabase/server";
 import { fetchTodasLasUbicaciones } from "@/lib/ubicaciones/fetch-todas";
-import { labelUbicacion } from "@/components/ubicaciones/types";
+import { labelUbicacion, labelSitioFino } from "@/components/ubicaciones/types";
 import { computarItemsMantenimiento, type PanelMantenimientoItem } from "./mantenimientos";
 
 type Supabase = Awaited<ReturnType<typeof createClient>>;
@@ -31,6 +31,8 @@ export interface PanelSitioMantenimiento {
 export interface PanelSitioResumen {
   id: string;
   label: string;
+  /** Solo el nivel más específico (oficina/planta/sitio) — para el título del detalle, sin repetir el recorrido que ya muestra el breadcrumb. */
+  nombreFino: string;
   region: string;
   provincia: string;
   localidad: string | null;
@@ -103,7 +105,6 @@ export async function getPanelOverview(supabase: Supabase): Promise<PanelOvervie
   const [
     ubicaciones,
     tablerosRes,
-    tableroCircuitosRes,
     tableroMedicionesRes,
     racksRes,
     rackEquipamientosRes,
@@ -120,7 +121,6 @@ export async function getPanelOverview(supabase: Supabase): Promise<PanelOvervie
   ] = await Promise.all([
     fetchTodasLasUbicaciones(supabase),
     supabase.from("tableros").select("id, ubicacion_id"),
-    supabase.from("tablero_circuitos").select("tablero_id").eq("estado", "activo"),
     supabase.from("tablero_mediciones").select("tablero_id, fecha"),
     supabase.from("racks").select("id, ubicacion_id"),
     supabase.from("rack_equipamientos").select("rack_id, cantidad, consumo_promedio_w").eq("estado", "activo"),
@@ -141,45 +141,48 @@ export async function getPanelOverview(supabase: Supabase): Promise<PanelOvervie
   const rackIdUbicacion = new Map((racksRes.data ?? []).map((r) => [r.id, r.ubicacion_id]));
   const torreIdUbicacion = new Map((torresRes.data ?? []).map((t) => [t.id, t.ubicacion_id]));
 
-  // Total por sitio y por módulo — una sola pasada por cada tabla de
-  // equipamiento, sumando `cantidad` donde existe (un circuito de tablero
-  // o una sala siempre cuentan 1, no tienen ese campo). En el mismo pasaje
-  // se acumula el consumo estimado (consumo_promedio_w * cantidad) donde el
-  // módulo lo tiene — Tableros y Salas no entran: ahí no hay consumo
-  // estimado por IA (Tableros mide corriente real; Salas es el ambiente en
-  // sí, no un equipo con consumo propio).
+  // Total por sitio y por módulo: lo que se cuenta en porModulo es la
+  // cantidad de UNIDADES FÍSICAS del módulo que hay en el sitio (cuántos
+  // tableros, cuántos racks, cuántas torres), no los circuitos/equipamientos
+  // que tiene cada una adentro — eso infla el número y deja de representar
+  // "cuántos tableros hay acá". El consumo estimado sí se sigue acumulando
+  // desde lo que cada tablero/rack/torre tiene montado adentro, por
+  // separado del conteo. Equipos Individuales y Salas ya son la unidad
+  // física en sí (una fila = un tipo de equipo/una sala), así que ahí
+  // conteo y consumo salen de la misma fila.
   const totalPorSitio = new Map<string, Record<string, number>>();
   const consumoWPorSitio = new Map<string, number>();
   const sinConsumoPorSitio = new Map<string, number>();
-  function sumar(ubicacionId: string | undefined, modulo: string, cantidad: number, consumoPromedioW?: number | null) {
+  function contarUnidad(ubicacionId: string | undefined, modulo: string, cantidad = 1) {
     if (!ubicacionId) return;
     const actual = totalPorSitio.get(ubicacionId) ?? {};
     actual[modulo] = (actual[modulo] ?? 0) + cantidad;
     totalPorSitio.set(ubicacionId, actual);
-    if (consumoPromedioW === undefined) return; // el módulo (Tableros/Salas) no tiene este dato en absoluto
+  }
+  function acumularConsumo(ubicacionId: string | undefined, cantidad: number, consumoPromedioW: number | null | undefined) {
+    if (!ubicacionId) return;
     if (consumoPromedioW != null && consumoPromedioW > 0) {
       consumoWPorSitio.set(ubicacionId, (consumoWPorSitio.get(ubicacionId) ?? 0) + consumoPromedioW * cantidad);
     } else {
       sinConsumoPorSitio.set(ubicacionId, (sinConsumoPorSitio.get(ubicacionId) ?? 0) + cantidad);
     }
   }
-  for (const c of tableroCircuitosRes.data ?? []) {
-    sumar(tableroIdUbicacion.get(c.tablero_id), "Tableros", 1);
+  for (const t of tablerosRes.data ?? []) contarUnidad(t.ubicacion_id, "Tableros");
+  for (const r of racksRes.data ?? []) contarUnidad(r.ubicacion_id, "Racks");
+  for (const t of torresRes.data ?? []) contarUnidad(t.ubicacion_id, "Torres");
+  for (const s of salasRes.data ?? []) contarUnidad(s.ubicacion_id, "Salas");
+  for (const e of equiposRes.data ?? []) {
+    const cantidad = Number.isFinite(e.cantidad) && e.cantidad > 0 ? e.cantidad : 1;
+    contarUnidad(e.ubicacion_id, "Equipos Individuales", cantidad);
+    acumularConsumo(e.ubicacion_id, cantidad, e.consumo_promedio_w);
   }
   for (const e of rackEquipamientosRes.data ?? []) {
     const cantidad = Number.isFinite(e.cantidad) && e.cantidad > 0 ? e.cantidad : 1;
-    sumar(rackIdUbicacion.get(e.rack_id), "Racks", cantidad, e.consumo_promedio_w);
+    acumularConsumo(rackIdUbicacion.get(e.rack_id), cantidad, e.consumo_promedio_w);
   }
   for (const e of torreEquipamientosRes.data ?? []) {
     const cantidad = Number.isFinite(e.cantidad) && e.cantidad > 0 ? e.cantidad : 1;
-    sumar(torreIdUbicacion.get(e.torre_id), "Torres", cantidad, e.consumo_promedio_w);
-  }
-  for (const e of equiposRes.data ?? []) {
-    const cantidad = Number.isFinite(e.cantidad) && e.cantidad > 0 ? e.cantidad : 1;
-    sumar(e.ubicacion_id, "Equipos Individuales", cantidad, e.consumo_promedio_w);
-  }
-  for (const s of salasRes.data ?? []) {
-    sumar(s.ubicacion_id, "Salas", 1);
+    acumularConsumo(torreIdUbicacion.get(e.torre_id), cantidad, e.consumo_promedio_w);
   }
 
   // Última visita por sitio: la fecha más reciente entre un relevamiento/
@@ -222,6 +225,7 @@ export async function getPanelOverview(supabase: Supabase): Promise<PanelOvervie
     sitios.push({
       id: ubicacionId,
       label: labelUbicacion(ubicacion),
+      nombreFino: labelSitioFino(ubicacion),
       region: ubicacion.region,
       provincia: ubicacion.provincia,
       localidad: ubicacion.localidad,
