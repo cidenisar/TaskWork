@@ -9,12 +9,12 @@ import {
 } from "@/lib/mantenimiento/types";
 import { calcularRecursoAltura, RECURSO_ALTURA_LABEL, type ConfigRecursoAltura } from "@/lib/equipos/recurso-altura";
 import { getPronosticosPorSitio, type PronosticoSitio } from "@/lib/panel/clima";
-import type { TipoEquipoBaja, TipoMontajeCamara } from "@/lib/database.types";
+import type { TipoEquipoMantenimiento, TipoMontajeCamara } from "@/lib/database.types";
 
 type Supabase = Awaited<ReturnType<typeof createClient>>;
 
 export interface PanelMantenimientoItem {
-  tipoEquipo: TipoEquipoBaja;
+  tipoEquipo: TipoEquipoMantenimiento;
   tipoEquipoLabel: string;
   equipoId: string;
   texto: string;
@@ -67,18 +67,29 @@ export interface PanelMantenimientos {
 }
 
 export async function getPanelMantenimientos(supabase: Supabase): Promise<PanelMantenimientos> {
-  const [ubicaciones, intervalosRes, racksRes, rackEquipamientosRes, equiposRes, mantenimientosRes, programacionesRes, tecnicosRes, recursoAlturaRes] =
-    await Promise.all([
-      fetchTodasLasUbicaciones(supabase),
-      supabase.from("mantenimiento_intervalos").select("tipo_equipo, categoria, frecuencia_dias"),
-      supabase.from("racks").select("id, ubicacion_id"),
-      supabase.from("rack_equipamientos").select("id, rack_id, categoria_equipo, texto").eq("estado", "activo"),
-      supabase.from("equipos").select("id, categoria_equipo, texto, ubicacion_id, tipo_montaje, altura_montaje_m").eq("estado", "activo"),
-      supabase.from("mantenimientos_equipamiento").select("tipo_equipo, equipo_id, fecha").order("fecha", { ascending: false }),
-      supabase.from("mantenimiento_programaciones").select("tipo_equipo, equipo_id, fecha_programada, asignado_a, origen, motivo"),
-      supabase.from("profiles").select("id, nombre_completo"),
-      supabase.from("catalogo_recurso_altura").select("tipo_montaje, recurso_fijo, umbral_escalera_m"),
-    ]);
+  const [
+    ubicaciones,
+    intervalosRes,
+    racksRes,
+    rackEquipamientosRes,
+    equiposRes,
+    salasRes,
+    mantenimientosRes,
+    programacionesRes,
+    tecnicosRes,
+    recursoAlturaRes,
+  ] = await Promise.all([
+    fetchTodasLasUbicaciones(supabase),
+    supabase.from("mantenimiento_intervalos").select("tipo_equipo, categoria, frecuencia_dias"),
+    supabase.from("racks").select("id, ubicacion_id"),
+    supabase.from("rack_equipamientos").select("id, rack_id, categoria_equipo, texto").eq("estado", "activo"),
+    supabase.from("equipos").select("id, categoria_equipo, texto, ubicacion_id, tipo_montaje, altura_montaje_m").eq("estado", "activo"),
+    supabase.from("salas").select("id, denominacion, tipo_construccion, ubicacion_id").eq("estado", "activo"),
+    supabase.from("mantenimientos_equipamiento").select("tipo_equipo, equipo_id, fecha").order("fecha", { ascending: false }),
+    supabase.from("mantenimiento_programaciones").select("tipo_equipo, equipo_id, fecha_programada, asignado_a, origen, motivo"),
+    supabase.from("profiles").select("id, nombre_completo"),
+    supabase.from("catalogo_recurso_altura").select("tipo_montaje, recurso_fijo, umbral_escalera_m"),
+  ]);
   const recursoAlturaConfig: ConfigRecursoAltura[] = (recursoAlturaRes.data ?? []).map((r) => ({
     tipoMontaje: r.tipo_montaje,
     recursoFijo: r.recurso_fijo,
@@ -112,7 +123,7 @@ export async function getPanelMantenimientos(supabase: Supabase): Promise<PanelM
   const items: PanelMantenimientoItem[] = [];
 
   function agregarItem(
-    tipoEquipo: TipoEquipoBaja,
+    tipoEquipo: TipoEquipoMantenimiento,
     equipoId: string,
     texto: string,
     categoriaEquipo: string,
@@ -161,6 +172,9 @@ export async function getPanelMantenimientos(supabase: Supabase): Promise<PanelM
   }
   for (const e of equiposRes.data ?? []) {
     agregarItem("equipo_individual", e.id, e.texto, e.categoria_equipo, e.ubicacion_id, e.tipo_montaje, e.altura_montaje_m);
+  }
+  for (const s of salasRes.data ?? []) {
+    agregarItem("sala", s.id, s.denominacion, s.tipo_construccion, s.ubicacion_id);
   }
 
   const kpis = calcularKpisMantenimiento(items);
@@ -214,7 +228,7 @@ export function calcularKpisMantenimiento(items: PanelMantenimientoItem[]): Kpis
 
 export interface MantenimientoRealizado {
   id: string;
-  tipoEquipo: TipoEquipoBaja;
+  tipoEquipo: TipoEquipoMantenimiento;
   tipoEquipoLabel: string;
   equipoId: string;
   texto: string;
@@ -228,11 +242,12 @@ export interface MantenimientoRealizado {
 
 /** Historial de mantenimientos ya registrados (pestaña "Realizados") — más reciente primero. */
 export async function getMantenimientosRealizados(supabase: Supabase, limite = 200): Promise<MantenimientoRealizado[]> {
-  const [ubicaciones, racksRes, rackEquipamientosRes, equiposRes, mantenimientosRes, usuariosRes] = await Promise.all([
+  const [ubicaciones, racksRes, rackEquipamientosRes, equiposRes, salasRes, mantenimientosRes, usuariosRes] = await Promise.all([
     fetchTodasLasUbicaciones(supabase),
     supabase.from("racks").select("id, ubicacion_id"),
     supabase.from("rack_equipamientos").select("id, rack_id, categoria_equipo, texto"),
     supabase.from("equipos").select("id, categoria_equipo, texto, ubicacion_id"),
+    supabase.from("salas").select("id, denominacion, tipo_construccion, ubicacion_id"),
     supabase
       .from("mantenimientos_equipamiento")
       .select("id, tipo_equipo, equipo_id, fecha, descripcion, foto_url, created_by")
@@ -245,6 +260,7 @@ export async function getMantenimientosRealizados(supabase: Supabase, limite = 2
   const rackIdUbicacion = new Map((racksRes.data ?? []).map((r) => [r.id, r.ubicacion_id]));
   const rackEquipoPorId = new Map((rackEquipamientosRes.data ?? []).map((e) => [e.id, e]));
   const equipoPorId = new Map((equiposRes.data ?? []).map((e) => [e.id, e]));
+  const salaPorId = new Map((salasRes.data ?? []).map((s) => [s.id, s]));
   const nombrePorUsuario = new Map((usuariosRes.data ?? []).map((u) => [u.id, u.nombre_completo]));
 
   const resultado: MantenimientoRealizado[] = [];
@@ -259,6 +275,14 @@ export async function getMantenimientosRealizados(supabase: Supabase, limite = 2
         categoriaLabel = labelCategoriaMantenimiento("rack_equipamiento", e.categoria_equipo);
         const ubicacionId = rackIdUbicacion.get(e.rack_id);
         const ubicacion = ubicacionId ? ubicacionPorId.get(ubicacionId) : undefined;
+        if (ubicacion) ubicacionLabel = labelUbicacion(ubicacion);
+      }
+    } else if (m.tipo_equipo === "sala") {
+      const s = salaPorId.get(m.equipo_id);
+      if (s) {
+        texto = s.denominacion;
+        categoriaLabel = labelCategoriaMantenimiento("sala", s.tipo_construccion);
+        const ubicacion = ubicacionPorId.get(s.ubicacion_id);
         if (ubicacion) ubicacionLabel = labelUbicacion(ubicacion);
       }
     } else {

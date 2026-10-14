@@ -47,6 +47,13 @@ export default async function RelevamientoHubPage() {
             Equipamiento suelto que no está en un rack ni en un tablero — UPS, cámaras y demás. Sacale una foto y la IA identifica qué es.
           </div>
         </Link>
+        <Link href="/salas/nuevo" className="module-card">
+          <div className="module-ico">
+            <ModuleIcon name="salas" />
+          </div>
+          <div className="module-title">Salas / Shelters</div>
+          <div className="module-sub">Relevá el ambiente físico en sí (sala, shelter o container) — aparte del equipamiento que tiene adentro.</div>
+        </Link>
       </div>
     </div>
   );

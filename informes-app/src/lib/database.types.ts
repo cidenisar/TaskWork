@@ -67,6 +67,15 @@ export type CondicionMaterial = "nuevo" | "usado_funcional";
 export type MotivoEntregaDeposito = "sobrante_obra" | "reemplazo_funcional" | "retorno_mantenimiento" | "otro";
 export type MotivoBaja = "rotura" | "ampliacion" | "obsolescencia" | "otro";
 export type TipoEquipoBaja = "tablero_circuito" | "rack_equipamiento" | "equipo_individual";
+/**
+ * Tipo propio del Plan de Mantenimiento — separado de `TipoEquipoBaja` a
+ * propósito: una Sala no se "da de baja" ni se "entrega a depósito" como
+ * una pieza suelta (eso es Bajas de Equipamiento/Entregas a Depósito, que
+ * siguen usando solo `TipoEquipoBaja`), pero sí necesita entrar al Plan de
+ * Mantenimiento igual que Racks y Equipos Individuales.
+ */
+export type TipoEquipoMantenimiento = "rack_equipamiento" | "equipo_individual" | "sala";
+export type SalaTipoConstruccion = "sala_interior" | "shelter" | "container" | "otro";
 /** Dónde está instalada una cámara/domo (Equipos Individuales) — determina junto con la altura qué recurso hace falta para el mantenimiento. */
 export type TipoMontajeCamara = "torre" | "columna" | "poste" | "pared" | "techo" | "otro";
 export type RecursoAlturaMantenimiento = "escalera" | "andamio_manlift" | "grupo_altura";
@@ -485,6 +494,26 @@ export type TorreComunicacionRelevamientoLecturaRow = {
   comentario: string | null;
 }
 
+/**
+ * Sala/shelter/container — el ambiente físico, no el equipamiento que
+ * alberga. Alta única (sin tabla de relevamientos repetidos): las visitas
+ * siguientes quedan en el Plan de Mantenimiento genérico (ver
+ * MantenimientoEquipamientoRow con tipo_equipo='sala').
+ */
+export type SalaRow = {
+  id: string;
+  ubicacion_id: string;
+  denominacion: string;
+  tipo_construccion: SalaTipoConstruccion;
+  estado: "activo" | "baja";
+  numero_generacion: string;
+  fotos_generales_urls: string[] | null;
+  pdf_url: string | null;
+  pdf_generado_at: string | null;
+  created_by: string;
+  created_at: string;
+}
+
 export type EquipoRow = {
   id: string;
   ubicacion_id: string;
@@ -590,7 +619,7 @@ export type EntregaDepositoRow = {
 
 export type MantenimientoIntervaloRow = {
   id: string;
-  tipo_equipo: TipoEquipoBaja;
+  tipo_equipo: TipoEquipoMantenimiento;
   /** Valor crudo del enum de categoría del tipo_equipo correspondiente (TableroCategoriaEquipo/RackCategoriaEquipo/EquipoCategoria). */
   categoria: string;
   frecuencia_dias: number;
@@ -600,7 +629,7 @@ export type MantenimientoIntervaloRow = {
 
 export type MantenimientoEquipamientoRow = {
   id: string;
-  tipo_equipo: TipoEquipoBaja;
+  tipo_equipo: TipoEquipoMantenimiento;
   equipo_id: string;
   fecha: string;
   descripcion: string | null;
@@ -612,7 +641,7 @@ export type MantenimientoEquipamientoRow = {
 /** Catálogo de ítems de checklist por (tipo_equipo, categoria) — admin-configurable. */
 export type MantenimientoChecklistItemRow = {
   id: string;
-  tipo_equipo: TipoEquipoBaja;
+  tipo_equipo: TipoEquipoMantenimiento;
   categoria: string;
   orden: number;
   texto: string;
@@ -644,7 +673,7 @@ export type MotivoReprogramacionMantenimiento =
 
 export type MantenimientoProgramacionRow = {
   id: string;
-  tipo_equipo: TipoEquipoBaja;
+  tipo_equipo: TipoEquipoMantenimiento;
   equipo_id: string;
   fecha_programada: string;
   asignado_a: string | null;
@@ -856,6 +885,11 @@ export interface Database {
         Partial<TorreComunicacionRelevamientoLecturaRow>
       >;
       torre_tipo_largos: Tbl<TorreTipoLargoRow, Partial<TorreTipoLargoRow> & Pick<TorreTipoLargoRow, "tipo_torre" | "largo_tramo_m">, Partial<TorreTipoLargoRow>>;
+      salas: Tbl<
+        SalaRow,
+        Partial<SalaRow> & Pick<SalaRow, "ubicacion_id" | "denominacion" | "tipo_construccion" | "numero_generacion" | "created_by">,
+        Partial<SalaRow>
+      >;
       catalogo_recurso_altura: Tbl<
         CatalogoRecursoAlturaRow,
         Partial<CatalogoRecursoAlturaRow> & Pick<CatalogoRecursoAlturaRow, "tipo_montaje">,

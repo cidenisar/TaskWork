@@ -6,14 +6,14 @@ import { requireAdmin } from "@/lib/auth";
 import { logAudit } from "@/lib/config/audit";
 import { labelCategoriaMantenimiento, TIPO_EQUIPO_MANTENIMIENTO_LABEL } from "@/lib/mantenimiento/types";
 import type { ConfigActionResult } from "./empresa";
-import type { TipoEquipoBaja } from "@/lib/database.types";
+import type { TipoEquipoMantenimiento } from "@/lib/database.types";
 
 function revalidateAll() {
   revalidatePath("/ubicaciones/[id]", "page");
   revalidatePath("/panel/mantenimientos");
 }
 
-export async function agregarChecklistItemAction(tipoEquipo: TipoEquipoBaja, categoria: string, texto: string): Promise<ConfigActionResult> {
+export async function agregarChecklistItemAction(tipoEquipo: TipoEquipoMantenimiento, categoria: string, texto: string): Promise<ConfigActionResult> {
   const profile = await requireAdmin();
   if (!texto.trim()) return { success: false, error: "Falta el texto del ítem." };
 

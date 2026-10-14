@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Icon } from "@/components/icon";
 import { programarMantenimientoAction } from "@/app/(app)/ubicaciones/actions";
 import { MOTIVO_REPROGRAMACION_OPCIONES, MOTIVO_REPROGRAMACION_LABEL } from "@/lib/mantenimiento/types";
-import type { TipoEquipoBaja, MotivoReprogramacionMantenimiento } from "@/lib/database.types";
+import type { TipoEquipoMantenimiento, MotivoReprogramacionMantenimiento } from "@/lib/database.types";
 
 /**
  * Botón "Programar mantenimiento" para una fila de equipamiento (Rack o
@@ -23,7 +23,7 @@ export function ProgramarMantenimientoButton({
   tecnicos,
   programacionActual,
 }: {
-  tipoEquipo: TipoEquipoBaja;
+  tipoEquipo: TipoEquipoMantenimiento;
   equipoId: string;
   equipoTexto: string;
   tecnicos: { id: string; nombreCompleto: string }[];

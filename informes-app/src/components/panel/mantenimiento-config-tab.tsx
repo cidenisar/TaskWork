@@ -12,7 +12,7 @@ import {
   categoriasDeTipoEquipo,
 } from "@/lib/mantenimiento/types";
 import { Icon } from "@/components/icon";
-import type { TipoEquipoBaja } from "@/lib/database.types";
+import type { TipoEquipoMantenimiento } from "@/lib/database.types";
 
 function fmtFecha(fecha: string) {
   const [y, m, d] = fecha.split("-");
@@ -20,7 +20,7 @@ function fmtFecha(fecha: string) {
 }
 
 export interface IntervaloConfigurado {
-  tipoEquipo: TipoEquipoBaja;
+  tipoEquipo: TipoEquipoMantenimiento;
   categoria: string;
   frecuenciaDias: number;
 }
@@ -34,7 +34,7 @@ export interface SupuestosDotacion {
 
 export interface ChecklistItemCatalogo {
   id: string;
-  tipoEquipo: TipoEquipoBaja;
+  tipoEquipo: TipoEquipoMantenimiento;
   categoria: string;
   texto: string;
 }
@@ -85,7 +85,7 @@ export function MantenimientoConfigTab({
   const [busyClave, setBusyClave] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  async function guardarFila(tipoEquipo: TipoEquipoBaja, categoria: string) {
+  async function guardarFila(tipoEquipo: TipoEquipoMantenimiento, categoria: string) {
     const clave = `${tipoEquipo}:${categoria}`;
     setBusyClave(clave);
     setError(null);
@@ -120,13 +120,13 @@ export function MantenimientoConfigTab({
     router.refresh();
   }
 
-  const [tipoEquipoChecklist, setTipoEquipoChecklist] = useState<TipoEquipoBaja>("rack_equipamiento");
+  const [tipoEquipoChecklist, setTipoEquipoChecklist] = useState<TipoEquipoMantenimiento>("rack_equipamiento");
   const [categoriaChecklist, setCategoriaChecklist] = useState("");
   const [nuevoItemTexto, setNuevoItemTexto] = useState("");
   const [checklistBusy, setChecklistBusy] = useState(false);
   const [checklistError, setChecklistError] = useState<string | null>(null);
 
-  function onTipoEquipoChecklistChange(v: TipoEquipoBaja) {
+  function onTipoEquipoChecklistChange(v: TipoEquipoMantenimiento) {
     setTipoEquipoChecklist(v);
     setCategoriaChecklist("");
   }
@@ -309,7 +309,7 @@ export function MantenimientoConfigTab({
         según lo que de verdad se controla en el campo.
       </div>
       <div className="tech-form-grid">
-        <select value={tipoEquipoChecklist} onChange={(e) => onTipoEquipoChecklistChange(e.target.value as TipoEquipoBaja)} disabled={checklistBusy}>
+        <select value={tipoEquipoChecklist} onChange={(e) => onTipoEquipoChecklistChange(e.target.value as TipoEquipoMantenimiento)} disabled={checklistBusy}>
           {TIPO_EQUIPO_MANTENIMIENTO_OPCIONES.map((t) => (
             <option key={t} value={t}>
               {TIPO_EQUIPO_MANTENIMIENTO_LABEL[t]}

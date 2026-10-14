@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Icon } from "@/components/icon";
 import { registrarMantenimientoAction } from "@/app/(app)/ubicaciones/actions";
-import type { TipoEquipoBaja, EstadoChecklist } from "@/lib/database.types";
+import type { TipoEquipoMantenimiento, EstadoChecklist } from "@/lib/database.types";
 
 function hoyISO(): string {
   return new Date().toISOString().slice(0, 10);
@@ -33,7 +33,7 @@ export function RegistrarMantenimientoButton({
   equipoTexto,
   checklistItems = [],
 }: {
-  tipoEquipo: TipoEquipoBaja;
+  tipoEquipo: TipoEquipoMantenimiento;
   equipoId: string;
   equipoTexto: string;
   checklistItems?: ChecklistItemConfigurado[];

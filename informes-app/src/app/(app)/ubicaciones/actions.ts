@@ -19,6 +19,7 @@ import type {
   MotivoEntregaDeposito,
   CondicionMaterial,
   TipoEquipoBaja,
+  TipoEquipoMantenimiento,
   EstadoChecklist,
   MotivoReprogramacionMantenimiento,
 } from "@/lib/database.types";
@@ -470,7 +471,7 @@ export async function registrarMantenimientoAction(formData: FormData): Promise<
   const raw = formData.get("payload");
   if (typeof raw !== "string") return { success: false, error: "Faltan datos del mantenimiento." };
   let payload: {
-    tipoEquipo: TipoEquipoBaja;
+    tipoEquipo: TipoEquipoMantenimiento;
     equipoId: string;
     fecha: string;
     descripcion: string;
@@ -541,7 +542,7 @@ export interface ProgramarMantenimientoResult {
  * pisa la anterior, no acumula.
  */
 export async function programarMantenimientoAction(payload: {
-  tipoEquipo: TipoEquipoBaja;
+  tipoEquipo: TipoEquipoMantenimiento;
   equipoId: string;
   fechaProgramada: string;
   asignadoA: string | null;
@@ -575,7 +576,7 @@ export async function programarMantenimientoAction(payload: {
 }
 
 /** Solo Admin — igual criterio que el borrado de un mantenimiento ya registrado (RLS admin-only en la tabla). */
-export async function quitarProgramacionMantenimientoAction(tipoEquipo: TipoEquipoBaja, equipoId: string): Promise<ProgramarMantenimientoResult> {
+export async function quitarProgramacionMantenimientoAction(tipoEquipo: TipoEquipoMantenimiento, equipoId: string): Promise<ProgramarMantenimientoResult> {
   await requireAdmin();
   const supabase = await createClient();
   const { error } = await supabase

@@ -1,6 +1,6 @@
 import type { createClient } from "@/lib/supabase/server";
 import { fetchTodasLasUbicaciones } from "@/lib/ubicaciones/fetch-todas";
-import type { TipoEquipoBaja } from "@/lib/database.types";
+import type { TipoEquipoMantenimiento } from "@/lib/database.types";
 
 type Supabase = Awaited<ReturnType<typeof createClient>>;
 
@@ -30,7 +30,7 @@ type Supabase = Awaited<ReturnType<typeof createClient>>;
 const HORIZONTE_DIAS = 90;
 
 interface EquipoPendiente {
-  tipoEquipo: TipoEquipoBaja;
+  tipoEquipo: TipoEquipoMantenimiento;
   equipoId: string;
   ubicacionId: string;
   provincia: string;
@@ -41,7 +41,7 @@ interface VisitaSitio {
   ubicacionId: string;
   provincia: string;
   fechaRequerida: string;
-  equipos: { tipoEquipo: TipoEquipoBaja; equipoId: string }[];
+  equipos: { tipoEquipo: TipoEquipoMantenimiento; equipoId: string }[];
 }
 
 export interface ResultadoProgramacionAutomatica {
@@ -75,12 +75,13 @@ function distanciaKm(a: { lat: number; lng: number }, b: { lat: number; lng: num
 }
 
 export async function generarProgramacionAutomatica(supabase: Supabase, createdBy: string): Promise<ResultadoProgramacionAutomatica> {
-  const [ubicaciones, intervalosRes, racksRes, rackEquipamientosRes, equiposRes, mantenimientosRes, configRes] = await Promise.all([
+  const [ubicaciones, intervalosRes, racksRes, rackEquipamientosRes, equiposRes, salasRes, mantenimientosRes, configRes] = await Promise.all([
     fetchTodasLasUbicaciones(supabase),
     supabase.from("mantenimiento_intervalos").select("tipo_equipo, categoria, frecuencia_dias"),
     supabase.from("racks").select("id, ubicacion_id"),
     supabase.from("rack_equipamientos").select("id, rack_id, categoria_equipo").eq("estado", "activo"),
     supabase.from("equipos").select("id, categoria_equipo, ubicacion_id").eq("estado", "activo"),
+    supabase.from("salas").select("id, tipo_construccion, ubicacion_id").eq("estado", "activo"),
     supabase.from("mantenimientos_equipamiento").select("tipo_equipo, equipo_id, fecha").order("fecha", { ascending: false }),
     supabase.from("config_general").select("pdm_horas_por_dia, pdm_horas_por_visita, pdm_velocidad_kmh").eq("id", 1).single(),
   ]);
@@ -110,7 +111,7 @@ export async function generarProgramacionAutomatica(supabase: Supabase, createdB
 
   const pendientes: EquipoPendiente[] = [];
 
-  function evaluar(tipoEquipo: TipoEquipoBaja, equipoId: string, categoria: string, ubicacionId: string) {
+  function evaluar(tipoEquipo: TipoEquipoMantenimiento, equipoId: string, categoria: string, ubicacionId: string) {
     const frecuencia = frecuenciaPorCategoria.get(`${tipoEquipo}:${categoria}`);
     if (frecuencia == null) return;
     const ubicacion = ubicacionPorId.get(ubicacionId);
@@ -127,6 +128,9 @@ export async function generarProgramacionAutomatica(supabase: Supabase, createdB
   }
   for (const e of equiposRes.data ?? []) {
     evaluar("equipo_individual", e.id, e.categoria_equipo, e.ubicacion_id);
+  }
+  for (const s of salasRes.data ?? []) {
+    evaluar("sala", s.id, s.tipo_construccion, s.ubicacion_id);
   }
 
   if (pendientes.length === 0) {

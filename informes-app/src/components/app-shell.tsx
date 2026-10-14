@@ -36,6 +36,7 @@ const RELEVAMIENTO_GROUP: GroupOption[] = [
   { href: "/racks/nuevo", label: "Comunicaciones" },
   { href: "/torres-comunicacion/nuevo", label: "Torres de Comunicaciones" },
   { href: "/equipos/nuevo", label: "Equipos Individuales" },
+  { href: "/salas/nuevo", label: "Salas / Shelters" },
 ];
 
 const NAV_CONFIG: Record<string, ModuleConfig> = {
@@ -92,6 +93,15 @@ const NAV_CONFIG: Record<string, ModuleConfig> = {
     tabs: [
       { href: "/equipos/nuevo", label: "Nuevo Relevamiento" },
       { href: "/equipos/historial", label: "Historial" },
+    ],
+  },
+  salas: {
+    brand: "Relevamiento de Equipos",
+    backHref: "/relevamiento",
+    group: RELEVAMIENTO_GROUP,
+    tabs: [
+      { href: "/salas/nuevo", label: "Nueva Sala" },
+      { href: "/salas/historial", label: "Historial" },
     ],
   },
   ubicaciones: {

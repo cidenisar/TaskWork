@@ -13,6 +13,7 @@ import {
 } from "@/components/tableros/types";
 import { calcularResumenEquipamiento as calcularResumenRacks, CATEGORIA_EQUIPO_LABEL as RACK_CATEGORIA_LABEL } from "@/components/racks/types";
 import { calcularResumenEquipos, CATEGORIA_EQUIPO_LABEL as EQUIPO_CATEGORIA_LABEL } from "@/components/equipos/types";
+import { SALA_TIPO_CONSTRUCCION_LABEL } from "@/components/salas/types";
 import { calcularRecursoAltura, TIPO_MONTAJE_LABEL, RECURSO_ALTURA_LABEL, type ConfigRecursoAltura } from "@/lib/equipos/recurso-altura";
 import { EstimarConsumoButton } from "@/components/ubicaciones/estimar-consumo-button";
 import { estimarConsumoRacksAction, estimarConsumoEquiposAction } from "../actions";
@@ -64,13 +65,19 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
     labelPorUbicacionId.set(h.id, [h.oficina, h.planta, h.localidad].filter(Boolean).join(" · ") || "Sin planta/oficina especificada");
   }
 
-  const [tablerosRes, racksRes, equiposRes, informesRes, rendicionesRes] = await Promise.all([
+  const [tablerosRes, racksRes, salasRes, equiposRes, informesRes, rendicionesRes] = await Promise.all([
     supabase
       .from("tableros")
       .select("id, denominacion, subsistemas, ubicacion_id, jerarquia, tablero_padre_id")
       .in("ubicacion_id", siblingIds)
       .order("denominacion"),
     supabase.from("racks").select("id, denominacion, etiqueta_ypf, ubicacion_id").in("ubicacion_id", siblingIds).order("denominacion"),
+    supabase
+      .from("salas")
+      .select("id, denominacion, tipo_construccion, ubicacion_id")
+      .eq("estado", "activo")
+      .in("ubicacion_id", siblingIds)
+      .order("denominacion"),
     supabase
       .from("equipos")
       .select(
@@ -98,6 +105,7 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
     if (t.tablero_padre_id) secundariosPorPadreId.set(t.tablero_padre_id, (secundariosPorPadreId.get(t.tablero_padre_id) ?? 0) + 1);
   }
   const racks = racksRes.data ?? [];
+  const salas = salasRes.data ?? [];
   // Un equipo dado de baja o entregado a depósito ya no es equipamiento
   // activo del sitio — se muestra aparte, en sus propias secciones (que leen
   // bajas_equipamiento/entregas_deposito, no esta lista).
@@ -218,15 +226,28 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
 
   const equipoIndividualIds = equipos.map((e) => e.id);
   const rackEquipoIds = equipamientos.map((e) => e.id);
-  const idsConMantenimiento = [...rackEquipoIds, ...equipoIndividualIds];
-  const [programacionesRes, tecnicosRes, checklistItemsRes, recursoAlturaRes] = await Promise.all([
+  const salaIds = salas.map((s) => s.id);
+  const idsConMantenimiento = [...rackEquipoIds, ...equipoIndividualIds, ...salaIds];
+  const [programacionesRes, tecnicosRes, checklistItemsRes, recursoAlturaRes, mantenimientosSalaRes] = await Promise.all([
     idsConMantenimiento.length > 0
       ? supabase.from("mantenimiento_programaciones").select("tipo_equipo, equipo_id, fecha_programada, asignado_a, nota, motivo").in("equipo_id", idsConMantenimiento)
       : { data: [] },
     supabase.from("profiles").select("id, nombre_completo").eq("activo", true).order("nombre_completo"),
     supabase.from("mantenimiento_checklist_items").select("id, tipo_equipo, categoria, texto").order("orden"),
     supabase.from("catalogo_recurso_altura").select("tipo_montaje, recurso_fijo, umbral_escalera_m"),
+    salaIds.length > 0
+      ? supabase
+          .from("mantenimientos_equipamiento")
+          .select("equipo_id, fecha")
+          .eq("tipo_equipo", "sala")
+          .in("equipo_id", salaIds)
+          .order("fecha", { ascending: false })
+      : { data: [] },
   ]);
+  const ultimaFechaPorSala = new Map<string, string>();
+  for (const m of mantenimientosSalaRes.data ?? []) {
+    if (!ultimaFechaPorSala.has(m.equipo_id)) ultimaFechaPorSala.set(m.equipo_id, m.fecha);
+  }
   const recursoAlturaConfig: ConfigRecursoAltura[] = (recursoAlturaRes.data ?? []).map((r) => ({
     tipoMontaje: r.tipo_montaje,
     recursoFijo: r.recurso_fijo,
@@ -722,6 +743,63 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
             </div>
           </>
         )}
+      </div>
+
+      <div className="card">
+        <div className="section-label">Salas / Shelters en este sitio</div>
+        {salas.length === 0 ? (
+          <div className="empty-note">No hay salas relevadas en {ubicacion.sitio}.</div>
+        ) : (
+          <div className="detalle-table-wrap">
+            <table className="detalle-table">
+              <thead>
+                <tr>
+                  <th>Denominación</th>
+                  {hayVariasPlantas && <th>Planta/Oficina</th>}
+                  <th>Tipo</th>
+                  <th>Último mantenimiento</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {salas.map((s) => (
+                  <tr key={s.id} id={`sala-${s.id}`}>
+                    <td>{s.denominacion}</td>
+                    {hayVariasPlantas && <td>{labelPorUbicacionId.get(s.ubicacion_id)}</td>}
+                    <td>{SALA_TIPO_CONSTRUCCION_LABEL[s.tipo_construccion]}</td>
+                    <td>{(() => { const f = ultimaFechaPorSala.get(s.id); return f ? fmtFecha(f) : "Sin registrar"; })()}</td>
+                    <td>
+                      <div style={{ display: "flex", gap: 6 }}>
+                        <RegistrarMantenimientoButton
+                          tipoEquipo="sala"
+                          equipoId={s.id}
+                          equipoTexto={s.denominacion}
+                          checklistItems={checklistPorCategoria.get(`sala:${s.tipo_construccion}`) ?? []}
+                        />
+                        <ProgramarMantenimientoButton
+                          tipoEquipo="sala"
+                          equipoId={s.id}
+                          equipoTexto={s.denominacion}
+                          tecnicos={tecnicos}
+                          programacionActual={programacionPorEquipo.get(`sala:${s.id}`) ?? null}
+                        />
+                        <a className="icon-btn" title="Descargar QR del plano" href={`/api/salas/${s.id}/qr`}>
+                          <Icon name="download" size={15} />
+                        </a>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        <div className="footer-nav" style={{ marginTop: 10 }}>
+          <span />
+          <Link href="/salas/nuevo" className="btn btn-secondary btn-sm">
+            + Nueva sala
+          </Link>
+        </div>
       </div>
 
       {puedeBajas && bajas.length > 0 && (

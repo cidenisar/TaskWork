@@ -1,13 +1,14 @@
-import type { TipoEquipoBaja, MotivoReprogramacionMantenimiento } from "@/lib/database.types";
+import type { TipoEquipoMantenimiento, MotivoReprogramacionMantenimiento } from "@/lib/database.types";
 import { CATEGORIA_EQUIPO_OPCIONES as RACK_CATEGORIAS, CATEGORIA_EQUIPO_LABEL as RACK_CATEGORIA_LABEL } from "@/components/racks/types";
 import { CATEGORIA_EQUIPO_OPCIONES as EQUIPO_CATEGORIAS, CATEGORIA_EQUIPO_LABEL as EQUIPO_CATEGORIA_LABEL } from "@/components/equipos/types";
+import { SALA_TIPO_CONSTRUCCION_OPCIONES, SALA_TIPO_CONSTRUCCION_LABEL } from "@/components/salas/types";
 
 /**
- * Plan de Mantenimiento (PDM): reusa a propósito el tipo `TipoEquipoBaja`
- * (ya compartido por Bajas de Equipamiento y Entregas a Depósito) en vez
- * de uno nuevo — es el mismo "a cuál tabla de equipamiento apunta esto".
- * Alcance de esta primera entrega: SOLO Racks y Equipos Individuales —
- * NO Tableros ni Torres de Comunicaciones.
+ * Plan de Mantenimiento (PDM): usa `TipoEquipoMantenimiento`, un tipo
+ * PROPIO (ver database.types.ts) — separado de `TipoEquipoBaja`, que
+ * siguen usando solo Bajas de Equipamiento y Entregas a Depósito. Alcance:
+ * Racks, Equipos Individuales y Salas — NO Tableros ni Torres de
+ * Comunicaciones.
  * - Tableros queda afuera porque YA tiene su propio sistema de
  *   mantenimiento (`tablero_mantenimientos`, con fecha de próxima visita
  *   que carga a mano el técnico en `/tableros/mantenimiento`) — construir
@@ -18,21 +19,22 @@ import { CATEGORIA_EQUIPO_OPCIONES as EQUIPO_CATEGORIAS, CATEGORIA_EQUIPO_LABEL 
  * - Torres queda afuera por el mismo motivo que en Bajas/Entregas:
  *   todavía no tiene su propia sección en la ficha de Sitio.
  */
-export const TIPO_EQUIPO_MANTENIMIENTO_OPCIONES: TipoEquipoBaja[] = ["rack_equipamiento", "equipo_individual"];
+export const TIPO_EQUIPO_MANTENIMIENTO_OPCIONES: TipoEquipoMantenimiento[] = ["rack_equipamiento", "equipo_individual", "sala"];
 
-export const TIPO_EQUIPO_MANTENIMIENTO_LABEL: Record<TipoEquipoBaja, string> = {
-  tablero_circuito: "Tablero — circuito/elemento",
+export const TIPO_EQUIPO_MANTENIMIENTO_LABEL: Record<TipoEquipoMantenimiento, string> = {
   rack_equipamiento: "Rack — equipamiento",
   equipo_individual: "Equipo individual",
+  sala: "Sala / Shelter",
 };
 
-/** Cada tipo_equipo tiene su PROPIO enum de categoría — no hay un solo tipo que sirva para los dos a la vez. */
-export function categoriasDeTipoEquipo(tipoEquipo: TipoEquipoBaja): { value: string; label: string }[] {
+/** Cada tipo_equipo tiene su PROPIO enum de categoría — no hay un solo tipo que sirva para los tres a la vez. */
+export function categoriasDeTipoEquipo(tipoEquipo: TipoEquipoMantenimiento): { value: string; label: string }[] {
   if (tipoEquipo === "rack_equipamiento") return RACK_CATEGORIAS.map((c) => ({ value: c, label: RACK_CATEGORIA_LABEL[c] }));
+  if (tipoEquipo === "sala") return SALA_TIPO_CONSTRUCCION_OPCIONES.map((c) => ({ value: c, label: SALA_TIPO_CONSTRUCCION_LABEL[c] }));
   return EQUIPO_CATEGORIAS.map((c) => ({ value: c, label: EQUIPO_CATEGORIA_LABEL[c] }));
 }
 
-export function labelCategoriaMantenimiento(tipoEquipo: TipoEquipoBaja, categoria: string): string {
+export function labelCategoriaMantenimiento(tipoEquipo: TipoEquipoMantenimiento, categoria: string): string {
   return categoriasDeTipoEquipo(tipoEquipo).find((o) => o.value === categoria)?.label ?? categoria;
 }
 

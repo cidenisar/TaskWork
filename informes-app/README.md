@@ -1800,3 +1800,64 @@ general que salió de esto.
     esos tipos no tienen un "plano" como el unifilar y conviene pensar
     qué mostrarles en su lugar (resumen de equipamiento en vez de
     esquema).
+
+- **Nuevo módulo: Salas / Shelters — relevar el AMBIENTE físico, no el
+  equipamiento que tiene adentro.** Pedido del usuario: además de
+  Tableros/Racks/Torres/Equipos (lo que hay DENTRO de una sala), hacía
+  falta poder relevar la sala/shelter/container EN SÍ — igual que a un
+  equipo, también se le hace mantenimiento (limpieza, obra civil,
+  arreglos), con checklist, entrando al mismo Plan de Mantenimiento y con
+  su propio QR.
+  - **Tabla `salas`** (`supabase/migrations/20261014020000_salas.sql`):
+    alta única por ambiente — `denominacion`, `tipo_construccion`
+    (`sala_interior` / `shelter` / `container` / `otro`), `ubicacion_id`,
+    fotos generales, PDF. A diferencia de Tableros/Racks/Torres, NO tiene
+    una tabla de "relevamientos" repetidos — la alta es una sola vez (el
+    relevamiento), las visitas siguientes son mantenimiento y esas quedan
+    en el Plan de Mantenimiento genérico, no en una tabla propia de Salas.
+  - **Por qué un enum nuevo (`tipo_equipo_mantenimiento`) separado de
+    `tipo_equipo_baja`**: el Plan de Mantenimiento (intervalos,
+    checklist, programación — ver más arriba "PDM") reusaba a propósito
+    `tipo_equipo_baja`, el mismo enum de Bajas de Equipamiento/Entregas a
+    Depósito. Pero una Sala no se "da de baja" como una pieza suelta ni
+    se "entrega a depósito" — son acciones que no tienen sentido para un
+    ambiente físico. Meter `sala` en ese enum le hubiera agregado una
+    opción sin sentido a esas dos pantallas. Se creó un enum PROPIO del
+    Plan de Mantenimiento (`rack_equipamiento` / `equipo_individual` /
+    `sala`), y las 4 tablas que usan ese enum (`mantenimiento_intervalos`,
+    `mantenimientos_equipamiento`, `mantenimiento_programaciones`,
+    `mantenimiento_checklist_items`) se migraron a él — Bajas/Entregas a
+    Depósito siguen con `tipo_equipo_baja` sin tocar.
+  - **Reusa el Plan de Mantenimiento tal cual está, sin tabla aparte**:
+    `RegistrarMantenimientoButton`/`ProgramarMantenimientoButton` (los
+    mismos componentes de Racks/Equipos) ahora también se usan para
+    Salas, con `categoria` = el `tipo_construccion` — el checklist se
+    configura por ese mismo campo, igual criterio que categoría de
+    equipamiento en Racks/Equipos. Checklist inicial seedeado (limpieza,
+    estado de paredes/piso/techo, puerta, iluminación, climatización,
+    filtraciones, señalética, detección/extinción de incendio), editable
+    por un Admin desde Configuración sin tocar código.
+  - **Alta simple, sin lista de equipamiento ni IA**: a diferencia de
+    Racks/Torres/Equipos, Salas no tiene ítems que leer con cámara — el
+    formulario (`/salas/nuevo`) es Ubicación + denominación + tipo de
+    construcción + fotos, genera un PDF simple (sin tabla, solo
+    cabecera/fotos) y un N° de generación (`SAL-{año}-{n}`).
+  - **QR + visor público, mismo patrón que Tableros**: `/planos/sala/[id]`
+    (público, sin login) muestra identificación, tipo y último
+    mantenimiento; con sesión activa, agrega un botón que lleva a la fila
+    de esa sala en la ficha de Sitio (`/ubicaciones/{id}#sala-{id}`) en
+    vez de prefilizar un formulario — a diferencia de Tableros, el
+    mantenimiento de Salas no tiene una página propia (vive en un modal
+    inline de la ficha de Sitio), así que no hay a dónde deep-linkear con
+    el dato precargado todavía. El QR en sí se genera desde
+    `/api/salas/[id]/qr`, con un botón "Descargar QR del plano" junto a
+    cada sala en la ficha de Sitio. A diferencia de Tableros, el visor no
+    muestra un plano/esquema (no existe el concepto para un ambiente) —
+    solo el link al PDF del relevamiento.
+  - **Wiring completo**: card "Salas / Shelters" en el hub
+    `/relevamiento`, tab propio en la navegación, sección "Salas /
+    Shelters en este sitio" en la ficha de Sitio (con los mismos botones
+    de mantenimiento/programación + descarga de QR que Racks/Equipos), y
+    rama `sala` en `getPanelMantenimientos`/`getMantenimientosRealizados`
+    y en el generador de programación automática — aparece en el Plan de
+    Mantenimiento exactamente igual que Racks y Equipos Individuales.

@@ -6,7 +6,7 @@ import { requireAdmin } from "@/lib/auth";
 import { logAudit } from "@/lib/config/audit";
 import { labelCategoriaMantenimiento, TIPO_EQUIPO_MANTENIMIENTO_LABEL } from "@/lib/mantenimiento/types";
 import type { ConfigActionResult } from "./empresa";
-import type { TipoEquipoBaja } from "@/lib/database.types";
+import type { TipoEquipoMantenimiento } from "@/lib/database.types";
 
 function revalidateAll() {
   revalidatePath("/panel/mantenimientos");
@@ -18,7 +18,7 @@ function revalidateAll() {
  * (vuelve a "sin intervalo configurado"), un número la crea o actualiza.
  */
 export async function guardarIntervaloMantenimientoAction(
-  tipoEquipo: TipoEquipoBaja,
+  tipoEquipo: TipoEquipoMantenimiento,
   categoria: string,
   frecuenciaDias: string,
 ): Promise<ConfigActionResult> {

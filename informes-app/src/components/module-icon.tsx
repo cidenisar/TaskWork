@@ -73,6 +73,13 @@ const ICON_PATHS: Record<string, React.ReactNode> = {
       <circle cx="12" cy="9.5" r="2.3" />
     </>
   ),
+  salas: (
+    <>
+      <rect x="4" y="3" width="16" height="18" rx="1.5" />
+      <path d="M15 12v.01" />
+      <path d="M4 3v18" />
+    </>
+  ),
   relevamiento: (
     <>
       <rect x="3.5" y="3.5" width="7" height="7" rx="1.3" />

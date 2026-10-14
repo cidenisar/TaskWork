@@ -124,6 +124,18 @@ export function buildBajaFilename(opts: {
   return `${partes.join("_")}.pdf`;
 }
 
+export function buildSalaFilename(opts: {
+  numeroGeneracion: string;
+  denominacion: string;
+  sitio: string;
+  generadoEn?: Date;
+}): string {
+  const partes = [opts.numeroGeneracion, timestampCompacto(opts.generadoEn ?? new Date()), slug(opts.denominacion), slug(opts.sitio)].filter(
+    (p): p is string => Boolean(p),
+  );
+  return `${partes.join("_")}.pdf`;
+}
+
 export function buildEntregaDepositoFilename(opts: {
   numeroGeneracion: string;
   descripcion: string;
