@@ -1961,3 +1961,42 @@ general que salió de esto.
     tocar los hallazgos (fuera de alcance, igual límite que materiales/
     remito ahí) pero sí recupera los ya guardados al regenerar el PDF,
     para que una edición no los borre de un informe existente.
+
+- **Vehículos: más fotos, galería visual completa, y lote "Interior"
+  (antes solo "Tablero").** Pedido real: ahora que la IA puede evaluar
+  cualquier cosa que un Admin cargue en el catálogo (pintura, cubiertas,
+  ópticas, parabrisas, tapizado — ver Inspección IA arriba), hacía falta
+  poder mandar más fotos y verlas después, no solo extraer un par de
+  datos puntuales.
+  - **Máximos subidos**: 8 fotos de exterior (antes 5), 6 de interior
+    (antes 2, y se llamaba "Tablero" — ahora cubre también tapizado y
+    parabrisas desde adentro, no solo el odómetro).
+  - **Se guarda TODA la galería, no solo 1 foto representativa**: antes
+    se descartaba el resto del lote después de leerlo con IA; ahora cada
+    foto mandada a leer (de cualquiera de los dos lotes, y de todas las
+    tandas si se lee en varias) queda guardada
+    (`catalogo_vehiculos.fotos_exterior_urls`/`fotos_interior_urls`,
+    `text[]`, reemplazan las columnas viejas de una sola foto). Se
+    pueden ver en la Flota con un botón "Ver fotos (N)" por vehículo.
+  - **`vehiculo-docs` es un bucket privado** (ni siquiera con URL
+    pública) — mostrar la galería necesita firmar cada path
+    (`createSignedUrls`, 1 hora de validez, se generan todas juntas en
+    `/panel/vehiculos/page.tsx`, no una llamada por foto). Se sumó
+    además una policy de **solo lectura** para que un Supervisor también
+    pueda ver la galería (antes el bucket entero era Admin-only, pero la
+    Flota ya es visible para los dos roles).
+  - Las dos columnas viejas (`foto_estado_alta_url`/`foto_tablero_url`)
+    no se usaban en ningún lado de la UI — se migraron a las nuevas
+    columnas array y quedaron sin uso en la base (no se pudieron borrar
+    en esta sesión por una confirmación de `DROP COLUMN` que no se pudo
+    otorgar sola; es un borrado trivial para quien tenga acceso al
+    dashboard de Supabase, no bloquea nada mientras tanto).
+
+- **Foto de perfil: un Administrador también puede cargarla/cambiarla
+  por cualquier usuario.** Antes solo existía la autocarga desde
+  `/cuenta` (`foto_perfil_url`, bucket `fotos-perfil`, preparada en una
+  migración anterior pero sin UI de Admin hasta ahora). Se sumó una
+  policy de Storage adicional (`is_admin()`, permisiva, no reemplaza las
+  de autoedición) y un botón "Subir foto"/"Cambiar foto" por usuario en
+  Configuración → Usuarios — útil cuando alguien todavía no cargó la
+  suya o hay que corregirla.

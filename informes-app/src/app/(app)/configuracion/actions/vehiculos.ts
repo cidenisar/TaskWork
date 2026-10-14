@@ -159,10 +159,9 @@ export interface AltaVehiculoResult extends ConfigActionResult {
 /**
  * Alta de vehículo con fotos (IA): mismo flujo de siempre (la IA lee,
  * el Admin revisa/corrige, los campos finales son los que llegan en el
- * payload, nunca lo que devolvió la IA sin pasar por acá) — solo guarda UNA
- * foto representativa de cada lote (exterior/tablero) como evidencia del
- * estado al momento del alta, el resto de las fotos que se mandaron a leer
- * no se persisten (mismo criterio que Equipos/Racks).
+ * payload, nunca lo que devolvió la IA sin pasar por acá) — guarda TODAS
+ * las fotos de cada lote (exterior/interior) como galería del estado del
+ * vehículo al momento del alta, no solo una representativa.
  */
 export async function altaVehiculoConFotosAction(formData: FormData): Promise<AltaVehiculoResult> {
   const profile = await requireAdmin();
@@ -190,19 +189,28 @@ export async function altaVehiculoConFotosAction(formData: FormData): Promise<Al
     return { success: false, error: error?.code === "23505" ? "Ya existe un vehículo con esa patente." : error?.message };
   }
 
-  const fotoExterior = formData.get("fotoExterior");
-  if (fotoExterior instanceof File && fotoExterior.size > 0) {
-    const buffer = Buffer.from(await fotoExterior.arrayBuffer());
-    const path = `${vehiculo.id}/alta-exterior.jpg`;
-    const { error: upErr } = await supabase.storage.from("vehiculo-docs").upload(path, buffer, { contentType: "image/jpeg", upsert: true });
-    if (!upErr) await supabase.from("catalogo_vehiculos").update({ foto_estado_alta_url: path }).eq("id", vehiculo.id);
+  async function subirGaleria(campo: string, carpeta: "exterior" | "interior"): Promise<string[]> {
+    const fotos = formData.getAll(campo).filter((f): f is File => f instanceof File && f.size > 0);
+    const paths: string[] = [];
+    for (let i = 0; i < fotos.length; i++) {
+      const buffer = Buffer.from(await fotos[i].arrayBuffer());
+      const path = `${vehiculo!.id}/${carpeta}-${i + 1}.jpg`;
+      const { error: upErr } = await supabase.storage.from("vehiculo-docs").upload(path, buffer, { contentType: "image/jpeg", upsert: true });
+      if (!upErr) paths.push(path);
+    }
+    return paths;
   }
-  const fotoTablero = formData.get("fotoTablero");
-  if (fotoTablero instanceof File && fotoTablero.size > 0) {
-    const buffer = Buffer.from(await fotoTablero.arrayBuffer());
-    const path = `${vehiculo.id}/alta-tablero.jpg`;
-    const { error: upErr } = await supabase.storage.from("vehiculo-docs").upload(path, buffer, { contentType: "image/jpeg", upsert: true });
-    if (!upErr) await supabase.from("catalogo_vehiculos").update({ foto_tablero_url: path }).eq("id", vehiculo.id);
+
+  const fotosExteriorUrls = await subirGaleria("fotosExterior", "exterior");
+  const fotosInteriorUrls = await subirGaleria("fotosInterior", "interior");
+  if (fotosExteriorUrls.length > 0 || fotosInteriorUrls.length > 0) {
+    await supabase
+      .from("catalogo_vehiculos")
+      .update({
+        ...(fotosExteriorUrls.length > 0 ? { fotos_exterior_urls: fotosExteriorUrls } : {}),
+        ...(fotosInteriorUrls.length > 0 ? { fotos_interior_urls: fotosInteriorUrls } : {}),
+      })
+      .eq("id", vehiculo.id);
   }
 
   // Inspección IA (opcional): solo los ítems que el Admin confirmó/corrigió

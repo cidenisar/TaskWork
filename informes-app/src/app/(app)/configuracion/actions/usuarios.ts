@@ -245,3 +245,38 @@ export async function reactivarUsuarioAction(userId: string, nombre: string): Pr
   revalidatePath("/rendicion-gastos/nueva");
   return { success: true };
 }
+
+export interface SubirFotoPerfilResult extends ConfigActionResult {
+  fotoPerfilUrl?: string;
+}
+
+/**
+ * Un Admin puede cargar/cambiar la foto de perfil de CUALQUIER usuario —
+ * hasta ahora solo el propio usuario podía subir la suya desde /cuenta
+ * (ver actualizarDatosPersonalesAction). Mismo path fijo "{uid}/foto" con
+ * upsert (una sola foto por usuario, se reemplaza) y el mismo cache-bust
+ * con "?v=" para que el navegador no muestre la vieja después de cambiarla.
+ */
+export async function subirFotoPerfilUsuarioAction(userId: string, nombre: string, formData: FormData): Promise<SubirFotoPerfilResult> {
+  const profile = await requireAdmin();
+  const foto = formData.get("foto");
+  if (!(foto instanceof File) || foto.size === 0) return { success: false, error: "Falta la foto." };
+
+  const supabase = await createClient();
+  const path = `${userId}/foto`;
+  const { error: upErr } = await supabase.storage.from("fotos-perfil").upload(path, Buffer.from(await foto.arrayBuffer()), {
+    contentType: foto.type || "image/jpeg",
+    upsert: true,
+  });
+  if (upErr) return { success: false, error: `No se pudo subir la foto: ${upErr.message}` };
+
+  const { data: pub } = supabase.storage.from("fotos-perfil").getPublicUrl(path);
+  const fotoPerfilUrl = `${pub.publicUrl}?v=${Date.now()}`;
+
+  const { error } = await supabase.from("profiles").update({ foto_perfil_url: fotoPerfilUrl }).eq("id", userId);
+  if (error) return { success: false, error: error.message };
+
+  await logAudit(supabase, profile, `Cambió la foto de perfil de "${nombre}"`);
+  revalidatePath("/configuracion/usuarios");
+  return { success: true, fotoPerfilUrl };
+}

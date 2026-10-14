@@ -166,8 +166,9 @@ export type CatalogoVehiculoRow = {
   /** Estado general (rayones/roturas) relevado con fotos al dar de alta el vehículo — null si se cargó por el alta manual o nunca se completó. */
   estado_alta: string | null;
   tiene_danios_alta: boolean | null;
-  foto_estado_alta_url: string | null;
-  foto_tablero_url: string | null;
+  /** Galería completa de fotos del alta (todas las que se mandaron a leer con IA, no solo una representativa). */
+  fotos_exterior_urls: string[] | null;
+  fotos_interior_urls: string[] | null;
   created_at: string;
   updated_at: string;
 }

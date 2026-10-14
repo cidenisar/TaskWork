@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { VEHICULO_TABLERO_FOTO_MAX } from "@/components/panel/vehiculos/alta-types";
+import { VEHICULO_INTERIOR_FOTO_MAX } from "@/components/panel/vehiculos/alta-types";
 import { instruccionInspeccionIa, INSTRUCCION_RESPUESTA_HALLAZGOS, parseHallazgosDetectados } from "@/lib/inspeccion-ia/prompt";
 
 /**
@@ -44,8 +44,8 @@ export async function POST(req: NextRequest) {
   if (files.length === 0) {
     return NextResponse.json({ error: "Falta al menos una foto." }, { status: 400 });
   }
-  if (files.length > VEHICULO_TABLERO_FOTO_MAX) {
-    return NextResponse.json({ error: `Máximo ${VEHICULO_TABLERO_FOTO_MAX} fotos por lectura.` }, { status: 400 });
+  if (files.length > VEHICULO_INTERIOR_FOTO_MAX) {
+    return NextResponse.json({ error: `Máximo ${VEHICULO_INTERIOR_FOTO_MAX} fotos por lectura.` }, { status: 400 });
   }
 
   const imagenes = await Promise.all(

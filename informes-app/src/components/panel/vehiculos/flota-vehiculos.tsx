@@ -36,6 +36,16 @@ export function FlotaVehiculos({
   const [tab, setTab] = useState<Tab>("flota");
   const [vehiculos, setVehiculos] = useState(vehiculosIniciales);
   const [services, setServices] = useState(servicesIniciales);
+  const [galeriaAbierta, setGaleriaAbierta] = useState<Set<string>>(new Set());
+
+  function toggleGaleria(id: string) {
+    setGaleriaAbierta((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
 
   const ultimoServicePorVehiculo = new Map<string, PanelVehiculoUltimoService>();
   for (const s of [...services].sort((a, b) => (a.fecha < b.fecha ? 1 : -1))) {
@@ -94,6 +104,7 @@ export function FlotaVehiculos({
               {vehiculos.map((v) => {
                 const ultimoService = ultimoServicePorVehiculo.get(v.id) ?? null;
                 const proximoService = calcularProximoService(v.kilometrajeActual, ultimoService);
+                const totalFotos = (v.fotosExterior?.length ?? 0) + (v.fotosInterior?.length ?? 0);
                 return (
                   <div className="list-item" key={v.id} style={{ flexDirection: "column", alignItems: "stretch", gap: 8 }}>
                     <div className="info">
@@ -125,6 +136,11 @@ export function FlotaVehiculos({
                           <Icon name="warning" size={11} /> {v.hallazgosNoOk}
                         </span>
                       )}
+                      {totalFotos > 0 && (
+                        <button type="button" className="btn btn-secondary btn-sm" onClick={() => toggleGaleria(v.id)}>
+                          <Icon name="camera" size={11} /> {galeriaAbierta.has(v.id) ? "Ocultar fotos" : `Ver fotos (${totalFotos})`}
+                        </button>
+                      )}
                     </div>
                     {v.estadoAlta && <div className="item-sub">Estado al alta: {v.estadoAlta}</div>}
                     <div className="item-sub">
@@ -136,6 +152,20 @@ export function FlotaVehiculos({
                         </>
                       )}
                     </div>
+                    {galeriaAbierta.has(v.id) && totalFotos > 0 && (
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                        {[...(v.fotosExterior ?? []), ...(v.fotosInterior ?? [])].map((url, i) => (
+                          <a key={i} href={url} target="_blank" rel="noreferrer">
+                            {/* eslint-disable-next-line @next/next/no-img-element -- URL firmada temporal, no apta para el optimizador de next/image */}
+                            <img
+                              src={url}
+                              alt=""
+                              style={{ width: 72, height: 72, objectFit: "cover", borderRadius: 8, border: "1px solid var(--field-border)" }}
+                            />
+                          </a>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 );
               })}

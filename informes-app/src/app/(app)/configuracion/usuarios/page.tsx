@@ -13,7 +13,7 @@ export default async function ConfiguracionUsuariosPage() {
 
   const supabase = await createClient();
   const [usuariosRes, torresRes] = await Promise.all([
-    supabase.from("profiles").select("id, email, nombre_completo, rol, torre, activo").order("nombre_completo"),
+    supabase.from("profiles").select("id, email, nombre_completo, rol, torre, activo, foto_perfil_url").order("nombre_completo"),
     supabase.from("catalogo_torres").select("nombre").order("nombre"),
   ]);
 
@@ -31,6 +31,7 @@ export default async function ConfiguracionUsuariosPage() {
           rol: u.rol,
           torre: u.torre,
           activo: u.activo,
+          fotoPerfilUrl: u.foto_perfil_url,
         }))}
         currentUserId={profile.id}
         torres={(torresRes.data ?? []).map((t) => t.nombre)}

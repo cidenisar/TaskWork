@@ -8,7 +8,7 @@ import { resizeImageToJpeg } from "@/lib/image-resize";
 import { ErrorNote, SuccessNote } from "@/components/notes";
 import { Icon } from "@/components/icon";
 import { Spinner } from "@/components/spinner";
-import { VEHICULO_EXTERIOR_FOTO_MAX, VEHICULO_TABLERO_FOTO_MAX } from "./alta-types";
+import { VEHICULO_EXTERIOR_FOTO_MAX, VEHICULO_INTERIOR_FOTO_MAX } from "./alta-types";
 import { mezclarHallazgos, type HallazgoInspeccionIa } from "@/lib/inspeccion-ia/types";
 import { HallazgosInspeccionIaSection } from "@/components/inspeccion-ia/hallazgos-section";
 import type { EstadoChecklist } from "@/lib/database.types";
@@ -23,7 +23,7 @@ interface ExteriorLectura {
   hallazgos?: HallazgoInspeccionIa[];
 }
 
-interface TableroLectura {
+interface InteriorLectura {
   kilometraje: number | null;
   identificado: boolean;
   hallazgos?: HallazgoInspeccionIa[];
@@ -33,11 +33,14 @@ interface TableroLectura {
  * Alta de vehículo con fotos — mismo sistema de lectura con IA que Racks/
  * Equipos/Torres, pero acá las fotos se mandan en dos lotes separados
  * porque son dos cosas físicamente distintas: fotos del EXTERIOR (patente,
- * marca/modelo, rayones/roturas) y una foto del TABLERO (kilometraje del
- * odómetro). Cada lote tiene su propio botón "Leer con IA" — se puede leer
- * uno sin el otro, y los dos resultados caen en los mismos campos
- * editables de abajo, que son los que realmente se guardan (la IA nunca
- * escribe directo a la base).
+ * marca/modelo, pintura, cubiertas, ópticas) y del INTERIOR (kilometraje del
+ * odómetro, tapizado, parabrisas desde adentro). Cada lote tiene su propio
+ * botón "Leer con IA" — se puede leer uno sin el otro, se puede leer en
+ * varias tandas (ej. frente/atrás/laterales), y los resultados de cada
+ * tanda caen en los mismos campos editables de abajo, que son los que
+ * realmente se guardan (la IA nunca escribe directo a la base). TODAS las
+ * fotos de los dos lotes quedan guardadas como galería visual del estado
+ * del vehículo al momento del alta, no solo una representativa.
  */
 export function NuevoVehiculoForm({ catalogoHallazgos }: { catalogoHallazgos: { id: string; texto: string }[] }) {
   const router = useRouter();
@@ -45,17 +48,17 @@ export function NuevoVehiculoForm({ catalogoHallazgos }: { catalogoHallazgos: { 
   const [fotosExterior, setFotosExterior] = useState<File[]>([]);
   const [leyendoExterior, setLeyendoExterior] = useState(false);
   const [notaExterior, setNotaExterior] = useState<string | null>(null);
-  /** La primera foto del lote que se leyó con IA — se guarda como evidencia del estado al alta (el resto del lote no se persiste). */
-  const [fotoExteriorGuardar, setFotoExteriorGuardar] = useState<File | null>(null);
+  /** Todas las fotos de exterior ya leídas (de todas las tandas) — se guardan como galería del estado al alta. */
+  const [fotosExteriorGuardar, setFotosExteriorGuardar] = useState<File[]>([]);
   const exteriorCameraRef = useRef<HTMLInputElement>(null);
   const exteriorGaleriaRef = useRef<HTMLInputElement>(null);
 
-  const [fotosTablero, setFotosTablero] = useState<File[]>([]);
-  const [leyendoTablero, setLeyendoTablero] = useState(false);
-  const [notaTablero, setNotaTablero] = useState<string | null>(null);
-  const [fotoTableroGuardar, setFotoTableroGuardar] = useState<File | null>(null);
-  const tableroCameraRef = useRef<HTMLInputElement>(null);
-  const tableroGaleriaRef = useRef<HTMLInputElement>(null);
+  const [fotosInterior, setFotosInterior] = useState<File[]>([]);
+  const [leyendoInterior, setLeyendoInterior] = useState(false);
+  const [notaInterior, setNotaInterior] = useState<string | null>(null);
+  const [fotosInteriorGuardar, setFotosInteriorGuardar] = useState<File[]>([]);
+  const interiorCameraRef = useRef<HTMLInputElement>(null);
+  const interiorGaleriaRef = useRef<HTMLInputElement>(null);
 
   const [patente, setPatente] = useState("");
   const [marcaModelo, setMarcaModelo] = useState("");
@@ -70,8 +73,8 @@ export function NuevoVehiculoForm({ catalogoHallazgos }: { catalogoHallazgos: { 
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
-  // Mismo catálogo evaluado desde los dos lotes de fotos (exterior y
-  // tablero) — arranca sin evaluar (estado null) y cada lectura con IA va
+  // Mismo catálogo evaluado desde los dos lotes de fotos (exterior e
+  // interior) — arranca sin evaluar (estado null) y cada lectura con IA va
   // sumando resultados al mismo estado vía mezclarHallazgos, igual criterio
   // que un relevamiento multi-foto en otros módulos.
   const [hallazgos, setHallazgos] = useState<HallazgoInspeccionIa[]>(
@@ -121,7 +124,7 @@ export function NuevoVehiculoForm({ catalogoHallazgos }: { catalogoHallazgos: { 
         setHallazgos(mezclarHallazgos(hallazgos, data.hallazgos));
       }
       setNotaExterior("Listo — revisá los datos antes de guardar, sobre todo si quedaron marcados para revisar.");
-      setFotoExteriorGuardar(fotosExterior[0]);
+      setFotosExteriorGuardar((prev) => [...prev, ...fotosExterior]);
       setFotosExterior([]);
     } catch (err) {
       setNotaExterior("No se pudo leer las fotos.");
@@ -131,20 +134,20 @@ export function NuevoVehiculoForm({ catalogoHallazgos }: { catalogoHallazgos: { 
     }
   }
 
-  async function leerTablero() {
-    if (fotosTablero.length === 0) return;
-    setLeyendoTablero(true);
-    setNotaTablero(null);
+  async function leerInterior() {
+    if (fotosInterior.length === 0) return;
+    setLeyendoInterior(true);
+    setNotaInterior(null);
     try {
       const fd = new FormData();
-      for (const f of fotosTablero) {
+      for (const f of fotosInterior) {
         const jpeg = await resizeImageToJpeg(f);
-        fd.append("fotos", jpeg, "tablero.jpg");
+        fd.append("fotos", jpeg, "interior.jpg");
       }
       const res = await fetch("/api/vehiculos/leer-tablero", { method: "POST", body: fd });
-      const data: Partial<TableroLectura> & { error?: string } = await res.json();
+      const data: Partial<InteriorLectura> & { error?: string } = await res.json();
       if (!res.ok) {
-        setNotaTablero(data.error || "No se pudo leer las fotos.");
+        setNotaInterior(data.error || "No se pudo leer las fotos.");
         return;
       }
       if (data.kilometraje != null) setKm(String(data.kilometraje));
@@ -152,18 +155,18 @@ export function NuevoVehiculoForm({ catalogoHallazgos }: { catalogoHallazgos: { 
       if (data.hallazgos && data.hallazgos.length > 0) {
         setHallazgos(mezclarHallazgos(hallazgos, data.hallazgos));
       }
-      setNotaTablero(
+      setNotaInterior(
         data.kilometraje != null
           ? "Listo — revisá el kilometraje antes de guardar."
           : "No se pudo leer el kilometraje con certeza — completalo a mano.",
       );
-      setFotoTableroGuardar(fotosTablero[0]);
-      setFotosTablero([]);
+      setFotosInteriorGuardar((prev) => [...prev, ...fotosInterior]);
+      setFotosInterior([]);
     } catch (err) {
-      setNotaTablero("No se pudo leer las fotos.");
-      reportarErrorCliente(err instanceof Error ? err.message : "Error leyendo tablero de vehículo con IA", "leer-tablero-vehiculo");
+      setNotaInterior("No se pudo leer las fotos.");
+      reportarErrorCliente(err instanceof Error ? err.message : "Error leyendo interior de vehículo con IA", "leer-interior-vehiculo");
     } finally {
-      setLeyendoTablero(false);
+      setLeyendoInterior(false);
     }
   }
 
@@ -189,8 +192,12 @@ export function NuevoVehiculoForm({ catalogoHallazgos }: { catalogoHallazgos: { 
             .map((h) => ({ itemId: h.itemId, estado: h.estado, comentario: h.comentario.trim() })),
         }),
       );
-      if (fotoExteriorGuardar) fd.append("fotoExterior", await resizeImageToJpeg(fotoExteriorGuardar), "exterior.jpg");
-      if (fotoTableroGuardar) fd.append("fotoTablero", await resizeImageToJpeg(fotoTableroGuardar), "tablero.jpg");
+      for (let i = 0; i < fotosExteriorGuardar.length; i++) {
+        fd.append("fotosExterior", await resizeImageToJpeg(fotosExteriorGuardar[i]), `exterior-${i + 1}.jpg`);
+      }
+      for (let i = 0; i < fotosInteriorGuardar.length; i++) {
+        fd.append("fotosInterior", await resizeImageToJpeg(fotosInteriorGuardar[i]), `interior-${i + 1}.jpg`);
+      }
       const res = await altaVehiculoConFotosAction(fd);
       if (!res.success) {
         setError(res.error || "No se pudo dar de alta el vehículo.");
@@ -228,7 +235,7 @@ export function NuevoVehiculoForm({ catalogoHallazgos }: { catalogoHallazgos: { 
           <Icon name="camera" size={14} /> Fotos del exterior
         </div>
         <div className="hint" style={{ margin: "-2px 0 10px" }}>
-          Patente, marca/modelo y estado general (rayones, roturas) — sacale una o más fotos al vehículo desde afuera.
+          Patente, marca/modelo, pintura, cubiertas, ópticas y espejos — sacale una o más fotos al vehículo desde afuera.
         </div>
         <input
           ref={exteriorCameraRef}
@@ -303,13 +310,13 @@ export function NuevoVehiculoForm({ catalogoHallazgos }: { catalogoHallazgos: { 
 
       <div className="card">
         <div className="section-label">
-          <Icon name="camera" size={14} /> Foto del tablero
+          <Icon name="camera" size={14} /> Fotos del interior
         </div>
         <div className="hint" style={{ margin: "-2px 0 10px" }}>
-          Kilometraje — sacale una foto clara al odómetro.
+          Kilometraje, tapizado, parabrisas desde adentro — sacale una o más fotos al habitáculo.
         </div>
         <input
-          ref={tableroCameraRef}
+          ref={interiorCameraRef}
           type="file"
           accept="image/*"
           capture="environment"
@@ -317,11 +324,11 @@ export function NuevoVehiculoForm({ catalogoHallazgos }: { catalogoHallazgos: { 
           onChange={(e) => {
             const files = Array.from(e.target.files ?? []);
             e.target.value = "";
-            agregarFotos(setFotosTablero, VEHICULO_TABLERO_FOTO_MAX, files);
+            agregarFotos(setFotosInterior, VEHICULO_INTERIOR_FOTO_MAX, files);
           }}
         />
         <input
-          ref={tableroGaleriaRef}
+          ref={interiorGaleriaRef}
           type="file"
           accept="image/*"
           multiple
@@ -329,41 +336,41 @@ export function NuevoVehiculoForm({ catalogoHallazgos }: { catalogoHallazgos: { 
           onChange={(e) => {
             const files = Array.from(e.target.files ?? []);
             e.target.value = "";
-            agregarFotos(setFotosTablero, VEHICULO_TABLERO_FOTO_MAX, files);
+            agregarFotos(setFotosInterior, VEHICULO_INTERIOR_FOTO_MAX, files);
           }}
         />
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: fotosTablero.length ? 8 : 0 }}>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: fotosInterior.length ? 8 : 0 }}>
           <button
             type="button"
             className="ai-btn"
-            onClick={() => tableroCameraRef.current?.click()}
-            disabled={submitting || leyendoTablero || fotosTablero.length >= VEHICULO_TABLERO_FOTO_MAX}
+            onClick={() => interiorCameraRef.current?.click()}
+            disabled={submitting || leyendoInterior || fotosInterior.length >= VEHICULO_INTERIOR_FOTO_MAX}
           >
-            <Icon name="camera" size={13} /> Sacar foto ({fotosTablero.length}/{VEHICULO_TABLERO_FOTO_MAX})
+            <Icon name="camera" size={13} /> Sacar foto ({fotosInterior.length}/{VEHICULO_INTERIOR_FOTO_MAX})
           </button>
           <button
             type="button"
             className="ai-btn"
-            onClick={() => tableroGaleriaRef.current?.click()}
-            disabled={submitting || leyendoTablero || fotosTablero.length >= VEHICULO_TABLERO_FOTO_MAX}
+            onClick={() => interiorGaleriaRef.current?.click()}
+            disabled={submitting || leyendoInterior || fotosInterior.length >= VEHICULO_INTERIOR_FOTO_MAX}
           >
             <Icon name="upload" size={13} /> Subir foto
           </button>
-          {fotosTablero.length > 0 && (
-            <button type="button" className="ai-btn" onClick={() => void leerTablero()} disabled={submitting || leyendoTablero}>
-              {leyendoTablero ? <Spinner /> : <Icon name="ai" size={13} />} {leyendoTablero ? "Leyendo..." : `Leer con IA (${fotosTablero.length})`}
+          {fotosInterior.length > 0 && (
+            <button type="button" className="ai-btn" onClick={() => void leerInterior()} disabled={submitting || leyendoInterior}>
+              {leyendoInterior ? <Spinner /> : <Icon name="ai" size={13} />} {leyendoInterior ? "Leyendo..." : `Leer con IA (${fotosInterior.length})`}
             </button>
           )}
         </div>
-        {fotosTablero.length > 0 && (
+        {fotosInterior.length > 0 && (
           <div className="chip-row" style={{ marginTop: 0, marginBottom: 8 }}>
-            {fotosTablero.map((f, i) => (
+            {fotosInterior.map((f, i) => (
               <span className="chip" key={i}>
                 Foto {i + 1}
                 <button
                   type="button"
-                  onClick={() => setFotosTablero((prev) => prev.filter((_, idx) => idx !== i))}
-                  disabled={leyendoTablero}
+                  onClick={() => setFotosInterior((prev) => prev.filter((_, idx) => idx !== i))}
+                  disabled={leyendoInterior}
                   aria-label={`Quitar foto ${i + 1}`}
                 >
                   <Icon name="x" size={11} />
@@ -372,9 +379,9 @@ export function NuevoVehiculoForm({ catalogoHallazgos }: { catalogoHallazgos: { 
             ))}
           </div>
         )}
-        {notaTablero && (
+        {notaInterior && (
           <div className="ai-note">
-            <span>{notaTablero}</span>
+            <span>{notaInterior}</span>
           </div>
         )}
       </div>
