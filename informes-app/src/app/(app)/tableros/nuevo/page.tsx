@@ -10,7 +10,7 @@ export default async function NuevaMedicionPage({ searchParams }: { searchParams
   const { tableroId } = await searchParams;
   const supabase = await createClient();
 
-  const [tablerosRes, circuitosRes, ubicaciones, provinciasRes] = await Promise.all([
+  const [tablerosRes, circuitosRes, ubicaciones, provinciasRes, hallazgosRes] = await Promise.all([
     supabase.from("tableros").select("id, subsistemas, denominacion, ubicacion_id").order("denominacion"),
     supabase
       .from("tablero_circuitos")
@@ -19,10 +19,12 @@ export default async function NuevaMedicionPage({ searchParams }: { searchParams
       .order("numero"),
     fetchTodasLasUbicaciones(supabase),
     supabase.from("catalogo_provincias").select("nombre").order("nombre"),
+    supabase.from("catalogo_hallazgos_seguridad_tablero").select("id, texto").order("orden"),
   ]);
 
   const ubicacionesPorId = new Map(ubicaciones.map((u) => [u.id, u]));
   const provincias = (provinciasRes.data ?? []).map((p) => p.nombre);
+  const catalogoHallazgos = hallazgosRes.data ?? [];
 
   const circuitosPorTablero = new Map<string, TableroConCircuitos["circuitos"]>();
   for (const c of circuitosRes.data ?? []) {
@@ -56,7 +58,13 @@ export default async function NuevaMedicionPage({ searchParams }: { searchParams
 
   return (
     <div>
-      <NuevaMedicionForm tableros={tableros} ubicaciones={ubicaciones} provincias={provincias} tableroIdInicial={tableroId ?? null} />
+      <NuevaMedicionForm
+        tableros={tableros}
+        ubicaciones={ubicaciones}
+        provincias={provincias}
+        tableroIdInicial={tableroId ?? null}
+        catalogoHallazgos={catalogoHallazgos}
+      />
     </div>
   );
 }

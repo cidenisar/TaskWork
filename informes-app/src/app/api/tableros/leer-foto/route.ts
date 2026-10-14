@@ -42,6 +42,14 @@ interface CircuitoDetectado {
   estadoDetectado: string | null;
 }
 
+interface HallazgoDetectado {
+  itemId: string;
+  estado: string;
+  comentario: string;
+}
+
+const ESTADOS_HALLAZGO = ["ok", "no_ok", "no_aplica"] as const;
+
 const CATEGORIAS_TEXTO = CATEGORIA_EQUIPO_OPCIONES.map((c) => `"${c}" (${CATEGORIA_EQUIPO_LABEL[c]})`).join(", ");
 const TIPOS_CIRCUITO_TEXTO = TIPO_CIRCUITO_OPCIONES.map((t) => `"${t}" (${TIPO_CIRCUITO_LABEL[t]})`).join(", ");
 
@@ -98,6 +106,16 @@ export async function POST(req: NextRequest) {
     })),
   );
 
+  // Catálogo configurable de hallazgos de seguridad (Configuración →
+  // Catálogos) — se evalúa contra las mismas fotos, además de identificar
+  // circuitos. Si no hay ninguno cargado, se le pide a la IA una lista
+  // vacía (nunca se inventa hallazgos que no estén en el catálogo).
+  const { data: catalogoHallazgos } = await supabase
+    .from("catalogo_hallazgos_seguridad_tablero")
+    .select("id, texto")
+    .order("orden");
+  const hallazgosItems = catalogoHallazgos ?? [];
+
   const contextoSubsistemas =
     subsistemas.length > 0
       ? ` Este tablero en particular tiene relevado: ${subsistemas.map((s) => TABLERO_TIPO_LABEL[s]).join(", ")} — pero puede ser mixto, así que igual clasificá cada elemento por lo que ves, no asumas que todo pertenece a esos subsistemas.`
@@ -108,6 +126,21 @@ export async function POST(req: NextRequest) {
         "close-up de una etiqueta que en otra foto se ve borrosa) — combinalas en una sola lista de circuitos/elementos: si el mismo " +
         "elemento físico aparece en más de una foto, contalo una sola vez (usá la foto donde se vea más claro para completar texto/" +
         "amperaje/categoría), y numerá de forma correlativa el conjunto combinado, no cada foto por separado."
+      : "";
+
+  const instruccionHallazgos =
+    hallazgosItems.length > 0
+      ? "\n\nADEMÁS de los circuitos, revisá estas fotos buscando específicamente estos hallazgos de seguridad/estado del gabinete " +
+        "(catálogo configurado por un Administrador):\n" +
+        hallazgosItems.map((h) => `- id "${h.id}": ${h.texto}`).join("\n") +
+        '\n\nPara CADA ítem de esa lista (sin excepción, incluilos todos aunque no encuentres nada) devolvé un objeto {"itemId": ' +
+        'string, "estado": string, "comentario": string} donde:\n' +
+        '- "itemId": el id EXACTO del ítem tal cual te lo pasé.\n' +
+        '- "estado": "no_ok" si lo que describe el ítem SE VE en la foto (hallazgo detectado — hay un problema), "ok" si se puede ' +
+        'ver la zona relevante y el hallazgo NO está presente, "no_aplica" si la foto no permite evaluarlo (ángulo, obstruido, ' +
+        "borroso, o esa parte del tablero no aparece en ninguna foto). Nunca inventes un \"no_ok\" que no puedas justificar por lo " +
+        "que ves.\n" +
+        '- "comentario": una frase corta justificando el estado (qué viste, o por qué no se pudo evaluar). Nunca vacío.'
       : "";
 
   try {
@@ -143,10 +176,13 @@ export async function POST(req: NextRequest) {
         've la palanca con claridad (ángulo, obstruida, foto borrosa) → null (nunca inventes el estado). Para cualquier otra ' +
         "categoriaEquipo, estadoDetectado siempre null.\n\n" +
         "No inventes elementos que no estén en la foto, y no adivines un amperaje, tensión o estado que no puedas justificar por lo que " +
-        'ves — pero "texto" y "categoriaEquipo" son obligatorios en todos los casos, con tu mejor estimación visual si hace falta.\n\n' +
-        'Respondé ÚNICAMENTE con un JSON válido: un array de objetos {"numero": number, "texto": string, "ampNominal": string, ' +
-        '"categoriaEquipo": string, "tipoCircuito": string, "identificado": boolean, "estadoDetectado": string | null}, sin texto antes ' +
-        "ni después, sin bloque de código markdown.",
+        'ves — pero "texto" y "categoriaEquipo" son obligatorios en todos los casos, con tu mejor estimación visual si hace falta.' +
+        `${instruccionHallazgos}\n\n` +
+        'Respondé ÚNICAMENTE con un JSON válido: un objeto {"circuitos": [...], "hallazgos": [...]} donde "circuitos" es un array de ' +
+        'objetos {"numero": number, "texto": string, "ampNominal": string, "categoriaEquipo": string, "tipoCircuito": string, ' +
+        '"identificado": boolean, "estadoDetectado": string | null} y "hallazgos" es un array de objetos {"itemId": string, "estado": ' +
+        'string, "comentario": string} (array VACÍO [] si no te pasé ningún ítem de hallazgos para evaluar). Sin texto antes ni ' +
+        "después, sin bloque de código markdown.",
       messages: [
         {
           role: "user",
@@ -173,15 +209,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "No se pudo leer la foto." }, { status: 502 });
     }
 
-    let circuitos: CircuitoDetectado[];
+    let resultado: { circuitos: CircuitoDetectado[]; hallazgos?: HallazgoDetectado[] };
     try {
-      const match = textBlock.text.match(/\[[\s\S]*\]/);
-      circuitos = JSON.parse(match ? match[0] : textBlock.text);
+      const match = textBlock.text.match(/\{[\s\S]*\}/);
+      resultado = JSON.parse(match ? match[0] : textBlock.text);
     } catch {
       await logDiagnostico(supabase, profile.id, "leer-foto: la respuesta no fue JSON parseable", textBlock.text);
       return NextResponse.json({ error: "La IA no devolvió una lista reconocible — probá con otra foto o cargá los circuitos a mano." }, { status: 502 });
     }
-    if (!Array.isArray(circuitos) || circuitos.length === 0) {
+    const circuitos = Array.isArray(resultado?.circuitos) ? resultado.circuitos : [];
+    if (circuitos.length === 0) {
       await logDiagnostico(supabase, profile.id, "leer-foto: la IA devolvió una lista vacía", textBlock.text);
       return NextResponse.json({ error: "No se detectó ningún circuito/elemento en la foto." }, { status: 200 });
     }
@@ -189,6 +226,9 @@ export async function POST(req: NextRequest) {
     const categoriasValidas = new Set<string>(CATEGORIA_EQUIPO_OPCIONES);
     const tiposCircuitoValidos = new Set<string>(TIPO_CIRCUITO_OPCIONES);
     const estadosPalancaValidos = new Set<string>(ESTADOS_PALANCA);
+    const estadosHallazgoValidos = new Set<string>(ESTADOS_HALLAZGO);
+    const hallazgosItemsPorId = new Map(hallazgosItems.map((h) => [h.id, h.texto]));
+    const hallazgosDetectados = Array.isArray(resultado?.hallazgos) ? resultado.hallazgos : [];
 
     return NextResponse.json({
       circuitos: circuitos
@@ -209,6 +249,16 @@ export async function POST(req: NextRequest) {
             estadoDetectado,
           };
         }),
+      // Solo ítems que REALMENTE estén en el catálogo (nunca un id inventado) y con un estado válido —
+      // un ítem del catálogo sin verdicto utilizable de la IA directamente no aparece (el form lo deja en blanco).
+      hallazgos: hallazgosDetectados
+        .filter((h) => h && hallazgosItemsPorId.has(h.itemId) && typeof h.estado === "string" && estadosHallazgoValidos.has(h.estado))
+        .map((h) => ({
+          itemId: h.itemId,
+          texto: hallazgosItemsPorId.get(h.itemId)!,
+          estado: h.estado,
+          comentario: typeof h.comentario === "string" ? h.comentario.trim().slice(0, 300) : "",
+        })),
     });
   } catch (err) {
     const detalle = err instanceof Error ? err.message : String(err);

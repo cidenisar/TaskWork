@@ -362,6 +362,23 @@ export type TableroMedicionLecturaRow = {
   comentario: string | null;
 }
 
+/** Catálogo admin-configurable de qué revisar en la foto del tablero además de los circuitos (ver EstadoChecklist). */
+export type CatalogoHallazgoSeguridadTableroRow = {
+  id: string;
+  orden: number;
+  texto: string;
+  created_by: string | null;
+  created_at: string;
+}
+
+export type TableroMedicionHallazgoRow = {
+  id: string;
+  medicion_id: string;
+  item_id: string;
+  estado: EstadoChecklist;
+  comentario: string | null;
+}
+
 export type RackRow = {
   id: string;
   denominacion: string;
@@ -843,6 +860,16 @@ export interface Database {
         Partial<TableroMantenimientoRow> &
           Pick<TableroMantenimientoRow, "tablero_id" | "fecha" | "descripcion" | "created_by">,
         Partial<TableroMantenimientoRow>
+      >;
+      catalogo_hallazgos_seguridad_tablero: Tbl<
+        CatalogoHallazgoSeguridadTableroRow,
+        Partial<CatalogoHallazgoSeguridadTableroRow> & Pick<CatalogoHallazgoSeguridadTableroRow, "texto">,
+        Partial<CatalogoHallazgoSeguridadTableroRow>
+      >;
+      tablero_medicion_hallazgos: Tbl<
+        TableroMedicionHallazgoRow,
+        Partial<TableroMedicionHallazgoRow> & Pick<TableroMedicionHallazgoRow, "medicion_id" | "item_id" | "estado">,
+        Partial<TableroMedicionHallazgoRow>
       >;
       racks: Tbl<RackRow, Partial<RackRow> & Pick<RackRow, "denominacion" | "ubicacion_id">, Partial<RackRow>>;
       ubicaciones: Tbl<UbicacionRow, Partial<UbicacionRow> & Pick<UbicacionRow, "provincia" | "sitio">, Partial<UbicacionRow>>;

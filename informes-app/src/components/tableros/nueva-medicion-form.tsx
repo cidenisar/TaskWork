@@ -29,9 +29,13 @@ import {
   fasesMedicion,
   labelSubsistemas,
   calcularResumenEquipamiento,
+  mezclarHallazgos,
+  HALLAZGO_ESTADO_LABEL,
   type CircuitoItem,
   type TableroConCircuitos,
+  type HallazgoSeguridad,
 } from "./types";
+import type { EstadoChecklist } from "@/lib/database.types";
 
 interface LecturaState {
   estado: string;
@@ -54,11 +58,13 @@ export function NuevaMedicionForm({
   ubicaciones,
   provincias,
   tableroIdInicial,
+  catalogoHallazgos,
 }: {
   tableros: TableroConCircuitos[];
   ubicaciones: Ubicacion[];
   provincias: string[];
   tableroIdInicial?: string | null;
+  catalogoHallazgos: { id: string; texto: string }[];
 }) {
   // Si se llega acá desde el QR del tablero (deep-link con ?tableroId=), se
   // preselecciona tanto la ubicación como el tablero — el técnico ya está
@@ -100,6 +106,12 @@ export function NuevaMedicionForm({
   const [fotosGenerales, setFotosGenerales] = useState<File[]>([]);
   const fotoGeneralCameraInputRef = useRef<HTMLInputElement>(null);
   const fotoGeneralGaleriaInputRef = useRef<HTMLInputElement>(null);
+  // Arranca con el catálogo completo sin evaluar (estado null) — el técnico
+  // puede marcarlos a mano aunque no use la lectura con IA; cada lectura IA
+  // sugiere un estado que igual queda a confirmar/corregir acá.
+  const [hallazgos, setHallazgos] = useState<HallazgoSeguridad[]>(
+    () => catalogoHallazgos.map((h) => ({ itemId: h.id, texto: h.texto, estado: null, comentario: "" })),
+  );
 
   function agregarFotosGenerales(files: File[]) {
     if (files.length === 0) return;
@@ -200,6 +212,14 @@ export function NuevaMedicionForm({
     setFotosIa((prev) => prev.filter((_, idx) => idx !== i));
   }
 
+  function setEstadoHallazgo(itemId: string, estado: EstadoChecklist) {
+    setHallazgos((prev) => prev.map((h) => (h.itemId === itemId ? { ...h, estado } : h)));
+  }
+
+  function setComentarioHallazgo(itemId: string, comentario: string) {
+    setHallazgos((prev) => prev.map((h) => (h.itemId === itemId ? { ...h, comentario } : h)));
+  }
+
   async function leerFotosConIa() {
     if (fotosIa.length === 0) return;
     setIaBusy(true);
@@ -275,6 +295,13 @@ export function NuevaMedicionForm({
         });
         return next;
       });
+      const hallazgosNuevos: HallazgoSeguridad[] = data.hallazgos ?? [];
+      let hallazgosDetectadosAhora = 0;
+      if (hallazgosNuevos.length > 0) {
+        const combinados = mezclarHallazgos(hallazgos, hallazgosNuevos);
+        hallazgosDetectadosAhora = combinados.filter((h) => h.estado === "no_ok").length;
+        setHallazgos(combinados);
+      }
       const sinEtiqueta = detectados.filter((d) => d.identificado !== true).length;
       const conEstado = detectados.filter((d) => d.estadoDetectado).length;
       setIaNote(
@@ -284,6 +311,9 @@ export function NuevaMedicionForm({
             : " — revisá la categoría/tipo de circuito antes de guardar.") +
           (conEstado > 0
             ? ` El estado de ${conEstado} térmica${conEstado === 1 ? "" : "s"}/disyuntor${conEstado === 1 ? "" : "es"} se precargó según la posición de la palanca — confirmalo.`
+            : "") +
+          (hallazgosDetectadosAhora > 0
+            ? ` ⚠ Se detectaron ${hallazgosDetectadosAhora} hallazgo${hallazgosDetectadosAhora === 1 ? "" : "s"} de seguridad — revisalos más abajo.`
             : "") +
           (fallidas.length > 0 ? ` (${fallidas.length} foto${fallidas.length === 1 ? "" : "s"} no se pudo leer: ${primerError})` : ""),
       );
@@ -398,6 +428,9 @@ export function NuevaMedicionForm({
               comentario: l.comentario,
             };
           }),
+          hallazgos: hallazgos
+            .filter((h) => h.estado !== null)
+            .map((h) => ({ itemId: h.itemId, estado: h.estado, comentario: h.comentario.trim() })),
         }),
       );
       for (let i = 0; i < fotosGenerales.length; i++) {
@@ -767,6 +800,53 @@ export function NuevaMedicionForm({
           {iaNote && (
             <div className="ai-note" style={{ marginBottom: 12 }}>
               <span>{iaNote}</span>
+            </div>
+          )}
+
+          {hallazgos.length > 0 && (
+            <div className="field">
+              <label>
+                Hallazgos de seguridad <span className="opt">(revisá y confirmá)</span>
+              </label>
+              <div className="hint" style={{ margin: "-2px 0 8px" }}>
+                Se completan al leer fotos con IA — confirmá o corregí cada uno antes de guardar (catálogo editable en Configuración).
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {hallazgos.map((h) => (
+                  <div
+                    key={h.itemId}
+                    style={{
+                      border: `1px solid ${h.estado === "no_ok" ? "var(--warn)" : "var(--field-border)"}`,
+                      borderRadius: 8,
+                      padding: 8,
+                    }}
+                  >
+                    <div style={{ fontSize: 12.5, marginBottom: 6 }}>{h.texto}</div>
+                    <div style={{ display: "flex", gap: 4, marginBottom: h.comentario ? 6 : 0, flexWrap: "wrap" }}>
+                      {(Object.keys(HALLAZGO_ESTADO_LABEL) as EstadoChecklist[]).map((estado) => (
+                        <button
+                          key={estado}
+                          type="button"
+                          className={`btn btn-sm ${h.estado === estado ? "btn-primary" : "btn-secondary"}`}
+                          onClick={() => setEstadoHallazgo(h.itemId, estado)}
+                          disabled={submitting}
+                        >
+                          {HALLAZGO_ESTADO_LABEL[estado]}
+                        </button>
+                      ))}
+                    </div>
+                    {h.estado && (
+                      <input
+                        type="text"
+                        placeholder="Comentario (opcional)"
+                        value={h.comentario}
+                        onChange={(e) => setComentarioHallazgo(h.itemId, e.target.value)}
+                        disabled={submitting}
+                      />
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 

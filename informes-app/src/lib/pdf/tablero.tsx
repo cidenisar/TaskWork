@@ -3,12 +3,13 @@ import { BORDER, commonStyles, KeyValueRow, PdfHeader, PdfFooter, formatFechaArg
 import {
   CATEGORIA_EQUIPO_LABEL,
   TABLERO_EVENTO_LABEL,
+  HALLAZGO_ESTADO_LABEL,
   itemMideCorriente,
   labelSubsistemas,
   type ResumenEquipamiento,
 } from "@/components/tableros/types";
 import type { UnifilarDrawing } from "@/lib/tableros/unifilar";
-import type { TableroCategoriaEquipo, TableroEventoTipo, TableroTipo, TableroTipoCircuito } from "@/lib/database.types";
+import type { EstadoChecklist, TableroCategoriaEquipo, TableroEventoTipo, TableroTipo, TableroTipoCircuito } from "@/lib/database.types";
 
 /**
  * Reemplaza la planilla Excel manual de medición de consumo — misma cabecera
@@ -42,6 +43,12 @@ export interface TableroPdfLectura {
   comentario: string | null;
 }
 
+export interface TableroPdfHallazgo {
+  texto: string;
+  estado: EstadoChecklist;
+  comentario: string | null;
+}
+
 export interface TableroPdfProps {
   numeroGeneracion: string;
   subsistemas: TableroTipo[];
@@ -58,6 +65,7 @@ export interface TableroPdfProps {
   resumen: ResumenEquipamiento;
   fotosGeneralesBuffers: Buffer[] | null;
   unifilar: UnifilarDrawing | null;
+  hallazgos: TableroPdfHallazgo[];
   logoBuffer: Buffer | null;
   appName: string;
   realizoNombre: string;
@@ -92,6 +100,7 @@ export function TableroPdf(props: TableroPdfProps) {
     resumen,
     fotosGeneralesBuffers,
     unifilar,
+    hallazgos,
     logoBuffer,
     appName,
     realizoNombre,
@@ -201,6 +210,34 @@ export function TableroPdf(props: TableroPdfProps) {
                   </Text>
                 ) : null,
               )}
+            </View>
+          </>
+        )}
+
+        {hallazgos.length > 0 && (
+          <>
+            <Text style={commonStyles.sectionTitle}>Hallazgos de Seguridad</Text>
+            <View style={styles.table}>
+              <View style={styles.headRow} fixed>
+                <Text style={[styles.th, { width: "40%" }]}>Hallazgo</Text>
+                <Text style={[styles.th, { width: "15%" }]}>Estado</Text>
+                <Text style={[styles.th, { width: "45%" }]}>Comentario</Text>
+              </View>
+              {hallazgos.map((h, i) => (
+                <View style={i === hallazgos.length - 1 ? styles.rowLast : styles.row} key={i} wrap={false}>
+                  <Text style={[styles.td, { width: "40%" }]}>{h.texto}</Text>
+                  <Text
+                    style={[
+                      styles.td,
+                      { width: "15%" },
+                      h.estado === "no_ok" ? { fontFamily: "Helvetica-Bold" } : {},
+                    ]}
+                  >
+                    {HALLAZGO_ESTADO_LABEL[h.estado]}
+                  </Text>
+                  <Text style={[styles.td, { width: "45%" }]}>{h.comentario || "—"}</Text>
+                </View>
+              ))}
             </View>
           </>
         )}

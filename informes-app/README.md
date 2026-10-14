@@ -1861,3 +1861,38 @@ general que salió de esto.
     rama `sala` en `getPanelMantenimientos`/`getMantenimientosRealizados`
     y en el generador de programación automática — aparece en el Plan de
     Mantenimiento exactamente igual que Racks y Equipos Individuales.
+
+- **Tableros: Hallazgos de Seguridad al leer la foto con IA.** Pedido del
+  usuario: ya que la IA lee la foto del tablero para identificar
+  circuitos, que también revise cosas de seguridad/estado del gabinete
+  (ej. "¿la térmica bypaseada tiene candado?") — y que la lista de qué
+  revisar sea configurable, "como el checklist".
+  - **Catálogo abierto, mismo criterio que el checklist de
+    mantenimiento** (`catalogo_hallazgos_seguridad_tablero`, tab propio
+    en Configuración → Catálogos): un Admin agrega/quita ítems sin tocar
+    código. Viene precargado con 10 hallazgos realmente verificables
+    desde una foto (térmica bypaseada sin candado, doble conexión en un
+    borne, cables pelados, espacios sin tapa ciega, marcas de quemado,
+    tierra ausente, puerta/cerradura rota, cartel de riesgo ausente,
+    cableado desordenado, corrosión/humedad) — pensados junto al usuario
+    en esta misma conversación, no inventados solos.
+  - **Reusa el mismo estado de 3 valores que el checklist de
+    mantenimiento** (`ok`/`no_ok`/`no_aplica`, en vez de inventar un
+    enum nuevo): "no_ok" = se detectó el hallazgo (hay un problema).
+  - **La IA evalúa cada ítem del catálogo contra las mismas fotos** que
+    ya manda para identificar circuitos (`/api/tableros/leer-foto`, un
+    solo pedido) y propone un estado + comentario por ítem — el técnico
+    SIEMPRE confirma o corrige antes de guardar, la IA nunca escribe
+    directo a la base (mismo principio que toda la lectura de fotos de
+    esta app). Si el catálogo está vacío, no se le pide nada a la IA y
+    el formulario no muestra la sección.
+  - **Se combinan resultados entre varias lecturas de fotos** (ej. una
+    tanda por cuerpo del tablero): una vez que una tanda detecta un
+    hallazgo ("no_ok"), se mantiene aunque una tanda posterior no lo
+    vea — nunca se "limpia" un hallazgo real porque la siguiente foto no
+    lo mostraba (`mezclarHallazgos()` en `components/tableros/types.ts`).
+  - **Persiste en `tablero_medicion_hallazgos`** (solo los ítems que el
+    técnico efectivamente confirmó, igual criterio que el checklist de
+    mantenimiento — un ítem nunca tocado no se guarda) y se imprime como
+    una sección "Hallazgos de Seguridad" en el PDF de la medición, con
+    los detectados ("no_ok") resaltados en negrita.

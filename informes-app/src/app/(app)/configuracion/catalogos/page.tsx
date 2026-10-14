@@ -12,7 +12,7 @@ export default async function ConfiguracionCatalogosPage() {
   }
 
   const supabase = await createClient();
-  const [torresRes, clientesRes, provinciasRes, tiposRes, categoriasRes, tramosTorreRes, recursoAlturaRes, calibreCableRes] =
+  const [torresRes, clientesRes, provinciasRes, tiposRes, categoriasRes, tramosTorreRes, recursoAlturaRes, calibreCableRes, hallazgosRes] =
     await Promise.all([
       supabase.from("catalogo_torres").select("id, nombre").order("nombre"),
       supabase.from("catalogo_clientes").select("id, nombre").order("nombre"),
@@ -22,6 +22,7 @@ export default async function ConfiguracionCatalogosPage() {
       supabase.from("torre_tipo_largos").select("tipo_torre, largo_tramo_m"),
       supabase.from("catalogo_recurso_altura").select("tipo_montaje, recurso_fijo, umbral_escalera_m"),
       supabase.from("catalogo_calibre_cable").select("id, amperaje_max, calibre_mm2").order("amperaje_max"),
+      supabase.from("catalogo_hallazgos_seguridad_tablero").select("id, orden, texto").order("orden"),
     ]);
 
   return (
@@ -48,6 +49,7 @@ export default async function ConfiguracionCatalogosPage() {
             amperajeMax: Number(c.amperaje_max),
             calibreMm2: Number(c.calibre_mm2),
           })),
+          hallazgosSeguridad: hallazgosRes.data ?? [],
         }}
       />
     </div>

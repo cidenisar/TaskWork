@@ -9,7 +9,13 @@ import { resolverUbicacionId, tagGpsSiFalta, type PayloadUbicacionNueva, type Pa
 import { calcularResumenEquipamiento, itemMideCorriente } from "@/components/tableros/types";
 import { construirUnifilar, agruparPorCuerpo } from "@/lib/tableros/unifilar";
 import { drawCommandsToDxf } from "@/lib/dxf/writer";
-import type { TableroCategoriaEquipo, TableroEventoTipo, TableroJerarquia, TableroTipo, TableroTipoCircuito } from "@/lib/database.types";
+import type { EstadoChecklist, TableroCategoriaEquipo, TableroEventoTipo, TableroJerarquia, TableroTipo, TableroTipoCircuito } from "@/lib/database.types";
+
+interface PayloadHallazgo {
+  itemId: string;
+  estado: EstadoChecklist;
+  comentario: string;
+}
 
 interface PayloadLectura {
   circuitoId: string | null;
@@ -39,6 +45,7 @@ export interface CrearMedicionPayload {
   tableroPadreId: string | null;
   fecha: string;
   lecturas: PayloadLectura[];
+  hallazgos?: PayloadHallazgo[];
 }
 
 export interface CrearMedicionResult {
@@ -206,6 +213,19 @@ export async function crearMedicionTableroAction(formData: FormData): Promise<Cr
     return { success: false, error: `No se pudieron guardar las lecturas: ${lecturasErr.message}` };
   }
 
+  // Hallazgos de seguridad (opcional): solo los que el técnico confirmó/corrigió
+  // (estado no nulo) — ver catalogo_hallazgos_seguridad_tablero.
+  if (payload.hallazgos && payload.hallazgos.length > 0) {
+    await supabase.from("tablero_medicion_hallazgos").insert(
+      payload.hallazgos.map((h) => ({
+        medicion_id: medicionId!,
+        item_id: h.itemId,
+        estado: h.estado,
+        comentario: h.comentario.trim() || null,
+      })),
+    );
+  }
+
   // Fotos generales del tablero (opcionales, hasta TABLERO_FOTO_GENERAL_MAX):
   // registro + quedan adjuntas en el PDF — una por cada cuerpo, u otros
   // ángulos de detalle. Reusa el bucket informe-fotos ya existente. Una
@@ -255,6 +275,22 @@ export async function crearMedicionTableroAction(formData: FormData): Promise<Cr
   );
   const unifilar = construirUnifilar(circuitosPorCuerpo, configCalibre);
 
+  const hallazgosConfirmados = (payload.hallazgos ?? []).filter((h) => h.estado);
+  let hallazgosPdf: { texto: string; estado: EstadoChecklist; comentario: string | null }[] = [];
+  if (hallazgosConfirmados.length > 0) {
+    const { data: hallazgosCatalogo } = await supabase
+      .from("catalogo_hallazgos_seguridad_tablero")
+      .select("id, texto")
+      .in(
+        "id",
+        hallazgosConfirmados.map((h) => h.itemId),
+      );
+    const textoPorId = new Map((hallazgosCatalogo ?? []).map((h) => [h.id, h.texto]));
+    hallazgosPdf = hallazgosConfirmados
+      .map((h) => ({ texto: textoPorId.get(h.itemId), estado: h.estado, comentario: h.comentario.trim() || null }))
+      .filter((h): h is { texto: string; estado: EstadoChecklist; comentario: string | null } => !!h.texto);
+  }
+
   const pdfBuffer = await renderTableroPdf({
     numeroGeneracion,
     subsistemas: tableroRow.subsistemas,
@@ -270,6 +306,7 @@ export async function crearMedicionTableroAction(formData: FormData): Promise<Cr
     resumen,
     fotosGeneralesBuffers,
     unifilar,
+    hallazgos: hallazgosPdf,
     lecturas: payload.lecturas.map((l) => {
       const mideCorriente = itemMideCorriente(l.categoriaEquipo, l.tipoCircuito, payload.tipoEvento);
       return {

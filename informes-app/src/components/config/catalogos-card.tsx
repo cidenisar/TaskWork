@@ -5,8 +5,9 @@ import { SimpleCatalogTab, type SimpleCatalogItem } from "./catalogos/simple-cat
 import { TorreTramosTab, type TramoTorreItem } from "./catalogos/torre-tramos-tab";
 import { RecursoAlturaTab, type RecursoAlturaItem } from "./catalogos/recurso-altura-tab";
 import { CalibreCableTab, type CalibreCableItem } from "./catalogos/calibre-cable-tab";
+import { HallazgosSeguridadTab, type HallazgoSeguridadItem } from "./catalogos/hallazgos-seguridad-tab";
 
-type TabId = "torres" | "clientes" | "torrecomtramos" | "recursoaltura" | "calibrecable" | "provincias" | "tipos" | "gastocat";
+type TabId = "torres" | "clientes" | "torrecomtramos" | "recursoaltura" | "calibrecable" | "hallazgosseguridad" | "provincias" | "tipos" | "gastocat";
 
 const TABS: { id: TabId; label: React.ReactNode }[] = [
   { id: "torres", label: "Torres (cuadrillas)" },
@@ -14,6 +15,7 @@ const TABS: { id: TabId; label: React.ReactNode }[] = [
   { id: "torrecomtramos", label: "Torres Comunic. (tramos)" },
   { id: "recursoaltura", label: "Recurso por altura" },
   { id: "calibrecable", label: "Calibre de cable" },
+  { id: "hallazgosseguridad", label: "Hallazgos de seguridad" },
   { id: "provincias", label: "Provincias" },
   { id: "tipos", label: "Tipos de Informe" },
   { id: "gastocat", label: "Categorías de Gasto" },
@@ -28,6 +30,7 @@ export interface CatalogosData {
   tramosTorre: TramoTorreItem[];
   recursoAltura: RecursoAlturaItem[];
   calibreCable: CalibreCableItem[];
+  hallazgosSeguridad: HallazgoSeguridadItem[];
 }
 
 /** Vehículos (alta, service, vencimientos) se trasladó a Panel de Supervisión → Vehículos — ver src/components/panel/vehiculos/. */
@@ -66,6 +69,7 @@ export function CatalogosCard({ data }: { data: CatalogosData }) {
       {tab === "torrecomtramos" && <TorreTramosTab tramos={tramosTorre} setTramos={setTramosTorre} />}
       {tab === "recursoaltura" && <RecursoAlturaTab items={recursoAltura} setItems={setRecursoAltura} />}
       {tab === "calibrecable" && <CalibreCableTab items={data.calibreCable} />}
+      {tab === "hallazgosseguridad" && <HallazgosSeguridadTab items={data.hallazgosSeguridad} />}
       {tab === "provincias" && (
         <SimpleCatalogTab
           tabla="catalogo_provincias"
