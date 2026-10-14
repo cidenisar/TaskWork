@@ -515,6 +515,14 @@ export type CatalogoRecursoAlturaRow = {
   updated_at: string;
 }
 
+export type CatalogoCalibreCableRow = {
+  id: string;
+  amperaje_max: number;
+  calibre_mm2: number;
+  updated_by: string | null;
+  updated_at: string;
+}
+
 export type EquipoRelevamientoRow = {
   id: string;
   ubicacion_id: string;
@@ -851,6 +859,11 @@ export interface Database {
         CatalogoRecursoAlturaRow,
         Partial<CatalogoRecursoAlturaRow> & Pick<CatalogoRecursoAlturaRow, "tipo_montaje">,
         Partial<CatalogoRecursoAlturaRow>
+      >;
+      catalogo_calibre_cable: Tbl<
+        CatalogoCalibreCableRow,
+        Partial<CatalogoCalibreCableRow> & Pick<CatalogoCalibreCableRow, "amperaje_max" | "calibre_mm2">,
+        Partial<CatalogoCalibreCableRow>
       >;
       equipos: Tbl<
         EquipoRow,

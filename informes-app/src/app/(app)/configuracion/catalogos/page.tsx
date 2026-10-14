@@ -12,15 +12,17 @@ export default async function ConfiguracionCatalogosPage() {
   }
 
   const supabase = await createClient();
-  const [torresRes, clientesRes, provinciasRes, tiposRes, categoriasRes, tramosTorreRes, recursoAlturaRes] = await Promise.all([
-    supabase.from("catalogo_torres").select("id, nombre").order("nombre"),
-    supabase.from("catalogo_clientes").select("id, nombre").order("nombre"),
-    supabase.from("catalogo_provincias").select("id, nombre").order("nombre"),
-    supabase.from("catalogo_tipos_informe").select("id, nombre").order("nombre"),
-    supabase.from("catalogo_categorias_gasto").select("id, nombre").order("nombre"),
-    supabase.from("torre_tipo_largos").select("tipo_torre, largo_tramo_m"),
-    supabase.from("catalogo_recurso_altura").select("tipo_montaje, recurso_fijo, umbral_escalera_m"),
-  ]);
+  const [torresRes, clientesRes, provinciasRes, tiposRes, categoriasRes, tramosTorreRes, recursoAlturaRes, calibreCableRes] =
+    await Promise.all([
+      supabase.from("catalogo_torres").select("id, nombre").order("nombre"),
+      supabase.from("catalogo_clientes").select("id, nombre").order("nombre"),
+      supabase.from("catalogo_provincias").select("id, nombre").order("nombre"),
+      supabase.from("catalogo_tipos_informe").select("id, nombre").order("nombre"),
+      supabase.from("catalogo_categorias_gasto").select("id, nombre").order("nombre"),
+      supabase.from("torre_tipo_largos").select("tipo_torre, largo_tramo_m"),
+      supabase.from("catalogo_recurso_altura").select("tipo_montaje, recurso_fijo, umbral_escalera_m"),
+      supabase.from("catalogo_calibre_cable").select("id, amperaje_max, calibre_mm2").order("amperaje_max"),
+    ]);
 
   return (
     <div>
@@ -40,6 +42,11 @@ export default async function ConfiguracionCatalogosPage() {
             tipoMontaje: r.tipo_montaje,
             recursoFijo: r.recurso_fijo,
             umbralEscaleraM: r.umbral_escalera_m,
+          })),
+          calibreCable: (calibreCableRes.data ?? []).map((c) => ({
+            id: c.id,
+            amperajeMax: Number(c.amperaje_max),
+            calibreMm2: Number(c.calibre_mm2),
           })),
         }}
       />

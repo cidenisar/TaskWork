@@ -4,14 +4,16 @@ import { useState } from "react";
 import { SimpleCatalogTab, type SimpleCatalogItem } from "./catalogos/simple-catalog-tab";
 import { TorreTramosTab, type TramoTorreItem } from "./catalogos/torre-tramos-tab";
 import { RecursoAlturaTab, type RecursoAlturaItem } from "./catalogos/recurso-altura-tab";
+import { CalibreCableTab, type CalibreCableItem } from "./catalogos/calibre-cable-tab";
 
-type TabId = "torres" | "clientes" | "torrecomtramos" | "recursoaltura" | "provincias" | "tipos" | "gastocat";
+type TabId = "torres" | "clientes" | "torrecomtramos" | "recursoaltura" | "calibrecable" | "provincias" | "tipos" | "gastocat";
 
 const TABS: { id: TabId; label: React.ReactNode }[] = [
   { id: "torres", label: "Torres (cuadrillas)" },
   { id: "clientes", label: "Clientes" },
   { id: "torrecomtramos", label: "Torres Comunic. (tramos)" },
   { id: "recursoaltura", label: "Recurso por altura" },
+  { id: "calibrecable", label: "Calibre de cable" },
   { id: "provincias", label: "Provincias" },
   { id: "tipos", label: "Tipos de Informe" },
   { id: "gastocat", label: "Categorías de Gasto" },
@@ -25,6 +27,7 @@ export interface CatalogosData {
   categoriasGasto: SimpleCatalogItem[];
   tramosTorre: TramoTorreItem[];
   recursoAltura: RecursoAlturaItem[];
+  calibreCable: CalibreCableItem[];
 }
 
 /** Vehículos (alta, service, vencimientos) se trasladó a Panel de Supervisión → Vehículos — ver src/components/panel/vehiculos/. */
@@ -62,6 +65,7 @@ export function CatalogosCard({ data }: { data: CatalogosData }) {
       )}
       {tab === "torrecomtramos" && <TorreTramosTab tramos={tramosTorre} setTramos={setTramosTorre} />}
       {tab === "recursoaltura" && <RecursoAlturaTab items={recursoAltura} setItems={setRecursoAltura} />}
+      {tab === "calibrecable" && <CalibreCableTab items={data.calibreCable} />}
       {tab === "provincias" && (
         <SimpleCatalogTab
           tabla="catalogo_provincias"

@@ -1648,3 +1648,30 @@ general que salió de esto.
     remedir de verdad — este botón es la vía liviana para el día a día
     de "fui, revisé/cambié algo puntual", sin forzar a resubir todo el
     tablero para que quede un registro.
+
+- **Tableros: catálogo "Calibre de cable" (amperaje → mm²), primer paso
+  hacia el esquema unifilar.** La idea completa (todavía no implementada
+  del todo) es generar un diagrama unifilar por tablero a partir de los
+  circuitos ya relevados, determinando el calibre de cable de cada
+  térmica/disyuntor según su amperaje nominal, embebido en el PDF +
+  descargable en DXF — y más adelante un visor público con QR para
+  pegar en el tablero físico. Este incremento es solo la base: el
+  catálogo admin-configurable que define esa relación.
+  - **Por qué un catálogo y no una fórmula**: el calibre real depende de
+    la norma vigente (acá, AEA 90364/IRAM 2183), el método de
+    instalación y la temperatura ambiente — no es un cálculo que la IA
+    ni el código deban inventar. `catalogo_calibre_cable` (id uuid PK +
+    `unique(amperaje_max)`, RLS: lectura para cualquier autenticado,
+    escritura solo admin — mismo patrón que `catalogo_recurso_altura`)
+    guarda bandas "hasta tantos A → tal calibre", precargada con valores
+    de referencia (cobre, aislación PVC, método B1 — cable en caño) que
+    un admin tiene que verificar contra el criterio real de YPF antes de
+    confiar en ellos para dimensionar cableado real — el tab en
+    Configuración → Catálogos → "Calibre de cable" lo deja explícito.
+  - **Editable en Configuración → Catálogos** (`CalibreCableTab`): agregar
+    o quitar bandas, sin fórmula ni "edición en el lugar" — una banda mal
+    cargada se borra y se recarga.
+  - **Todavía no está conectado a nada**: ni al formulario de Medición,
+    ni al PDF, ni hay esquema unifilar ni DXF todavía — eso es el
+    próximo incremento, que va a buscar en esta tabla el calibre según
+    el `ampNominal` ya cargado en cada circuito con térmica/disyuntor.
