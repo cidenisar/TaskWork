@@ -450,6 +450,33 @@ en total?" que se pueda descomponer en unidades contables × un valor
 real: preferir siempre esa descomposición antes que pedirle a una IA que
 estime la magnitud total de una.
 
+**Un `max_tokens` bajo en un pedido de IA que devuelve una LISTA (no un
+campo fijo) corta la respuesta a mitad del JSON sin ningún error de la
+API — y el síntoma en el cliente es indistinguible de "la IA no
+encontró nada".** Pasó en Informes: dos endpoints casi idénticos
+(`tableros/leer-foto` y `racks/leer-foto`), ambos migrados al mismo
+modelo, quedaron con límites distintos (`max_tokens: 8192`/`effort:
+"medium"` en tableros vs. `16000`/`"high"` en racks) porque se copiaron
+en momentos distintos sin unificar el criterio. Un tablero grande (20-30+
+circuitos, cada uno con una descripción larga) genera una respuesta más
+extensa que un rack típico, así que tableros rompía: el modelo se queda
+sin tokens, el texto llega cortado (ej. `{"circuitos":[{"numero":1,...`
+sin cerrar nunca el array/objeto), el `JSON.parse` tira excepción, y el
+endpoint devuelve "no se pudo leer" — un usuario reporta esto como "la
+IA no trae ninguna información", no como un error de truncamiento, y es
+indistinguible a simple vista de un problema de prompt o de visión. Se
+detectó leyendo `client_errores` (la tabla de diagnóstico que cada
+endpoint de lectura de fotos ya escribe en el `catch` del `JSON.parse`)
+y confirmando que el texto guardado arrancaba bien formado pero nunca
+cerraba. Regla general: cualquier endpoint de IA que devuelve una lista
+de longitud variable (no se sabe de antemano cuántos ítems va a haber)
+necesita un `max_tokens` generoso (igualar al endpoint hermano más
+permisivo del mismo patrón, no el mínimo que "andaba" en las pruebas
+chicas) — y cuando se agregan endpoints "iguales" para distintas
+entidades del mismo módulo (ver más abajo), hay que mantener sus límites
+de tokens/effort sincronizados a propósito, no dejar que diverjan por
+copy-paste en momentos distintos.
+
 **Antes de armar un módulo nuevo para un pedido que "suena" distinto, revisar
 si ya existe uno con el mismo patrón de uso — puede que solo le falte una
 forma más de conseguir el ítem.** Pasó en Informes: el pedido era un
