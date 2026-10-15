@@ -100,7 +100,8 @@ export default function MapaRelevamientosInner({ puntos }: { puntos: PuntoMapaRe
     setCategoriasVisibles(new Set(categoriasEquipo.map((c) => c.categoria)));
   }, [categoriasEquipo]);
 
-  const [soloUrgentes, setSoloUrgentes] = useState(false);
+  const [filtroVencido, setFiltroVencido] = useState(false);
+  const [filtroProximo, setFiltroProximo] = useState(false);
   const [busqueda, setBusqueda] = useState("");
 
   function toggleModulo(modulo: ModuloMapa) {
@@ -150,15 +151,20 @@ export default function MapaRelevamientosInner({ puntos }: { puntos: PuntoMapaRe
     if (!capa) return;
     capa.clearLayers();
     const q = busqueda.trim().toLowerCase();
+    const filtroUrgenciaActivo = filtroVencido || filtroProximo;
     for (const p of puntos) {
       if (!modulosVisibles.has(p.modulo)) continue;
       if (p.categoria && !categoriasVisibles.has(p.categoria)) continue;
-      if (soloUrgentes && p.urgencia !== "vencido" && p.urgencia !== "proximo" && p.urgencia !== "nunca") continue;
+      if (filtroUrgenciaActivo) {
+        const esVencido = p.urgencia === "vencido";
+        const esProximo = p.urgencia === "proximo" || p.urgencia === "nunca";
+        if (!((filtroVencido && esVencido) || (filtroProximo && esProximo))) continue;
+      }
       if (q && !p.label.toLowerCase().includes(q) && !p.nombreSitio.toLowerCase().includes(q)) continue;
       const popupHtml = `<b>${p.label}</b><br/>${p.modulo}${p.categoriaLabel ? ` · ${p.categoriaLabel}` : ""}<br/>${p.nombreSitio}<br/><a href="/ubicaciones/${p.ubicacionId}">Ver ficha completa</a>`;
       L.marker([p.lat, p.lng], { icon: iconoMarcador(p.modulo, colorDe(p.urgencia)) }).bindPopup(popupHtml).addTo(capa);
     }
-  }, [puntos, modulosVisibles, categoriasVisibles, soloUrgentes, busqueda]);
+  }, [puntos, modulosVisibles, categoriasVisibles, filtroVencido, filtroProximo, busqueda]);
 
   return (
     <div>
@@ -181,8 +187,21 @@ export default function MapaRelevamientosInner({ puntos }: { puntos: PuntoMapaRe
             {m}
           </button>
         ))}
-        <button type="button" className="chip" onClick={() => setSoloUrgentes((v) => !v)} style={{ opacity: soloUrgentes ? 1 : 0.4 }}>
-          Solo mantenimiento vencido/próximo
+        <button
+          type="button"
+          className="chip"
+          onClick={() => setFiltroVencido((v) => !v)}
+          style={{ opacity: filtroVencido ? 1 : 0.4, borderColor: "#ff3d3d", color: filtroVencido ? "#ff3d3d" : undefined }}
+        >
+          Vencido
+        </button>
+        <button
+          type="button"
+          className="chip"
+          onClick={() => setFiltroProximo((v) => !v)}
+          style={{ opacity: filtroProximo ? 1 : 0.4, borderColor: "#e0b23d", color: filtroProximo ? "#e0b23d" : undefined }}
+        >
+          Próximo/nunca
         </button>
       </div>
       {categoriasEquipo.length > 0 && modulosVisibles.has("Equipos Individuales") && (
