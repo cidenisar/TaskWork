@@ -131,8 +131,8 @@ export async function POST(req: NextRequest) {
       model: "claude-opus-5-5",
       betas: ["server-side-fallback-2026-07-01"],
       fallbacks: "default",
-      max_tokens: 8192,
-      output_config: { effort: "medium" },
+      max_tokens: 16000,
+      output_config: { effort: "high" },
       system:
         "Sos un asistente que ayuda a un técnico de campo a relevar un tablero eléctrico, que puede ser mixto: interruptores/térmicas " +
         "de energía, fuentes/UPS/baterías/conversores, y también elementos de CCTV o control de acceso (cámaras, lectoras, cerraduras) " +
