@@ -733,19 +733,28 @@ pruebas que en realidad nunca llegaron a correr). Achicar el dataset a
 mano (binary search sobre la cantidad de filas) hasta encontrar el umbral
 exacto confirma la causa antes de tocar el código de verdad.
 
-**El arreglo no es perseguir el límite exacto de la librería — es ponerle
-un techo conservador propio y degradar con gracia por encima de él.**
-Intentar "arreglar" el bug de fondo (reportarlo upstream, esperar un
-parche) no es una opción cuando hay un usuario bloqueado ahora mismo.
-Mejor: calcular la altura/cantidad de ese bloque específico de antemano
-(ya se tiene, viene de la misma función que arma el dibujo) y, si supera un
-umbral con margen de sobra respecto al punto real donde cuelga (en este
-caso 500pt de techo propio contra un cuelgue confirmado recién a partir de
-~678pt, dejando margen para el contenido variable que va antes en la
-página), mostrar una nota en vez del bloque completo ("no se pudo graficar
-automáticamente, ver el detalle en la tabla / en el archivo adjunto") —
-nunca dejar que la generación entera del documento dependa de que ese
-bloque puntual entre en un caso sano de la librería. El resto del
-documento (tabla con los mismos datos, archivo DXF/CSV generado aparte sin
-pasar por el renderer) sigue completo; se pierde solo el dibujo, no la
-medición.
+**El arreglo bajo presión (hay un usuario bloqueado ahora mismo) y el
+arreglo de fondo no son el mismo commit — pero tampoco hay que quedarse en
+el primero.** El primer paso razonable es un techo conservador por bloque
+que, si se supera, omite ese contenido puntual con una nota en vez de
+tirar abajo todo el documento (nunca dejar que la generación entera
+dependa de que un bloque puntual entre en un caso sano de la librería) —
+eso destraba al usuario en minutos. Pero "omitir el dibujo si hay
+demasiados elementos" es una regresión real para cualquier caso que supere
+el techo, no una solución — y vale la pena volver enseguida después con el
+arreglo que sí sostiene cualquier volumen: en vez de un bloque gigante,
+**particionar el contenido en varios bloques más chicos, cada uno
+garantizado por debajo del umbral, dejando que la paginación normal del
+documento los acomode** (mismo criterio que ya usa cualquier tabla larga —
+varias filas chicas en vez de una fila gigante). Concretamente acá: una
+función que arma el dibujo completo sin partir (para el DXF, que no pasa
+por react-pdf y no tiene este problema) y una versión paginada aparte (solo
+para el PDF) que corta cualquier grupo que por sí solo exceda el máximo en
+"parte 1/N, parte 2/N...", agrupando grupos chicos consecutivos en el mismo
+bloque para no desperdiciar espacio. Probado hasta 500 ítems en un solo
+grupo sin cuelgue. La lección general: cuando el parche rápido es "cortar
+contenido para esquivar un bug de una librería", preguntarse enseguida si
+en cambio se puede **partir ese contenido en unidades más chicas que caigan
+del lado sano del bug** — casi siempre es la diferencia entre un límite
+arbitrario que alguien va a pisar tarde o temprano y una solución que
+escala sola.
