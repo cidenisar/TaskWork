@@ -60,6 +60,30 @@ const PATRONES_COMUNES: Seccion[] = [
       "El N° de generación es el identificador único de ese comprobante — sirve para buscarlo después en el Historial, o para nombrarlo si lo mencionás por mensaje/mail.",
     ],
   },
+  {
+    titulo: "Inspección de seguridad con IA",
+    acceso: "todos",
+    resumen:
+      "Tableros, Racks, Torres de Comunicaciones y Equipos Individuales tienen la misma sección de \"Inspección\": la IA revisa las fotos que ya sacaste para el relevamiento y marca por su cuenta hallazgos de seguridad (cables sueltos, falta de señalética, tapa faltante, lo que vea) — no hace falta sacar fotos extra para esto.",
+    pasos: [
+      "Cargá las fotos del relevamiento como siempre — la Inspección usa esas mismas fotos, no pide otras.",
+      "Revisá la lista de hallazgos que propone la IA: tildá los que confirmás, destildá los que no aplican, y agregá a mano cualquiera que la IA no haya visto.",
+      "Los hallazgos confirmados quedan en el comprobante PDF y visibles en la ficha del Sitio, para que quede registro de qué se detectó y cuándo.",
+    ],
+    tip: "La lista de hallazgos posibles por módulo la define un Administrador en Configuración → Catálogos — si te parece que falta uno frecuente, pedile que lo agregue.",
+  },
+  {
+    titulo: "QR en el gabinete o la sala",
+    acceso: "todos",
+    resumen:
+      "Tableros y Salas tienen una ficha pública con QR para pegar en el equipo físico — cualquiera que lo escanee (con o sin cuenta en la app) ve el estado actual del equipo sin tener que entrar a la app.",
+    pasos: [
+      "Desde la ficha del Sitio, cada tablero/sala tiene un botón \"Descargar QR\" — imprimilo y pegalo en el gabinete o la puerta.",
+      "Al escanearlo sin sesión iniciada, se ve el esquema unifilar (en tableros) o la ficha básica (en salas), la última visita y el último mantenimiento — información de solo ese equipo, nada del resto del Sitio.",
+      "Si lo escaneás estando logueado, además aparecen accesos directos para cargar una medición o un mantenimiento con ese tablero/sala ya preseleccionado.",
+      "En Tableros además podés adjuntar archivos sueltos (un plano propio, un PDF, una foto del gabinete) que también se ven desde el QR — aparte del esquema unifilar (que siempre se dibuja solo, en vivo) y del DXF que genera cada Nueva Medición.",
+    ],
+  },
 ];
 
 const MODULOS: Seccion[] = [
@@ -92,9 +116,9 @@ const MODULOS: Seccion[] = [
     acceso: "todos",
     resumen: "Para tableros eléctricos: medís sus circuitos y dejás constancia de su estado.",
     pasos: [
-      "Nueva Medición: elegí el Sitio y cargá los circuitos del tablero (a mano o con fotos + IA).",
+      "Nueva Medición: elegí el Sitio y cargá los circuitos del tablero (a mano o con fotos + IA) — con cada medición se recalcula solo el calibre de cable recomendado y se genera el plano unifilar y su DXF descargable.",
       "Mantenimiento: usalo cuando volvés a un tablero que ya existe, para una visita de mantenimiento sin cargar todo de cero.",
-      "Historial: buscá mediciones anteriores de cualquier tablero.",
+      "Historial: buscá mediciones anteriores de cualquier tablero, y descargá el DXF de cualquiera de ellas.",
     ],
   },
   {
@@ -111,7 +135,7 @@ const MODULOS: Seccion[] = [
     acceso: "todos",
     resumen: "Para torres de comunicaciones y el equipamiento montado en ellas (antenas, radioenlaces, baliza, pararrayos, feeder).",
     pasos: [
-      "Nuevo Relevamiento: elegí el Sitio y cargá el equipamiento de la torre (a mano o con fotos + IA) — anotá la altura aproximada de cada equipo si la conocés.",
+      "Nuevo Relevamiento: elegí el Sitio y cargá el equipamiento de la torre (a mano o con fotos + IA) — la IA también identifica el tipo de torre y cuenta los tramos visibles en la foto para estimar su altura total (el largo real de cada tramo sale de un catálogo configurado, no lo inventa la IA).",
       "Historial: buscá relevamientos anteriores de cualquier torre.",
     ],
   },
@@ -127,12 +151,46 @@ const MODULOS: Seccion[] = [
     ],
   },
   {
+    titulo: "Relevamiento de Equipos — Salas",
+    acceso: "todos",
+    resumen: "Para salas técnicas o shelters completos (no un equipo suelto): aire acondicionado, UPS de sala, tablero propio, detección de incendio — con su propio checklist de inspección por tipo de construcción.",
+    pasos: [
+      "Nuevo Relevamiento: elegí el Sitio, indicá el tipo de construcción de la sala y completá el checklist correspondiente.",
+      "Historial: buscá relevamientos anteriores de cualquier sala.",
+      "Igual que Tableros, cada sala tiene su propio QR para pegar en la puerta (ver \"QR en el gabinete o la sala\" arriba).",
+    ],
+  },
+  {
     titulo: "Sitios",
     acceso: "todos",
     resumen: "La ficha de cada lugar donde YPF tiene equipamiento — acá se ve TODO lo que hay cargado en ese Sitio, de todos los módulos.",
     pasos: [
       "Entrá a \"Todos los Sitios\" y buscá el que te interesa.",
       "En la ficha vas a ver sus tableros, racks, equipos, informes, y (si tenés acceso) sus bajas y entregas a depósito — todo junto, no hace falta ir módulo por módulo.",
+    ],
+  },
+  {
+    titulo: "Plan de Mantenimiento",
+    acceso: "supervisor",
+    resumen:
+      "Panel → Mantenimientos: cruza los intervalos configurados (cada cuánto corresponde un mantenimiento, por categoría) con el último mantenimiento registrado de cada equipo, para avisar quién está vencido, quién se acerca y quién nunca tuvo uno.",
+    pasos: [
+      "Pendientes: la lista ordenada por urgencia (vencido primero), con el pronóstico de lluvia del Sitio para decidir si conviene programar la visita. Tocá cualquier KPI de arriba para filtrar la lista por ese estado.",
+      "Calendario: vista anual de lo programado, mes a mes.",
+      "Realizados: historial de mantenimientos ya registrados, con foto y descripción.",
+      "Dotación: estimación de cuántos técnicos hacen falta por provincia para no acumular atrasos, según los supuestos configurados.",
+      "Configuración (solo Admin): acá se definen los intervalos por categoría, el checklist de inspección de cada una, y los supuestos usados para calcular la Dotación.",
+      "Desde la ficha de un Sitio podés \"Registrar mantenimiento\" (dejar constancia de que ya se hizo, con checklist) o \"Programar\" (agendarlo para una fecha, con un técnico asignado y, si corresponde, un motivo de reprogramación).",
+    ],
+    tip: "Si una categoría no tiene intervalo configurado, simplemente no aparece en el Plan — no significa que esté \"al día\", significa que todavía nadie definió cada cuánto hay que revisarla.",
+  },
+  {
+    titulo: "Vehículos",
+    acceso: "supervisor",
+    resumen: "Panel → Vehículos: la flota de la empresa, con su documentación y su estado.",
+    pasos: [
+      "Flota: lista de vehículos con su vencimiento de tarjeta verde y RTO, y la galería de fotos de su último alta (exterior/interior).",
+      "Nueva alta: sacá fotos del exterior y el tablero del vehículo — la IA lee patente, marca/modelo, estado/daños visibles y kilometraje, para no tener que tipearlo todo a mano.",
     ],
   },
   {
@@ -160,14 +218,16 @@ const MODULOS: Seccion[] = [
     tip: "Lo que entregás acá podés después \"traerlo\" de vuelta desde Equipos Individuales → Nuevo Relevamiento, para instalarlo en otro Sitio (o el mismo).",
   },
   {
-    titulo: "Panel de Supervisión",
+    titulo: "Vista General (Panel)",
     acceso: "supervisor",
     resumen:
-      "Vista general de sitios, equipamiento y vencimientos — pensada para pantalla grande (notebook/PC), no para el celular del técnico en el campo.",
+      "La portada del Panel de Supervisión (Panel → Vista general) — pensada para pantalla grande (notebook/PC), no para el celular del técnico en el campo. Resume todo lo cargado y deja navegar de la región más amplia hasta un Sitio puntual.",
     pasos: [
-      "Sitios con equipamiento: cuánto hay cargado por sitio y por módulo (Tableros/Racks/Torres/Equipos Individuales) — buscá por sitio o provincia.",
-      "Vencimientos: DNI y licencia de conducir de los técnicos, tarjeta verde y RTO de los vehículos — muestra lo ya vencido y lo que vence en los próximos 60 días.",
-      "Es un resumen ejecutivo, no reemplaza el Historial de cada módulo ni la ficha de Sitio (que sí muestran el detalle fila por fila).",
+      "Arriba, 4 cuadros resumen: equipamiento relevado (tableros/racks/torres/salas), actividad (informes por tipo), gente y flota (técnicos activos/vehículos), y el estado del Plan de Mantenimiento (hechos/por hacer/vencidos/reprogramados). Tocá cualquier fila para ir directo a esa lista ya filtrada.",
+      "Abajo, un árbol navegable: Región → Provincia → Localidad → Sitio. Andá entrando para achicar el universo hasta llegar al Sitio que te interesa — cada nivel muestra cuánto equipamiento y qué urgencia de mantenimiento tiene adentro.",
+      "Cuando llegás a un Sitio con mantenimiento vencido o checklist pendiente, se avisa ahí mismo; si no, se muestra la estimación de consumo eléctrico del Sitio.",
+      "Mapa de relevamientos: todos los tableros/racks/torres/equipos/salas con GPS cargado, cada uno con su propio ícono y color (verde = al día, amarillo = próximo, rojo = vencido, gris = sin mantenimiento configurado). Podés filtrar por módulo, por categoría de Equipo Individual, por estado de mantenimiento (Vencido/Próximo) y buscar por nombre — y hacer zoom con la rueda del mouse.",
+      "Es un resumen ejecutivo y de navegación; el detalle fila por fila sigue estando en el Historial de cada módulo y en la ficha del Sitio.",
     ],
   },
   {
@@ -179,13 +239,19 @@ const MODULOS: Seccion[] = [
   {
     titulo: "Configuración",
     acceso: "admin",
-    resumen: "Ajustes generales de la empresa y herramientas de mantenimiento de la app.",
+    resumen: "Ajustes generales de la empresa, catálogos y herramientas de mantenimiento de la app — un hub con 9 secciones, cada una en su propia pantalla.",
     pasos: [
-      "Logo de la empresa, que aparece en todos los PDF generados.",
-      "Liberación automática de storage: un trabajo que archiva y libera PDFs viejos para no acumular espacio sin límite.",
-      "Emails de envío automático de resúmenes.",
-      "Herramientas de borrado (borrar un registro puntual, o vaciar todos los datos de prueba) — pensadas para mientras la app está en pruebas, no para uso normal.",
+      "Empresa: el logo que aparece en todos los PDF generados.",
+      "Usuarios: alta de cuentas, rol, torre/cuadrilla asignada, blanqueo de contraseña y baja.",
+      "Catálogos: acá viven todos los catálogos chicos de la app — torres (cuadrillas), clientes, provincias, tipos de informe, categorías de gasto, tramos de torre, calibre de cable, recurso por altura (para cámaras) y la lista de hallazgos de seguridad por módulo.",
+      "Emails de envío: envío automático de informes y la lista de direcciones que los reciben.",
+      "Almacenamiento: umbral de aviso, recordatorio semanal y liberación automática de archivos viejos.",
+      "Resumen semanal IA: el mensaje que la IA redacta cada semana con lo que hizo el equipo.",
+      "Auditoría: quién hizo qué — últimas 100 acciones de administración registradas.",
+      "Errores reportados: errores que la app capturó sola en el navegador de los usuarios.",
+      "Datos de prueba: herramientas de borrado (un registro puntual, o vaciar todo lo de prueba) — para mientras la app está en pruebas, nunca para uso normal.",
     ],
+    tip: "Los intervalos de mantenimiento, su checklist y los supuestos de dotación NO están acá — viven en Panel → Mantenimientos → Configuración, porque son del Plan de Mantenimiento específicamente.",
   },
   {
     titulo: "Mi cuenta",
