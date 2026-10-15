@@ -52,6 +52,9 @@ export interface PanelSitioResumen {
   localidad: string | null;
   /** Nombre crudo del nivel "sitio" de la Ubicación (sin planta/oficina) — se usa para agrupar en la jerarquía de Vista General. */
   sitioNombre: string;
+  /** GPS de la Ubicación — null si todavía no se cargó (sitio del catálogo importado sin relevamiento con GPS aún). Para el mapa de Vista General. */
+  lat: number | null;
+  lng: number | null;
   total: number;
   porModulo: Record<string, number>;
   /** Suma de consumo_promedio_w * cantidad de lo que tiene ese dato estimado por IA — null si ningún equipo del sitio lo tiene. */
@@ -250,6 +253,8 @@ export async function getPanelOverview(supabase: Supabase): Promise<PanelOvervie
       provincia: ubicacion.provincia,
       localidad: ubicacion.localidad,
       sitioNombre: ubicacion.sitio,
+      lat: ubicacion.lat,
+      lng: ubicacion.lng,
       total,
       porModulo,
       consumoW: consumoWPorSitio.get(ubicacionId) ?? null,

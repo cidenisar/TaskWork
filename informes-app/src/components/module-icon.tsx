@@ -1,4 +1,5 @@
-const ICON_PATHS: Record<string, React.ReactNode> = {
+/** Exportado para reusar las mismas formas en otros contextos (ej. íconos de marcador en el mapa de Vista General) sin duplicar el path data. */
+export const ICON_PATHS: Record<string, React.ReactNode> = {
   informe: (
     <>
       <path d="M8 3h6l4 4v13a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z" />

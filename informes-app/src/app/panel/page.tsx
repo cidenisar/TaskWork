@@ -6,6 +6,8 @@ import { JerarquiaBreadcrumb } from "@/components/panel/jerarquia-breadcrumb";
 import { JerarquiaNodos } from "@/components/panel/jerarquia-nodos";
 import { JerarquiaSitioPicker } from "@/components/panel/jerarquia-sitio-picker";
 import { SitioDetalleCard } from "@/components/panel/sitio-detalle-card";
+import { MapaRelevamientosCard } from "@/components/panel/mapa-relevamientos-card";
+import type { PuntoMapaRelevamiento } from "@/components/panel/mapa-relevamientos-inner";
 
 function fmtHoy(): string {
   return new Date().toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
@@ -76,6 +78,17 @@ export default async function PanelPage({ searchParams }: { searchParams: Promis
 
   const filtros: FiltrosJerarquia = { region: sp.region, provincia: sp.provincia, localidad: sp.localidad, sitio: sp.sitio };
   const filtrados = filtrarSitios(sitios, filtros);
+
+  const puntosMapa: PuntoMapaRelevamiento[] = sitios
+    .filter((s): s is typeof s & { lat: number; lng: number } => s.lat != null && s.lng != null)
+    .map((s) => ({
+      id: s.id,
+      nombreFino: s.nombreFino,
+      lat: s.lat,
+      lng: s.lng,
+      porModulo: s.porModulo,
+      urgencia: s.masUrgente?.urgencia ?? null,
+    }));
 
   let contenido: React.ReactNode;
   if (filtros.sitio) {
@@ -199,6 +212,8 @@ export default async function PanelPage({ searchParams }: { searchParams: Promis
           </div>
         </div>
       </div>
+
+      <MapaRelevamientosCard puntos={puntosMapa} totalSitios={kpis.totalSitios} />
     </div>
   );
 }
