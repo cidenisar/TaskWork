@@ -228,6 +228,60 @@ no se duplica el render del PDF ni el manejo de colisión del número de
 generación, y cada camino de entrada mantiene su propio control de
 acceso sin heredar el del otro.
 
+**Un mismo bucket de Storage se puede compartir entre features sin
+mezclar sus permisos, si cada una vive bajo su propio prefijo de
+carpeta literal y sus policies lo exigen explícitamente.** Pasó en
+Informes: ya existía un bucket privado (`informes-pdf`) usado por
+"Nueva Medición" de tableros, con policies que exigen que el primer
+segmento del path sea el `auth.uid()` de quien sube. Una feature nueva
+("adjuntar un archivo suelto a un tablero", abierta a cualquier técnico
+logueado, no solo al dueño) reusó el MISMO bucket pero bajo un prefijo
+distinto (`tablero-adjuntos/...`), con policies propias y ADITIVAS que
+chequean `(storage.foldername(name))[1] = 'tablero-adjuntos'` — nunca
+tocó ni aflojó las policies existentes del otro prefijo. Como las
+policies permisivas de Postgres se combinan con OR, esto es seguro por
+diseño: ningún técnico gana acceso a la carpeta por-uid de otro, cada
+prefijo tiene su propia regla de quién lee/escribe/borra. Generaliza a
+cualquier caso de "necesito otro patrón de acceso en el mismo bucket
+ya existente": no crear un bucket nuevo (fragmenta configuración) ni
+ensanchar las policies existentes — un prefijo de carpeta propio +
+policies propias alcanza.
+
+**Un redirect automático por dispositivo/rol puede trabarse con la
+propia navegación interna de la app — revisar ese caso ANTES de
+shippear, no esperar a que el usuario lo encuentre.** Pasó en Informes:
+se agregó un redirect en `/` que manda a Admin/Supervisor en desktop
+directo a `/panel` (y deja el celular entrar normal). El bug (detectado
+antes de pushear, no reportado por el usuario) es que el propio link
+"Volver a la app" del panel apunta a `/`, así que ese mismo redirect lo
+rebotaba de inmediato de vuelta a `/panel` — el link quedaba inservible
+para ese rol en desktop. El arreglo es chequear el header `referer`: si
+viene de dentro de la misma app (`referer.includes("/panel")`), respetar
+la navegación explícita del usuario y NO re-redirigir. Regla general:
+cualquier redirect automático en una ruta de entrada/landing tiene que
+probarse contra los propios links internos de la app que apuntan ahí —
+si alguno existe, hace falta una señal (referer, query param, lo que
+sea) que distinga "llegué acá por default" de "elegí volver acá a
+propósito".
+
+**Antes de asumir que un visor con datos "en vivo" necesita pasar a
+estático por riesgo de desactualización (o viceversa), revisar los
+caminos de escritura reales de esa tabla — la respuesta suele ser que
+da lo mismo.** Surgió en Informes con el plano unifilar público
+(se redibuja en vivo desde `tablero_circuitos` en cada vista del QR,
+a propósito, para no quedar desactualizado). La pregunta era si
+convenía pasar a un PDF pre-generado que se regenere en cada edición.
+Revisando las policies, la tabla no tiene UPDATE directo habilitado —
+la ÚNICA forma de tocar un circuito es a través del flujo que YA
+regenera el archivo estático (DXF) en ese mismo momento. Conclusión:
+si no hay una vía de escritura por fuera del único flujo controlado,
+un archivo pre-generado y un render en vivo quedan igual de
+actualizados en la práctica — la decisión entre los dos pasa a ser de
+simplicidad/mantenimiento, no de riesgo de staleness. Antes de elegir
+entre "vivo" y "estático" por miedo a que quede viejo, listar
+explícitamente TODOS los caminos de escritura de la tabla fuente (no
+asumir que existen más de los que en verdad hay).
+
 **Diagnosticar RLS con los logs reales y reproduciendo la consulta exacta —
 nunca a ciegas.** `edge_logs`/API logs (qué pedido llegó, con qué código) y
 los logs de Postgres (el error real, a veces con el SQL completo) resuelven
