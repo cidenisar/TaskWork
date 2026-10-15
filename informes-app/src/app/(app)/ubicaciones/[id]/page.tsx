@@ -27,6 +27,7 @@ import { MOTIVO_ENTREGA_LABEL, CONDICION_LABEL, TIPO_EQUIPO_LABEL as TIPO_EQUIPO
 import { RegistrarMantenimientoButton } from "@/components/mantenimiento/registrar-mantenimiento-button";
 import { RegistrarMantenimientoCircuitoButton } from "@/components/tableros/registrar-mantenimiento-circuito-button";
 import { ProgramarMantenimientoButton } from "@/components/mantenimiento/programar-mantenimiento-button";
+import { AdjuntosTablero, type AdjuntoTableroItem } from "@/components/tableros/adjuntos-tablero";
 
 function fmtFecha(fecha: string) {
   const [y, m, d] = fecha.split("-");
@@ -115,7 +116,7 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
   const tableroIds = tableros.map((t) => t.id);
   const rackIds = racks.map((r) => r.id);
 
-  const [circuitosRes, equipamientosRes, medicionesRes, relevamientosRes, equipoRelevamientosRes] = await Promise.all([
+  const [circuitosRes, equipamientosRes, medicionesRes, relevamientosRes, equipoRelevamientosRes, tableroAdjuntosRes] = await Promise.all([
     tableroIds.length > 0
       ? supabase
           .from("tablero_circuitos")
@@ -145,10 +146,34 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
       ? supabase.from("rack_relevamientos").select("id, rack_id, fecha").in("rack_id", rackIds).order("fecha", { ascending: false })
       : { data: [] },
     supabase.from("equipo_relevamientos").select("id, ubicacion_id, fecha").in("ubicacion_id", siblingIds).order("fecha", { ascending: false }),
+    tableroIds.length > 0
+      ? supabase.from("tablero_adjuntos").select("id, tablero_id, nombre, archivo_url").in("tablero_id", tableroIds).order("created_at")
+      : { data: [] },
   ]);
 
   const circuitos = (circuitosRes.data ?? []).filter((c) => c.estado === "activo");
   const equipamientos = (equipamientosRes.data ?? []).filter((e) => e.estado === "activo");
+
+  // Archivos sueltos adjuntados a un tablero (un unifilar propio, un PDF, una foto del gabinete) — las URLs son
+  // firmadas en bloque (una sola llamada a Storage) en vez de una por adjunto.
+  const adjuntosCrudos = tableroAdjuntosRes.data ?? [];
+  const adjuntosPorTableroId = new Map<string, AdjuntoTableroItem[]>();
+  if (adjuntosCrudos.length > 0) {
+    const { data: firmadas } = await supabase.storage
+      .from("informes-pdf")
+      .createSignedUrls(
+        adjuntosCrudos.map((a) => a.archivo_url),
+        60 * 15,
+      );
+    const urlPorPath = new Map((firmadas ?? []).filter((f) => f.signedUrl && !f.error).map((f) => [f.path ?? "", f.signedUrl]));
+    for (const a of adjuntosCrudos) {
+      const url = urlPorPath.get(a.archivo_url);
+      if (!url) continue;
+      const lista = adjuntosPorTableroId.get(a.tablero_id) ?? [];
+      lista.push({ id: a.id, nombre: a.nombre, url });
+      adjuntosPorTableroId.set(a.tablero_id, lista);
+    }
+  }
 
   const ultimaFechaTablero = new Map<string, string>();
   const ultimaMedicionPorTablero = new Map<string, { id: string; tipoEvento: "medicion" | "relevamiento" }>();
@@ -433,6 +458,7 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
                       <div className="hint" style={{ margin: "4px 0 0" }}>
                         Para pegar en el tablero físico — al escanearlo se ve el esquema unifilar siempre actualizado, sin login.
                       </div>
+                      <AdjuntosTablero tableroId={t.id} adjuntos={adjuntosPorTableroId.get(t.id) ?? []} esAdmin={profile.rol === "admin"} />
                     </div>
                     {circuitosDelTablero.length === 0 ? (
                       <div className="empty-note" style={{ margin: "0 14px 14px" }}>

@@ -47,7 +47,7 @@ export default async function PlanoTableroPublicoPage({ params }: { params: Prom
   const { data: tablero } = await service.from("tableros").select("id, denominacion, subsistemas, ubicacion_id").eq("id", id).single();
   if (!tablero) notFound();
 
-  const [{ data: ubicacion }, { data: circuitosRes }, { data: calibreRes }, { data: medicion }, { data: mantenimiento }, profile] =
+  const [{ data: ubicacion }, { data: circuitosRes }, { data: calibreRes }, { data: medicion }, { data: mantenimiento }, profile, { data: adjuntosRes }] =
     await Promise.all([
       service.from("ubicaciones").select("region, provincia, localidad, sitio, planta, oficina").eq("id", tablero.ubicacion_id).single(),
       service
@@ -66,6 +66,7 @@ export default async function PlanoTableroPublicoPage({ params }: { params: Prom
         .maybeSingle(),
       service.from("tablero_mantenimientos").select("fecha, descripcion").eq("tablero_id", id).order("fecha", { ascending: false }).limit(1).maybeSingle(),
       getCurrentProfile(),
+      service.from("tablero_adjuntos").select("id, nombre, archivo_url").eq("tablero_id", id).order("created_at"),
     ]);
 
   const configCalibre = (calibreRes ?? []).map((c) => ({ amperajeMax: Number(c.amperaje_max), calibreMm2: Number(c.calibre_mm2) }));
@@ -88,6 +89,22 @@ export default async function PlanoTableroPublicoPage({ params }: { params: Prom
   if (medicion?.dxf_url) {
     const { data: signed } = await service.storage.from("informes-pdf").createSignedUrl(medicion.dxf_url, 60 * 15);
     dxfUrl = signed?.signedUrl ?? null;
+  }
+
+  // Archivos sueltos adjuntados a mano (un unifilar propio, un PDF, una foto del gabinete) — aparte del esquema en
+  // vivo de arriba y del PDF/DXF de la última visita.
+  const adjuntos = adjuntosRes ?? [];
+  let adjuntosConUrl: { id: string; nombre: string; url: string }[] = [];
+  if (adjuntos.length > 0) {
+    const { data: firmadas } = await service.storage.from("informes-pdf").createSignedUrls(
+      adjuntos.map((a) => a.archivo_url),
+      60 * 15,
+    );
+    const urlPorPath = new Map((firmadas ?? []).filter((f) => f.signedUrl && !f.error).map((f) => [f.path ?? "", f.signedUrl]));
+    adjuntosConUrl = adjuntos.flatMap((a) => {
+      const url = urlPorPath.get(a.archivo_url);
+      return url ? [{ id: a.id, nombre: a.nombre, url }] : [];
+    });
   }
 
   return (
@@ -173,6 +190,20 @@ export default async function PlanoTableroPublicoPage({ params }: { params: Prom
                   Descargar DXF
                 </a>
               )}
+            </div>
+          )}
+          {adjuntosConUrl.length > 0 && (
+            <div style={{ marginTop: 12 }}>
+              <div className="hint" style={{ margin: "0 0 4px" }}>
+                Archivos adjuntos
+              </div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                {adjuntosConUrl.map((a) => (
+                  <a key={a.id} className="btn btn-secondary btn-sm" href={a.url} target="_blank" rel="noopener noreferrer">
+                    {a.nombre}
+                  </a>
+                ))}
+              </div>
             </div>
           )}
         </div>

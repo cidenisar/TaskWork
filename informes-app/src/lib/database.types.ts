@@ -342,6 +342,16 @@ export type TableroMedicionRow = {
   created_at: string;
 }
 
+/** Archivo suelto adjuntado a un tablero (un unifilar propio, un PDF, una foto del gabinete) — aparte del unifilar en vivo y el DXF que ya genera "Nueva Medición". */
+export type TableroAdjuntoRow = {
+  id: string;
+  tablero_id: string;
+  nombre: string;
+  archivo_url: string;
+  created_by: string | null;
+  created_at: string;
+}
+
 export type TableroMantenimientoRow = {
   id: string;
   tablero_id: string;
@@ -941,6 +951,11 @@ export interface Database {
         SalaRow,
         Partial<SalaRow> & Pick<SalaRow, "ubicacion_id" | "denominacion" | "tipo_construccion" | "numero_generacion" | "created_by">,
         Partial<SalaRow>
+      >;
+      tablero_adjuntos: Tbl<
+        TableroAdjuntoRow,
+        Partial<TableroAdjuntoRow> & Pick<TableroAdjuntoRow, "tablero_id" | "nombre" | "archivo_url">,
+        Partial<TableroAdjuntoRow>
       >;
       catalogo_recurso_altura: Tbl<
         CatalogoRecursoAlturaRow,
