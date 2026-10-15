@@ -17,7 +17,7 @@ import { SALA_TIPO_CONSTRUCCION_LABEL } from "@/components/salas/types";
 import { calcularRecursoAltura, TIPO_MONTAJE_LABEL, construirConfigRecursoAltura } from "@/lib/equipos/recurso-altura";
 import { EstimarConsumoButton } from "@/components/ubicaciones/estimar-consumo-button";
 import { estimarConsumoRacksAction, estimarConsumoEquiposAction } from "../actions";
-import { puedeGestionarBajas, puedeGestionarDeposito } from "@/lib/types";
+import { puedeGestionarBajas, puedeGestionarDeposito, puedeVerPanel } from "@/lib/types";
 import { DarDeBajaButton } from "@/components/bajas/dar-de-baja-button";
 import { DescargarBajaBoton } from "@/components/bajas/descargar-boton";
 import { MOTIVO_BAJA_LABEL, TIPO_EQUIPO_BAJA_LABEL } from "@/components/bajas/types";
@@ -315,9 +315,16 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
   return (
     <div>
       <div className="page-heading">
-        <Link href="/ubicaciones" className="hint" style={{ display: "inline-flex", alignItems: "center", gap: 4, marginBottom: 6 }}>
-          <Icon name="chevron-right" size={13} style={{ transform: "rotate(180deg)" }} /> Todos los sitios
-        </Link>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 14, marginBottom: 6 }}>
+          <Link href="/ubicaciones" className="hint" style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+            <Icon name="chevron-right" size={13} style={{ transform: "rotate(180deg)" }} /> Todos los sitios
+          </Link>
+          {puedeVerPanel(profile.rol) && (
+            <Link href="/panel" className="hint" style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+              <Icon name="chevron-right" size={13} style={{ transform: "rotate(180deg)" }} /> Volver al Panel
+            </Link>
+          )}
+        </div>
         <h1>{ubicacion.sitio}</h1>
         <p>
           {[ubicacion.provincia, ubicacion.region].filter(Boolean).join(" · ")}

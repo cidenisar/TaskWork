@@ -1,11 +1,30 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 import { requireProfile } from "@/lib/auth";
 import { puedeVerEstadisticas, puedeGestionarBajas, puedeGestionarDeposito, puedeVerPanel } from "@/lib/types";
 import { ModuleIcon } from "@/components/module-icon";
 import { Icon } from "@/components/icon";
 
+/** Heurística simple de "¿esto es un celular?" por user-agent — alcanza para elegir pantalla de arranque, no hace falta nada más fino. */
+function esMobile(userAgent: string): boolean {
+  return /Mobi|Android|iPhone|iPad|iPod/i.test(userAgent);
+}
+
 export default async function HomePage() {
   const profile = await requireProfile();
+
+  // En notebook/PC, Admin y Supervisor arrancan directo en el Panel de Supervisión (para eso lo usan) — en el
+  // celular (el técnico en el campo) se queda en este menú de módulos, que es mobile-first. Si volvió acá a
+  // propósito desde el Panel (el link "Volver a la app" de su sidebar), no lo rebota de nuevo — si no, "Volver a
+  // la app" nunca llegaría a ningún lado.
+  if (puedeVerPanel(profile.rol)) {
+    const encabezados = await headers();
+    const userAgent = encabezados.get("user-agent") ?? "";
+    const vieneDelPanel = (encabezados.get("referer") ?? "").includes("/panel");
+    if (!esMobile(userAgent) && !vieneDelPanel) redirect("/panel");
+  }
+
   const statsLocked = !puedeVerEstadisticas(profile.rol);
   const panelLocked = !puedeVerPanel(profile.rol);
   const bajasLocked = !puedeGestionarBajas(profile.rol);

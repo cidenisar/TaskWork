@@ -9,12 +9,14 @@ const MapaRelevamientosInner = dynamic(() => import("./mapa-relevamientos-inner"
 });
 
 export function MapaRelevamientosCard({ puntos, totalSitios }: { puntos: PuntoMapaRelevamiento[]; totalSitios: number }) {
+  const sitiosConGps = new Set(puntos.map((p) => p.ubicacionId)).size;
   return (
     <div className="card" style={{ marginTop: 16 }}>
       <div className="panel-card-title">
         <h2>Mapa de relevamientos</h2>
         <span className="panel-card-count">
-          {puntos.length} de {totalSitios} sitio{totalSitios === 1 ? "" : "s"} con GPS cargado
+          {sitiosConGps} de {totalSitios} sitio{totalSitios === 1 ? "" : "s"} con GPS cargado · {puntos.length} unidad
+          {puntos.length === 1 ? "" : "es"} en el mapa
         </span>
       </div>
       {puntos.length === 0 ? (

@@ -8,6 +8,7 @@ import { JerarquiaSitioPicker } from "@/components/panel/jerarquia-sitio-picker"
 import { SitioDetalleCard } from "@/components/panel/sitio-detalle-card";
 import { MapaRelevamientosCard } from "@/components/panel/mapa-relevamientos-card";
 import type { PuntoMapaRelevamiento } from "@/components/panel/mapa-relevamientos-inner";
+import { getPuntosMapa } from "@/lib/panel/mapa";
 
 function fmtHoy(): string {
   return new Date().toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
@@ -73,22 +74,20 @@ interface PanelSearchParams {
 export default async function PanelPage({ searchParams }: { searchParams: Promise<PanelSearchParams> }) {
   const sp = await searchParams;
   const supabase = await createClient();
-  const overview = await getPanelOverview(supabase);
+  const [overview, puntosCrudos] = await Promise.all([getPanelOverview(supabase), getPuntosMapa(supabase)]);
   const { kpis, equipoPorModulo, sitios, vencimientos } = overview;
 
   const filtros: FiltrosJerarquia = { region: sp.region, provincia: sp.provincia, localidad: sp.localidad, sitio: sp.sitio };
   const filtrados = filtrarSitios(sitios, filtros);
 
-  const puntosMapa: PuntoMapaRelevamiento[] = sitios
-    .filter((s): s is typeof s & { lat: number; lng: number } => s.lat != null && s.lng != null)
-    .map((s) => ({
-      id: s.id,
-      nombreFino: s.nombreFino,
-      lat: s.lat,
-      lng: s.lng,
-      porModulo: s.porModulo,
-      urgencia: s.masUrgente?.urgencia ?? null,
-    }));
+  // Cada unidad física (un tablero, un rack, una sala puntual, etc.) no sabe por sí sola el estado de mantenimiento
+  // ni el nombre del sitio al que pertenece — eso sale del resumen por sitio que ya calculó getPanelOverview.
+  const sitioPorId = new Map(sitios.map((s) => [s.id, s]));
+  const puntosMapa: PuntoMapaRelevamiento[] = puntosCrudos.flatMap((p) => {
+    const sitio = sitioPorId.get(p.ubicacionId);
+    if (!sitio) return [];
+    return [{ ...p, nombreSitio: sitio.nombreFino, urgencia: sitio.masUrgente?.urgencia ?? null }];
+  });
 
   let contenido: React.ReactNode;
   if (filtros.sitio) {

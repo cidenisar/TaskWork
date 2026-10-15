@@ -1,31 +1,41 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import "leaflet.markercluster";
+import "leaflet.markercluster/dist/MarkerCluster.css";
+import "leaflet.markercluster/dist/MarkerCluster.Default.css";
 import { ICON_PATHS } from "@/components/module-icon";
+import type { ModuloMapa } from "@/lib/panel/mapa";
 
 export interface PuntoMapaRelevamiento {
   id: string;
-  nombreFino: string;
+  ubicacionId: string;
+  nombreSitio: string;
   lat: number;
   lng: number;
-  porModulo: Record<string, number>;
-  /** El ítem de mantenimiento más urgente de este sitio — null si no tiene nada con intervalo configurado (no es lo mismo que "al día"). */
+  modulo: ModuloMapa;
+  categoria: string | null;
+  categoriaLabel: string | null;
+  label: string;
+  /** El ítem de mantenimiento más urgente del SITIO (no de esta unidad puntual) — null si el sitio no tiene nada con intervalo configurado. */
   urgencia: "vencido" | "proximo" | "nunca" | "ok" | null;
 }
 
-/** Qué forma (de las de ModuleIcon) y bajo qué nombre de módulo (porModulo) le corresponde a cada marcador. */
-const MODULOS: { modulo: string; iconKey: keyof typeof ICON_PATHS }[] = [
-  { modulo: "Tableros", iconKey: "tableros" },
-  { modulo: "Racks", iconKey: "racks" },
-  { modulo: "Torres", iconKey: "torre-comunicacion" },
-  { modulo: "Equipos Individuales", iconKey: "equipos" },
-  { modulo: "Salas", iconKey: "salas" },
-];
+/** Qué forma (de las de ModuleIcon) le corresponde a cada módulo. */
+const ICON_KEY_POR_MODULO: Record<ModuloMapa, keyof typeof ICON_PATHS> = {
+  Tableros: "tableros",
+  Racks: "racks",
+  Torres: "torre-comunicacion",
+  "Equipos Individuales": "equipos",
+  Salas: "salas",
+};
 
-/** Mismos valores hex que --vencido/--warn/--ok en wireframe-ui.css (no cambian entre tema claro/oscuro) — acá no hay CSS custom properties disponibles porque Leaflet arma el HTML del marcador por fuera de React. */
+const MODULOS: ModuloMapa[] = ["Tableros", "Racks", "Torres", "Equipos Individuales", "Salas"];
+
+/** Mismos valores hex que --ok/--warn/--accent-2 en wireframe-ui.css (no cambian entre tema claro/oscuro) — acá no hay CSS custom properties disponibles porque Leaflet arma el HTML del marcador por fuera de React. */
 const COLOR_URGENCIA: Record<string, string> = {
   vencido: "#ff3d3d",
   proximo: "#e0b23d",
@@ -38,10 +48,10 @@ function colorDe(urgencia: PuntoMapaRelevamiento["urgencia"]): string {
   return COLOR_URGENCIA[urgencia ?? "sin_seguimiento"];
 }
 
-function iconoMarcador(iconKey: keyof typeof ICON_PATHS, color: string): L.DivIcon {
+function iconoMarcador(modulo: ModuloMapa, color: string): L.DivIcon {
   const svg = renderToStaticMarkup(
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-      {ICON_PATHS[iconKey]}
+      {ICON_PATHS[ICON_KEY_POR_MODULO[modulo]]}
     </svg>,
   );
   return L.divIcon({
@@ -54,29 +64,57 @@ function iconoMarcador(iconKey: keyof typeof ICON_PATHS, color: string): L.DivIc
 }
 
 /**
- * Mapa de Vista General — un marcador por cada módulo presente en cada
- * sitio (no uno por sitio): así un mismo lugar con Tableros Y Racks
- * muestra las dos formas, y los filtros de módulo pueden prenderla o
- * apagarla por separado. Cuando hay más de un módulo en el mismo sitio se
- * abren en un pequeño círculo alrededor de la coordenada real para que no
- * queden tapados unos con otros. El color es el estado de mantenimiento
- * del SITIO completo (el ítem más urgente), no de ese módulo puntual —
- * tener eso por módulo requeriría cruzar el Plan de Mantenimiento por
- * cada equipo individual, que es más de lo que este primer corte necesita.
+ * Mapa de Vista General — un marcador por cada UNIDAD FÍSICA (un tablero,
+ * un rack, una torre, un equipo individual, una sala), no un agregado por
+ * sitio: dos salas del mismo lugar (una en PB, otra en 1° piso) son dos
+ * marcadores distintos con su propio nombre, no uno solo con "Salas: 2".
+ * Cuando quedan muy cerca en pantalla, Leaflet.markercluster los agrupa en
+ * una burbuja con el número, y al tocarla (si no alcanza con acercar el
+ * zoom) los "abre" en abanico para poder elegir cuál tocar — mismo
+ * comportamiento que un cluster de Google Maps. El color sigue siendo el
+ * estado de mantenimiento del SITIO completo (el ítem más urgente), no de
+ * esa unidad puntual.
  */
 export default function MapaRelevamientosInner({ puntos }: { puntos: PuntoMapaRelevamiento[] }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
-  const capaMarcadoresRef = useRef<L.LayerGroup | null>(null);
+  const capaMarcadoresRef = useRef<L.MarkerClusterGroup | null>(null);
 
-  const [modulosVisibles, setModulosVisibles] = useState<Set<string>>(new Set(MODULOS.map((m) => m.modulo)));
+  const [modulosVisibles, setModulosVisibles] = useState<Set<ModuloMapa>>(new Set(MODULOS));
+
+  const categoriasEquipo = useMemo(() => {
+    const vistas = new Map<string, string>();
+    for (const p of puntos) {
+      if (p.modulo === "Equipos Individuales" && p.categoria && p.categoriaLabel && !vistas.has(p.categoria)) {
+        vistas.set(p.categoria, p.categoriaLabel);
+      }
+    }
+    return [...vistas.entries()].map(([categoria, label]) => ({ categoria, label })).sort((a, b) => a.label.localeCompare(b.label, "es"));
+  }, [puntos]);
+  const [categoriasVisibles, setCategoriasVisibles] = useState<Set<string>>(new Set());
+  // Arrancan todas prendidas una vez que se sabe qué categorías hay (puntos llega async desde el server).
+  const categoriasInicializadas = useRef(false);
+  useEffect(() => {
+    if (categoriasInicializadas.current || categoriasEquipo.length === 0) return;
+    categoriasInicializadas.current = true;
+    setCategoriasVisibles(new Set(categoriasEquipo.map((c) => c.categoria)));
+  }, [categoriasEquipo]);
+
   const [soloUrgentes, setSoloUrgentes] = useState(false);
 
-  function toggleModulo(modulo: string) {
+  function toggleModulo(modulo: ModuloMapa) {
     setModulosVisibles((prev) => {
       const next = new Set(prev);
       if (next.has(modulo)) next.delete(modulo);
       else next.add(modulo);
+      return next;
+    });
+  }
+  function toggleCategoria(categoria: string) {
+    setCategoriasVisibles((prev) => {
+      const next = new Set(prev);
+      if (next.has(categoria)) next.delete(categoria);
+      else next.add(categoria);
       return next;
     });
   }
@@ -93,7 +131,8 @@ export default function MapaRelevamientosInner({ puntos }: { puntos: PuntoMapaRe
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
       maxZoom: 19,
     }).addTo(map);
-    capaMarcadoresRef.current = L.layerGroup().addTo(map);
+    capaMarcadoresRef.current = L.markerClusterGroup({ spiderfyOnMaxZoom: true, showCoverageOnHover: false, maxClusterRadius: 44 });
+    capaMarcadoresRef.current.addTo(map);
     if (puntos.length > 1) {
       map.fitBounds(L.latLngBounds(puntos.map((p) => [p.lat, p.lng] as [number, number])), { padding: [30, 30] });
     }
@@ -110,44 +149,50 @@ export default function MapaRelevamientosInner({ puntos }: { puntos: PuntoMapaRe
     if (!capa) return;
     capa.clearLayers();
     for (const p of puntos) {
+      if (!modulosVisibles.has(p.modulo)) continue;
+      if (p.categoria && !categoriasVisibles.has(p.categoria)) continue;
       if (soloUrgentes && p.urgencia !== "vencido" && p.urgencia !== "proximo" && p.urgencia !== "nunca") continue;
-      const color = colorDe(p.urgencia);
-      const modulosDelSitio = MODULOS.filter((m) => modulosVisibles.has(m.modulo) && (p.porModulo[m.modulo] ?? 0) > 0);
-      const n = modulosDelSitio.length;
-      if (n === 0) continue;
-      // Mismo popup para todos los marcadores de este sitio (con la lista completa de módulos) — así, si quedan
-      // superpuestos en pantalla, no importa cuál de los íconos apilados se alcance a tocar: cualquiera muestra todo.
-      const popupHtml = `<b>${p.nombreFino}</b><br/>${modulosDelSitio
-        .map((m) => `${m.modulo}: ${p.porModulo[m.modulo]}`)
-        .join("<br/>")}<br/><a href="/ubicaciones/${p.id}">Ver ficha completa</a>`;
-      modulosDelSitio.forEach((m, i) => {
-        const angulo = (2 * Math.PI * i) / n;
-        const radioGrados = n > 1 ? 0.0002 : 0;
-        const lat = p.lat + radioGrados * Math.cos(angulo);
-        const lng = p.lng + radioGrados * Math.sin(angulo);
-        L.marker([lat, lng], { icon: iconoMarcador(m.iconKey, color) }).bindPopup(popupHtml).addTo(capa);
-      });
+      const popupHtml = `<b>${p.label}</b><br/>${p.modulo}${p.categoriaLabel ? ` · ${p.categoriaLabel}` : ""}<br/>${p.nombreSitio}<br/><a href="/ubicaciones/${p.ubicacionId}">Ver ficha completa</a>`;
+      L.marker([p.lat, p.lng], { icon: iconoMarcador(p.modulo, colorDe(p.urgencia)) }).bindPopup(popupHtml).addTo(capa);
     }
-  }, [puntos, modulosVisibles, soloUrgentes]);
+  }, [puntos, modulosVisibles, categoriasVisibles, soloUrgentes]);
 
   return (
     <div>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
         {MODULOS.map((m) => (
           <button
-            key={m.modulo}
+            key={m}
             type="button"
             className="chip"
-            onClick={() => toggleModulo(m.modulo)}
-            style={{ opacity: modulosVisibles.has(m.modulo) ? 1 : 0.4 }}
+            onClick={() => toggleModulo(m)}
+            style={{ opacity: modulosVisibles.has(m) ? 1 : 0.4 }}
           >
-            {m.modulo}
+            {m}
           </button>
         ))}
         <button type="button" className="chip" onClick={() => setSoloUrgentes((v) => !v)} style={{ opacity: soloUrgentes ? 1 : 0.4 }}>
           Solo mantenimiento vencido/próximo
         </button>
       </div>
+      {categoriasEquipo.length > 0 && modulosVisibles.has("Equipos Individuales") && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
+          <span className="item-sub" style={{ alignSelf: "center", marginRight: 2 }}>
+            Equipos Individuales:
+          </span>
+          {categoriasEquipo.map((c) => (
+            <button
+              key={c.categoria}
+              type="button"
+              className="chip"
+              onClick={() => toggleCategoria(c.categoria)}
+              style={{ opacity: categoriasVisibles.has(c.categoria) ? 1 : 0.4 }}
+            >
+              {c.label}
+            </button>
+          ))}
+        </div>
+      )}
       <div ref={containerRef} style={{ height: 420, borderRadius: "var(--radius)", overflow: "hidden" }} />
       <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginTop: 8, fontSize: 11.5, color: "var(--text-faint)" }}>
         <span>
