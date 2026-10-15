@@ -690,3 +690,62 @@ código que decide cuándo llamar al envío?".
   lo que rompió y cómo se arregló**, en el orden en que apareció — no una
   guía genérica del proveedor, sino la lista específica de esta vez, para
   no volver a perder el tiempo con los mismos problemas la próxima.
+
+## 10. Generación de PDF con @react-pdf/renderer
+
+**Un bloque "alto" (Svg + varios `<Text>` con `position: absolute` apilados
+encima, o una fila de tabla con `wrap={false}`) puede dejar a
+@react-pdf/renderer colgado en un loop sin fin — sin tirar excepción, sin
+timeout propio — en vez de simplemente fallar o paginar mal.** Pasó en
+Informes con el esquema unifilar de Tableros (un `<View>` con un `<Svg>` de
+líneas/rectángulos y ~1 `<Text position="absolute">` por circuito encima):
+con un tablero real de 42 circuitos en un solo cuerpo, la altura del bloque
+cruza un umbral (confirmado entre 39 ítems ≈662pt, que renderiza bien, y 40
+≈678pt, que cuelga para siempre) y el proceso de Node queda al 50-100% de
+CPU sin devolver nunca una respuesta — en el cliente esto se ve como "An
+unexpected response was received from the server" (el mensaje genérico de
+Next.js cuando una Server Action nunca contesta), indistinguible a simple
+vista de cualquier otro error. Mismo patrón, más chico, en una fila de
+tabla con `wrap={false}` cuando la tabla tiene muchas filas y el contenido
+de alguna fuerza un salto de página justo ahí. No depende del largo del
+texto ni de activar/desactivar `wrap`/`break` en ese bloque — es la altura
+total acumulada la que importa.
+
+**Cómo diagnosticar esto (nunca a ciegas, nunca asumiendo "debe ser un
+error de datos"):** si una Server Action que genera un PDF devuelve ese
+mensaje genérico, antes de sospechar de los datos o del RLS, revisar si la
+fila que SÍ se guardó en la base (el registro padre de la medición/informe,
+si el flujo inserta antes de generar el PDF) quedó con el campo del PDF en
+null — eso confirma que el proceso llegó hasta la generación y se colgó
+ahí, no que falló antes. Para reproducir y aislar la causa real: armar una
+ruta de API descartable (nombre SIN empezar con `_`, porque Next.js excluye
+las carpetas `_foldername` del ruteo — un detalle que cuesta un rato
+perdido si no se sabe) que llame directo a la función de render con datos
+reales sacados de la base (no inventados — el bug puede depender de la
+combinación exacta de altura/cantidad), excluirla del matcher de
+`proxy.ts`/middleware para no necesitar sesión, y pegarle con `curl
+--max-time <n>`. Si el proceso de `next dev` (`ps aux | grep next-server`)
+queda consumiendo CPU mucho después de que el `curl` cortó por timeout, es
+un colgado real del renderer, no una excepción — matar el proceso y
+reiniciar `next dev` entre cada prueba (una vez colgado, TODO pedido nuevo
+queda en cola detrás, dando falsos positivos de "también cuelga" en
+pruebas que en realidad nunca llegaron a correr). Achicar el dataset a
+mano (binary search sobre la cantidad de filas) hasta encontrar el umbral
+exacto confirma la causa antes de tocar el código de verdad.
+
+**El arreglo no es perseguir el límite exacto de la librería — es ponerle
+un techo conservador propio y degradar con gracia por encima de él.**
+Intentar "arreglar" el bug de fondo (reportarlo upstream, esperar un
+parche) no es una opción cuando hay un usuario bloqueado ahora mismo.
+Mejor: calcular la altura/cantidad de ese bloque específico de antemano
+(ya se tiene, viene de la misma función que arma el dibujo) y, si supera un
+umbral con margen de sobra respecto al punto real donde cuelga (en este
+caso 500pt de techo propio contra un cuelgue confirmado recién a partir de
+~678pt, dejando margen para el contenido variable que va antes en la
+página), mostrar una nota en vez del bloque completo ("no se pudo graficar
+automáticamente, ver el detalle en la tabla / en el archivo adjunto") —
+nunca dejar que la generación entera del documento dependa de que ese
+bloque puntual entre en un caso sano de la librería. El resto del
+documento (tabla con los mismos datos, archivo DXF/CSV generado aparte sin
+pasar por el renderer) sigue completo; se pierde solo el dibujo, no la
+medición.
