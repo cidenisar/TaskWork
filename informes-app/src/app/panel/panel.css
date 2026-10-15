@@ -154,6 +154,16 @@
   align-items: baseline;
   gap: 8px;
 }
+.kpi-multi-row-link {
+  text-decoration: none;
+  color: inherit;
+  margin: -3px -5px;
+  padding: 3px 5px;
+  border-radius: 6px;
+}
+.kpi-multi-row-link:hover {
+  background: var(--panel-2);
+}
 .kpi-multi-num {
   font-size: 17px;
   font-weight: 800;

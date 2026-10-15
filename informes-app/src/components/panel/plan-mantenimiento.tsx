@@ -43,6 +43,13 @@ function peorUrgencia(items: PanelMantenimientoItem[]): string {
 }
 
 type Tab = "pendientes" | "calendario" | "realizados" | "dotacion" | "configuracion";
+type FiltroPendientes = "vencido" | "porHacer" | "reprogramado";
+
+const FILTRO_LABEL: Record<FiltroPendientes, string> = {
+  vencido: "Vencidos",
+  porHacer: "Por hacer",
+  reprogramado: "Reprogramados",
+};
 
 export function PlanMantenimiento({
   items,
@@ -53,6 +60,7 @@ export function PlanMantenimiento({
   intervalos,
   supuestosDotacion,
   checklistItems,
+  filtroInicial,
 }: {
   items: PanelMantenimientoItem[];
   kpis: KpisMantenimiento;
@@ -62,9 +70,18 @@ export function PlanMantenimiento({
   intervalos: IntervaloConfigurado[];
   supuestosDotacion: SupuestosDotacion;
   checklistItems: ChecklistItemCatalogo[];
+  /** Deep-link desde Vista General — filtra la pestaña "Pendientes" al entrar (el técnico puede sacarlo después). */
+  filtroInicial?: FiltroPendientes;
 }) {
   const [tab, setTab] = useState<Tab>("pendientes");
-  const pendientes = useMemo(() => items.filter((i) => i.urgencia !== "ok"), [items]);
+  const [filtro, setFiltro] = useState<FiltroPendientes | null>(filtroInicial ?? null);
+  const pendientes = useMemo(() => {
+    const base = items.filter((i) => i.urgencia !== "ok");
+    if (filtro === "vencido") return base.filter((i) => i.urgencia === "vencido");
+    if (filtro === "porHacer") return base.filter((i) => i.urgencia === "proximo" || i.urgencia === "nunca");
+    if (filtro === "reprogramado") return base.filter((i) => i.motivoLabel != null);
+    return base;
+  }, [items, filtro]);
 
   const anioActual = new Date().getFullYear();
   const porMes = useMemo(() => {
@@ -163,6 +180,13 @@ export function PlanMantenimiento({
               {items.length} equipo{items.length === 1 ? "" : "s"} con intervalo configurado
             </span>
           </div>
+          {filtro && (
+            <div style={{ marginBottom: 10 }}>
+              <button type="button" className="chip" onClick={() => setFiltro(null)}>
+                Filtro: {FILTRO_LABEL[filtro]} <Icon name="x" size={11} />
+              </button>
+            </div>
+          )}
           {items.length === 0 ? (
             <div className="empty-note">
               Todavía no hay intervalos de mantenimiento configurados —{" "}
@@ -176,7 +200,11 @@ export function PlanMantenimiento({
               para que esta pantalla empiece a avisar.
             </div>
           ) : pendientes.length === 0 ? (
-            <div className="empty-note">Todo al día — ningún equipo con intervalo configurado está vencido ni próximo a vencer.</div>
+            <div className="empty-note">
+              {filtro
+                ? `No hay equipos en "${FILTRO_LABEL[filtro]}" en este momento.`
+                : "Todo al día — ningún equipo con intervalo configurado está vencido ni próximo a vencer."}
+            </div>
           ) : (
             <div className="item-list">
               {pendientes.map((item) => (

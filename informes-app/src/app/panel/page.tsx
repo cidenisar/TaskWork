@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getPanelOverview } from "@/lib/panel/overview";
 import { filtrarSitios, agruparPor, localidadKey, type FiltrosJerarquia } from "@/lib/panel/jerarquia";
@@ -8,6 +9,42 @@ import { SitioDetalleCard } from "@/components/panel/sitio-detalle-card";
 
 function fmtHoy(): string {
   return new Date().toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+}
+
+/** A dónde lleva cada renglón de "Equipamiento relevado" — su propio historial. */
+const HISTORIAL_POR_MODULO: Record<string, string> = {
+  Tableros: "/tableros/historial",
+  Racks: "/racks/historial",
+  Torres: "/torres-comunicacion/historial",
+  "Equipos Individuales": "/equipos/historial",
+  Salas: "/salas/historial",
+};
+
+/** A dónde lleva cada renglón de "Informes" — su propio historial. */
+const HISTORIAL_POR_INFORME: Record<string, string> = {
+  "Informe Técnico": "/informe-tecnico/historial",
+  "Rendición de Gastos": "/rendicion-gastos/historial",
+  "Entregas a Depósito": "/entregas-deposito/historial",
+  "Bajas de Equipamiento": "/bajas/historial",
+};
+
+/** Fila de un cuadro "kpi-card-multi" — si hay href, lleva a donde corresponde ese dato (historial, Plan de Mantenimiento, etc). */
+function FilaKpi({ num, label, color, href }: { num: number; label: string; color?: string; href?: string }) {
+  const contenido = (
+    <>
+      <span className="kpi-multi-num" style={color ? { color } : undefined}>
+        {num}
+      </span>
+      <span className="kpi-multi-label">{label}</span>
+    </>
+  );
+  return href ? (
+    <Link href={href} className="kpi-multi-row kpi-multi-row-link">
+      {contenido}
+    </Link>
+  ) : (
+    <div className="kpi-multi-row">{contenido}</div>
+  );
 }
 
 interface PanelSearchParams {
@@ -79,10 +116,7 @@ export default async function PanelPage({ searchParams }: { searchParams: Promis
           <div className="kpi-multi-title">Equipamiento relevado</div>
           <div className="kpi-multi-rows">
             {equipoPorModulo.map((m) => (
-              <div className="kpi-multi-row" key={m.modulo}>
-                <span className="kpi-multi-num">{m.cantidad}</span>
-                <span className="kpi-multi-label">{m.modulo}</span>
-              </div>
+              <FilaKpi key={m.modulo} num={m.cantidad} label={m.modulo} href={HISTORIAL_POR_MODULO[m.modulo]} />
             ))}
           </div>
         </div>
@@ -91,10 +125,7 @@ export default async function PanelPage({ searchParams }: { searchParams: Promis
           <div className="kpi-multi-title">Informes</div>
           <div className="kpi-multi-rows">
             {kpis.informesPorTipo.map((i) => (
-              <div className="kpi-multi-row" key={i.label}>
-                <span className="kpi-multi-num">{i.cantidad}</span>
-                <span className="kpi-multi-label">{i.label}</span>
-              </div>
+              <FilaKpi key={i.label} num={i.cantidad} label={i.label} href={HISTORIAL_POR_INFORME[i.label]} />
             ))}
           </div>
         </div>
@@ -102,40 +133,23 @@ export default async function PanelPage({ searchParams }: { searchParams: Promis
         <div className="kpi-card kpi-card-multi">
           <div className="kpi-multi-title">Personal y flota</div>
           <div className="kpi-multi-rows">
-            <div className="kpi-multi-row">
-              <span className="kpi-multi-num">{kpis.tecnicosActivos}</span>
-              <span className="kpi-multi-label">Técnicos activos</span>
-            </div>
-            <div className="kpi-multi-row">
-              <span className="kpi-multi-num">{kpis.vehiculosTotal}</span>
-              <span className="kpi-multi-label">Vehículos</span>
-            </div>
+            <FilaKpi num={kpis.tecnicosActivos} label="Técnicos activos" />
+            <FilaKpi num={kpis.vehiculosTotal} label="Vehículos" href="/panel/vehiculos" />
           </div>
         </div>
 
         <div className="kpi-card kpi-card-multi">
           <div className="kpi-multi-title">Plan de Mantenimiento</div>
           <div className="kpi-multi-rows">
-            <div className="kpi-multi-row">
-              <span className="kpi-multi-num" style={{ color: "var(--ok)" }}>
-                {kpis.mantenimiento.hechos}
-              </span>
-              <span className="kpi-multi-label">Al día</span>
-            </div>
-            <div className="kpi-multi-row">
-              <span className="kpi-multi-num">{kpis.mantenimiento.porHacer}</span>
-              <span className="kpi-multi-label">Por hacer</span>
-            </div>
-            <div className="kpi-multi-row">
-              <span className="kpi-multi-num" style={{ color: kpis.mantenimiento.vencidos > 0 ? "var(--accent-2)" : undefined }}>
-                {kpis.mantenimiento.vencidos}
-              </span>
-              <span className="kpi-multi-label">Vencidos</span>
-            </div>
-            <div className="kpi-multi-row">
-              <span className="kpi-multi-num">{kpis.mantenimiento.reprogramados}</span>
-              <span className="kpi-multi-label">Reprogramados</span>
-            </div>
+            <FilaKpi num={kpis.mantenimiento.hechos} label="Al día" color="var(--ok)" />
+            <FilaKpi num={kpis.mantenimiento.porHacer} label="Por hacer" href="/panel/mantenimientos?filtro=porHacer" />
+            <FilaKpi
+              num={kpis.mantenimiento.vencidos}
+              label="Vencidos"
+              color={kpis.mantenimiento.vencidos > 0 ? "var(--accent-2)" : undefined}
+              href="/panel/mantenimientos?filtro=vencido"
+            />
+            <FilaKpi num={kpis.mantenimiento.reprogramados} label="Reprogramados" href="/panel/mantenimientos?filtro=reprogramado" />
           </div>
         </div>
       </div>

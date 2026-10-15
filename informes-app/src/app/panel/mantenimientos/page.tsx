@@ -4,7 +4,16 @@ import { getPanelMantenimientos, getMantenimientosRealizados } from "@/lib/panel
 import { getDotacionEstimada } from "@/lib/panel/mantenimiento-dotacion";
 import { PlanMantenimiento } from "@/components/panel/plan-mantenimiento";
 
-export default async function PanelMantenimientosPage() {
+interface MantenimientosSearchParams {
+  /** Deep-link desde los cuadros de Vista General — filtra la pestaña "Pendientes" al entrar. */
+  filtro?: string;
+}
+
+const FILTROS_VALIDOS = new Set(["vencido", "porHacer", "reprogramado"]);
+
+export default async function PanelMantenimientosPage({ searchParams }: { searchParams: Promise<MantenimientosSearchParams> }) {
+  const sp = await searchParams;
+  const filtroInicial = FILTROS_VALIDOS.has(sp.filtro ?? "") ? (sp.filtro as "vencido" | "porHacer" | "reprogramado") : undefined;
   const profile = await requireProfile();
   const supabase = await createClient();
   const [{ items, kpis }, realizados, dotacion, intervalosRes, configRes, checklistItemsRes] = await Promise.all([
@@ -41,6 +50,7 @@ export default async function PanelMantenimientosPage() {
         intervalos={intervalos}
         supuestosDotacion={supuestosDotacion}
         checklistItems={checklistItems}
+        filtroInicial={filtroInicial}
       />
     </div>
   );
