@@ -11,6 +11,8 @@ import {
   TABLERO_FOTO_IA_MAX,
 } from "@/components/tableros/types";
 import type { TableroCategoriaEquipo, TableroTipo, TableroTipoCircuito } from "@/lib/database.types";
+import { instruccionInspeccionIa, INSTRUCCION_RESPUESTA_HALLAZGOS, parseHallazgosDetectados } from "@/lib/inspeccion-ia/prompt";
+import { registrarUsoIa } from "@/lib/ai/registrar-uso";
 
 /** Solo térmicas/disyuntores tienen una palanca cuya posición física dice el estado. */
 const CATEGORIAS_CON_PALANCA: TableroCategoriaEquipo[] = ["termica", "disyuntor"];
@@ -98,6 +100,17 @@ export async function POST(req: NextRequest) {
     })),
   );
 
+  // Catálogo configurable de Inspección IA (Configuración → Catálogos,
+  // módulo "tableros") — se evalúa contra las mismas fotos, además de
+  // identificar circuitos. Si no hay ningún ítem cargado, se le pide a la
+  // IA una lista vacía (nunca se inventa hallazgos fuera del catálogo).
+  const { data: catalogoHallazgos } = await supabase
+    .from("catalogo_inspeccion_ia")
+    .select("id, texto")
+    .eq("modulo", "tableros")
+    .order("orden");
+  const hallazgosItems = catalogoHallazgos ?? [];
+
   const contextoSubsistemas =
     subsistemas.length > 0
       ? ` Este tablero en particular tiene relevado: ${subsistemas.map((s) => TABLERO_TIPO_LABEL[s]).join(", ")} — pero puede ser mixto, así que igual clasificá cada elemento por lo que ves, no asumas que todo pertenece a esos subsistemas.`
@@ -110,12 +123,16 @@ export async function POST(req: NextRequest) {
         "amperaje/categoría), y numerá de forma correlativa el conjunto combinado, no cada foto por separado."
       : "";
 
+  const instruccionHallazgos = instruccionInspeccionIa(hallazgosItems);
+
   try {
     const client = new Anthropic();
-    const response = await client.messages.create({
-      model: "claude-opus-5",
-      max_tokens: 8192,
-      output_config: { effort: "medium" },
+    const response = await client.beta.messages.create({
+      model: "claude-opus-5-5",
+      betas: ["server-side-fallback-2026-07-01"],
+      fallbacks: "default",
+      max_tokens: 16000,
+      output_config: { effort: "high" },
       system:
         "Sos un asistente que ayuda a un técnico de campo a relevar un tablero eléctrico, que puede ser mixto: interruptores/térmicas " +
         "de energía, fuentes/UPS/baterías/conversores, y también elementos de CCTV o control de acceso (cámaras, lectoras, cerraduras) " +
@@ -143,10 +160,12 @@ export async function POST(req: NextRequest) {
         've la palanca con claridad (ángulo, obstruida, foto borrosa) → null (nunca inventes el estado). Para cualquier otra ' +
         "categoriaEquipo, estadoDetectado siempre null.\n\n" +
         "No inventes elementos que no estén en la foto, y no adivines un amperaje, tensión o estado que no puedas justificar por lo que " +
-        'ves — pero "texto" y "categoriaEquipo" son obligatorios en todos los casos, con tu mejor estimación visual si hace falta.\n\n' +
-        'Respondé ÚNICAMENTE con un JSON válido: un array de objetos {"numero": number, "texto": string, "ampNominal": string, ' +
-        '"categoriaEquipo": string, "tipoCircuito": string, "identificado": boolean, "estadoDetectado": string | null}, sin texto antes ' +
-        "ni después, sin bloque de código markdown.",
+        'ves — pero "texto" y "categoriaEquipo" son obligatorios en todos los casos, con tu mejor estimación visual si hace falta.' +
+        `${instruccionHallazgos}\n\n` +
+        'Respondé ÚNICAMENTE con un JSON válido: un objeto {"circuitos": [...], "hallazgos": [...]} donde "circuitos" es un array de ' +
+        'objetos {"numero": number, "texto": string, "ampNominal": string, "categoriaEquipo": string, "tipoCircuito": string, ' +
+        `"identificado": boolean, "estadoDetectado": string | null} y ${INSTRUCCION_RESPUESTA_HALLAZGOS}. Sin texto antes ni después, ` +
+        "sin bloque de código markdown.",
       messages: [
         {
           role: "user",
@@ -167,21 +186,31 @@ export async function POST(req: NextRequest) {
       ],
     });
 
+    await registrarUsoIa(supabase, {
+      endpoint: "tableros/leer-foto",
+      modulo: "tableros",
+      modelo: response.model,
+      inputTokens: response.usage.input_tokens,
+      outputTokens: response.usage.output_tokens,
+      userId: profile.id,
+    });
+
     const textBlock = response.content.find((b) => b.type === "text");
     if (response.stop_reason === "refusal" || !textBlock) {
       await logDiagnostico(supabase, profile.id, `leer-foto: stop_reason=${response.stop_reason}, sin bloque de texto utilizable`);
       return NextResponse.json({ error: "No se pudo leer la foto." }, { status: 502 });
     }
 
-    let circuitos: CircuitoDetectado[];
+    let resultado: { circuitos: CircuitoDetectado[]; hallazgos?: unknown[] };
     try {
-      const match = textBlock.text.match(/\[[\s\S]*\]/);
-      circuitos = JSON.parse(match ? match[0] : textBlock.text);
+      const match = textBlock.text.match(/\{[\s\S]*\}/);
+      resultado = JSON.parse(match ? match[0] : textBlock.text);
     } catch {
       await logDiagnostico(supabase, profile.id, "leer-foto: la respuesta no fue JSON parseable", textBlock.text);
       return NextResponse.json({ error: "La IA no devolvió una lista reconocible — probá con otra foto o cargá los circuitos a mano." }, { status: 502 });
     }
-    if (!Array.isArray(circuitos) || circuitos.length === 0) {
+    const circuitos = Array.isArray(resultado?.circuitos) ? resultado.circuitos : [];
+    if (circuitos.length === 0) {
       await logDiagnostico(supabase, profile.id, "leer-foto: la IA devolvió una lista vacía", textBlock.text);
       return NextResponse.json({ error: "No se detectó ningún circuito/elemento en la foto." }, { status: 200 });
     }
@@ -209,6 +238,7 @@ export async function POST(req: NextRequest) {
             estadoDetectado,
           };
         }),
+      hallazgos: parseHallazgosDetectados(resultado?.hallazgos, hallazgosItems),
     });
   } catch (err) {
     const detalle = err instanceof Error ? err.message : String(err);

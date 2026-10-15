@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireProfile } from "@/lib/auth";
 
@@ -59,5 +60,6 @@ export async function crearMantenimientoAction(formData: FormData): Promise<Crea
     // Una foto que falla no debe tirar abajo el registro del mantenimiento.
   }
 
+  revalidatePath("/ubicaciones/[id]", "page");
   return { success: true };
 }

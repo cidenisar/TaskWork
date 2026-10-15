@@ -76,9 +76,6 @@ Rendición de Gastos, Configuración, Estadísticas).
 
 ⏳ Explícitamente pendiente (jobs de background, no UI):
 
-- El job que efectivamente libera del storage el PDF/fotos pasado el umbral
-  configurado (el umbral ya se guarda y se muestra en el historial, pero
-  nada lo aplica todavía).
 - Resumen semanal por IA y recordatorio de archivo: el switch y el ejemplo
   ya están en Configuración, pero el envío real (cron + email) no está
   implementado.
@@ -124,6 +121,12 @@ cp .env.example .env.local
   las funciones 🤖 avisan que no están disponibles en vez de fallar en silencio.
 - `RESEND_API_KEY` / `RESEND_FROM_EMAIL`: opcional — sin ellas, el informe se
   genera igual pero no se manda el email automático.
+- `CRON_SECRET`: opcional, pero obligatoria para que corra la liberación
+  automática de storage (ver sección más abajo) — sin ella, el endpoint de
+  cron rechaza cualquier pedido en vez de correr sin protección. Se
+  configura también como env var del proyecto en Vercel (no solo local),
+  porque es la que Vercel Cron manda en el header `Authorization` al
+  invocar el endpoint.
 
 ### 3. Primer usuario Administrador
 
@@ -396,10 +399,11 @@ npm run dev
   pensado para diagnosticar fallos en equipos que no probamos nosotros
   directamente, sin depender de que alguien nos cuente el error de memoria.
 - **Modelo dato-vs-archivo del historial** (spec 6.5): el registro es
-  permanente, el PDF/fotos son temporales. El job que libera el storage
-  pasado el umbral configurado todavía no está implementado (vive en el
-  módulo Configuración, pendiente); la UI del historial ya distingue
-  "PDF disponible" de "Solo registro".
+  permanente, el PDF/fotos son temporales. El job que libera el PDF del
+  storage pasado el umbral configurado ya está implementado — ver
+  "Liberación automática de PDFs viejos" más abajo; la UI del historial ya
+  distinguía "PDF disponible" de "Solo registro" desde antes de que el job
+  existiera.
 - **Links "ver PDF" con URL firmada fresca** (`src/components/ver-pdf-link.tsx`):
   los links a PDFs/fotos en Supabase Storage son privados — se acceden con
   una URL firmada que vence. El error típico cuando vence
@@ -486,3 +490,1558 @@ npm run dev
   "dibujos") y los emoji dentro del prompt de IA en
   `src/app/api/estadisticas/insights/route.ts` (son contenido generado por
   la IA, no chrome de la UI).
+- **Detalle de Sitio con el mismo nivel que el PDF** (`/ubicaciones/[id]`):
+  la ficha de un Sitio solo mostraba un resumen por categoría — para ver
+  marca/modelo, número de serie o la corriente medida había que abrir el
+  PDF del relevamiento. Ahora cada tablero/rack se puede desplegar
+  (`<details>`, clase `.detalle-item` en `wireframe-ui.css`) y muestra la
+  tabla completa de circuitos/equipamiento con la última lectura conocida
+  (estado, corriente por fase, comentario), reusando la misma lógica de
+  negocio que ya usa el PDF (`itemMideCorriente`, `categoriaLlevaAmp`) para
+  decidir cuándo corresponde mostrar corriente — nada de esto es un dato
+  nuevo, ya estaba guardado, solo no se mostraba. Equipos Individuales
+  (que no tiene un "contenedor" como tablero/rack, es una lista plana) se
+  muestra directo como tabla, sin `<details>` — la primera versión lo
+  mostraba como texto concatenado en una sola línea, difícil de leer con
+  varias columnas de datos.
+- **Consumo estimado por IA en Racks y Equipos Individuales**
+  (migraciones `20261005040000_consumo_estimado_ia.sql` y
+  `20261005050000_consumo_promedio_max_y_etiqueta_ypf.sql`,
+  `src/app/(app)/ubicaciones/actions.ts`): los Tableros de energía ya
+  tienen consumo REAL medido con instrumento (corriente por fase en cada
+  Medición) — pero el equipamiento de Racks y Equipos Individuales
+  (routers, switches, UPS, rectificadores...) no se mide así. Para poder
+  armar a futuro una estimación de consumo energético que cubra **todo**
+  el equipamiento de un sitio, no solo lo que tiene térmica, se agregaron
+  `consumo_promedio_w`/`consumo_max_w` (nullable) a `rack_equipamientos` y
+  `equipos`: la misma IA que ya lee las fotos para identificar categoría/
+  marca/modelo ahora también devuelve su mejor estimación del consumo en
+  Watts de esa marca/modelo **por su conocimiento general del producto, no
+  por la foto** — en uso normal (promedio) y pico (máximo) por separado,
+  null en los dos si no reconoce el modelo con confianza, nunca inventa un
+  número. **Primera versión real (un solo campo "consumo estimado") dio un
+  resultado incorrecto al probarla**: para una notebook devolvió 65W, que
+  resultó ser el vatiaje de la FUENTE/CARGADOR (lo máximo que puede
+  entregar), no lo que la notebook consume en uso normal — confusión fácil
+  para cualquier estimación de este tipo, no específica de este caso. El
+  prompt ahora aclara explícitamente la diferencia y pide los dos números.
+  El técnico puede corregir/completar ambos a mano igual que el resto de
+  los campos. Para lo que ya estaba cargado antes de este campo (o donde
+  la IA no pudo estimar en su momento), un botón "Estimar consumo de lo
+  que falta" en la ficha de Sitio (visible solo para Administrador, porque
+  el `UPDATE` de `rack_equipamientos`/`equipos` es admin-only por RLS — a
+  propósito, para que un técnico no pueda editar equipamiento que cargó
+  otro) manda todo lo pendiente de ese sitio en un solo pedido de texto a
+  Claude (sin fotos) y completa lo que pueda. Siempre se muestra marcado
+  como **estimado** (`~123W`), nunca mezclado visualmente con una medición
+  real.
+- **Etiqueta de inventario de YPF, separada del número de serie**: se
+  venía leyendo mezclada dentro de "texto" (ej. "Notebook Lenovo con
+  etiqueta de inventario YPF 582432") en vez de en su propio campo —
+  mismo criterio que ya tenía `numero_serie`, que es del fabricante y es
+  un campo distinto. Se agregó `etiqueta_ypf` a `rack_equipamientos` y
+  `equipos`, y el prompt de lectura de fotos ahora la busca
+  específicamente, aclarando que no es ni la marca/modelo ni el número de
+  serie del fabricante.
+- **Patrón responsive para pantallas con mucho dato** (`Estadísticas`,
+  `Sitios` y los 5 `Historial`, pensado para reusarse en cualquier
+  pantalla nueva que lo necesite): toda la app es mobile-first — `.app`
+  limita el contenido a 800px, centrado, sea cual sea el ancho real de la
+  pantalla — así que en una PC con monitor ancho sobraba espacio vacío a
+  los costados en vez de aprovecharse para mostrar más datos a la vez. En
+  vez de armar una app aparte tipo Via-Cash (que separa
+  `apps/movil`/`apps/oficina` porque son **roles** distintos — chofer vs.
+  oficina —, no el mismo usuario en otro dispositivo), alcanza con
+  responsive, con 3 piezas genéricas en `wireframe-ui.css` (`.app-wide`,
+  1080px, ya existía pero no se usaba en ningún lado; `.wide-grid`/
+  `.wide-cell`/`.wide-span-2`, grid de 2 columnas a partir de 1024px;
+  `.list-grid`, igual idea para listas de filas clickeables) que
+  `AppShell` activa en `src/components/app-shell.tsx` — por módulo
+  (`moduleKey`, ej. Estadísticas/Sitios) o por ruta exacta (cualquier
+  `/historial`, sin importar el módulo — las pantallas de carga del mismo
+  módulo, ej. `/tableros/nuevo`, son formularios angostos que no se
+  benefician de más ancho, así que no entran solo por compartir módulo).
+  Por debajo de 1024px (celular/tablet) se ve exactamente igual que antes
+  en los tres casos, apilado en una columna — nada de esto toca el
+  comportamiento mobile.
+  - **Estadísticas** (primer caso, donde se armó el patrón): las tarjetas
+    secundarias (Gastos por categoría, Informes por técnico, Insights,
+    Mantenimiento predictivo, Comparación, Verificación de fotos) se
+    emparejan de a 2; el Mapa de calor y "Preguntale a tus datos" ocupan
+    las dos columnas porque se benefician del ancho completo (un mapa más
+    grande, un chat).
+  - **Sitios**: en la lista (`/ubicaciones`, `lista.tsx`) las filas
+    clickeables del drill-down (Región/Provincia/Sitio) y los resultados
+    de búsqueda pasan de una fila larga por ítem a 2 columnas
+    (`.list-grid`). En la ficha de un Sitio (`/ubicaciones/[id]`),
+    Tableros/Racks/Equipos Individuales **quedan a ancho completo** a
+    propósito — sus tablas ya tienen 9-11 columnas y necesitan el espacio,
+    emparejarlas las haría peor, no mejor — y solo Informes Técnicos y
+    Rendiciones de Gastos (listas simples de título + fecha) se emparejan
+    de a 2, mismo criterio que Estadísticas.
+  - **Historial** (Informe Técnico, Rendición de Gastos, Tableros —
+    mediciones y mantenimientos, dos listas separadas por tab—, Racks,
+    Equipos Individuales): todos comparten el mismo patrón de filas
+    `.hist-item` (título + meta + acciones), así que entran todos con el
+    mismo cambio — el `<div>` que envuelve el `.map(...)` de cada lista
+    pasa a `.list-grid`, sin tocar nada de la lógica de búsqueda,
+    selección múltiple o descarga de cada uno.
+- **Bajas de Equipamiento** (nuevo módulo, solo Administrador/Supervisor —
+  `puedeGestionarBajas` en `src/lib/types.ts` —, migración
+  `20261005060000_bajas_equipamiento.sql`, `src/components/bajas/`,
+  `src/app/(app)/bajas/historial/`, acción `darDeBajaAction` en
+  `src/app/(app)/ubicaciones/actions.ts`): un tablero/rack/equipo
+  individual que se rompe, queda obsoleto o se reemplaza por una ampliación
+  no desaparecía del relevamiento — había que borrarlo a mano o dejarlo
+  "fantasma" en la lista activa. Ahora, en la ficha de un Sitio
+  (`/ubicaciones/[id]`), cada fila de las 3 tablas de equipamiento tiene un
+  botón "Dar de baja" (ícono `box`) que abre un modal chico (motivo —
+  rotura/ampliación-reemplazo/obsolescencia/otro—, fecha, comentario
+  opcional) — primer modal de la app, `.modal-overlay`/`.modal-card` en
+  `wireframe-ui.css`, genérico a propósito porque las tablas de 9-11
+  columnas no tienen lugar para un formulario inline. Al confirmar: el
+  equipo pasa a `estado = 'baja'` (columna nueva en `tablero_circuitos`/
+  `rack_equipamientos`/`equipos`, default `'activo'`) y desaparece de la
+  lista de equipamiento activo (y de los selects de "Nueva Medición"/
+  "Mantenimiento"/"Nuevo Relevamiento" de los 3 tipos) sin borrar ningún
+  dato histórico (mediciones/relevamientos viejos del equipo siguen
+  intactos); se genera **en el momento**, sin batching (se evaluó un
+  "remito" que junte varias bajas y se descartó — un PDF por baja
+  individual es lo que se pidió), un comprobante PDF de una sola página
+  ("Comprobante de baja", `src/lib/pdf/baja.tsx`) con la foto de los datos
+  del equipo al momento de la baja (no un join en vivo — mismo criterio
+  que el resto de los PDFs de la app) y un número de generación propio
+  (`BAJA-{año}-{4 dígitos}`), pensado para entregar junto con el equipo
+  físico en depósito. La escritura (`estado` + el insert en
+  `bajas_equipamiento`) usa `createServiceRoleClient()` porque el `UPDATE`
+  de `rack_equipamientos`/`equipos` es admin-only por RLS pero Supervisor
+  también tiene que poder dar de baja — el control de rol se hace en
+  código, antes de cualquier escritura, no relajando la policy. El
+  **Historial de Bajas** (`/bajas/historial`, tile propio en el inicio)
+  lista todas las bajas de todos los sitios con buscador y descarga del
+  comprobante (misma "URL firmada fresca al tocar" que el resto de la
+  app); la ficha de Sitio además tiene su propia sección "Equipamiento
+  dado de baja en este sitio", acotada a ese sitio.
+- **Liberación automática de PDFs viejos del storage** (migración
+  `20261005070000_liberacion_automatica_storage.sql`,
+  `src/lib/storage/liberacion-automatica.ts`,
+  `src/app/api/cron/liberar-storage/route.ts`, `vercel.json`): implementa
+  el job que el modelo dato-vs-archivo del historial (spec 6.5) venía
+  dejando pendiente — primer job programado de la app, no existía ninguna
+  infraestructura de cron antes de este incremento. **Apagado por
+  default**, a propósito: la spec (9.5) dice explícitamente "nunca se
+  borra nada automáticamente — el sistema solo avisa", así que activarlo
+  es una decisión explícita de un Administrador (switch nuevo "Liberar
+  archivos automáticamente" en Configuración → Historial y
+  almacenamiento), no un cambio de comportamiento que le llegue a nadie
+  sin pedirlo. Al activarlo, reusa el mismo número de semanas que ya
+  elige el selector de aviso (20/50/100 informes → 4/8/12 semanas) — una
+  sola decisión de umbral para avisar y, opcionalmente, también liberar,
+  en vez de un segundo número que explicar. Corre una vez por día vía
+  Vercel Cron (`/api/cron/liberar-storage`, protegido con `CRON_SECRET`
+  — sin esa env var, el endpoint rechaza cualquier pedido en vez de
+  correr sin protección) y por cada PDF más viejo que el umbral (en los
+  6 módulos: Informe Técnico, Rendición de Gastos —solo cerradas—,
+  Tableros, Racks, Equipos Individuales y Bajas) **primero lo copia** al
+  bucket `informes-pdf-archivo` (mismo path, mismo proyecto de Supabase)
+  y **recién si esa copia confirma éxito** borra el original de
+  `informes-pdf` y vacía `pdf_url` en la fila — si la copia falla, el
+  original queda intacto, nunca se borra "a ciegas". El registro en sí
+  nunca se toca más que para vaciar esa columna: el dato queda para
+  siempre, como ya exige el modelo dato-vs-archivo. **Ojo**: mover el
+  archivo a otro bucket del mismo proyecto de Supabase no reduce el costo
+  de storage (Supabase cobra por bytes totales del proyecto, no hay un
+  nivel "frío" más barato dentro del mismo proyecto) — lo que gana esto es
+  un backup seguro y una separación clara entre "storage activo" y
+  "archivo", no un ahorro de plata; si en algún momento el volumen crece y
+  el costo importa, un backup afuera de Supabase (S3/Backblaze) sería el
+  siguiente paso, evaluado y descartado por ahora por sumar una cuenta/
+  credencial nueva para el volumen actual. **Alcance de este incremento:
+  solo PDFs, no fotos** — a diferencia del PDF (inmutable una vez
+  generado), varias fotos siguen referenciadas desde flujos de edición
+  (Informe Técnico permite reabrir y regenerar el PDF sin tocar las fotos
+  ya cargadas) que necesitan su propio diseño antes de tocarlas sin
+  romper nada; queda para un próximo incremento.
+- **Borrado real por Administrador** (`src/lib/admin/eliminar-registro.ts`,
+  `src/lib/admin/vaciar-datos-prueba.ts`, acciones nuevas en los 5
+  `historial/actions.ts` de Informe Técnico/Rendición/Tableros/Racks/
+  Equipos y en `configuracion/actions/mantenimiento.ts`): hasta este
+  incremento, **nada** en la app se borraba de verdad — el modelo
+  dato-vs-archivo (spec 6.5) dice "el registro es permanente" a
+  propósito, y así sigue siendo para el uso normal. Pero mientras la app
+  todavía está en etapa de pruebas (no en producción real todavía), hacía
+  falta poder sacar lo que se cargó de prueba — así que se agregó, **solo
+  para Administrador**, borrado real en dos formas:
+  - **Fila por fila**: un ícono de tacho en cada uno de los 5 Historiales
+    (Informe Técnico, Rendición, Tableros —mediciones y mantenimientos
+    por separado—, Racks, Equipos) borra ese registro puntual (con
+    confirmación) — las filas hijas caen solas por `cascade` de FK (ya
+    estaban así en el schema) y el PDF/fotos asociados se borran del
+    storage antes de que la fila desaparezca (si no, se pierde el path
+    para encontrarlos). Queda disponible para siempre, no solo durante
+    las pruebas — un Administrador puede necesitar borrar un informe
+    cargado por error también en producción real.
+  - **"Vaciar datos de prueba"** (Configuración, al final, con borde rojo
+    a propósito): un solo botón que borra TODO lo cargado hasta ahora en
+    los 5 módulos + Bajas de Equipamiento — el equipo cargado en cada
+    sitio incluido, no solo su historial de mediciones/relevamientos — y
+    vacía los buckets de PDFs/fotos. Pensado como un "reset" para usar
+    las veces que haga falta mientras se sigue probando, no para uso
+    diario. El gate es más fuerte que el `window.confirm` de siempre:
+    hay que escribir la frase exacta "BORRAR TODO" en un campo de texto
+    para que el botón se habilite — a propósito, para una acción que no
+    tiene vuelta atrás. Nunca toca Ubicaciones (es el catálogo real de
+    ~1747 sitios YPF, no un dato de prueba), catálogos, usuarios ni el
+    resto de Configuración.
+
+  Ninguna de estas tablas tenía policy de **DELETE** (a propósito —
+  nadie más que un Administrador puede borrar) así que ambas formas usan
+  `createServiceRoleClient()` para el borrado en sí, con `requireAdmin()`
+  validado en código ANTES de leer nada — mismo criterio que "Bajas de
+  Equipamiento" (service-role para una acción puntual en vez de aflojar
+  la policy para todo el rol). El orden de los `DELETE` en "Vaciar datos
+  de prueba" importa por las FK entre tablas (algunas son `RESTRICT`
+  hacia su tabla "padre", no `CASCADE`) — documentado en el propio
+  archivo.
+- **Bug: "ver PDF" en los Historiales en realidad descargaba el archivo**
+  (Informe Técnico, Rendición, Tableros, Racks, Equipos, Bajas): el botón
+  armaba un blob a partir de la URL firmada y lo "clickeaba" con un
+  `<a download>` — eso fuerza la descarga siempre, sin importar qué
+  diga el servidor, así que no había forma de solo mirar el PDF sin que
+  se fuera a la carpeta de Descargas. Ahora abre la URL firmada
+  directo en una pestaña nueva (`window.open`, mismo criterio que ya
+  usaban los botones de "ver foto"), y el visor de PDF nativo del
+  navegador lo muestra ahí — si alguien quiere además guardarlo, el
+  propio visor tiene su botón de descarga. La selección múltiple +
+  `.zip` de Informe Técnico no se tocó: esa sí necesita el blob real.
+- **Entregas a Depósito** (nuevo módulo, solo Administrador/Supervisor —
+  `puedeGestionarDeposito` en `src/lib/types.ts`, hermano de "Bajas de
+  Equipamiento" —, migración `20261005080000_entregas_deposito.sql`,
+  `src/components/deposito/`, `src/app/(app)/entregas-deposito/`): una
+  Baja es equipo roto/obsoleto que se retira para siempre — pero hacía
+  falta algo distinto para equipo o material que **vuelve** al depósito
+  (nuevo sin usar, o usado pero todavía funciona) y necesita una
+  constancia. Dos orígenes posibles para una misma entrega:
+  - **Equipo ya cargado en un sitio** (tablero-circuito, rack-equipamiento
+    o equipo individual): mismo botón-modal que "Dar de baja"
+    (`EntregarADepositoButton`, ícono `truck` al lado del ícono `box` de
+    Bajas, en cada fila de las 3 tablas de la ficha de Sitio) — al
+    confirmar, el equipo pasa a `estado = 'en_deposito'` (un tercer valor
+    agregado al mismo `estado` que ya usan Bajas, junto a `'activo'`/
+    `'baja'`) y desaparece de las listas activas igual que una Baja,
+    pero con su propio motivo (sobrante de obra / reemplazo funcional —
+    todavía sirve, no está roto / retorno post-mantenimiento / otro) y
+    condición (nuevo / usado-funcional) en vez de rotura/obsolescencia.
+    El resolvedor de los 3 tipos de equipo (`resolverEquipo`,
+    `TABLA_POR_TIPO`) se extrajo a `src/lib/equipamiento/resolver-equipo.ts`
+    para compartirlo entre `darDeBajaAction` y la acción nueva
+    `entregarEquipoADepositoAction` en vez de duplicarlo.
+  - **Material que nunca se registró como equipamiento de un sitio**
+    (cables sueltos, repuestos, equipo nuevo sin instalar): no hay fila
+    de tablero/rack/equipo que tocar, así que tiene su propia pantalla
+    — `/entregas-deposito/nueva` ("Nueva Entrega", tab propio del
+    módulo) — con el mismo picker de Ubicación (Provincia→Sitio→Planta→
+    Oficina, con alta al vuelo y GPS) que ya usan Informe Técnico y
+    Rendición de Gastos, más los campos del material (descripción,
+    categoría, marca/modelo, cantidad, condición, motivo). Como no toca
+    ninguna tabla de equipamiento admin-only, esta acción no necesita
+    Service Role — corre con la sesión normal del usuario, apoyada en
+    la policy de INSERT/UPDATE de `entregas_deposito` (que sí exige
+    Admin/Supervisor).
+
+  Los dos orígenes comparten la misma tabla (`entregas_deposito`, con
+  `origen` como discriminante), el mismo PDF ("Constancia de entrega a
+  depósito", un documento por entrega, igual criterio que Bajas) y el
+  mismo Historial (`/entregas-deposito/historial`) — y, al tener ambos
+  un `ubicacion_id`, también aparecen juntos en la nueva sección
+  "Entregado a depósito desde este sitio" de la ficha de cada Sitio, sin
+  necesitar lógica separada para distinguirlos ahí.
+- **"Nueva Entrega a Depósito" pasó a aceptar varios materiales por carga,
+  con lectura con IA igual que Equipos Individuales**
+  (`src/app/api/entregas-deposito/leer-foto/route.ts`,
+  `ENTREGA_FOTO_IA_MAX` en `src/components/deposito/types.ts`, migración
+  `20261005090000_entregas_deposito_lote.sql`): la primera versión de este
+  formulario era de un solo material por entrega — quedó corto en cuanto
+  se probó con una devolución real de varios materiales distintos de la
+  misma visita (5 fotos no alcanzan si cada una es algo diferente, no solo
+  ángulos de lo mismo). Ahora es el mismo patrón que Equipos Individuales:
+  sacás hasta `ENTREGA_FOTO_IA_MAX` (10) fotos de todo junto, la IA separa
+  cada material físico distinto en una lista (reusando las categorías de
+  Equipos Individuales — es el mismo universo de cosas, solo que acá puede
+  no estar registrado como equipamiento de ningún sitio) completando
+  descripción, categoría, marca/modelo, N° de serie y etiqueta YPF — nunca
+  la cantidad, eso se carga a mano para cada material, igual que cualquier
+  dato que la IA no pueda leer con certeza (tampoco estima consumo: un
+  material en depósito no está instalado). Se pueden agregar más
+  materiales a mano con "+ Agregar material manual", y la carga genera
+  **un solo comprobante** con todos los materiales en una tabla (como el
+  PDF de Equipos Individuales), no uno por material. Cada material sigue
+  siendo su propia fila en `entregas_deposito` (para que el resto de la
+  app — Historial, ficha de Sitio — no necesite tratamiento especial),
+  pero ahora comparten el mismo `numero_generacion` y el mismo `pdf_url`:
+  la migración relaja el `UNIQUE` de `numero_generacion` a un índice
+  normal, y la unicidad real se chequea en la aplicación (`SELECT` antes
+  de insertar, con reintento) en vez de depender de la constraint — mismo
+  criterio que ya usa el resolver de Ubicaciones ante una colisión. El
+  flujo de "equipo ya cargado en un sitio" (botón en la ficha de Sitio,
+  una fila = una entrega con su propio número) no se tocó.
+- **"Nueva Entrega a Depósito" ahora acepta 1-2 fotos de evidencia (vista
+  general), guardadas y visibles — distintas de las fotos de IA, que se
+  descartan** (migración `20261005100000_entregas_deposito_fotos_evidencia.sql`,
+  `ENTREGA_FOTOS_EVIDENCIA_MAX` en `src/components/deposito/types.ts`): las
+  fotos que se sacan para identificar materiales con IA se procesan y se
+  tiran — nunca quedó una vista de lo que realmente se entregó. Esta es una
+  sección separada en el formulario, igual criterio que la "Foto general"
+  de Tableros/Racks/Equipos Individuales pero con un tope de 2 en vez de 1:
+  se suben al bucket `informe-fotos`, se imprimen en el PDF del comprobante
+  (sección "Fotos de evidencia") y quedan en la columna nueva
+  `fotos_evidencia_urls` (un array de paths), compartida entre todas las
+  filas de un mismo lote — mismo criterio que `pdf_url`/`numero_generacion`.
+  El Historial tiene un botón "Ver fotos de evidencia" aparte de "Ver
+  comprobante" (abre cada foto en una pestaña nueva, URL firmada al
+  momento del click — mismo patrón que el resto de la app). El flujo de
+  "equipo ya cargado en un sitio" no pide estas fotos (sigue siendo un
+  modal rápido con motivo/condición).
+- **"Equipos Individuales → Nueva" ahora puede instalar equipo que estaba
+  en depósito, cerrando el círculo con Entregas a Depósito — sin crear un
+  módulo nuevo** (`buscarEquiposEnDepositoAction`/`EquipoItem.desdeDeposito`
+  en `src/app/(app)/equipos/nuevo/actions.ts` y
+  `src/components/equipos/nuevo-relevamiento-form.tsx`): pedido del
+  usuario — "lo mismo que Entregas a Depósito, pero para instalar, igual
+  que ya veníamos haciendo con fotos + IA + lista con número de serie".
+  En vez de armar un módulo "Informe de Instalación" en paralelo (con su
+  propia tabla, historial y PDF), se extendió el flujo que YA tenía
+  exactamente ese patrón — "Equipos Individuales → Nueva" ya sacaba fotos,
+  identificaba con IA y armaba una lista con número de serie para dar de
+  alta equipo en un sitio; lo único que le faltaba era poder traer un
+  equipo que no es nuevo, sino que está `estado='en_deposito'` en
+  cualquier otro sitio. Ahora, para Administrador/Supervisor
+  (`puedeGestionarDeposito`, mismo gate que el resto de depósito), hay una
+  sección "Traer equipo desde depósito" con buscador (por nombre, marca,
+  serie o etiqueta YPF, sin importar el sitio de origen) — al agregar un
+  resultado y guardar el relevamiento, ese equipo se reactiva
+  (`estado='activo'`) y se reubica (`ubicacion_id`) en el sitio de esta
+  instalación, con un `UPDATE` condicionado a `estado='en_deposito'` (si
+  otro técnico ya lo instaló mientras tanto, falla con un mensaje claro en
+  vez de pisarlo en silencio) vía service-role (mismo motivo que Bajas:
+  `equipos` UPDATE es admin-only por RLS, Supervisor necesita bypassearlo
+  puntualmente). Material que se instala directo, sin haber pasado nunca
+  por depósito, sigue siendo simplemente "Agregar equipo manual" o una
+  lectura con IA normal — ya daba de alta un equipo nuevo en el sitio,
+  que es exactamente lo que hace falta. **Alcance de esta vuelta:** solo
+  cubre `equipos` (equipamiento suelto) — un `tablero_circuito` o
+  `rack_equipamiento` que esté en depósito todavía no se puede reinstalar
+  desde ninguna pantalla, porque requeriría elegir un tablero/rack destino
+  ya existente en el sitio nuevo (estructura de contenedor que Tableros/
+  Racks no tienen pensada para este flujo) — queda afuera a propósito en
+  vez de forzar un diseño a medias.
+- **Nueva sección "Ayuda" (`/ayuda`) para que un técnico nuevo aprenda la
+  app sin que nadie se lo explique en persona** (`src/components/ayuda/view.tsx`,
+  link permanente en la `sessionbar` de `src/components/app-shell.tsx`, al
+  lado de "Mi cuenta"): contenido estático en español, un `<details>` nativo
+  por sección (sin JS/estado — se abre y cierra solo con el navegador), con
+  dos grupos: "Patrones que vas a ver en varios módulos" (elegir/crear Sitio
+  + GPS, fotos con IA, "Ver PDF" y el N° de generación — explicados una sola
+  vez en vez de repetirlos módulo por módulo) y "Módulos de la app" (uno por
+  cada ítem del menú, con los pasos para usarlo y una badge de qué rol lo
+  puede ver). Las secciones de Admin/Supervisor se muestran igual a un
+  Técnico (con su badge de acceso) para que entienda qué hace el resto del
+  equipo, no se ocultan.
+- **El módulo standalone "Instalación" (recién agregado) se reemplazó por
+  una sección "Materiales/equipos" DENTRO de Informe Técnico — el usuario
+  probó el flujo y notó que cargar una Instalación Y, aparte, un Informe
+  Técnico para la misma visita era redundante, y que "materiales usados"
+  no es exclusivo de una instalación (una reparación con repuestos
+  también aplica).** Informe Técnico (`src/components/informe-tecnico/`)
+  gana un botón opcional "+ Agregar materiales/equipos" en el paso
+  "Técnicos y Recursos" (`step-2-equipo.tsx`, visible solo si ya se eligió
+  una Ubicación en el paso 1) que despliega `materiales-section.tsx`: dos
+  listas independientes con fotos + IA — "Materiales/equipos usados"
+  (reusa `/api/equipos/leer-foto`, el mismo universo que Equipos
+  Individuales — categoría, marca/modelo, N° de serie, y hasta estimación
+  de consumo cuando reconoce el modelo) y "Remito" (una foto del papel del
+  depósito, leída por `/api/informe-tecnico/leer-remito` — una IA que
+  transcribe una TABLA, no identifica objetos físicos; devuelve N° de
+  remito si es legible y cada línea con descripción + cantidad). El
+  técnico ajusta la "cantidad sobrante" de cada línea del remito que no
+  terminó usada (arranca en 0).
+  Al guardar el informe: cada material se da de alta como una fila REAL en
+  `equipos` (`estado='activo'`, en la Ubicación del informe — no solo un
+  registro de constancia) y queda vinculado vía la tabla nueva
+  `informe_materiales` (child de `informes_tecnicos`, mismo patrón que
+  `informe_imagenes`/`informe_tecnicos_asignados`); si hay sobrantes, se
+  genera sola una Entrega a Depósito (`motivo='sobrante_obra'`,
+  `condicion='nuevo'`, comentario con el N° del informe y del remito) —
+  nunca hay que ir a cargarla aparte. La lógica de "generar un lote de
+  Entregas a Depósito" sigue viviendo en `crearEntregaDepositoLote`
+  (`src/lib/deposito/crear-lote.ts`, extraída en la vuelta anterior),
+  reusada acá tal cual.
+  **Decisión de rol:** Informe Técnico (y por lo tanto esta sección) sigue
+  abierto a cualquier rol — es el trabajo de campo normal de un técnico,
+  no una decisión operativa como Bajas/Entregas a Depósito manuales. Como
+  `entregas_deposito` sí sigue siendo admin/supervisor-only por RLS, el
+  paso de la devolución automática usa `createServiceRoleClient()` para
+  ese técnico puntual — la policy de la tabla no se afloja, la excepción
+  vive en código, auditada, solo para este flujo (mismo criterio que
+  Bajas y "traer equipo desde depósito" en Equipos Individuales).
+  La pantalla de "Editar" un informe no permite tocar los materiales ya
+  cargados (mismo criterio que las fotos: "si hay que cambiarlos, hay que
+  rehacer el informe") — sí los vuelve a traer para no perderlos al
+  regenerar el PDF, salvo la tabla de líneas del remito en sí (esperado/
+  sobrante), que es transitoria y no se persiste — solo persisten el
+  material ya dado de alta, la foto/N° del remito y la referencia a la
+  devolución generada.
+  La tabla `instalaciones` (del módulo standalone recién reemplazado) y
+  una tabla `_ping_test` de diagnóstico quedaron huérfanas en la base — el
+  `DROP TABLE` específico se colgó repetidas veces vía las herramientas de
+  Supabase en esta sesión (diagnosticado: sin locks reales, parece la
+  herramienta) — pendiente de borrarlas a mano o cuando la herramienta
+  ande: `drop table public.instalaciones; drop table public._ping_test;`.
+  **La foto del remito pasó de ser una sola a admitir hasta
+  `REMITO_FOTO_MAX` (3, `materiales-types.ts`)** — el remito puede traer
+  varias páginas, o convenir reintentar una que salió borrosa, mismo
+  criterio que las "fotos de evidencia" de Entregas a Depósito. Columna
+  `informes_tecnicos.remito_fotos_urls text[]` (reemplaza a
+  `remito_foto_url`, que quedó huérfana en la base por el mismo problema de
+  `DROP COLUMN` colgándose — pendiente: `alter table
+  public.informes_tecnicos drop column remito_foto_url;`). Todas las fotos
+  se mandan juntas en una sola lectura a `/api/informe-tecnico/leer-remito`
+  (campo `fotos`, plural) — el prompt le aclara a la IA que puede ser el
+  mismo remito repetido en varias páginas/intentos, para que combine todo
+  en una lista sin duplicar líneas. El PDF las renderiza en grilla
+  (`commonStyles.photoGrid`/`photoCell`), igual que las fotos de evidencia.
+
+- **Racks: "bocas disponibles" por equipo + fotos generales en plural.**
+  Dos ajustes de detalle sobre Relevamiento de Equipamiento
+  (`src/components/racks/`). (1) Cada equipo del rack suma un campo manual
+  "Bocas disponibles" (`rack_equipamientos.bocas_disponibles`, nullable) —
+  deliberadamente NO lo intenta inferir la IA desde la foto (un puerto
+  puede estar parcialmente tapado o no distinguirse cuál está realmente
+  libre): se completa a mano al dar de alta el equipo, igual criterio que
+  posición (U) o etiqueta YPF — no se edita en visitas posteriores porque
+  no hay pantalla de edición de equipamiento ya creado. (2) La "foto
+  general" del rack (antes una sola) pasa a admitir hasta
+  `RACK_FOTO_GENERAL_MAX` (4, `components/racks/types.ts`) — el técnico
+  quería sacar delantera y trasera del rack para más detalle. Mismo
+  patrón que el remito de Informe Técnico: columna
+  `rack_relevamientos.fotos_generales_urls text[]` (reemplaza a
+  `foto_general_url`, huérfana por el mismo problema de `DROP COLUMN`
+  colgándose — pendiente: `alter table public.rack_relevamientos drop
+  column foto_general_url;`), acción de Historial renombrada a
+  `obtenerUrlsFotosGeneralesRackAction` (devuelve `urls: string[]`, abre
+  cada una en una pestaña — mismo patrón que
+  `obtenerUrlsFotosEvidenciaEntregaAction` de Entregas a Depósito), y PDF
+  en grilla (`commonStyles.photoGrid`/`photoCell`). Estas fotos NO pasan
+  por IA (son solo registro, como ya era antes) — distinto de las fotos
+  de identificación de equipamiento (`RACK_FOTO_IA_MAX` = 7), que sí se
+  mandan a `/api/racks/leer-foto` pero nunca se guardan.
+
+- **Módulo nuevo: Relevamiento de Torres de Comunicaciones.** Mismo patrón
+  que Racks (alta al vuelo de la torre, equipamiento cargado una vez y
+  releveado en cada visita, fotos + IA, historial con PDF) pero para lo
+  montado en una torre física (antena, radioenlace/microonda, antena
+  celular/trunking, baliza de obstrucción, pararrayos, cableado/feeder) en
+  vez de un rack de sala técnica — la posición de cada equipo se registra
+  como altura aproximada en metros (texto libre, ej. "24m") en vez de una
+  posición "U", y el consumo estimado por IA solo aplica a equipamiento
+  ACTIVO (radioenlaces/baliza) — para antenas/pararrayos/cableado
+  (pasivos) la IA siempre devuelve null, explícito en el prompt de
+  `/api/torres-comunicacion/leer-foto`.
+  **Nombrado `torre_comunicacion` (no simplemente `torre`) a propósito:**
+  la app ya usaba "torre" para la cuadrilla/turno de un técnico
+  (`profiles.torre`, `catalogo_torres`, usado en Informe Técnico y
+  Rendición de Gastos) — dos conceptos físicos sin relación que comparten
+  la palabra en español. Tablas (`torres_comunicacion`,
+  `torre_comunicacion_equipamientos`, `torre_comunicacion_relevamientos`,
+  `torre_comunicacion_relevamiento_lecturas`), tipo
+  (`TorreComunicacionCategoriaEquipo`) y ruta (`/torres-comunicacion/...`,
+  `src/components/torres-comunicacion/`) califican el nombre en todos
+  lados para que nadie confunda las dos cosas leyendo el código — ver
+  CRITERIOS_Y_IDEAS.md para la regla general que salió de esto.
+  Fotos generales en array desde el día 1
+  (`torre_comunicacion_relevamientos.fotos_generales_urls text[]`, hasta
+  `TORRE_FOTO_GENERAL_MAX` = 4) — no hubo que repetir la migración
+  simple→array que sí hizo falta en Racks/Informe Técnico/Entregas a
+  Depósito, porque la lección ya estaba aprendida antes de escribir la
+  tabla.
+  **Alcance de esta primera versión, a propósito acotado:** el nuevo
+  `torre_comunicacion_equipamiento` NO está todavía integrado en Bajas de
+  Equipamiento, Entregas a Depósito ni en la ficha de Sitio (que sí
+  incluyen Tableros/Racks/Equipos Individuales) — eso implicaría sumar
+  `torre_comunicacion` a `TipoEquipoBaja` y tocar varios flujos
+  compartidos de esos dos módulos. Se dejó afuera deliberadamente para la
+  primera entrega (el pedido era "dar de alta una torre y relevar su
+  equipamiento", no esas integraciones) — es un buen candidato de
+  incremento siguiente si hace falta, mismo criterio que Racks/Equipos
+  Individuales fueron creciendo en incrementos separados.
+  **Fix post-deploy:** a `torre_comunicacion_relevamientos` le faltaba la
+  policy de UPDATE (`created_by = auth.uid()`) — mismo bug ya resuelto
+  para Tableros/Racks/Equipos en `20261005010000_fix_relevamiento_update_
+  rls.sql`, reintroducido acá por haber copiado la migración de CREACIÓN
+  original de Racks en vez de su esquema ya parchado (ver
+  CRITERIOS_Y_IDEAS.md). Sin la policy, el PDF y las fotos generales se
+  subían bien a Storage pero la fila nunca se enteraba (UPDATE con 0
+  filas, sin error) — el historial quedaba en "Solo registro". Arreglado
+  en `20261005160000_torre_comunicacion_relevamientos_update_rls.sql` +
+  backfill manual del único relevamiento afectado (TOC-2026-9395, el PDF/
+  fotos ya estaban en Storage, solo se linkearon).
+
+- **Racks/Torres: tope de fotos para IA subido de 7 a 14 (el doble).** Un
+  rack/torre con mucho equipamiento necesita fotos de frente Y de atrás
+  (las etiquetas, puertos y cableado no se ven todos desde un solo lado)
+  — con 7 fotos la IA se quedaba corta y perdía equipos. Subido
+  `RACK_FOTO_IA_MAX`/`TORRE_FOTO_IA_MAX` a 14 en
+  `components/{racks,torres-comunicacion}/types.ts`, con el hint del
+  formulario mencionando explícitamente sacar de ambos lados. En
+  `/api/racks/leer-foto` y `/api/torres-comunicacion/leer-foto`: el
+  prompt le aclara a la IA que el mismo equipo puede aparecer en su foto
+  de frente Y en la de atrás y no hay que contarlo dos veces; `max_tokens`
+  subido de 8192 a 16000 (el doble de fotos puede implicar el doble de
+  equipamiento detectado en una sola respuesta) y `output_config.effort`
+  de `"medium"` a `"high"` (se le pidió explícitamente más precisión,
+  dado que la detección venía fallando).
+
+- **Módulo nuevo: Panel de Supervisión (`/panel`).** El usuario pidió una
+  experiencia separada "para supervisión" — pantalla grande (notebook/PC),
+  distinta del celular del técnico en el campo — con sitios+equipamiento,
+  estadísticas y vencimientos de un vistazo. Primera entrega (vista
+  general): a propósito es una sección nueva en el MISMO repo/deploy (no
+  un proyecto aparte) para reusar auth/RLS/datos ya existentes, pero con
+  shell propio — `src/app/panel/layout.tsx` NO usa `<AppShell>` (el shell
+  mobile-first de 800px del resto de la app): sidebar fija + grilla densa,
+  gateado a Admin/Supervisor (`requireAdminOrSupervisor()` en
+  `lib/auth.ts`, mismo gate que Estadísticas vía `puedeVerPanel` en
+  `lib/types.ts`). CSS propio en `src/app/panel/panel.css` (shell/sidebar/
+  grid — lo genuinamente nuevo), pero reusa a propósito los componentes y
+  variables de color YA existentes para quedar en la misma identidad
+  visual: `.card`/`.kpi-grid`/`.kpi-card` (Estadísticas), `BarList`
+  (`components/estadisticas/bar-list.tsx`), `.detalle-table`/`.venc-badge`
+  (ya existían en `wireframe-ui.css` sin usarse para esto). Sin estas
+  reusas hubiera sido un sistema de diseño paralelo completo — "visualmente
+  distinto" acá significa layout/densidad de información nuevos, no una
+  paleta/tipografía nueva de cero.
+  `src/lib/panel/overview.ts` (`getPanelOverview`) agrega, en una sola
+  carga: equipamiento activo por sitio y por módulo (sumando `cantidad`
+  donde existe esa columna, cada fila de `tablero_circuitos` cuenta 1 —
+  mismo criterio que `calcularResumenEquipamiento*` de cada módulo) —
+  filtra a sitios con `total > 0` (catálogo completo ≠ pantalla de
+  actividad, mismo criterio que el resto de la app—, y vencimientos: DNI/
+  licencia de conducir de técnicos activos (`profiles`) + tarjeta verde/
+  RTO de vehículos (`catalogo_vehiculos`) — campos que YA se cargaban
+  (Mi Cuenta, Configuración → Vehículos) pero no tenían ningún lugar que
+  los agregara/alertara; ventana de 60 días o ya vencido para considerarlo
+  relevante. Validado corriendo el equivalente en SQL directo contra la
+  base real (Supabase) antes de dar por buena la agregación — con datos
+  reales que disparan los dos niveles de urgencia (vencido y próximo).
+  **Pendiente de esta primera entrega:** no se pudo verificar visualmente
+  en un navegador logueado como Admin/Supervisor (sin credenciales de
+  prueba en este entorno) — sí se validó que compila/tipa/lintea limpio y
+  que la agregación de datos es correcta contra la base real; falta la
+  revisión visual humana. El "Programador de mantenimientos" (pedido
+  original del usuario) queda para un incremento siguiente, mismo
+  criterio de entrega incremental que el resto de los módulos.
+
+- **Panel → Vehículos (`/panel/vehiculos`).** Segunda pantalla del Panel
+  (sumada a la sidebar junto a Vista General y Estadísticas). A pedido del
+  usuario, la lista es la MISMA que ya existe en Configuración → Vehículos
+  (`components/config/catalogos/vehiculos-tab.tsx`: patente/marca-modelo,
+  badges de Tarjeta Verde/RTO en fila, km actual) pero de solo lectura
+  (sin alta/baja/edición — eso sigue viviendo en Configuración, es
+  Admin-only) y suma lo que pedía: un badge de "Próximo service" y sigue
+  mostrando el kilometraje. Reusa directamente `VencBadge`
+  (`components/venc-badge.tsx`) para los dos vencimientos de documentos —
+  cero CSS nuevo, mismo criterio de reuso que el resto del Panel.
+  El "próximo service" NO existía como dato ni UI en ningún lado — solo
+  como mensajes de alerta sueltos dentro de "Vencimientos 🤖"
+  (`lib/config/fleet-alerts.ts`, sección 9.4 del spec): intervalo fijo de
+  `INTERVALO_SERVICE_KM` (10.000 km para todos, no configurable por
+  vehículo) contra el último `vehiculo_services` cargado. `lib/panel/
+  vehiculos.ts` (`getPanelVehiculos`) reusa esa misma constante y ese
+  mismo criterio (nunca se guarda un "próximo service" aparte, se
+  recalcula al vuelo) pero devuelve un badge estructurado por vehículo
+  (ok/warn/danger + mensaje) en vez de una lista de alertas de texto —
+  mismo dato, forma distinta para esta pantalla.
+  **Gap pre-existente que NO se tocó (fuera de alcance de este pedido):**
+  cargar un service (`addServiceAction`) nunca actualiza
+  `catalogo_vehiculos.kilometraje_actual` — son dos pasos manuales
+  desacoplados hoy. El "próximo service" de esta pantalla es tan preciso
+  como ese campo lo esté; si un Admin carga el service pero se olvida de
+  actualizar el km, la cuenta queda desactualizada. Documentado como
+  candidato a resolver en un incremento siguiente (ej. que
+  `addServiceAction` también bancee `kilometraje_actual`), no en este.
+
+- **Panel → Vista general: "Sitios con equipamiento" pasa a "Sitios y su
+  consumo".** A pedido del usuario, la tabla de sitios ahora se ordena por
+  consumo estimado (`consumo_promedio_w * cantidad`, sumado por sitio)
+  en vez de por cantidad de equipos — mismo dato que ya estimaba la IA en
+  Racks/Torres/Equipos Individuales (Tableros no suma: ahí se mide
+  corriente real, es otro tipo de dato), solo que hasta ahora no se
+  totalizaba por sitio en ningún lado. Se agregó `consumoW` y
+  `equiposSinConsumo` a `PanelSitioResumen`
+  (`lib/panel/overview.ts`) — un sitio con equipos sin marca/modelo
+  reconocido muestra ese conteo aparte ("+N sin estimar") en vez de que el
+  total parezca completo cuando no lo es. KPI nuevo `consumoTotalW` en el
+  encabezado de la tarjeta (no se agregó como KPI-tile aparte para no
+  tocar `.kpi-grid`, que comparte CSS con Estadísticas). Validado con el
+  equivalente en SQL directo contra la base real antes de confirmar la
+  agregación.
+
+- **Módulo nuevo: Plan de Mantenimiento (PDM).** A pedido del usuario:
+  intervalos configurables por categoría de equipo + aviso de cuándo toca
+  el próximo mantenimiento, con pronóstico de lluvia para decidir si
+  conviene programar la visita.
+  **Alcance, a propósito acotado a Racks y Equipos Individuales — NI
+  Tableros NI Torres de Comunicaciones:**
+  - Tableros queda afuera porque YA tenía su propio sistema de
+    mantenimiento (`tablero_mantenimientos`, con fecha de próxima visita
+    cargada a mano por el técnico en `/tableros/mantenimiento`, ya
+    existía de antes en la app) — este descubrimiento se hizo a mitad de
+    la construcción (ver CRITERIOS_Y_IDEAS.md) y recortó el alcance
+    original para no duplicar una feature que ya funcionaba.
+  - Torres de Comunicaciones queda afuera por el mismo motivo ya
+    documentado para Bajas/Entregas a Depósito: todavía no tiene su
+    propia sección en la ficha de Sitio.
+  **Piezas:**
+  - Reusa a propósito el tipo `TipoEquipoBaja` (ya compartido por Bajas
+    de Equipamiento y Entregas a Depósito) en `mantenimiento_intervalos`
+    y `mantenimientos_equipamiento` en vez de un enum nuevo — mismo
+    "a cuál tabla de equipamiento apunta esto" de siempre.
+    `lib/mantenimiento/types.ts` tiene el resto de la lógica compartida
+    (`categoriasDeTipoEquipo`, `calcularEstadoMantenimiento` — mismo
+    criterio de "nunca se guarda un próximo vencimiento, se recalcula al
+    vuelo" que "próximo service" de Vehículos).
+  - **Configuración → Mantenimiento** (nuevo tab en
+    `catalogos-card.tsx`): Admin define, por tipo de equipo + categoría,
+    cada cuántos días corresponde el mantenimiento
+    (`mantenimiento-intervalos.ts` — nombrado así, no `mantenimiento.ts`,
+    para no pisar el archivo de acciones ya existente de "vaciar datos de
+    prueba").
+  - **Ficha de Sitio**: botón "Registrar mantenimiento" (ícono llave)
+    en cada fila de Rack/Equipo Individual, SIN gate de rol (es trabajo
+    de campo normal, no una decisión operativa como Bajas/Entregas) —
+    mismo patrón modal self-contained que `DarDeBajaButton`/
+    `EntregarADepositoButton`, con fecha + descripción + foto opcional.
+  - **Panel → Mantenimientos** (`/panel/mantenimientos`): cruza los
+    intervalos configurados con el último mantenimiento registrado de
+    cada equipo para mostrar vencido/próximo/nunca, ordenado por
+    urgencia. Si no hay NINGÚN intervalo configurado todavía, la pantalla
+    queda vacía a propósito (no tiene sentido avisar sin una regla) con
+    un link directo a Configuración.
+  - **Clima**: para los ítems vencidos/próximos/nunca con el sitio
+    georreferenciado, un pedido batcheado a Open-Meteo (gratuita, sin API
+    key, `lib/panel/clima.ts`) trae la probabilidad de precipitación de
+    los próximos 3 días — si supera 60% en algún día, se muestra un aviso
+    "lluvia prevista, evaluá reprogramar". A propósito NO se le pidió
+    esto a la IA: sin acceso a internet en este flujo terminaría
+    inventando el clima, y una regla simple sobre números reales es más
+    rápida/confiable que pedirle a un modelo que "interprete" un
+    pronóstico estructurado. Si el pedido a Open-Meteo falla (sin
+    internet, API caída), se degrada en silencio — la pantalla sigue
+    funcionando sin el dato de clima, nunca rompe la página.
+    **No se pudo probar en vivo desde este entorno**: la política de red
+    de esta sesión de Claude Code bloquea `api.open-meteo.com`
+    (`CONNECT tunnel failed, 403` — política de la organización) — mismo
+    tipo de limitación ya conocida en este proyecto para los endpoints de
+    IA (tampoco se pueden probar en vivo desde acá). Debería funcionar
+    normal desplegado en Vercel, que tiene su propia salida a internet
+    sin esa restricción — pendiente de confirmación real en producción.
+
+**Error real cometido durante la construcción (y cómo se corrigió):** al
+escribir el primer archivo de acciones de Configuración para este
+feature, se usó el nombre "obvio" `actions/mantenimiento.ts` SIN revisar
+antes si ya existía algo ahí — y sí existía: la acción
+`vaciarDatosPruebaAction` (limpieza de datos de prueba, feature sin
+relación). Quedó parcialmente sobreescrita hasta que `tsc` lo detectó por
+un import roto en otro componente. Se restauró el archivo original con
+`git checkout` y se movieron las funciones nuevas a
+`mantenimiento-intervalos.ts`. Ver CRITERIOS_Y_IDEAS.md para la lección
+general que salió de esto.
+
+- **Racks: N° de serie de fábrica + escaneo puntual de un solo campo con
+  la cámara.** Dos ajustes sobre Relevamiento de Equipamiento
+  (`src/components/racks/`), a pedido de uso real en campo. (1) Cada
+  equipo del rack suma un campo nuevo `numeroSerie`
+  (`rack_equipamientos.numero_serie`, nullable) — el N° de serie que
+  imprime el FABRICANTE, distinto de `etiquetaYpf` (la chapa de
+  inventario de YPF, que ya existía). La lectura general con IA
+  (`/api/racks/leer-foto`) ahora intenta los dos por separado, con el
+  mismo criterio que el resto de los campos: vacío si no es legible,
+  nunca inventado. (2) Cuando la lectura general no lo capturó (foto
+  borrosa, ángulo malo, etiqueta tapada en ese momento), cada fila de
+  equipo nuevo tiene un botón de cámara chico al lado de "Etiqueta YPF" y
+  de "N° de serie" que saca UNA foto de cerca de esa etiqueta puntual y
+  completa solo ese campo. En vez de sumar una librería de OCR genérica
+  (Tesseract y similares andan mal con etiquetas chicas/reflejos/fuentes
+  industriales), se reusa el mismo motor que ya usa toda la app — Claude
+  Vision — en un endpoint nuevo y liviano
+  (`/api/racks/leer-campo`, `effort: "low"`, un solo campo pedido en el
+  prompt) en vez de reenviar la foto a la lectura general de 14 fotos.
+  Patrón general para el próximo proyecto que use lectura de fotos con
+  IA: cuando haga falta completar UN campo puntual que la lectura
+  "general" no agarró, conviene un endpoint chico y enfocado con el mismo
+  proveedor, no una librería de OCR aparte ni reusar el endpoint grande
+  (más lento y con un prompt que no es para esto).
+  **Alcance, a propósito**: por ahora solo en Racks (donde surgió el
+  pedido) — no se tocó Torres ni Equipos Individuales, que comparten el
+  patrón de etiqueta YPF pero no se confirmó que necesiten lo mismo
+  todavía; se replica fácil si hace falta, ver `leer-campo/route.ts`. Se
+  mantiene la opción de subir foto desde galería además de la cámara en
+  todos los relevamientos (no se sacó, a pedido explícito) — la cámara
+  directa sigue siendo la opción recomendada (entre otras cosas porque de
+  paso evita el problema de fotos HEIC de iPhone al elegir de la
+  galería), pero la galería queda como alternativa.
+
+- **Racks: etiqueta YPF del rack en sí (para ServiceNow).** Hasta ahora
+  `racks` solo tenía `denominacion` (nombre libre) — no había forma de
+  anotar el número de inventario de YPF que se usa para cargar el rack
+  como activo en ServiceNow. Se agregó `racks.etiqueta_ypf` (nullable),
+  campo opcional al lado de "Denominación" cuando se da de alta un rack
+  nuevo en el Relevamiento de Equipamiento, y se muestra junto al nombre
+  del rack en la ficha de Sitio y en el encabezado del PDF. Importante:
+  es un campo DISTINTO del `etiquetaYpf` que ya tiene cada equipo
+  individual adentro del rack (la chapa de inventario de cada pieza de
+  equipamiento) — acá es la etiqueta del rack como mueble/gabinete en sí.
+  Mismo límite que denominación: solo se carga al dar de alta el rack
+  (alta al vuelo), no hay pantalla para editarlo después si un rack ya
+  existente no lo tiene cargado.
+
+- **Torres de Comunicaciones: altura ESTIMADA de la torre por conteo de
+  tramos, nunca una medición real.** Medir la altura de una torre con una
+  sola foto sacada desde abajo no es confiable (fotogrametría necesita
+  una referencia de escala que ahí no hay) — en cambio, las torres se
+  arman en tramos modulares de largo estándar según el tipo, así que el
+  enfoque es: la IA clasifica el tipo de torre (autosoportada/
+  arriostrada/monopole/otro, `torre_tipo`) y CUENTA tramos visibles al
+  procesar las mismas fotos de equipamiento que ya se sacan para el
+  relevamiento (`/api/torres-comunicacion/leer-foto`, que ahora devuelve
+  `{ equipos, torre: { tipoTorre, tramosContados, tramosConfiable } }` en
+  vez de solo el array de equipos) — marcando `tramosConfiable: false`
+  si la foto no muestra la torre completa de abajo arriba. El LARGO real
+  de cada tramo nunca lo inventa la IA (varía por fabricante/modelo):
+  sale de un catálogo nuevo en Configuración → Catálogos → "Torres
+  Comunic. (tramos)" (tabla `torre_tipo_largos`, admin-only, un valor en
+  metros por tipo — "otro" no es configurable). La altura final
+  (`torres_comunicacion.altura_estimada_m` = tramos × largo del
+  catálogo) se precarga editable en el formulario de alta de una torre
+  nueva, junto con tipo y tramos contados, con un aviso si falta
+  configurar el largo de ese tipo o si la IA no está segura del conteo —
+  el técnico siempre puede corregir todo antes de guardar, igual criterio
+  que el resto de los campos estimados de esta app.
+  **Alcance, a propósito**: solo se carga/calcula al dar de alta la torre
+  (igual límite que denominación/etiqueta YPF — no hay pantalla para
+  recalcularla en una torre ya existente en esta entrega). Tab "Torres"
+  de Catálogos (el catálogo de cuadrillas/turnos de técnico,
+  `catalogo_torres` — un concepto físico totalmente distinto que
+  comparte la palabra en español, ver nota en la migración de Torres de
+  Comunicaciones) se renombró a "Torres (cuadrillas)" en la UI para que
+  no se confunda con el tab nuevo.
+
+- **Plan de Mantenimiento v2: programación manual, calendario anual,
+  historial de Realizados y estimación de dotación.** Mejora sobre el
+  PDM v1 (sección "PDM" más arriba) a pedido de uso real — la v1 solo
+  calculaba vencimientos de una lista plana; esta entrega lo convierte en
+  un plan de verdad:
+  - **Programación manual** (`mantenimiento_programaciones`, fecha +
+    técnico asignado opcional + nota): botón "Programar mantenimiento"
+    (ícono calendario) al lado de "Registrar mantenimiento" en la ficha
+    de Sitio, mismo criterio de acceso (sin gate de rol, un técnico
+    puede programar/reprogramar; solo Admin puede borrar una
+    programación, RLS admin-only). Es UNA fila por equipo (upsert por
+    `tipo_equipo+equipo_id` — reprogramar pisa la fecha anterior, no
+    acumula) que, cuando existe, se muestra junto a la fecha calculada
+    del intervalo — no la reemplaza en el cálculo de urgencia (vencido/
+    próximo/ok sigue siendo siempre del intervalo), solo se exhibe como
+    dato aparte ("Programado: fecha · técnico").
+  - **`/panel/mantenimientos` rediseñada** con KPIs arriba (% al día,
+    vencidos, vencen en 30 días) y 4 pestañas: **Pendientes** (la lista
+    de antes, ahora con el badge de programación si existe),
+    **Calendario del año actual** (grilla de 12 meses — cada equipo
+    pendiente cae en el mes de su fecha objetivo, programada o
+    calculada; lo muy vencido de años anteriores o sin fecha calculable
+    va aparte, para no romper la grilla del año), **Realizados**
+    (historial completo de `mantenimientos_equipamiento` con buscador
+    por equipo/sitio/categoría — antes este dato existía pero no tenía
+    pantalla propia para repasarlo) y **Dotación** (ver próximo punto).
+    Cada tarjeta de mes es clickeable: abre un modal con la grilla de
+    días de ese mes (lunes a domingo, con los días vacíos de alineación
+    al principio) — cada día con mantenimientos muestra un punto con la
+    cantidad, coloreado según la peor urgencia de ese día (vencido en
+    rojo, próximo/nunca en amarillo), y clickeando un día se ve el
+    detalle de los equipos programados ahí (mismo formato de tarjeta que
+    la pestaña Pendientes: badge de urgencia, programación manual/auto,
+    motivo de reprogramación si lo tiene). Días sin nada quedan atenuados
+    y sin click.
+  - **Estimación de cuántos técnicos hacen falta**
+    (`lib/panel/mantenimiento-dotacion.ts`), agrupada por provincia
+    (proxy simple de "zona", ya disponible sin armar un clustering
+    propio): visitas/año necesarias según los intervalos configurados, +
+    horas de viaje estimadas con la distancia REAL **promedio** (Haversine,
+    sobre las coordenadas GPS que ya tiene cada sitio en Ubicaciones)
+    entre los sitios de esa provincia — nunca una distancia inventada por
+    la IA, mismo principio que el clima del Panel. Horas totales (trabajo
+    + viaje) ÷ horas disponibles por técnico = técnicos necesarios en esa
+    provincia; la suma total entre provincias es un límite superior
+    honesto, no una asignación de rutas real (un técnico podría cubrir
+    parte de dos provincias vecinas — eso ya es logística real, afuera de
+    esta estimación). Los supuestos (horas/día, días hábiles/año, horas
+    de trabajo por visita, velocidad de viaje promedio) son números reales
+    que carga un Admin en *Configuración → Catálogos → Mantenimiento*
+    (mismo tab que los intervalos), nunca inventados por la IA — valores
+    por defecto razonables (8h/día, 230 días hábiles, 2h/visita, 60km/h)
+    hasta que se ajusten a la cuadrilla real.
+  - **Error evitado en el camino**: la tabla nueva `torre_tipo_largos`
+    (de la entrega anterior) había quedado con `tipo_torre` como primary
+    key directa — se armó la tabla nueva de esta entrega
+    (`mantenimiento_programaciones`) con `id` uuid como PK desde el
+    arranque, seguro el patrón real de este proyecto para catálogos con
+    clave natural (`id` + `unique`), no una PK natural. Ver
+    CRITERIOS_Y_IDEAS.md para el error que motivó esto.
+
+- **Plan de Mantenimiento: configuración movida de Catálogos al Panel,
+  como tabla editable.** Dos ajustes de UX a pedido de uso real. (1) La
+  configuración de intervalos + supuestos de dotación vivía en
+  Configuración → Catálogos → tab "Mantenimiento" — un salto de pantalla
+  separado del Plan que la usa. Se movió entera a
+  `/panel/mantenimientos` como una 5ª pestaña "Configuración", visible
+  solo para Admin (`esAdmin`, igual gate que las escrituras por RLS); los
+  textos que antes decían "configuralo en Configuración" ahora son
+  botones que cambian de pestaña en el mismo lugar, en vez de navegar a
+  otra pantalla. El tab "Mantenimiento" de Catálogos se eliminó (no quedó
+  un duplicado). (2) El formulario para cargar intervalos era "elegí
+  tipo + categoría + frecuencia + Agregar", con una lista aparte para
+  borrar de a uno — se cambió a una TABLA con una fila fija por cada
+  categoría existente (de Racks y de Equipos Individuales), frecuencia
+  editable en el lugar por fila, vacío = sin configurar (mismo patrón ya
+  usado para el largo de tramo de Torres). Esto obligó a agregar la
+  policy de UPDATE que le faltaba a `mantenimiento_intervalos` (tenía
+  select + insert + delete admin-only, pero no update — el upsert de la
+  tabla nueva hubiera afectado 0 filas en silencio al cambiar un valor
+  existente, mismo bug ya documentado con Torres en esta sesión).
+
+- **Checklist de mantenimiento por categoría de equipo.** El flujo real
+  queda: primero se releva el equipamiento (ya existía), después se
+  registra el mantenimiento desde la ficha de Sitio (botón que ya
+  existía) — y ahora, si la categoría de ese equipo tiene un checklist
+  configurado, aparece inline en el MISMO modal de "Registrar
+  mantenimiento" (no se agregó una pantalla ni un botón nuevo: ya estás
+  parado en el equipo correcto, no hace falta elegirlo de nuevo en otro
+  lado). Cada ítem se marca OK / No OK / No aplica, con una observación
+  opcional cuando algo no está OK.
+  - **Catálogo de ítems** (`mantenimiento_checklist_items`, `tipo_equipo` +
+    `categoria` + `orden` + `texto`) — admin-configurable desde el mismo
+    lugar que los intervalos (Panel → Mantenimientos → Configuración):
+    elegís tipo + categoría, ves los ítems existentes, agregás/quitás.
+  - **Respuestas** (`mantenimiento_checklist_respuestas`) quedan
+    guardadas junto al mantenimiento que las generó (`mantenimiento_id`),
+    no son un registro aparte.
+  - **Contenido inicial investigado** (no genérico) para las 6 categorías
+    más relevantes en sitios de YPF: UPS, Grupo Electrógeno, Banco de
+    Baterías, Rectificador, Radioenlace y Cámara CCTV — aplicado a cada
+    `tipo_equipo` donde esa categoría existe de verdad (ej. UPS está en
+    Rack y en Equipo Individual, Radioenlace solo en Rack, Grupo
+    Electrógeno y Cámara CCTV solo en Equipo Individual). Un Admin puede
+    agregar/quitar ítems después sin tocar código.
+  - **Cobertura ampliada a todas las categorías restantes** (migración
+    `20261009060000_mantenimiento_checklist_resto_categorias`), mismo
+    criterio de contenido investigado por tipo de equipo, no genérico: en
+    Racks — Router, Switch, Servidor, ODF, Patch panel, Convertidor de
+    medios, Firewall, Multiplexor, PDU/Regleta; en Equipos Individuales —
+    Control de acceso, Impresora, Telefonía, Climatización. Solo
+    "Otro" queda sin checklist en los dos `tipo_equipo` — es un cajón de
+    sastre, no un tipo de equipo real sobre el que tenga sentido escribir
+    ítems. No hizo falta tocar código: la UI ya buscaba ítems por
+    `tipo_equipo+categoria` de forma genérica (sección #51), así que
+    cualquier categoría con ítems cargados los muestra sola.
+  - **Categoría nueva: "Grupo electrógeno"** en Equipos Individuales
+    (`equipo_categoria` — faltaba, señalado por uso real en campo).
+    `ALTER TYPE ... ADD VALUE` va en su propia migración/transacción
+    (no se puede usar el valor nuevo en la misma transacción que lo
+    agrega) — por eso quedó en un archivo de migración aparte del resto.
+  - **Alcance, a propósito**: el checklist es opcional por diseño — un
+    mantenimiento se puede registrar igual que antes (fecha +
+    descripción + foto) sin completar ningún ítem, y una categoría sin
+    ítems configurados simplemente no muestra la sección. No se armó un
+    PDF de checklist aparte en esta entrega (las respuestas quedan en la
+    base, consultables, pero no se imprimen todavía) — se puede sumar
+    después si hace falta un comprobante en papel.
+
+- **Programación automática del Plan de Mantenimiento.** Corrección sobre
+  la entrega anterior: el botón "Programar mantenimiento" por equipo se
+  había entendido como la forma normal de armar la agenda — pero la idea
+  real es que la agenda la calcule el sistema desde Configuración, y ese
+  botón quede solo para una excepción puntual ("este sitio se adelanta/
+  atrasa"). Se agregó un botón **"Generar programación automática"** en
+  *Panel → Mantenimientos → Configuración*
+  (`lib/mantenimiento/generar-programacion.ts`, solo Admin) que arma la
+  agenda de los próximos ~90 días (ventana deslizante — se vuelve a
+  correr cuando hace falta, no es un plan anual fijo):
+  - Agrupa los equipos vencidos/por vencer por SITIO (una visita cubre
+    todo lo que vence ahí, no un viaje por equipo) y por PROVINCIA
+    (mismo proxy de "zona" que ya usa Dotación).
+  - La hora de viaje por visita sale de la distancia PROMEDIO real
+    (Haversine, coordenadas GPS ya cargadas) entre los sitios de esa
+    provincia — nunca inventada.
+  - Empaqueta greedy, día hábil por día hábil: ubica cada visita en el
+    primer día con horas libres (según los supuestos ya configurados:
+    horas/día, horas/visita, velocidad de viaje) sin pasarse de la fecha
+    límite de sus equipos.
+  - **Nunca pisa una programación cargada a mano** (`mantenimiento_
+    programaciones.origen`, `'manual' | 'auto'` — columna nueva): cada
+    corrida borra y reemplaza solo lo que generó ella misma la vez
+    anterior (`origen = 'auto'`), dejando intactas las excepciones
+    puntuales cargadas por un técnico. En el Plan, el badge distingue
+    "Programado (auto)" de "Programado (excepción)".
+  - **A propósito, no es ruteo real**: sigue siendo una ESTIMACIÓN —
+    trata cada provincia como una sola cuadrilla (mismo supuesto
+    simplificador que Dotación), no arma un itinerario óptimo entre
+    sitios ni asigna técnico automáticamente (ese campo queda en null,
+    se asigna a mano después si hace falta). Sirve para dimensionar
+    cuándo visitar cada sitio, no para reemplazar el criterio de quien
+    arma las salidas reales de la cuadrilla.
+
+- **Motivo de reprogramación en "Programar mantenimiento".** El botón de
+  excepción puntual (ver punto anterior) también se usa cuando un técnico
+  YA llegó al sitio y no pudo hacer el mantenimiento — para ese caso se
+  sumó un campo **"Motivo de la reprogramación"** (opcional, select) en el
+  mismo modal, antes de la Nota: `motivo_reprogramacion_mantenimiento`
+  (enum nuevo en `mantenimiento_programaciones.motivo`, mismo criterio que
+  `MotivoBaja`/`MotivoEntregaDeposito` — un enum chico con "otro" de
+  escape, nunca texto libre suelto): Clima, Sitio inaccesible, Falta
+  repuesto/herramienta, Equipo no encontrado/retirado, No se pudo ingresar
+  (seguridad del sitio), Otro. Queda `null` cuando la reprogramación es
+  simplemente una fecha anticipada de antemano (no hubo un intento
+  fallido) o cuando la programación la generó el algoritmo automático. En
+  el Plan (`/panel/mantenimientos`, pestaña Pendientes) se muestra como un
+  badge aparte ("Reprogramado: Clima") junto al de programación existente,
+  así queda visible de un vistazo por qué ese sitio no quedó resuelto en
+  la visita anterior.
+
+- **Configuración: reorganizada en 9 secciones propias, accesible solo
+  desde el Panel de Supervisión.** Dos cambios de UX a pedido de uso real.
+  (1) **Ya no aparece en el menú principal de los técnicos** — ni como
+  tarjeta en el inicio ni como tab dentro de Estadísticas: se sacó de
+  `src/app/(app)/page.tsx` y de `NAV_CONFIG.estadisticas.tabs` en
+  `app-shell.tsx`. Se accede desde `PanelNav` (el sidebar del Panel de
+  Supervisión), mismo lugar donde ya vivía el acceso a Estadísticas — el
+  gate real sigue siendo RLS + `puedeVerConfiguracion` (solo Admin, más
+  estricto que el Panel en sí, que es Admin o Supervisor), esto solo
+  cambia DÓNDE aparece el link, no quién puede entrar. (2) **Antes era una
+  sola pantalla con 9 tarjetas apiladas** (Empresa, Usuarios, Emails,
+  Catálogos, Almacenamiento, Resumen semanal IA, Auditoría, Errores,
+  Datos de prueba) con scroll largo — ahora `/configuracion` es un hub
+  (mismo patrón que `/relevamiento`) con una tarjeta por sección, y cada
+  una es su propia subruta (`/configuracion/usuarios`,
+  `/configuracion/catalogos`, etc.) con su propio fetch acotado a lo que
+  esa pantalla necesita, en vez de un solo `page.tsx` gigante que traía
+  las 13 queries de todas las secciones juntas de una. El componente
+  viejo `ConfiguracionView` (stack de las 9 cards) se borró — ya no tenía
+  uso. El botón "Volver" del header baja un nivel por vez: desde una
+  sección vuelve al hub, desde el hub vuelve al Panel. Se sumaron 9
+  íconos nuevos al sistema de íconos de módulo (`module-icon.tsx`) y uno
+  chico (`settings`, para el link del Panel) — mismo criterio de siempre:
+  líneas simples, nunca emoji.
+
+- **Montaje de cámaras/domos: qué recurso hace falta para el
+  mantenimiento.** A pedido de uso real — al relevar una cámara/domo
+  (Equipos Individuales, categoría Cámara CCTV) ahora se puede cargar
+  **dónde está montada** (Torre, Columna, Poste, Pared, Techo/azotea) y
+  **a qué altura real** (metros, opcional). Con eso, la app calcula qué
+  recurso hace falta para hacer el mantenimiento más adelante — nunca
+  inventado por IA, el técnico lo mide/estima y lo carga a mano, mismo
+  criterio que la distancia real de Dotación y el largo de tramo real de
+  Torres:
+  - **Torre → siempre Grupo de altura**, sin importar la altura real —
+    es una decisión organizacional (equipo especializado), no una
+    cuestión de metros.
+  - **Columna / Poste / Pared / Techo → según la altura real** contra
+    **bandas configurables** (no un único umbral fijo): una lista
+    ascendente de "hasta X metros → este recurso" por tipo de montaje —
+    se resuelve con la primera banda cuyo "hasta" cubre la altura real; si
+    ninguna la cubre, no se muestra recurso (nunca se inventa uno fuera de
+    lo configurado, mismo criterio que el calibre de cable).
+  - **Catálogo admin-configurable, en dos partes** (tab "Recurso por
+    altura" dentro de Configuración → Catálogos):
+    - **Nombres de recurso abiertos** (`catalogo_tipos_recurso_altura`,
+      reusa el componente genérico de catálogo simple): ya no es un enum
+      Postgres fijo (`escalera`/`andamio_manlift`/`grupo_altura`) — un
+      Admin agrega un recurso nuevo (ej. "Andamóvil", pedido real de
+      usuario) sin deploy. Viene semilla con Escalera, Andamio/Manlift,
+      Grupo de altura y Andamóvil.
+    - **Bandas por tipo de montaje** (`catalogo_recurso_altura_bandas`):
+      por cada tipo de montaje con "Recurso fijo" vacío, se edita la
+      lista de bandas (altura hasta + recurso, elegido del catálogo de
+      nombres de arriba) — agregar/quitar filas sin tocar código. Torre
+      sigue siendo "Recurso fijo = Grupo de altura" siempre (columna
+      `recurso_fijo`, ahora texto libre en vez de enum).
+    - La migración que separó el viejo umbral único en bandas preservó el
+      comportamiento existente 1:1 (insertó automáticamente dos bandas por
+      fila: el umbral viejo → Escalera, y un techo alto → Andamio/Manlift)
+      — nada cambió para quien no vuelva a tocar la configuración.
+  - **Se ve en 3 lugares**: en el propio formulario de relevamiento (chip
+    "Recurso: ..." en vivo mientras se completa Montaje/Altura), en la
+    ficha de Sitio (columna "Montaje" de la tabla de Equipos
+    Individuales) y en el Plan de Mantenimiento (`/panel/mantenimientos`,
+    pestaña Pendientes) como un chip más junto a la urgencia — para que
+    al planificar una visita ya se sepa qué equipo llevar.
+  - **Alcance, a propósito**: solo se carga al dar de alta el equipo
+    (igual límite que marca/modelo/N° de serie en Equipos Individuales —
+    no hay edición de equipo existente todavía en esta app, para ningún
+    campo). Un equipo cargado antes de esta entrega simplemente no tiene
+    montaje hasta que se re-cargue o se sume una edición más adelante. No
+    se agregó al PDF del relevamiento en esta entrega (sí a las pantallas
+    de planificación, que es donde realmente se usa este dato) ni a
+    Tableros (la cámara ahí es un circuito eléctrico del tablero, no el
+    equipo físico con mantenimiento propio — ver Equipos Individuales).
+
+- **Vehículos: todo a Panel de Supervisión, más alta con fotos (IA).** Dos
+  cambios a pedido de uso real.
+  - **Gestión de la flota trasladada de Configuración → Catálogos a Panel
+    de Supervisión → Vehículos.** Antes el alta/service/vencimientos
+    vivían en Catálogos (dentro de Configuración, Admin-only) y la vista
+    general estaba aparte, en el Panel, solo de lectura — dos lugares
+    para lo mismo. Ahora `/panel/vehiculos` es una sola pantalla con 4
+    pestañas: **Flota** (vista general, visible para Admin y Supervisor
+    igual que el resto del Panel), **Gestión** (alta manual, baja,
+    actualizar kilometraje — Admin-only), **Service** (Admin-only) y
+    **Vencimientos** (lectura, visible para los dos roles). Los
+    componentes se movieron de `components/config/catalogos/` a
+    `components/panel/vehiculos/`; las Server Actions se quedaron donde
+    estaban (`configuracion/actions/vehiculos.ts` — la ubicación de la
+    action no tiene que ver con dónde vive la UI que la llama, mismo
+    criterio ya usado con Mantenimiento).
+  - **Alta de vehículo con fotos**, mismo sistema de lectura con IA que
+    Racks/Equipos/Torres (`/panel/vehiculos/nuevo`, botón "Alta con fotos
+    (IA)" en la pestaña Flota): a diferencia del alta manual de siempre
+    (que solo pedía patente/marca a mano), acá la IA lee **patente,
+    marca/modelo, estado general (rayones/roturas) y kilometraje**
+    directo de las fotos. Dos lotes de fotos SEPARADOS, cada uno con su
+    propio botón "Leer con IA" — son dos cosas físicamente distintas, no
+    tiene sentido mezclarlas en una sola lectura:
+    - **Exterior** (`/api/vehiculos/leer-exterior`, hasta 5 fotos): lee
+      patente y marca/modelo, y describe el estado general de la
+      carrocería con un flag `tieneDanios` (true/false/null si no se
+      puede evaluar). La patente es un dato que tiene que ser exacto —
+      el prompt es explícito en devolver vacío antes que adivinar un
+      carácter que no se lee con certeza (mismo criterio que el número
+      de serie en Equipos: nunca inventar un dato preciso que no se
+      puede justificar por la foto).
+    - **Tablero** (`/api/vehiculos/leer-tablero`, hasta 2 fotos): lee el
+      kilometraje del odómetro — mismo criterio de precisión, `null` si
+      no se puede leer cada dígito con certeza.
+    - Los campos que llegan de la IA quedan en inputs editables (nunca
+      se graban directo) con un aviso "revisar" cuando la IA no estuvo
+      seguro (`identificadoPatente`/`identificadoMarca`/`identificado`
+      en `false`) — mismo patrón `revisar` que Equipos Individuales.
+    - Al guardar, se persiste solo **una** foto representativa de cada
+      lote como evidencia del estado al momento del alta
+      (`catalogo_vehiculos.foto_estado_alta_url`/`foto_tablero_url`,
+      bucket `vehiculo-docs`) — el resto de las fotos que se mandaron a
+      leer no se guardan, mismo criterio que Equipos/Racks (la IA lee,
+      no archiva).
+    - Nuevas columnas en `catalogo_vehiculos`: `estado_alta` (texto
+      libre), `tiene_danios_alta` (boolean), `foto_estado_alta_url`,
+      `foto_tablero_url`. Se ven en la pestaña Flota como badge "Con
+      daños al alta" + la descripción del estado.
+    - **Alcance, a propósito**: es una foto del estado AL MOMENTO del
+      alta, no un registro que se actualiza después — para eso ya existe
+      Service. El alta manual de la pestaña Gestión sigue existiendo tal
+      cual estaba, como alternativa más rápida cuando no hace falta el
+      detalle de fotos.
+
+- **Tableros: jerarquía Principal/Secundario, para ir armando la relación
+  de cargas.** Al dar de alta un tablero nuevo (Relevamiento de Equipos →
+  Tableros) ahora se puede marcar, de forma opcional, si es **Principal**
+  o **Secundario** — y si es Secundario, a qué tablero está **asociado**
+  (puede ser un Principal u OTRO Secundario, para armar una cadena, no
+  solo dos niveles). El picker de "Asociado a" lista los tableros que ya
+  existen en esa misma ubicación.
+  - **Columnas nuevas** en `tableros`: `jerarquia`
+    (`tablero_jerarquia`: `'principal' | 'secundario'`, nullable — un
+    tablero sin clasificar sigue funcionando exactamente igual que
+    antes, no se fuerza a clasificar todo de una) y `tablero_padre_id`
+    (self-reference a `tableros.id`). Un `check` en la base impide que
+    un tablero tenga `tablero_padre_id` sin estar marcado `secundario`.
+    Como el padre solo puede ser un tablero que YA existía al crear este
+    (se elige de una lista de tableros existentes, nunca se puede crear
+    los dos juntos apuntándose entre sí), no hace falta una validación
+    extra contra ciclos — la cadena solo puede construirse hacia atrás.
+  - **Se ve en la ficha de Sitio**: cada tablero muestra su jerarquía si
+    la tiene, y según el caso "Asociado a: {denominación del tablero
+    del que depende}" (Secundario) o "N secundario(s)" (Principal, solo
+    si tiene al menos uno) — así de un vistazo se ve qué tableros
+    alimentan a cuáles.
+  - **Alcance, a propósito**: por ahora es solo la relación (quién
+    depende de quién) y el conteo — todavía no suma la corriente/carga
+    real de los circuitos de los secundarios hacia el principal (eso ya
+    se mide por tablero en Mediciones, sumarlo hacia arriba en la
+    jerarquía es un paso natural siguiente una vez que la relación esté
+    cargada en los tableros reales). Igual límite que el resto de los
+    campos de alta de esta app: solo se carga al crear el tablero, no
+    hay edición de un tablero ya existente todavía.
+
+- **Tableros: campo "Cuerpo" por circuito, para gabinetes con más de un
+  cuerpo/puerta.** Un tablero físico puede tener varios cuerpos (ej. uno
+  de 220V/24V, otro de control de acceso, otro de CCTV, cada uno con su
+  propia puerta) — esto es distinto de la jerarquía Principal/Secundario
+  (que son tableros físicamente separados que se alimentan entre sí, no
+  compartimentos del mismo gabinete). Ahora cada circuito/elemento puede
+  llevar, opcionalmente, en qué cuerpo está (texto libre, ej. "Cuerpo 1" o
+  "Puerta control de acceso").
+  - **Columna nueva**: `tablero_circuitos.cuerpo` (text, nullable).
+  - **Carga en el form** (`nueva-medicion-form.tsx`): un campo "Cuerpo
+    actual" arriba de la sección de circuitos marca en qué cuerpo está
+    parado el técnico — se lo suma automáticamente a los circuitos que
+    cargue a mano o que detecte la lectura con IA a partir de ese momento,
+    sin que la IA tenga que adivinarlo de la foto. También hay un campo
+    "Cuerpo" editable por fila, para corregir un circuito puntual sin
+    tener que cambiar el contexto general. Igual límite que el resto de
+    los campos de alta: solo se carga al dar de alta el circuito, no hay
+    edición de uno ya existente.
+  - **Última fecha de visita por cuerpo, nunca persistida**: en la ficha
+    de Sitio, si un tablero tiene circuitos con cuerpo cargado, la tabla
+    de circuitos se agrupa por cuerpo y cada grupo muestra su propia
+    "última visita" — calculada en el momento a partir del historial
+    COMPLETO de `tablero_mediciones`/`tablero_medicion_lecturas` (no solo
+    la medición más reciente del tablero en general), porque un cuerpo
+    puede no haberse tocado en la última visita pero sí en una anterior.
+    Si ningún circuito del tablero tiene cuerpo cargado todavía, se
+    muestra la tabla sin agrupar, igual que antes. Esto también sirve
+    como indicio de que se hizo alguna modificación en ese cuerpo del
+    tablero (nueva fecha ⇒ hubo actividad ahí).
+  - **`TABLERO_FOTO_IA_MAX` subido de 7 a 14**: un tablero con varios
+    cuerpos necesita varias fotos por cuerpo para cubrirlo entero, no
+    una sola del conjunto — mismo techo que ya usan Racks y Torres de
+    Comunicaciones (`RACK_FOTO_IA_MAX`/`TORRE_FOTO_IA_MAX`), que son los
+    otros "contenedores con varias secciones" de la app.
+  - **"Foto general del tablero" pasa de una sola a hasta
+    `TABLERO_FOTO_GENERAL_MAX` (4) fotos** — esta es la foto de registro
+    que queda adjunta al PDF de la visita (distinta de las fotos que
+    lee la IA para armar la lista de circuitos), y con varios cuerpos
+    una sola no alcanza para dejar constancia de cada uno. Mismo
+    criterio que ya usan Racks (`fotos_generales_urls`), Entregas a
+    Depósito y el remito de Informe Técnico: columna nueva
+    `tablero_mediciones.fotos_generales_urls` (`text[]`), la columna
+    vieja `foto_general_url` queda huérfana (el `DROP COLUMN` se cuelga
+    en esta sesión vía las herramientas de Supabase, documentado en la
+    migración) pero su limpieza al eliminar una medición se mantiene
+    por si quedó algún dato viejo. El PDF ahora imprime una grilla con
+    todas las fotos cargadas, no solo una.
+
+- **Tableros: botón "Registrar mantenimiento" por circuito en la ficha de
+  Sitio, para no tener que remedir todo el tablero por una revisión
+  puntual.** Surgió de una confusión real al usar la app: "relevar"
+  (dar de alta tableros/racks/equipos la primera vez) y "volver a algo
+  que ya relevé para revisarlo/modificarlo" son dos momentos distintos,
+  y antes de este cambio Tableros los mezclaba — cada vez que entrabas a
+  "Nueva Medición" sobre un tablero existente, el formulario precargaba
+  TODOS sus circuitos, así que una visita para revisar un solo circuito
+  terminaba generando una lectura "de hoy" para circuitos que ni se
+  tocaron, pisando la fecha real de los demás (incluida la de "última
+  visita por cuerpo" de más arriba).
+  - **No se construyó nada nuevo para esto** — Tableros ya tenía, desde
+    antes, un registro de mantenimiento separado de la Medición
+    (`tablero_mantenimientos`, con fecha + descripción + circuito
+    afectado opcional + próximo mantenimiento a mano, sin PDF ni grilla
+    de corriente, usado hasta ahora solo desde la pantalla aparte
+    `/tableros/mantenimiento`). Meterlo en el mismo esquema que ya usan
+    Racks/Equipos Individuales (`mantenimientos_equipamiento` +
+    checklist) hubiera sido la duplicación que
+    `CRITERIOS_Y_IDEAS.md` pide evitar — ese esquema excluye Tableros a
+    propósito por este mismo motivo. En cambio, se agregó un botón
+    (`RegistrarMantenimientoCircuitoButton`) en cada fila de circuito de
+    la ficha de Sitio que abre el mismo registro de siempre
+    (`tablero_mantenimientos`, vía `crearMantenimientoAction`) con
+    tablero y circuito ya fijados por la fila — no hace falta volver a
+    elegirlos como en la pantalla aparte.
+  - **La "última fecha" por circuito/cuerpo ahora también mira estos
+    registros**, no solo `tablero_mediciones` — una revisión puntual
+    (sin remedir nada) actualiza la fecha de ESE circuito igual que una
+    medición nueva, tomando la más reciente entre las dos fuentes.
+  - **Alcance, a propósito**: la Medición/Relevamiento completa (con
+    corriente y PDF) sigue existiendo tal cual para cuando corresponde
+    remedir de verdad — este botón es la vía liviana para el día a día
+    de "fui, revisé/cambié algo puntual", sin forzar a resubir todo el
+    tablero para que quede un registro.
+
+- **Tableros: catálogo "Calibre de cable" (amperaje → mm²), primer paso
+  hacia el esquema unifilar.** La idea completa (todavía no implementada
+  del todo) es generar un diagrama unifilar por tablero a partir de los
+  circuitos ya relevados, determinando el calibre de cable de cada
+  térmica/disyuntor según su amperaje nominal, embebido en el PDF +
+  descargable en DXF — y más adelante un visor público con QR para
+  pegar en el tablero físico. Este incremento es solo la base: el
+  catálogo admin-configurable que define esa relación.
+  - **Por qué un catálogo y no una fórmula**: el calibre real depende de
+    la norma vigente (acá, AEA 90364/IRAM 2183), el método de
+    instalación y la temperatura ambiente — no es un cálculo que la IA
+    ni el código deban inventar. `catalogo_calibre_cable` (id uuid PK +
+    `unique(amperaje_max)`, RLS: lectura para cualquier autenticado,
+    escritura solo admin — mismo patrón que `catalogo_recurso_altura`)
+    guarda bandas "hasta tantos A → tal calibre", precargada con valores
+    de referencia (cobre, aislación PVC, método B1 — cable en caño) que
+    un admin tiene que verificar contra el criterio real de YPF antes de
+    confiar en ellos para dimensionar cableado real — el tab en
+    Configuración → Catálogos → "Calibre de cable" lo deja explícito.
+  - **Editable en Configuración → Catálogos** (`CalibreCableTab`): agregar
+    o quitar bandas, sin fórmula ni "edición en el lugar" — una banda mal
+    cargada se borra y se recarga.
+  - **Ya conectado** (ver el siguiente ítem): el esquema unifilar que se
+    genera en cada medición busca en esta tabla el calibre según el
+    `ampNominal` ya cargado en cada circuito con térmica/disyuntor.
+
+- **Tableros: esquema unifilar por cuerpo, embebido en el PDF + descargable
+  en DXF.** Se genera automáticamente en cada Medición/Relevamiento, a
+  partir de los circuitos ya relevados — nunca un plano a escala real
+  (eso necesitaría fotogrametría desde la foto, que no es confiable con
+  una sola toma, mismo criterio que la altura de torres): es un esquema
+  simplificado tipo diagrama de bloques — una barra vertical por cuerpo,
+  cada térmica/disyuntor ramificando en fila con su número, categoría,
+  amperaje y el calibre de cable que le corresponde según
+  `catalogo_calibre_cable`.
+  - **Una sola fuente de verdad para PDF y DXF** (`lib/tableros/
+    unifilar.ts`): `construirUnifilar()` arma una lista de "draw
+    commands" abstractos (líneas, rectángulos, texto, en un sistema de
+    coordenadas propio) a partir de los circuitos agrupados por cuerpo
+    — ni React ni DXF se mezclan acá, es la única lógica de layout. El
+    PDF (`lib/pdf/tablero.tsx`) los renderiza con los primitivos `Svg`/
+    `Line`/`Rect`/`Text` de `@react-pdf/renderer` (primera vez que se
+    usan en la app — hasta ahora todos los PDF eran tablas/texto). El
+    DXF (`lib/dxf/writer.ts`) los convierte a un archivo DXF ASCII
+    R12 mínimo (secciones HEADER + ENTITIES, solo `LINE`/`LWPOLYLINE`/
+    `TEXT`) escrito a mano — no se sumó una librería de terceros para
+    esto, el formato es texto plano simple y AutoCAD lo abre sin
+    problema. El eje Y se invierte al escribir el DXF porque CAD usa
+    origen abajo-a-la-izquierda y el modelo (como el PDF) usa origen
+    arriba-a-la-izquierda.
+  - **Dónde se genera y se descarga**: `tableros/nuevo/actions.ts` arma
+    el dibujo en el momento de guardar la medición (mismo criterio que
+    el resto del PDF — es una foto de esa visita, no algo que se
+    recalcule después) y sube el `.dxf` al mismo bucket `informes-pdf`
+    que ya usa el PDF (columna nueva `tablero_mediciones.dxf_url`).
+    Historial de Tableros tiene un botón nuevo ("Descargar DXF", ícono
+    de descarga) al lado de "Ver PDF", con el mismo patrón de URL
+    firmada en el momento del click que ya usa el PDF — y
+    `eliminarMedicionAction` ahora también borra el DXF del storage al
+    borrar una medición.
+  - **Alcance, a propósito**: esto es el esquema eléctrico en sí — el
+    visor público con QR para pegar en el tablero físico (mencionado
+    como idea en la sección de arriba) todavía no está implementado, es
+    el próximo paso de esta misma idea.
+  - **Calibre y color fijos para lo que no lleva térmica — valores reales,
+    no estimados.** Una primera versión de esto salió con números
+    inventados por error (iba contra el criterio de "nunca inventar" que
+    sigue toda la app) — se corrigió con los valores reales que dio el
+    usuario, y ahora `calcularCalibreCircuito()` (en
+    `lib/tableros/calibre-cable.ts`) devuelve calibre **y** color:
+    - Todo lo que se alimenta de 12V o 24V: **1,5mm², rojo y negro**
+      (cualquier circuito `tipo_circuito` 24vdc/12vdc que no tenga un
+      valor propio más específico abajo).
+    - Conexión de la fuente hacia las bornes **con fusible**
+      (`bornera_fusible`): **2,5mm², rojo y negro**.
+    - Conexión del banco de batería de 24V (`bateria`): **4mm², rojo y
+      negro**.
+    - Datos de control de acceso (`lectora`/`cerradura`): **1mm², blanco**.
+    - 220V (circuitos con térmica, calibre real por el catálogo de
+      amperaje): color **fase marrón, neutro celeste**.
+    - 380V (circuitos con térmica, calibre real por el catálogo de
+      amperaje): color **R marrón, S negro, T rojo, N celeste**.
+    Igual que antes: térmica/disyuntor sigue yendo por
+    `catalogo_calibre_cable` (amperaje real, editable); todo lo demás usa
+    estos valores fijos porque son cableado de instalación típica que no
+    varía por sitio — quedan hardcodeados a propósito, no hace falta una
+    tabla para un valor que siempre es el mismo. El color ahora se
+    imprime junto al calibre en cada fila del unifilar.
+
+- **Tableros: visor público del plano con QR, para pegar en el tablero
+  físico y dejar de imprimir papel.** Cierra la idea del unifilar: ahora
+  hay una página (`/planos/tablero/[id]`) que cualquiera puede abrir
+  escaneando un QR o entrando al link, sin login — pensada para que el
+  técnico (propio o contratista) escanee el cartel pegado en el gabinete
+  y vea el esquema actualizado desde el celular, o desde una PC.
+  - **Por qué sin login, a propósito**: a este sitio YPF ya no entra
+    cualquiera — el acceso a la planta está controlado y requiere estar
+    autorizado, así que pedir login de la app encima sería duplicar una
+    barrera que ya existe físicamente. La protección real es el link en
+    sí: el id en la URL es un UUID de `tableros.id`, imposible de
+    adivinar — mismo modelo que "cualquiera con el link" de Google Docs.
+  - **Qué muestra, a propósito acotado**: SOLO el esquema unifilar de ESE
+    tablero (recalculado en vivo desde los circuitos actuales, nunca un
+    PDF viejo guardado — así el QR nunca queda desactualizado) + links
+    para ver el PDF completo o descargar el DXF de la última visita.
+    Nunca la ficha de sitio completa — nada de GPS, otros equipos,
+    vehículos ni datos de técnicos.
+  - **Cómo se protege sin aflojar RLS para el resto de la app**: la
+    página vive FUERA del grupo `(app)` (que exige login en su
+    `layout.tsx`) y usa el cliente service-role en el servidor, con el
+    código mismo limitando qué toca — las tablas (`tableros`,
+    `tablero_circuitos`, `tablero_mediciones`, `catalogo_calibre_cable`)
+    siguen con su RLS normal para el resto de la app, nada se afloja a
+    nivel base. El PDF/DXF de storage sigue privado: el link de descarga
+    se firma en el momento, en el propio render de la página.
+  - **El QR en sí** (`/api/tableros/[id]/qr`, con la librería `qrcode`)
+    SÍ requiere login — es la acción de "generarlo para imprimir", no el
+    visor público. Codifica la URL del visor construida con el host real
+    del request (nunca una variable de entorno a mano), así que apunta
+    bien tanto en preview de Vercel como en producción. Hay un botón
+    "Descargar QR del plano" en la ficha de Sitio, dentro de cada
+    tablero.
+
+- **Tableros: el mismo QR del plano, ahora también como atajo a la acción
+  cuando quien escanea está logueado.** Idea del usuario: el QR pegado en
+  el tablero ya sirve para "mirar" sin login — faltaba que también
+  sirviera para "actuar" cuando el que escanea es un técnico con sesión
+  abierta. No hace falta un segundo QR ni una URL distinta: es la misma
+  página `/planos/tablero/[id]` la que se adapta.
+  - **Cómo se entera de que hay sesión, sin romper el acceso sin login**:
+    llama a `getCurrentProfile()` (nunca `requireProfile()`, que
+    redirige a `/login`) — si no hay sesión sigue mostrando exactamente
+    lo mismo que antes; si la hay, suma dos botones.
+  - **Estado siempre visible**: arriba del esquema, "Última visita" y
+    "Último mantenimiento" (de `tablero_mantenimientos`, el más
+    reciente) — esto se muestra para cualquiera, con o sin sesión, no es
+    información sensible.
+  - **Accesos directos, solo si hay sesión**: "Cargar medición nueva
+    acá" y "Registrar mantenimiento acá", que llevan a
+    `/tableros/nuevo?tableroId=X` y `/tableros/mantenimiento?tableroId=X`
+    con el tablero ya preseleccionado — el técnico está parado frente al
+    gabinete, no tiene sentido hacerlo buscar sitio → tablero de nuevo a
+    mano. Ambos formularios ahora aceptan ese parámetro opcional
+    (`tableroIdInicial`) y, si no viene o no matchea ningún tablero,
+    funcionan exactamente igual que antes (selección manual).
+  - **Pendiente, a propósito todavía no implementado**: generalizar este
+    mismo patrón (visor público + QR + atajo logueado) a Racks y Equipos
+    Individuales — queda planteado para un próximo incremento, porque
+    esos tipos no tienen un "plano" como el unifilar y conviene pensar
+    qué mostrarles en su lugar (resumen de equipamiento en vez de
+    esquema).
+
+- **Nuevo módulo: Salas / Shelters — relevar el AMBIENTE físico, no el
+  equipamiento que tiene adentro.** Pedido del usuario: además de
+  Tableros/Racks/Torres/Equipos (lo que hay DENTRO de una sala), hacía
+  falta poder relevar la sala/shelter/container EN SÍ — igual que a un
+  equipo, también se le hace mantenimiento (limpieza, obra civil,
+  arreglos), con checklist, entrando al mismo Plan de Mantenimiento y con
+  su propio QR.
+  - **Tabla `salas`** (`supabase/migrations/20261014020000_salas.sql`):
+    alta única por ambiente — `denominacion`, `tipo_construccion`
+    (`sala_interior` / `shelter` / `container` / `otro`), `ubicacion_id`,
+    fotos generales, PDF. A diferencia de Tableros/Racks/Torres, NO tiene
+    una tabla de "relevamientos" repetidos — la alta es una sola vez (el
+    relevamiento), las visitas siguientes son mantenimiento y esas quedan
+    en el Plan de Mantenimiento genérico, no en una tabla propia de Salas.
+  - **Por qué un enum nuevo (`tipo_equipo_mantenimiento`) separado de
+    `tipo_equipo_baja`**: el Plan de Mantenimiento (intervalos,
+    checklist, programación — ver más arriba "PDM") reusaba a propósito
+    `tipo_equipo_baja`, el mismo enum de Bajas de Equipamiento/Entregas a
+    Depósito. Pero una Sala no se "da de baja" como una pieza suelta ni
+    se "entrega a depósito" — son acciones que no tienen sentido para un
+    ambiente físico. Meter `sala` en ese enum le hubiera agregado una
+    opción sin sentido a esas dos pantallas. Se creó un enum PROPIO del
+    Plan de Mantenimiento (`rack_equipamiento` / `equipo_individual` /
+    `sala`), y las 4 tablas que usan ese enum (`mantenimiento_intervalos`,
+    `mantenimientos_equipamiento`, `mantenimiento_programaciones`,
+    `mantenimiento_checklist_items`) se migraron a él — Bajas/Entregas a
+    Depósito siguen con `tipo_equipo_baja` sin tocar.
+  - **Reusa el Plan de Mantenimiento tal cual está, sin tabla aparte**:
+    `RegistrarMantenimientoButton`/`ProgramarMantenimientoButton` (los
+    mismos componentes de Racks/Equipos) ahora también se usan para
+    Salas, con `categoria` = el `tipo_construccion` — el checklist se
+    configura por ese mismo campo, igual criterio que categoría de
+    equipamiento en Racks/Equipos. Checklist inicial seedeado (limpieza,
+    estado de paredes/piso/techo, puerta, iluminación, climatización,
+    filtraciones, señalética, detección/extinción de incendio), editable
+    por un Admin desde Configuración sin tocar código.
+  - **Alta simple, sin lista de equipamiento ni IA**: a diferencia de
+    Racks/Torres/Equipos, Salas no tiene ítems que leer con cámara — el
+    formulario (`/salas/nuevo`) es Ubicación + denominación + tipo de
+    construcción + fotos, genera un PDF simple (sin tabla, solo
+    cabecera/fotos) y un N° de generación (`SAL-{año}-{n}`).
+  - **QR + visor público, mismo patrón que Tableros**: `/planos/sala/[id]`
+    (público, sin login) muestra identificación, tipo y último
+    mantenimiento; con sesión activa, agrega un botón que lleva a la fila
+    de esa sala en la ficha de Sitio (`/ubicaciones/{id}#sala-{id}`) en
+    vez de prefilizar un formulario — a diferencia de Tableros, el
+    mantenimiento de Salas no tiene una página propia (vive en un modal
+    inline de la ficha de Sitio), así que no hay a dónde deep-linkear con
+    el dato precargado todavía. El QR en sí se genera desde
+    `/api/salas/[id]/qr`, con un botón "Descargar QR del plano" junto a
+    cada sala en la ficha de Sitio. A diferencia de Tableros, el visor no
+    muestra un plano/esquema (no existe el concepto para un ambiente) —
+    solo el link al PDF del relevamiento.
+  - **Wiring completo**: card "Salas / Shelters" en el hub
+    `/relevamiento`, tab propio en la navegación, sección "Salas /
+    Shelters en este sitio" en la ficha de Sitio (con los mismos botones
+    de mantenimiento/programación + descarga de QR que Racks/Equipos), y
+    rama `sala` en `getPanelMantenimientos`/`getMantenimientosRealizados`
+    y en el generador de programación automática — aparece en el Plan de
+    Mantenimiento exactamente igual que Racks y Equipos Individuales.
+
+- **Inspección IA: "Hallazgos de Seguridad" generalizado a los 4 módulos
+  con identificación por IA.** Pedido del usuario a partir de la primera
+  entrega (solo Tableros): "me gustaría habilitar esta opción a todo lo
+  que usa la identificación con IA, para poder agregar que busque algo
+  más sin tener que volver a programar" — y que se le cambie el nombre.
+  Se rebautizó **Inspección IA** (quedó más genérico que "Hallazgos de
+  Seguridad" ya que ahora un Admin puede cargar cualquier cosa a revisar,
+  no solo seguridad eléctrica) y se llevó a **Tableros, Racks, Equipos
+  Individuales y Torres de Comunicación** — los 4 módulos que ya leen
+  fotos con Claude Vision para identificar lo suyo (circuitos,
+  equipamiento de rack, equipo suelto, tramos/altura de torre). En esta
+  primera vuelta quedaron deliberadamente afuera **Vehículos** (lector de
+  patente/km) e **Informe Técnico** (lector de remito) por extraer un dato
+  puntual en vez de inspeccionar una lista de elementos — pero el usuario
+  pidió extenderlo igual a esos dos (ver más abajo, "Inspección IA
+  extendida").
+  - **Un solo catálogo + una sola tabla de resultados, escaneados por
+    `modulo`** (`catalogo_inspeccion_ia` / `inspeccion_ia_hallazgos`,
+    `modulo` = `"tableros" | "racks" | "equipos" | "torres"`, texto libre
+    — mismo criterio que `mantenimiento_checklist_items.categoria`: no
+    hay un enum Postgres único que sirva para relevamientos tan
+    distintos) en vez de una tabla por módulo — reemplazan las tablas
+    específicas de Tableros de la primera entrega
+    (`catalogo_hallazgos_seguridad_tablero` /
+    `tablero_medicion_hallazgos`, migradas 1:1 y eliminadas). Tab propio
+    por módulo en Configuración → Catálogos ("Inspección IA — Tableros/
+    Racks/Equipos/Torres"), mismo componente genérico para los 4.
+  - **Núcleo compartido** (`src/lib/inspeccion-ia/`,
+    `src/components/inspeccion-ia/`): tipo de resultado, helper de fusión
+    entre tandas de fotos (`mezclarHallazgos` — un "no_ok" detectado se
+    mantiene aunque una tanda posterior no lo vea, igual criterio que la
+    primera entrega), el bloque de instrucción para el prompt de la IA
+    (`instruccionInspeccionIa`) y el validador de la respuesta cruda
+    contra el catálogo real (`parseHallazgosDetectados` — nunca deja
+    pasar un id inventado ni un estado inválido), y el bloque de
+    formulario (`<HallazgosInspeccionIaSection>`) — los 4 módulos
+    reusan exactamente lo mismo, ningún módulo reimplementa esta lógica.
+  - **Mismo patrón en los 4 módulos**: su `/api/<modulo>/leer-foto` le
+    suma al mismo pedido de IA (una sola llamada, no una aparte) la
+    evaluación del catálogo de su módulo contra las mismas fotos; el
+    formulario de alta muestra la sección "Inspección IA" con los
+    resultados para que el técnico confirme/corrija (nunca se guarda sin
+    pasar por ahí); al guardar, los ítems confirmados quedan en
+    `inspeccion_ia_hallazgos` con el `modulo` correspondiente y se
+    imprimen en el PDF del relevamiento (tabla Ítem/Estado/Comentario).
+  - **Si el catálogo de un módulo está vacío, no se le pide nada extra a
+    la IA** y el formulario no muestra la sección — cero costo/riesgo
+    para un módulo que un Admin todavía no configuró.
+
+- **Spinner mientras la IA está procesando una foto.** A pedido de uso
+  real: los botones "Leer con IA"/"Procesar fotos con IA" de los 5
+  lugares que leen fotos (Tableros, Racks, Equipos, Torres de
+  Comunicación y las dos lecturas de Vehículos) ahora muestran un
+  círculo girando (`<Spinner>`, `src/components/spinner.tsx`) en vez del
+  ícono fijo mientras esperan la respuesta — antes el botón quedaba
+  deshabilitado sin ningún indicador visual de que algo estaba en curso.
+
+- **Inspección IA extendida a Vehículos e Informe Técnico.** El usuario
+  pidió "extender" la generalización de arriba también a los 2 módulos
+  que habían quedado afuera a propósito — mismo núcleo compartido
+  (`src/lib/inspeccion-ia/`, `<HallazgosInspeccionIaSection>`), sin
+  tocar nada de Tableros/Racks/Equipos/Torres.
+  - **Vehículos** (`modulo="vehiculos"`): el catálogo se evalúa contra
+    AMBOS lotes de fotos del alta (`/api/vehiculos/leer-exterior` y
+    `/api/vehiculos/leer-tablero`, cada uno evalúa la misma lista contra
+    sus propias fotos) y los resultados se combinan con el mismo
+    `mezclarHallazgos` que ya usan los lotes múltiples de los otros
+    módulos. Como `catalogo_vehiculos` no tiene `created_by` (el alta con
+    fotos ya es Admin-only), el RLS de inserción para este módulo
+    valida `is_admin()` directo en vez de dueño-por-registro — único caso
+    de los 6 módulos con ese criterio. Al no generar PDF, el resultado se
+    muestra como un badge "⚠ N" en la Flota (Panel → Vehículos) cuando
+    hay hallazgos detectados.
+  - **Informe Técnico** (`modulo="informe_tecnico"`): se evalúa en
+    `/api/informe-tecnico/leer-remito` contra la foto del remito. Único
+    módulo con un wizard de varios pasos en vez de un formulario de una
+    pantalla — el estado de hallazgos vive en `wizard.tsx` (mismo nivel
+    que `remitoItems`), se edita dentro de la sección de materiales
+    (`materiales-section.tsx`) y se persiste junto con el resto del
+    informe al confirmar el paso final. Se imprime en el PDF
+    (`lib/pdf/informe-tecnico.tsx`). La pantalla de **edición
+    post-generación** (`/informe-tecnico/editar/[id]`) no suma UI para
+    tocar los hallazgos (fuera de alcance, igual límite que materiales/
+    remito ahí) pero sí recupera los ya guardados al regenerar el PDF,
+    para que una edición no los borre de un informe existente.
+
+- **Vehículos: más fotos, galería visual completa, y lote "Interior"
+  (antes solo "Tablero").** Pedido real: ahora que la IA puede evaluar
+  cualquier cosa que un Admin cargue en el catálogo (pintura, cubiertas,
+  ópticas, parabrisas, tapizado — ver Inspección IA arriba), hacía falta
+  poder mandar más fotos y verlas después, no solo extraer un par de
+  datos puntuales.
+  - **Máximos subidos**: 8 fotos de exterior (antes 5), 6 de interior
+    (antes 2, y se llamaba "Tablero" — ahora cubre también tapizado y
+    parabrisas desde adentro, no solo el odómetro).
+  - **Se guarda TODA la galería, no solo 1 foto representativa**: antes
+    se descartaba el resto del lote después de leerlo con IA; ahora cada
+    foto mandada a leer (de cualquiera de los dos lotes, y de todas las
+    tandas si se lee en varias) queda guardada
+    (`catalogo_vehiculos.fotos_exterior_urls`/`fotos_interior_urls`,
+    `text[]`, reemplazan las columnas viejas de una sola foto). Se
+    pueden ver en la Flota con un botón "Ver fotos (N)" por vehículo.
+  - **`vehiculo-docs` es un bucket privado** (ni siquiera con URL
+    pública) — mostrar la galería necesita firmar cada path
+    (`createSignedUrls`, 1 hora de validez, se generan todas juntas en
+    `/panel/vehiculos/page.tsx`, no una llamada por foto). Se sumó
+    además una policy de **solo lectura** para que un Supervisor también
+    pueda ver la galería (antes el bucket entero era Admin-only, pero la
+    Flota ya es visible para los dos roles).
+  - Las dos columnas viejas (`foto_estado_alta_url`/`foto_tablero_url`)
+    no se usaban en ningún lado de la UI — se migraron a las nuevas
+    columnas array y quedaron sin uso en la base (no se pudieron borrar
+    en esta sesión por una confirmación de `DROP COLUMN` que no se pudo
+    otorgar sola; es un borrado trivial para quien tenga acceso al
+    dashboard de Supabase, no bloquea nada mientras tanto).
+
+- **Foto de perfil: un Administrador también puede cargarla/cambiarla
+  por cualquier usuario.** Antes solo existía la autocarga desde
+  `/cuenta` (`foto_perfil_url`, bucket `fotos-perfil`, preparada en una
+  migración anterior pero sin UI de Admin hasta ahora). Se sumó una
+  policy de Storage adicional (`is_admin()`, permisiva, no reemplaza las
+  de autoedición) y un botón "Subir foto"/"Cambiar foto" por usuario en
+  Configuración → Usuarios — útil cuando alguien todavía no cargó la
+  suya o hay que corregirla.
+
+- **Vista General rediseñada: drill-down por región → provincia →
+  localidad → sitio, en vez de una tabla plana.** Pedido explícito del
+  usuario, ida y vuelta de preguntas antes de programar (zonificación a
+  usar, navegación, qué agregar por nivel, si Salas/Torres cuentan). La
+  vieja tabla "Sitios y su consumo" (una fila por sitio, hasta 40,
+  ordenada por consumo) se reemplaza por completo.
+  - **Navegación con breadcrumb**, un nivel a la vez, vía `searchParams`
+    de `/panel` (`?region=...&provincia=...&localidad=...&sitio=...`) —
+    sin JavaScript de cliente, son links `<Link>` normales de Next.js.
+    Un nodo sin ningún sitio con equipamiento debajo directamente no
+    aparece en la lista.
+  - **`región` es la zonificación de cuadrillas YPF que ya estaba
+    cargada** (`ubicaciones.region`: NOA/NEA/SUR) — el usuario confirmó
+    que es esa, aunque agrupa provincias que geográficamente no son NOA
+    (ej. Mendoza). No se inventó ninguna regionalización nueva.
+  - **Cada nodo intermedio agrega lo que cuelga debajo**: cantidad de
+    sitios, cantidad total de equipamiento, consumo estimado, cantidad
+    de sitios con el Plan de Mantenimiento vencido, y fecha de la visita
+    más reciente a cualquier sitio del grupo.
+  - **El nivel final (un sitio puntual)** muestra el conteo por módulo
+    (Racks/Tableros/Equipos Individuales/Torres/Salas, salteando los que
+    están en 0), el consumo del sitio, su última visita, y el ítem de
+    mantenimiento más urgente si tiene alguno vencido — con un link a la
+    ficha completa de Ubicación.
+  - **Cuando un mismo "sitio" tiene más de una Ubicación cargada**
+    (varias plantas/oficinas de un mismo complejo, ej. varias filas para
+    "Refinería Luján de Cuyo") se muestra un selector intermedio para
+    elegir cuál — se salta solo si hay una única coincidencia.
+  - **"Salas" se suma por primera vez** al conteo de equipamiento/módulos
+    de esta pantalla (antes `getPanelOverview` no las traía en absoluto).
+  - **"Última visita" y "mantenimiento vencido" reusan el mismo cálculo
+    del Plan de Mantenimiento** (`calcularEstadoMantenimiento`) — se
+    extrajo `computarItemsMantenimiento()` de
+    `lib/panel/mantenimientos.ts` (antes todo vivía adentro de
+    `getPanelMantenimientos`) para que Vista General pueda calcular el
+    estado por sitio sin pagar el costo de la consulta de clima, que
+    solo tiene sentido para la lista completa del Plan.
+  - **Los vencimientos de técnicos/vehículos siguen siendo un KPI
+    global**, arriba de todo — no se pueden repartir por zona porque no
+    están atados a ninguna Ubicación.
+  - Validado con `tsc`/`eslint`/`build` y, además, contra los datos
+    reales del proyecto (consulta SQL directa) para confirmar que la
+    jerarquía agrupa bien incluso el caso real de un sitio con el mismo
+    nombre repetido en más de una Ubicación.

@@ -7,7 +7,15 @@ import { renderTableroPdf } from "@/lib/pdf/render";
 import { buildTableroFilename } from "@/lib/pdf/filename";
 import { resolverUbicacionId, tagGpsSiFalta, type PayloadUbicacionNueva, type PayloadGps } from "@/lib/ubicaciones/resolver";
 import { calcularResumenEquipamiento, itemMideCorriente } from "@/components/tableros/types";
-import type { TableroCategoriaEquipo, TableroEventoTipo, TableroTipo, TableroTipoCircuito } from "@/lib/database.types";
+import { construirUnifilar, construirUnifilarPaginado, agruparPorCuerpo } from "@/lib/tableros/unifilar";
+import { drawCommandsToDxf } from "@/lib/dxf/writer";
+import type { EstadoChecklist, TableroCategoriaEquipo, TableroEventoTipo, TableroJerarquia, TableroTipo, TableroTipoCircuito } from "@/lib/database.types";
+
+interface PayloadHallazgo {
+  itemId: string;
+  estado: EstadoChecklist;
+  comentario: string;
+}
 
 interface PayloadLectura {
   circuitoId: string | null;
@@ -16,6 +24,7 @@ interface PayloadLectura {
   ampNominal: string;
   categoriaEquipo: TableroCategoriaEquipo;
   tipoCircuito: TableroTipoCircuito;
+  cuerpo: string;
   estado: string;
   corrienteF: string;
   corrienteR: string;
@@ -32,8 +41,11 @@ export interface CrearMedicionPayload {
   gps: PayloadGps | null;
   tableroId: string | null;
   denominacionNueva: string;
+  jerarquiaNueva: TableroJerarquia | null;
+  tableroPadreId: string | null;
   fecha: string;
   lecturas: PayloadLectura[];
+  hallazgos?: PayloadHallazgo[];
 }
 
 export interface CrearMedicionResult {
@@ -62,7 +74,7 @@ export async function crearMedicionTableroAction(formData: FormData): Promise<Cr
   } catch {
     return { success: false, error: "Faltan datos de la medición." };
   }
-  const fotoGeneral = formData.get("fotoGeneral");
+  const fotosGenerales = formData.getAll("fotoGeneral").filter((f): f is File => f instanceof File);
 
   if (!payload.lecturas.length) {
     return { success: false, error: "El tablero no tiene circuitos/elementos cargados." };
@@ -93,6 +105,8 @@ export async function crearMedicionTableroAction(formData: FormData): Promise<Cr
         subsistemas: payload.subsistemas,
         denominacion: payload.denominacionNueva.trim(),
         ubicacion_id: ubicacion.id,
+        jerarquia: payload.jerarquiaNueva,
+        tablero_padre_id: payload.jerarquiaNueva === "secundario" ? payload.tableroPadreId : null,
         created_by: profile.id,
       })
       .select("id")
@@ -139,6 +153,7 @@ export async function crearMedicionTableroAction(formData: FormData): Promise<Cr
         amp_nominal: l.ampNominal.trim() || null,
         categoria_equipo: l.categoriaEquipo,
         tipo_circuito: l.tipoCircuito,
+        cuerpo: l.cuerpo.trim() || null,
       })
       .select("id")
       .single();
@@ -198,19 +213,39 @@ export async function crearMedicionTableroAction(formData: FormData): Promise<Cr
     return { success: false, error: `No se pudieron guardar las lecturas: ${lecturasErr.message}` };
   }
 
-  // Foto general del tablero (opcional): registro + queda adjunta en el PDF.
-  // Reusa el bucket informe-fotos ya existente, no hace falta storage nuevo.
-  // Una foto que falla no debe tirar abajo toda la medición.
-  let fotoGeneralBuffer: Buffer | null = null;
-  if (fotoGeneral instanceof File) {
-    fotoGeneralBuffer = Buffer.from(await fotoGeneral.arrayBuffer());
-    const fotoPath = `${profile.id}/tableros/${medicionId}/general.jpg`;
+  // Inspección IA (opcional): solo los ítems que el técnico confirmó/corrigió
+  // (estado no nulo) — ver catalogo_inspeccion_ia (modulo="tableros").
+  if (payload.hallazgos && payload.hallazgos.length > 0) {
+    await supabase.from("inspeccion_ia_hallazgos").insert(
+      payload.hallazgos.map((h) => ({
+        modulo: "tableros" as const,
+        registro_id: medicionId!,
+        item_id: h.itemId,
+        estado: h.estado,
+        comentario: h.comentario.trim() || null,
+      })),
+    );
+  }
+
+  // Fotos generales del tablero (opcionales, hasta TABLERO_FOTO_GENERAL_MAX):
+  // registro + quedan adjuntas en el PDF — una por cada cuerpo, u otros
+  // ángulos de detalle. Reusa el bucket informe-fotos ya existente. Una
+  // foto que falla no debe tirar abajo toda la medición.
+  const fotosGeneralesBuffers: Buffer[] = [];
+  const fotosGeneralesPaths: string[] = [];
+  for (let i = 0; i < fotosGenerales.length; i++) {
+    const buffer = Buffer.from(await fotosGenerales[i].arrayBuffer());
+    const fotoPath = `${profile.id}/tableros/${medicionId}/general-${i + 1}.jpg`;
     const { error: fotoUpErr } = await supabase.storage
       .from("informe-fotos")
-      .upload(fotoPath, fotoGeneralBuffer, { contentType: "image/jpeg", upsert: true });
+      .upload(fotoPath, buffer, { contentType: "image/jpeg", upsert: true });
     if (!fotoUpErr) {
-      await supabase.from("tablero_mediciones").update({ foto_general_url: fotoPath }).eq("id", medicionId);
+      fotosGeneralesBuffers.push(buffer);
+      fotosGeneralesPaths.push(fotoPath);
     }
+  }
+  if (fotosGeneralesPaths.length > 0) {
+    await supabase.from("tablero_mediciones").update({ fotos_generales_urls: fotosGeneralesPaths }).eq("id", medicionId);
   }
 
   // Logo de la empresa (cabecera del PDF), igual que Informe Técnico/Rendición.
@@ -227,6 +262,41 @@ export async function crearMedicionTableroAction(formData: FormData): Promise<Cr
 
   const resumen = calcularResumenEquipamiento(payload.lecturas);
 
+  const { data: calibreRes } = await supabase.from("catalogo_calibre_cable").select("amperaje_max, calibre_mm2");
+  const configCalibre = (calibreRes ?? []).map((c) => ({ amperajeMax: Number(c.amperaje_max), calibreMm2: Number(c.calibre_mm2) }));
+  const circuitosPorCuerpo = agruparPorCuerpo(
+    payload.lecturas.map((l) => ({
+      numero: l.numero,
+      texto: l.texto,
+      categoriaEquipo: l.categoriaEquipo,
+      tipoCircuito: l.tipoCircuito,
+      ampNominal: l.ampNominal || null,
+      cuerpo: l.cuerpo.trim() || null,
+    })),
+  );
+  // El dibujo completo (sin partir) va al DXF, que no pasa por react-pdf y
+  // no tiene límite de altura por bloque. Para el PDF se usa la versión
+  // paginada: react-pdf queda colgado (sin excepción) si un bloque del
+  // esquema supera cierta altura — ver CRITERIOS_Y_IDEAS.md § 10.
+  const unifilar = construirUnifilar(circuitosPorCuerpo, configCalibre);
+  const unifilarBloques = construirUnifilarPaginado(circuitosPorCuerpo, configCalibre);
+
+  const hallazgosConfirmados = (payload.hallazgos ?? []).filter((h) => h.estado);
+  let hallazgosPdf: { texto: string; estado: EstadoChecklist; comentario: string | null }[] = [];
+  if (hallazgosConfirmados.length > 0) {
+    const { data: hallazgosCatalogo } = await supabase
+      .from("catalogo_inspeccion_ia")
+      .select("id, texto")
+      .in(
+        "id",
+        hallazgosConfirmados.map((h) => h.itemId),
+      );
+    const textoPorId = new Map((hallazgosCatalogo ?? []).map((h) => [h.id, h.texto]));
+    hallazgosPdf = hallazgosConfirmados
+      .map((h) => ({ texto: textoPorId.get(h.itemId), estado: h.estado, comentario: h.comentario.trim() || null }))
+      .filter((h): h is { texto: string; estado: EstadoChecklist; comentario: string | null } => !!h.texto);
+  }
+
   const pdfBuffer = await renderTableroPdf({
     numeroGeneracion,
     subsistemas: tableroRow.subsistemas,
@@ -240,7 +310,9 @@ export async function crearMedicionTableroAction(formData: FormData): Promise<Cr
     oficina: ubicacionTablero.oficina,
     fecha: payload.fecha,
     resumen,
-    fotoGeneralBuffer,
+    fotosGeneralesBuffers,
+    unifilarBloques,
+    hallazgos: hallazgosPdf,
     lecturas: payload.lecturas.map((l) => {
       const mideCorriente = itemMideCorriente(l.categoriaEquipo, l.tipoCircuito, payload.tipoEvento);
       return {
@@ -277,6 +349,22 @@ export async function crearMedicionTableroAction(formData: FormData): Promise<Cr
     await supabase.from("tablero_mediciones").update({ pdf_url: pdfPath, pdf_generado_at: new Date().toISOString() }).eq("id", medicionId);
     const { data: signed } = await supabase.storage.from("informes-pdf").createSignedUrl(pdfPath, 60 * 60);
     pdfUrl = signed?.signedUrl ?? null;
+  }
+
+  // Esquema unifilar en DXF (mismos circuitos que el PDF, pero en un único
+  // dibujo sin partir en bloques — el DXF no pasa por react-pdf y no tiene
+  // el límite de altura por bloque que sí aplica al PDF, para abrir en
+  // AutoCAD) — una falla acá no debe tirar abajo la medición, que ya quedó
+  // guardada con su PDF.
+  if (unifilar.commands.length > 0) {
+    const dxfBuffer = drawCommandsToDxf(unifilar.commands, unifilar.height);
+    const dxfPath = `${profile.id}/tableros/${medicionId}/plano.dxf`;
+    const { error: dxfUpErr } = await supabase.storage
+      .from("informes-pdf")
+      .upload(dxfPath, dxfBuffer, { contentType: "application/dxf", upsert: true });
+    if (!dxfUpErr) {
+      await supabase.from("tablero_mediciones").update({ dxf_url: dxfPath }).eq("id", medicionId);
+    }
   }
 
   return { success: true, medicionId: medicionId!, numeroGeneracion, pdfUrl };

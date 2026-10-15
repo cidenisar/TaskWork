@@ -1,11 +1,14 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { requireProfile } from "@/lib/auth";
 import { nuevoNumeroGeneracionInforme } from "@/lib/informe-tecnico/numero-generacion";
 import { renderInformeTecnicoPdf } from "@/lib/pdf/render";
 import { buildInformeTecnicoFilename } from "@/lib/pdf/filename";
 import { resolverUbicacionId, tagGpsSiFalta, type PayloadGps } from "@/lib/ubicaciones/resolver";
+import { crearEntregaDepositoLote, type MaterialLoteDeposito } from "@/lib/deposito/crear-lote";
+import { CATEGORIA_EQUIPO_LABEL } from "@/components/equipos/types";
+import type { EquipoCategoria, EstadoChecklist } from "@/lib/database.types";
 
 interface PayloadTecnico {
   nombre: string;
@@ -21,6 +24,27 @@ interface PayloadImagenMeta {
   lon: number | null;
   accuracyM: number | null;
   tomadaEn: string;
+}
+interface PayloadMaterial {
+  categoriaEquipo: EquipoCategoria;
+  descripcion: string;
+  marcaModelo: string;
+  numeroSerie: string;
+  etiquetaYpf: string;
+  cantidad: number;
+  consumoPromedioW: number | null;
+  consumoMaxW: number | null;
+  comentario: string;
+}
+interface PayloadRemitoItem {
+  descripcion: string;
+  cantidadEsperada: number;
+  cantidadSobrante: number;
+}
+interface PayloadHallazgo {
+  itemId: string;
+  estado: EstadoChecklist;
+  comentario: string;
 }
 interface Payload {
   titulo: string;
@@ -45,6 +69,10 @@ interface Payload {
   imagenes: PayloadImagenMeta[];
   emailsSeleccionados: string[];
   numeroGeneracionPreferido: string;
+  materiales: PayloadMaterial[];
+  remitoNumero: string | null;
+  remitoItems: PayloadRemitoItem[];
+  hallazgos?: PayloadHallazgo[];
 }
 
 /**
@@ -155,6 +183,9 @@ export async function crearInformeTecnicoAction(formData: FormData): Promise<Cre
   if (!payload.titulo?.trim() || !payload.fecha || !payload.cliente?.trim() || !payload.proyecto?.trim()) {
     return { success: false, error: "Faltan campos obligatorios (título, fecha, cliente, proyecto)." };
   }
+  if (payload.materiales.length > 0 && !payload.ubicacionId) {
+    return { success: false, error: "Elegí una ubicación para poder agregar materiales/equipos." };
+  }
 
   const supabase = await createClient();
 
@@ -253,6 +284,20 @@ export async function crearInformeTecnicoAction(formData: FormData): Promise<Cre
     if (error) return { success: false, error: `No se pudieron guardar los vehículos: ${error.message}` };
   }
 
+  // Inspección IA (opcional): solo los ítems que el técnico confirmó/corrigió
+  // (estado no nulo) — ver catalogo_inspeccion_ia (modulo="informe_tecnico").
+  if (payload.hallazgos && payload.hallazgos.length > 0) {
+    await supabase.from("inspeccion_ia_hallazgos").insert(
+      payload.hallazgos.map((h) => ({
+        modulo: "informe_tecnico" as const,
+        registro_id: informeId!,
+        item_id: h.itemId,
+        estado: h.estado,
+        comentario: h.comentario.trim() || null,
+      })),
+    );
+  }
+
   // Imágenes: subir a Storage, insertar la fila y guardar el buffer para el PDF.
   const imagenesPdf: { buffer: Buffer; lat: number | null; lon: number | null; accuracyM: number | null }[] = [];
   for (let i = 0; i < payload.imagenes.length; i++) {
@@ -278,6 +323,142 @@ export async function crearInformeTecnicoAction(formData: FormData): Promise<Cre
     imagenesPdf.push({ buffer, lat: meta.lat, lon: meta.lon, accuracyM: meta.accuracyM });
   }
 
+  // Materiales/equipos (opcional): cada uno se da de alta como equipo real
+  // en `equipos` (estado='activo') — `equipos_insert` ya es abierta a
+  // cualquier autenticado, no hace falta service-role para esto — y queda
+  // vinculado a este informe vía `informe_materiales`.
+  const materialesPdf: {
+    categoriaLabel: string;
+    descripcion: string;
+    marcaModelo: string | null;
+    numeroSerie: string | null;
+    etiquetaYpf: string | null;
+    cantidad: number;
+    comentario: string | null;
+  }[] = [];
+  if (payload.materiales.length > 0 && ubicacionResuelta.ubicacionId) {
+    const ubicacionIdMateriales = ubicacionResuelta.ubicacionId;
+    for (const m of payload.materiales) {
+      const { data: nuevoEquipo, error: equipoErr } = await supabase
+        .from("equipos")
+        .insert({
+          ubicacion_id: ubicacionIdMateriales,
+          categoria_equipo: m.categoriaEquipo,
+          texto: m.descripcion.trim(),
+          marca_modelo: m.marcaModelo.trim() || null,
+          numero_serie: m.numeroSerie.trim() || null,
+          etiqueta_ypf: m.etiquetaYpf.trim() || null,
+          cantidad: m.cantidad || 1,
+          consumo_promedio_w: m.consumoPromedioW,
+          consumo_max_w: m.consumoMaxW,
+          created_by: profile.id,
+        })
+        .select("id")
+        .single();
+      if (equipoErr || !nuevoEquipo) continue; // un material que falla no debe tirar abajo todo el informe
+
+      await supabase.from("informe_materiales").insert({
+        informe_id: informeId,
+        categoria_equipo: m.categoriaEquipo,
+        descripcion: m.descripcion.trim(),
+        marca_modelo: m.marcaModelo.trim() || null,
+        numero_serie: m.numeroSerie.trim() || null,
+        etiqueta_ypf: m.etiquetaYpf.trim() || null,
+        cantidad: m.cantidad || 1,
+        consumo_promedio_w: m.consumoPromedioW,
+        consumo_max_w: m.consumoMaxW,
+        comentario: m.comentario.trim() || null,
+        equipo_id: nuevoEquipo.id,
+      });
+      materialesPdf.push({
+        categoriaLabel: CATEGORIA_EQUIPO_LABEL[m.categoriaEquipo],
+        descripcion: m.descripcion.trim(),
+        marcaModelo: m.marcaModelo.trim() || null,
+        numeroSerie: m.numeroSerie.trim() || null,
+        etiquetaYpf: m.etiquetaYpf.trim() || null,
+        cantidad: m.cantidad || 1,
+        comentario: m.comentario.trim() || null,
+      });
+    }
+  }
+
+  // Remito (opcional): foto + N° se guardan en el informe; los sobrantes
+  // marcados generan sola una devolución a depósito. `entregas_deposito` es
+  // admin/supervisor-only por RLS, así que ese paso puntual usa
+  // service-role — cualquier técnico puede cargar materiales en su propio
+  // informe, la devolución es un efecto mecánico de eso, no una decisión
+  // operativa nueva (mismo criterio que Bajas/"traer de depósito").
+  const remitoFotoBuffers: Buffer[] = [];
+  const remitoFotoPaths: string[] = [];
+  const remitoFotosRecibidas = formData.getAll("remitoFoto").filter((f): f is File => f instanceof File);
+  for (let i = 0; i < remitoFotosRecibidas.length; i++) {
+    const buffer = Buffer.from(await remitoFotosRecibidas[i].arrayBuffer());
+    const path = `${profile.id}/${informeId}/remito-${i + 1}.jpg`;
+    const { error: fotoUpErr } = await supabase.storage
+      .from("informe-fotos")
+      .upload(path, buffer, { contentType: "image/jpeg", upsert: true });
+    if (!fotoUpErr) {
+      remitoFotoBuffers.push(buffer);
+      remitoFotoPaths.push(path);
+    }
+  }
+
+  const sobrantes = payload.remitoItems.filter((r) => r.cantidadSobrante > 0);
+  let entregaDepositoNumeroGeneracion: string | null = null;
+  if (sobrantes.length > 0 && ubicacionResuelta.ubicacionId) {
+    let service: ReturnType<typeof createServiceRoleClient>;
+    try {
+      service = createServiceRoleClient();
+    } catch {
+      return {
+        success: false,
+        error: "Falta configurar SUPABASE_SERVICE_ROLE_KEY en el servidor — sin esa variable no se puede generar la devolución de sobrantes.",
+      };
+    }
+    const { data: ubicacionRowDevolucion } = await supabase
+      .from("ubicaciones")
+      .select("region, provincia, localidad, sitio, planta, oficina")
+      .eq("id", ubicacionResuelta.ubicacionId)
+      .single();
+    if (ubicacionRowDevolucion) {
+      const materialesSobrantes: MaterialLoteDeposito[] = sobrantes.map((r) => ({
+        descripcion: r.descripcion,
+        categoria: "",
+        marcaModelo: "",
+        numeroSerie: "",
+        etiquetaYpf: "",
+        cantidad: r.cantidadSobrante,
+        condicion: "nuevo",
+        motivo: "sobrante_obra",
+        comentario: `Sobrante del Informe Técnico ${numeroGeneracion}${payload.remitoNumero ? ` (remito ${payload.remitoNumero})` : ""}.`,
+      }));
+      const resultadoDevolucion = await crearEntregaDepositoLote({
+        supabase: service,
+        ubicacionId: ubicacionResuelta.ubicacionId,
+        ubicacion: ubicacionRowDevolucion,
+        fecha: payload.fecha,
+        materiales: materialesSobrantes,
+        createdBy: profile.id,
+        realizoNombre: profile.nombreCompleto,
+        fotosEvidencia: [],
+      });
+      if (resultadoDevolucion.success) {
+        entregaDepositoNumeroGeneracion = resultadoDevolucion.numeroGeneracion ?? null;
+      }
+    }
+  }
+
+  if (remitoFotoPaths.length > 0 || payload.remitoNumero || entregaDepositoNumeroGeneracion) {
+    await supabase
+      .from("informes_tecnicos")
+      .update({
+        remito_fotos_urls: remitoFotoPaths.length > 0 ? remitoFotoPaths : null,
+        remito_numero: payload.remitoNumero,
+        entrega_deposito_numero_generacion: entregaDepositoNumeroGeneracion,
+      })
+      .eq("id", informeId);
+  }
+
   // Config general: logo de la empresa (cabecera del PDF) + envío automático.
   const { data: config } = await supabase
     .from("config_general")
@@ -299,6 +480,22 @@ export async function crearInformeTecnicoAction(formData: FormData): Promise<Cre
     .split("\n")
     .map((s) => s.trim())
     .filter(Boolean);
+
+  const hallazgosConfirmados = (payload.hallazgos ?? []).filter((h) => h.estado);
+  let hallazgosPdf: { texto: string; estado: EstadoChecklist; comentario: string | null }[] = [];
+  if (hallazgosConfirmados.length > 0) {
+    const { data: hallazgosCatalogo } = await supabase
+      .from("catalogo_inspeccion_ia")
+      .select("id, texto")
+      .in(
+        "id",
+        hallazgosConfirmados.map((h) => h.itemId),
+      );
+    const textoPorId = new Map((hallazgosCatalogo ?? []).map((h) => [h.id, h.texto]));
+    hallazgosPdf = hallazgosConfirmados
+      .map((h) => ({ texto: textoPorId.get(h.itemId), estado: h.estado, comentario: h.comentario.trim() || null }))
+      .filter((h): h is { texto: string; estado: EstadoChecklist; comentario: string | null } => !!h.texto);
+  }
 
   const pdfBuffer = await renderInformeTecnicoPdf({
     numeroGeneracion,
@@ -323,6 +520,12 @@ export async function crearInformeTecnicoAction(formData: FormData): Promise<Cre
       marcaModelo: v.marcaModelo?.trim() || null,
     })),
     imagenes: imagenesPdf,
+    materiales: materialesPdf,
+    remitoNumero: payload.remitoNumero,
+    remitoItems: payload.remitoItems,
+    remitoFotoBuffers,
+    hallazgos: hallazgosPdf,
+    entregaDepositoNumeroGeneracion,
     logoBuffer,
     appName: "Informe Técnico App",
     realizoNombre: profile.nombreCompleto,

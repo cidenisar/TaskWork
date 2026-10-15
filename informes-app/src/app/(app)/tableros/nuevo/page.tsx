@@ -5,22 +5,26 @@ import { labelUbicacion } from "@/components/ubicaciones/types";
 import type { TableroConCircuitos } from "@/components/tableros/types";
 import { fetchTodasLasUbicaciones } from "@/lib/ubicaciones/fetch-todas";
 
-export default async function NuevaMedicionPage() {
+export default async function NuevaMedicionPage({ searchParams }: { searchParams: Promise<{ tableroId?: string }> }) {
   await requireProfile();
+  const { tableroId } = await searchParams;
   const supabase = await createClient();
 
-  const [tablerosRes, circuitosRes, ubicaciones, provinciasRes] = await Promise.all([
+  const [tablerosRes, circuitosRes, ubicaciones, provinciasRes, hallazgosRes] = await Promise.all([
     supabase.from("tableros").select("id, subsistemas, denominacion, ubicacion_id").order("denominacion"),
     supabase
       .from("tablero_circuitos")
-      .select("id, tablero_id, numero, texto, amp_nominal, categoria_equipo, tipo_circuito")
+      .select("id, tablero_id, numero, texto, amp_nominal, categoria_equipo, tipo_circuito, cuerpo")
+      .eq("estado", "activo")
       .order("numero"),
     fetchTodasLasUbicaciones(supabase),
     supabase.from("catalogo_provincias").select("nombre").order("nombre"),
+    supabase.from("catalogo_inspeccion_ia").select("id, texto").eq("modulo", "tableros").order("orden"),
   ]);
 
   const ubicacionesPorId = new Map(ubicaciones.map((u) => [u.id, u]));
   const provincias = (provinciasRes.data ?? []).map((p) => p.nombre);
+  const catalogoHallazgos = hallazgosRes.data ?? [];
 
   const circuitosPorTablero = new Map<string, TableroConCircuitos["circuitos"]>();
   for (const c of circuitosRes.data ?? []) {
@@ -32,6 +36,7 @@ export default async function NuevaMedicionPage() {
       ampNominal: c.amp_nominal ?? "",
       categoriaEquipo: c.categoria_equipo,
       tipoCircuito: c.tipo_circuito,
+      cuerpo: c.cuerpo ?? "",
     });
     circuitosPorTablero.set(c.tablero_id, lista);
   }
@@ -53,7 +58,13 @@ export default async function NuevaMedicionPage() {
 
   return (
     <div>
-      <NuevaMedicionForm tableros={tableros} ubicaciones={ubicaciones} provincias={provincias} />
+      <NuevaMedicionForm
+        tableros={tableros}
+        ubicaciones={ubicaciones}
+        provincias={provincias}
+        tableroIdInicial={tableroId ?? null}
+        catalogoHallazgos={catalogoHallazgos}
+      />
     </div>
   );
 }

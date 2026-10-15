@@ -6,13 +6,16 @@ import type { MantenimientoRow } from "@/components/tableros/types";
 import { fetchTodasLasUbicaciones } from "@/lib/ubicaciones/fetch-todas";
 
 export default async function HistorialTablerosPage() {
-  await requireProfile();
+  const profile = await requireProfile();
   const supabase = await createClient();
 
   // RLS (tablero_mediciones_select_own / tablero_mantenimientos_select_own)
   // ya limita esto a lo propio, o a todo si sos Admin/Supervisor.
   const [medicionesRes, mantenimientosRes] = await Promise.all([
-    supabase.from("tablero_mediciones").select("id, numero_generacion, tipo_evento, fecha, pdf_url, tablero_id").order("fecha", { ascending: false }),
+    supabase
+      .from("tablero_mediciones")
+      .select("id, numero_generacion, tipo_evento, fecha, pdf_url, dxf_url, tablero_id")
+      .order("fecha", { ascending: false }),
     supabase
       .from("tablero_mantenimientos")
       .select("id, tablero_id, circuito_id, fecha, descripcion, foto_url, proximo_mantenimiento")
@@ -49,6 +52,7 @@ export default async function HistorialTablerosPage() {
         denominacion: t.denominacion,
         ubicacionLabel: labelUbicacion(ubicacion),
         pdfDisponible: !!m.pdf_url,
+        dxfDisponible: !!m.dxf_url,
       };
     })
     .filter((r): r is HistorialMedicionRow => r !== null);
@@ -72,5 +76,5 @@ export default async function HistorialTablerosPage() {
     })
     .filter((r): r is MantenimientoRow => r !== null);
 
-  return <HistorialTableros mediciones={mediciones} mantenimientos={mantenimientos} />;
+  return <HistorialTableros mediciones={mediciones} mantenimientos={mantenimientos} esAdmin={profile.rol === "admin"} />;
 }

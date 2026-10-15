@@ -1,7 +1,24 @@
-import type { TableroCategoriaEquipo, TableroEventoTipo, TableroTipo, TableroTipoCircuito } from "@/lib/database.types";
+import type { TableroCategoriaEquipo, TableroEventoTipo, TableroJerarquia, TableroTipo, TableroTipoCircuito } from "@/lib/database.types";
 
-/** Máximo de fotos que se pueden mandar juntas a la lectura con IA de un tablero (distintos ángulos/secciones del mismo gabinete). */
-export const TABLERO_FOTO_IA_MAX = 7;
+/**
+ * Máximo de fotos que se pueden mandar juntas a la lectura con IA de un
+ * tablero (distintos ángulos/secciones del mismo gabinete). Un tablero con
+ * varios cuerpos (ver campo `cuerpo` de `CircuitoItem`) necesita varias
+ * fotos por cuerpo para cubrirlo entero, no solo una del conjunto — mismo
+ * techo que Racks/Torres (`RACK_FOTO_IA_MAX`/`TORRE_FOTO_IA_MAX`), que ya
+ * tienen el mismo problema de "contenedor con varias secciones".
+ */
+export const TABLERO_FOTO_IA_MAX = 14;
+
+/** Máximo de fotos generales que se guardan como evidencia de una visita (una por cuerpo, u otros ángulos de detalle). */
+export const TABLERO_FOTO_GENERAL_MAX = 4;
+
+export const TABLERO_JERARQUIA_OPCIONES: TableroJerarquia[] = ["principal", "secundario"];
+
+export const TABLERO_JERARQUIA_LABEL: Record<TableroJerarquia, string> = {
+  principal: "Principal",
+  secundario: "Secundario",
+};
 
 export const TABLERO_TIPOS: TableroTipo[] = ["energia", "cctv", "control_acceso"];
 
@@ -129,6 +146,13 @@ export interface CircuitoItem {
   categoriaEquipo: TableroCategoriaEquipo;
   tipoCircuito: TableroTipoCircuito;
   /**
+   * Cuerpo físico del tablero (gabinete/puerta) al que pertenece este
+   * circuito — un tablero con varios cuerpos tiene contenido y fecha de
+   * visita distintos por cuerpo. Solo se puede cargar al dar de alta el
+   * circuito, igual criterio que el resto de los campos de alta.
+   */
+  cuerpo: string;
+  /**
    * Solo transitorio en el form (no se persiste): true cuando lo cargó la
    * lectura de foto con IA sin encontrar una etiqueta legible, así el
    * técnico sabe que el texto es una descripción visual y conviene
@@ -144,6 +168,8 @@ export interface TableroConCircuitos {
   ubicacionId: string;
   ubicacionLabel: string;
   circuitos: CircuitoItem[];
+  jerarquia?: TableroJerarquia | null;
+  tableroPadreId?: string | null;
 }
 
 export interface MantenimientoRow {
@@ -197,3 +223,7 @@ export function calcularResumenEquipamiento(
     .sort((a, b) => b.cantidad - a.cantidad);
   return { total: items.length, circuitos220vMono, circuitos380vTri, porCategoria };
 }
+
+// Inspección IA (hallazgos evaluados contra el catálogo configurable del
+// módulo, más allá de los circuitos) vive en src/lib/inspeccion-ia/types.ts
+// — es compartida por los 4 módulos que usan identificación con IA.

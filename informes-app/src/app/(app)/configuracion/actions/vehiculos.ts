@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireAdmin } from "@/lib/auth";
 import { logAudit } from "@/lib/config/audit";
 import type { ConfigActionResult } from "./empresa";
+import type { EstadoChecklist } from "@/lib/database.types";
 
 interface VehiculoPayload {
   patente: string;
@@ -15,7 +16,7 @@ interface VehiculoPayload {
 }
 
 function revalidateAll() {
-  revalidatePath("/configuracion");
+  revalidatePath("/panel/vehiculos");
   revalidatePath("/informe-tecnico/nuevo");
 }
 
@@ -140,4 +141,93 @@ export async function addServiceAction(formData: FormData): Promise<ConfigAction
   await logAudit(supabase, profile, `Registró un service para "${vehiculo?.patente ?? payload.vehiculoId}" (${km.toLocaleString("es-AR")} km)`);
   revalidateAll();
   return { success: true };
+}
+
+interface AltaVehiculoPayload {
+  patente: string;
+  marcaModelo: string;
+  kilometrajeActual: string;
+  estadoGeneral: string;
+  tieneDanios: boolean | null;
+  hallazgos?: { itemId: string; estado: EstadoChecklist; comentario: string }[];
+}
+
+export interface AltaVehiculoResult extends ConfigActionResult {
+  vehiculoId?: string;
+}
+
+/**
+ * Alta de vehículo con fotos (IA): mismo flujo de siempre (la IA lee,
+ * el Admin revisa/corrige, los campos finales son los que llegan en el
+ * payload, nunca lo que devolvió la IA sin pasar por acá) — guarda TODAS
+ * las fotos de cada lote (exterior/interior) como galería del estado del
+ * vehículo al momento del alta, no solo una representativa.
+ */
+export async function altaVehiculoConFotosAction(formData: FormData): Promise<AltaVehiculoResult> {
+  const profile = await requireAdmin();
+  const raw = formData.get("payload");
+  if (typeof raw !== "string") return { success: false, error: "Datos inválidos." };
+  const payload: AltaVehiculoPayload = JSON.parse(raw);
+
+  const patente = payload.patente.trim().toUpperCase();
+  if (!patente) return { success: false, error: "Falta la patente." };
+
+  const supabase = await createClient();
+  const { data: vehiculo, error } = await supabase
+    .from("catalogo_vehiculos")
+    .insert({
+      patente,
+      marca_modelo: payload.marcaModelo.trim() || null,
+      kilometraje_actual: payload.kilometrajeActual ? Number(payload.kilometrajeActual) : null,
+      estado_alta: payload.estadoGeneral.trim() || null,
+      tiene_danios_alta: payload.tieneDanios,
+    })
+    .select("id")
+    .single();
+
+  if (error || !vehiculo) {
+    return { success: false, error: error?.code === "23505" ? "Ya existe un vehículo con esa patente." : error?.message };
+  }
+
+  async function subirGaleria(campo: string, carpeta: "exterior" | "interior"): Promise<string[]> {
+    const fotos = formData.getAll(campo).filter((f): f is File => f instanceof File && f.size > 0);
+    const paths: string[] = [];
+    for (let i = 0; i < fotos.length; i++) {
+      const buffer = Buffer.from(await fotos[i].arrayBuffer());
+      const path = `${vehiculo!.id}/${carpeta}-${i + 1}.jpg`;
+      const { error: upErr } = await supabase.storage.from("vehiculo-docs").upload(path, buffer, { contentType: "image/jpeg", upsert: true });
+      if (!upErr) paths.push(path);
+    }
+    return paths;
+  }
+
+  const fotosExteriorUrls = await subirGaleria("fotosExterior", "exterior");
+  const fotosInteriorUrls = await subirGaleria("fotosInterior", "interior");
+  if (fotosExteriorUrls.length > 0 || fotosInteriorUrls.length > 0) {
+    await supabase
+      .from("catalogo_vehiculos")
+      .update({
+        ...(fotosExteriorUrls.length > 0 ? { fotos_exterior_urls: fotosExteriorUrls } : {}),
+        ...(fotosInteriorUrls.length > 0 ? { fotos_interior_urls: fotosInteriorUrls } : {}),
+      })
+      .eq("id", vehiculo.id);
+  }
+
+  // Inspección IA (opcional): solo los ítems que el Admin confirmó/corrigió
+  // (estado no nulo) — ver catalogo_inspeccion_ia (modulo="vehiculos").
+  if (payload.hallazgos && payload.hallazgos.length > 0) {
+    await supabase.from("inspeccion_ia_hallazgos").insert(
+      payload.hallazgos.map((h) => ({
+        modulo: "vehiculos" as const,
+        registro_id: vehiculo.id,
+        item_id: h.itemId,
+        estado: h.estado,
+        comentario: h.comentario.trim() || null,
+      })),
+    );
+  }
+
+  await logAudit(supabase, profile, `Dio de alta el vehículo "${patente}" con fotos (IA)`);
+  revalidateAll();
+  return { success: true, vehiculoId: vehiculo.id };
 }

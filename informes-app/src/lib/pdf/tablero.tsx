@@ -1,4 +1,4 @@
-import { Document, Page, Text, View, Image, StyleSheet } from "@react-pdf/renderer";
+import { Document, Page, Text, View, Image, StyleSheet, Svg, Line, Rect } from "@react-pdf/renderer";
 import { BORDER, commonStyles, KeyValueRow, PdfHeader, PdfFooter, formatFechaArg } from "./common";
 import {
   CATEGORIA_EQUIPO_LABEL,
@@ -7,7 +7,9 @@ import {
   labelSubsistemas,
   type ResumenEquipamiento,
 } from "@/components/tableros/types";
-import type { TableroCategoriaEquipo, TableroEventoTipo, TableroTipo, TableroTipoCircuito } from "@/lib/database.types";
+import { HALLAZGO_ESTADO_LABEL } from "@/lib/inspeccion-ia/types";
+import type { UnifilarDrawing } from "@/lib/tableros/unifilar";
+import type { EstadoChecklist, TableroCategoriaEquipo, TableroEventoTipo, TableroTipo, TableroTipoCircuito } from "@/lib/database.types";
 
 /**
  * Reemplaza la planilla Excel manual de medición de consumo — misma cabecera
@@ -41,6 +43,12 @@ export interface TableroPdfLectura {
   comentario: string | null;
 }
 
+export interface TableroPdfHallazgo {
+  texto: string;
+  estado: EstadoChecklist;
+  comentario: string | null;
+}
+
 export interface TableroPdfProps {
   numeroGeneracion: string;
   subsistemas: TableroTipo[];
@@ -55,7 +63,9 @@ export interface TableroPdfProps {
   fecha: string;
   lecturas: TableroPdfLectura[];
   resumen: ResumenEquipamiento;
-  fotoGeneralBuffer: Buffer | null;
+  fotosGeneralesBuffers: Buffer[] | null;
+  unifilarBloques: UnifilarDrawing[] | null;
+  hallazgos: TableroPdfHallazgo[];
   logoBuffer: Buffer | null;
   appName: string;
   realizoNombre: string;
@@ -88,7 +98,9 @@ export function TableroPdf(props: TableroPdfProps) {
     fecha,
     lecturas,
     resumen,
-    fotoGeneralBuffer,
+    fotosGeneralesBuffers,
+    unifilarBloques,
+    hallazgos,
     logoBuffer,
     appName,
     realizoNombre,
@@ -146,11 +158,97 @@ export function TableroPdf(props: TableroPdfProps) {
           )}
         </View>
 
-        {fotoGeneralBuffer && (
+        {fotosGeneralesBuffers && fotosGeneralesBuffers.length > 0 && (
           <>
-            <Text style={commonStyles.sectionTitle}>Foto General del Tablero</Text>
-            <View style={{ marginBottom: 6 }}>
-              <Image src={fotoGeneralBuffer} style={commonStyles.photo} />
+            <Text style={commonStyles.sectionTitle}>
+              Foto{fotosGeneralesBuffers.length === 1 ? "" : "s"} General{fotosGeneralesBuffers.length === 1 ? "" : "es"} del Tablero
+            </Text>
+            <View style={commonStyles.photoGrid}>
+              {fotosGeneralesBuffers.map((buf, i) => (
+                <View style={commonStyles.photoCell} key={i} wrap={false}>
+                  <Image src={buf} style={commonStyles.photo} />
+                </View>
+              ))}
+            </View>
+          </>
+        )}
+
+        {unifilarBloques && unifilarBloques.length > 0 && (
+          <>
+            <Text style={commonStyles.sectionTitle}>Esquema Unifilar</Text>
+            <Text style={{ fontSize: 7, color: "#555", marginBottom: 4 }}>
+              Esquema simplificado a partir de los circuitos relevados — no es un plano a escala. Calibre de cable según catálogo
+              configurado (verificar contra la norma vigente).
+            </Text>
+            {unifilarBloques.map((bloque, b) => (
+              <View key={b} style={{ position: "relative", width: bloque.width, height: bloque.height, marginBottom: 8 }} wrap={false}>
+                <Svg width={bloque.width} height={bloque.height}>
+                  {bloque.commands.map((cmd, i) => {
+                    if (cmd.type === "line") {
+                      return <Line key={i} x1={cmd.x1} y1={cmd.y1} x2={cmd.x2} y2={cmd.y2} stroke="#1a1a1a" strokeWidth={0.75} />;
+                    }
+                    if (cmd.type === "rect") {
+                      return (
+                        <Rect
+                          key={i}
+                          x={cmd.x}
+                          y={cmd.y}
+                          width={cmd.width}
+                          height={cmd.height}
+                          stroke="#1a1a1a"
+                          strokeWidth={0.75}
+                          fill="none"
+                        />
+                      );
+                    }
+                    return null;
+                  })}
+                </Svg>
+                {bloque.commands.map((cmd, i) =>
+                  cmd.type === "text" ? (
+                    <Text
+                      key={`t${i}`}
+                      style={{
+                        position: "absolute",
+                        left: cmd.x,
+                        top: cmd.y - cmd.size,
+                        fontSize: cmd.size,
+                        fontFamily: cmd.bold ? "Helvetica-Bold" : "Helvetica",
+                      }}
+                    >
+                      {cmd.text}
+                    </Text>
+                  ) : null,
+                )}
+              </View>
+            ))}
+          </>
+        )}
+
+        {hallazgos.length > 0 && (
+          <>
+            <Text style={commonStyles.sectionTitle}>Inspección IA</Text>
+            <View style={styles.table}>
+              <View style={styles.headRow} fixed>
+                <Text style={[styles.th, { width: "40%" }]}>Ítem</Text>
+                <Text style={[styles.th, { width: "15%" }]}>Estado</Text>
+                <Text style={[styles.th, { width: "45%" }]}>Comentario</Text>
+              </View>
+              {hallazgos.map((h, i) => (
+                <View style={i === hallazgos.length - 1 ? styles.rowLast : styles.row} key={i}>
+                  <Text style={[styles.td, { width: "40%" }]}>{h.texto}</Text>
+                  <Text
+                    style={[
+                      styles.td,
+                      { width: "15%" },
+                      h.estado === "no_ok" ? { fontFamily: "Helvetica-Bold" } : {},
+                    ]}
+                  >
+                    {HALLAZGO_ESTADO_LABEL[h.estado]}
+                  </Text>
+                  <Text style={[styles.td, { width: "45%" }]}>{h.comentario || "—"}</Text>
+                </View>
+              ))}
             </View>
           </>
         )}
@@ -176,7 +274,7 @@ export function TableroPdf(props: TableroPdfProps) {
           {lecturas.map((l, i) => {
             const mideCorriente = itemMideCorriente(l.categoriaEquipo, l.tipoCircuito, tipoEvento);
             return (
-              <View style={i === lecturas.length - 1 ? styles.rowLast : styles.row} key={i} wrap={false}>
+              <View style={i === lecturas.length - 1 ? styles.rowLast : styles.row} key={i}>
                 <Text style={[styles.td, { width: w.n }]}>{l.numero}</Text>
                 <Text style={[styles.td, { width: w.circuito }]}>{l.texto}</Text>
                 <Text style={[styles.td, { width: w.categoria }]}>{CATEGORIA_EQUIPO_LABEL[l.categoriaEquipo]}</Text>
