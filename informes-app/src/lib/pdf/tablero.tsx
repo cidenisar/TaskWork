@@ -20,19 +20,6 @@ import type { EstadoChecklist, TableroCategoriaEquipo, TableroEventoTipo, Tabler
  * (solo térmicas/disyuntores en un circuito AC la tienen), no por tablero.
  */
 
-/**
- * Por encima de esta altura (en puntos), @react-pdf/renderer queda colgado
- * procesando el bloque del esquema unifilar (Svg + muchos <Text> absolutos
- * apilados) en vez de tirar un error — confirmado reproduciendo el cuelgue
- * localmente con un tablero real de 42 circuitos en un solo cuerpo: con
- * 39 ítems (altura ~662pt) renderiza bien, con 40 (~678pt) el proceso queda
- * en un loop sin fin, sin excepción que capturar. No depende del largo del
- * texto ni de wrap/break — es la altura total del bloque. 500pt deja margen
- * contra el contenido variable que va antes (cabecera, resumen, fotos) y
- * sigue entrando cómodo en una sola página A4.
- */
-const UNIFILAR_ALTO_MAX_PDF = 500;
-
 const styles = StyleSheet.create({
   table: { border: `1pt solid ${BORDER}`, marginBottom: 4 },
   headRow: { flexDirection: "row", backgroundColor: "#EDEFF2", borderBottom: `1pt solid ${BORDER}` },
@@ -77,7 +64,7 @@ export interface TableroPdfProps {
   lecturas: TableroPdfLectura[];
   resumen: ResumenEquipamiento;
   fotosGeneralesBuffers: Buffer[] | null;
-  unifilar: UnifilarDrawing | null;
+  unifilarBloques: UnifilarDrawing[] | null;
   hallazgos: TableroPdfHallazgo[];
   logoBuffer: Buffer | null;
   appName: string;
@@ -112,7 +99,7 @@ export function TableroPdf(props: TableroPdfProps) {
     lecturas,
     resumen,
     fotosGeneralesBuffers,
-    unifilar,
+    unifilarBloques,
     hallazgos,
     logoBuffer,
     appName,
@@ -186,63 +173,55 @@ export function TableroPdf(props: TableroPdfProps) {
           </>
         )}
 
-        {unifilar && unifilar.commands.length > 0 && (
+        {unifilarBloques && unifilarBloques.length > 0 && (
           <>
             <Text style={commonStyles.sectionTitle}>Esquema Unifilar</Text>
-            {unifilar.height > UNIFILAR_ALTO_MAX_PDF ? (
-              <Text style={{ fontSize: 7, color: "#555", marginBottom: 4 }}>
-                El tablero tiene demasiados circuitos/elementos para graficar el esquema automático en esta página — el dibujo completo
-                queda disponible en el archivo DXF (botón &quot;Descargar DXF&quot; en el Historial). Ver el detalle completo en la tabla de
-                circuitos más abajo.
-              </Text>
-            ) : (
-              <>
-                <Text style={{ fontSize: 7, color: "#555", marginBottom: 4 }}>
-                  Esquema simplificado a partir de los circuitos relevados — no es un plano a escala. Calibre de cable según catálogo
-                  configurado (verificar contra la norma vigente).
-                </Text>
-                <View style={{ position: "relative", width: unifilar.width, height: unifilar.height, marginBottom: 8 }} wrap={false}>
-                  <Svg width={unifilar.width} height={unifilar.height}>
-                    {unifilar.commands.map((cmd, i) => {
-                      if (cmd.type === "line") {
-                        return <Line key={i} x1={cmd.x1} y1={cmd.y1} x2={cmd.x2} y2={cmd.y2} stroke="#1a1a1a" strokeWidth={0.75} />;
-                      }
-                      if (cmd.type === "rect") {
-                        return (
-                          <Rect
-                            key={i}
-                            x={cmd.x}
-                            y={cmd.y}
-                            width={cmd.width}
-                            height={cmd.height}
-                            stroke="#1a1a1a"
-                            strokeWidth={0.75}
-                            fill="none"
-                          />
-                        );
-                      }
-                      return null;
-                    })}
-                  </Svg>
-                  {unifilar.commands.map((cmd, i) =>
-                    cmd.type === "text" ? (
-                      <Text
-                        key={`t${i}`}
-                        style={{
-                          position: "absolute",
-                          left: cmd.x,
-                          top: cmd.y - cmd.size,
-                          fontSize: cmd.size,
-                          fontFamily: cmd.bold ? "Helvetica-Bold" : "Helvetica",
-                        }}
-                      >
-                        {cmd.text}
-                      </Text>
-                    ) : null,
-                  )}
-                </View>
-              </>
-            )}
+            <Text style={{ fontSize: 7, color: "#555", marginBottom: 4 }}>
+              Esquema simplificado a partir de los circuitos relevados — no es un plano a escala. Calibre de cable según catálogo
+              configurado (verificar contra la norma vigente).
+            </Text>
+            {unifilarBloques.map((bloque, b) => (
+              <View key={b} style={{ position: "relative", width: bloque.width, height: bloque.height, marginBottom: 8 }} wrap={false}>
+                <Svg width={bloque.width} height={bloque.height}>
+                  {bloque.commands.map((cmd, i) => {
+                    if (cmd.type === "line") {
+                      return <Line key={i} x1={cmd.x1} y1={cmd.y1} x2={cmd.x2} y2={cmd.y2} stroke="#1a1a1a" strokeWidth={0.75} />;
+                    }
+                    if (cmd.type === "rect") {
+                      return (
+                        <Rect
+                          key={i}
+                          x={cmd.x}
+                          y={cmd.y}
+                          width={cmd.width}
+                          height={cmd.height}
+                          stroke="#1a1a1a"
+                          strokeWidth={0.75}
+                          fill="none"
+                        />
+                      );
+                    }
+                    return null;
+                  })}
+                </Svg>
+                {bloque.commands.map((cmd, i) =>
+                  cmd.type === "text" ? (
+                    <Text
+                      key={`t${i}`}
+                      style={{
+                        position: "absolute",
+                        left: cmd.x,
+                        top: cmd.y - cmd.size,
+                        fontSize: cmd.size,
+                        fontFamily: cmd.bold ? "Helvetica-Bold" : "Helvetica",
+                      }}
+                    >
+                      {cmd.text}
+                    </Text>
+                  ) : null,
+                )}
+              </View>
+            ))}
           </>
         )}
 

@@ -7,7 +7,7 @@ import { renderTableroPdf } from "@/lib/pdf/render";
 import { buildTableroFilename } from "@/lib/pdf/filename";
 import { resolverUbicacionId, tagGpsSiFalta, type PayloadUbicacionNueva, type PayloadGps } from "@/lib/ubicaciones/resolver";
 import { calcularResumenEquipamiento, itemMideCorriente } from "@/components/tableros/types";
-import { construirUnifilar, agruparPorCuerpo } from "@/lib/tableros/unifilar";
+import { construirUnifilar, construirUnifilarPaginado, agruparPorCuerpo } from "@/lib/tableros/unifilar";
 import { drawCommandsToDxf } from "@/lib/dxf/writer";
 import type { EstadoChecklist, TableroCategoriaEquipo, TableroEventoTipo, TableroJerarquia, TableroTipo, TableroTipoCircuito } from "@/lib/database.types";
 
@@ -274,7 +274,12 @@ export async function crearMedicionTableroAction(formData: FormData): Promise<Cr
       cuerpo: l.cuerpo.trim() || null,
     })),
   );
+  // El dibujo completo (sin partir) va al DXF, que no pasa por react-pdf y
+  // no tiene límite de altura por bloque. Para el PDF se usa la versión
+  // paginada: react-pdf queda colgado (sin excepción) si un bloque del
+  // esquema supera cierta altura — ver CRITERIOS_Y_IDEAS.md § 10.
   const unifilar = construirUnifilar(circuitosPorCuerpo, configCalibre);
+  const unifilarBloques = construirUnifilarPaginado(circuitosPorCuerpo, configCalibre);
 
   const hallazgosConfirmados = (payload.hallazgos ?? []).filter((h) => h.estado);
   let hallazgosPdf: { texto: string; estado: EstadoChecklist; comentario: string | null }[] = [];
@@ -306,7 +311,7 @@ export async function crearMedicionTableroAction(formData: FormData): Promise<Cr
     fecha: payload.fecha,
     resumen,
     fotosGeneralesBuffers,
-    unifilar,
+    unifilarBloques,
     hallazgos: hallazgosPdf,
     lecturas: payload.lecturas.map((l) => {
       const mideCorriente = itemMideCorriente(l.categoriaEquipo, l.tipoCircuito, payload.tipoEvento);
@@ -346,9 +351,11 @@ export async function crearMedicionTableroAction(formData: FormData): Promise<Cr
     pdfUrl = signed?.signedUrl ?? null;
   }
 
-  // Esquema unifilar en DXF (mismo contenido que la sección del PDF, para
-  // abrir en AutoCAD) — una falla acá no debe tirar abajo la medición, que
-  // ya quedó guardada con su PDF.
+  // Esquema unifilar en DXF (mismos circuitos que el PDF, pero en un único
+  // dibujo sin partir en bloques — el DXF no pasa por react-pdf y no tiene
+  // el límite de altura por bloque que sí aplica al PDF, para abrir en
+  // AutoCAD) — una falla acá no debe tirar abajo la medición, que ya quedó
+  // guardada con su PDF.
   if (unifilar.commands.length > 0) {
     const dxfBuffer = drawCommandsToDxf(unifilar.commands, unifilar.height);
     const dxfPath = `${profile.id}/tableros/${medicionId}/plano.dxf`;

@@ -47,7 +47,7 @@ function truncar(s: string, max: number): string {
  * fuente de verdad para los dos formatos.
  */
 export function construirUnifilar(
-  circuitosPorCuerpo: Map<string, UnifilarCircuito[]>,
+  circuitosPorCuerpo: Iterable<[string, UnifilarCircuito[]]>,
   configCalibre: ConfigCalibreCable[],
 ): UnifilarDrawing {
   const commands: DrawCommand[] = [];
@@ -109,6 +109,66 @@ export function construirUnifilar(
   }
 
   return { commands, width: ANCHO, height: y };
+}
+
+/**
+ * @react-pdf/renderer queda colgado (sin excepción, sin timeout propio) al
+ * renderizar un bloque del esquema unifilar (Svg + muchos <Text> absolutos
+ * apilados dentro de un mismo View) por encima de cierta altura — confirmado
+ * reproduciendo el cuelgue localmente: con 39 circuitos en un solo cuerpo
+ * (altura ~662pt) renderiza bien, con 40 (~678pt) el proceso no vuelve más
+ * (ver CRITERIOS_Y_IDEAS.md § 10). Esta altura máxima por bloque, bien por
+ * debajo de ese punto, es el límite real que no hay que cruzar nunca en el
+ * PDF — ver UNIFILAR_ALTO_MAX_BLOQUE_PDF en tablero.tsx para el valor usado.
+ */
+const ALTO_MAX_BLOQUE_SEGURO = 480;
+
+/**
+ * Versión paginada de `construirUnifilar`, pensada para el PDF: en vez de
+ * un solo dibujo gigante (que puede superar el alto seguro de un bloque),
+ * devuelve una lista de dibujos más chicos — cada uno garantizado por
+ * debajo de `ALTO_MAX_BLOQUE_SEGURO` sin importar cuántos circuitos tenga
+ * el tablero en total. Un cuerpo que por sí solo ya supera el máximo se
+ * parte en "Cuerpo X (parte 1/N)", "(parte 2/N)", etc.; cuerpos chicos
+ * consecutivos se agrupan en el mismo bloque mientras entren juntos, para
+ * no desperdiciar espacio con un bloque por cuerpo cuando no hace falta.
+ * El DXF (que no pasa por react-pdf y no tiene este problema) sigue
+ * usando `construirUnifilar` directo, con el dibujo completo sin partir.
+ */
+export function construirUnifilarPaginado(
+  circuitosPorCuerpo: Map<string, UnifilarCircuito[]>,
+  configCalibre: ConfigCalibreCable[],
+): UnifilarDrawing[] {
+  const maxItemsPorGrupo = Math.max(1, Math.floor((ALTO_MAX_BLOQUE_SEGURO - MARGEN - GAP_CUERPO - ALTO_HEADER_CUERPO) / ALTO_FILA));
+
+  const grupos: [string, UnifilarCircuito[]][] = [];
+  for (const [cuerpo, circuitos] of circuitosPorCuerpo) {
+    if (circuitos.length <= maxItemsPorGrupo) {
+      grupos.push([cuerpo, circuitos]);
+      continue;
+    }
+    const partes = Math.ceil(circuitos.length / maxItemsPorGrupo);
+    for (let p = 0; p < partes; p++) {
+      const slice = circuitos.slice(p * maxItemsPorGrupo, (p + 1) * maxItemsPorGrupo);
+      grupos.push([`${cuerpo || "Sin cuerpo asignado"} (parte ${p + 1}/${partes})`, slice]);
+    }
+  }
+
+  const bloques: UnifilarDrawing[] = [];
+  let actual: [string, UnifilarCircuito[]][] = [];
+  let alturaActual = MARGEN;
+  for (const grupo of grupos) {
+    const alturaGrupo = ALTO_HEADER_CUERPO + grupo[1].length * ALTO_FILA + GAP_CUERPO;
+    if (actual.length > 0 && alturaActual + alturaGrupo > ALTO_MAX_BLOQUE_SEGURO) {
+      bloques.push(construirUnifilar(actual, configCalibre));
+      actual = [];
+      alturaActual = MARGEN;
+    }
+    actual.push(grupo);
+    alturaActual += alturaGrupo;
+  }
+  if (actual.length > 0) bloques.push(construirUnifilar(actual, configCalibre));
+  return bloques;
 }
 
 /** Agrupa circuitos por cuerpo preservando el orden de aparición (los sin cuerpo quedan en un grupo aparte, al final). */
