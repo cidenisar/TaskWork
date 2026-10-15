@@ -114,16 +114,18 @@ export default function MapaRelevamientosInner({ puntos }: { puntos: PuntoMapaRe
       const color = colorDe(p.urgencia);
       const modulosDelSitio = MODULOS.filter((m) => modulosVisibles.has(m.modulo) && (p.porModulo[m.modulo] ?? 0) > 0);
       const n = modulosDelSitio.length;
+      if (n === 0) continue;
+      // Mismo popup para todos los marcadores de este sitio (con la lista completa de módulos) — así, si quedan
+      // superpuestos en pantalla, no importa cuál de los íconos apilados se alcance a tocar: cualquiera muestra todo.
+      const popupHtml = `<b>${p.nombreFino}</b><br/>${modulosDelSitio
+        .map((m) => `${m.modulo}: ${p.porModulo[m.modulo]}`)
+        .join("<br/>")}<br/><a href="/ubicaciones/${p.id}">Ver ficha completa</a>`;
       modulosDelSitio.forEach((m, i) => {
         const angulo = (2 * Math.PI * i) / n;
-        const radioGrados = n > 1 ? 0.00012 : 0;
+        const radioGrados = n > 1 ? 0.0002 : 0;
         const lat = p.lat + radioGrados * Math.cos(angulo);
         const lng = p.lng + radioGrados * Math.sin(angulo);
-        L.marker([lat, lng], { icon: iconoMarcador(m.iconKey, color) })
-          .bindPopup(
-            `<b>${p.nombreFino}</b><br/>${m.modulo}: ${p.porModulo[m.modulo]}<br/><a href="/ubicaciones/${p.id}">Ver ficha completa</a>`,
-          )
-          .addTo(capa);
+        L.marker([lat, lng], { icon: iconoMarcador(m.iconKey, color) }).bindPopup(popupHtml).addTo(capa);
       });
     }
   }, [puntos, modulosVisibles, soloUrgentes]);
