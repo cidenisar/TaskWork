@@ -696,6 +696,19 @@ export type InstalacionRow = {
   created_at: string;
 }
 
+/** Consumo real de tokens de una llamada a la IA — ver Configuración → Uso de IA. */
+export type IaUsoRow = {
+  id: string;
+  endpoint: string;
+  modulo: string;
+  modelo: string;
+  input_tokens: number;
+  output_tokens: number;
+  costo_estimado_usd: number;
+  created_by: string;
+  created_at: string;
+}
+
 export type MantenimientoIntervaloRow = {
   id: string;
   tipo_equipo: TipoEquipoMantenimiento;
@@ -1035,6 +1048,12 @@ export interface Database {
         InstalacionRow,
         Partial<InstalacionRow> & Pick<InstalacionRow, "numero_generacion" | "ubicacion_id" | "fecha" | "descripcion" | "cantidad" | "created_by">,
         Partial<InstalacionRow>
+      >;
+      ia_uso: Tbl<
+        IaUsoRow,
+        Partial<IaUsoRow> &
+          Pick<IaUsoRow, "endpoint" | "modulo" | "modelo" | "input_tokens" | "output_tokens" | "costo_estimado_usd" | "created_by">,
+        Partial<IaUsoRow>
       >;
       mantenimiento_intervalos: Tbl<
         MantenimientoIntervaloRow,

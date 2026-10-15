@@ -12,6 +12,7 @@ import {
 } from "@/components/tableros/types";
 import type { TableroCategoriaEquipo, TableroTipo, TableroTipoCircuito } from "@/lib/database.types";
 import { instruccionInspeccionIa, INSTRUCCION_RESPUESTA_HALLAZGOS, parseHallazgosDetectados } from "@/lib/inspeccion-ia/prompt";
+import { registrarUsoIa } from "@/lib/ai/registrar-uso";
 
 /** Solo térmicas/disyuntores tienen una palanca cuya posición física dice el estado. */
 const CATEGORIAS_CON_PALANCA: TableroCategoriaEquipo[] = ["termica", "disyuntor"];
@@ -126,8 +127,10 @@ export async function POST(req: NextRequest) {
 
   try {
     const client = new Anthropic();
-    const response = await client.messages.create({
-      model: "claude-opus-5",
+    const response = await client.beta.messages.create({
+      model: "claude-opus-5-5",
+      betas: ["server-side-fallback-2026-07-01"],
+      fallbacks: "default",
       max_tokens: 8192,
       output_config: { effort: "medium" },
       system:
@@ -181,6 +184,15 @@ export async function POST(req: NextRequest) {
           ],
         },
       ],
+    });
+
+    await registrarUsoIa(supabase, {
+      endpoint: "tableros/leer-foto",
+      modulo: "tableros",
+      modelo: response.model,
+      inputTokens: response.usage.input_tokens,
+      outputTokens: response.usage.output_tokens,
+      userId: profile.id,
     });
 
     const textBlock = response.content.find((b) => b.type === "text");

@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { CATEGORIA_EQUIPO_OPCIONES, CATEGORIA_EQUIPO_LABEL } from "@/components/equipos/types";
 import { ENTREGA_FOTO_IA_MAX } from "@/components/deposito/types";
 import type { EquipoCategoria } from "@/lib/database.types";
+import { registrarUsoIa } from "@/lib/ai/registrar-uso";
 
 /**
  * Lee hasta ENTREGA_FOTO_IA_MAX fotos de material/equipo que se entrega a
@@ -87,8 +88,10 @@ export async function POST(req: NextRequest) {
 
   try {
     const client = new Anthropic();
-    const response = await client.messages.create({
-      model: "claude-opus-5",
+    const response = await client.beta.messages.create({
+      model: "claude-opus-5-5",
+      betas: ["server-side-fallback-2026-07-01"],
+      fallbacks: "default",
       max_tokens: 8192,
       output_config: { effort: "medium" },
       system:
@@ -139,6 +142,15 @@ export async function POST(req: NextRequest) {
           ],
         },
       ],
+    });
+
+    await registrarUsoIa(supabase, {
+      endpoint: "entregas-deposito/leer-foto",
+      modulo: "entregas-deposito",
+      modelo: response.model,
+      inputTokens: response.usage.input_tokens,
+      outputTokens: response.usage.output_tokens,
+      userId: profile.id,
     });
 
     const textBlock = response.content.find((b) => b.type === "text");

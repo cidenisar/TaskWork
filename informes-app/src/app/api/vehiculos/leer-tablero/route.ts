@@ -4,6 +4,7 @@ import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { VEHICULO_INTERIOR_FOTO_MAX } from "@/components/panel/vehiculos/alta-types";
 import { instruccionInspeccionIa, INSTRUCCION_RESPUESTA_HALLAZGOS, parseHallazgosDetectados } from "@/lib/inspeccion-ia/prompt";
+import { registrarUsoIa } from "@/lib/ai/registrar-uso";
 
 /**
  * Lee fotos del TABLERO/odómetro de un vehículo para completar el
@@ -68,8 +69,10 @@ export async function POST(req: NextRequest) {
 
   try {
     const client = new Anthropic();
-    const response = await client.messages.create({
-      model: "claude-opus-5",
+    const response = await client.beta.messages.create({
+      model: "claude-opus-5-5",
+      betas: ["server-side-fallback-2026-07-01"],
+      fallbacks: "default",
       max_tokens: 1024,
       output_config: { effort: "high" },
       system:
@@ -96,6 +99,15 @@ export async function POST(req: NextRequest) {
           ],
         },
       ],
+    });
+
+    await registrarUsoIa(supabase, {
+      endpoint: "vehiculos/leer-tablero",
+      modulo: "vehiculos",
+      modelo: response.model,
+      inputTokens: response.usage.input_tokens,
+      outputTokens: response.usage.output_tokens,
+      userId: profile.id,
     });
 
     const textBlock = response.content.find((b) => b.type === "text");

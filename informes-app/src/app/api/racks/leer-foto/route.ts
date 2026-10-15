@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { CATEGORIA_EQUIPO_OPCIONES, CATEGORIA_EQUIPO_LABEL, RACK_FOTO_IA_MAX } from "@/components/racks/types";
 import type { RackCategoriaEquipo } from "@/lib/database.types";
 import { instruccionInspeccionIa, INSTRUCCION_RESPUESTA_HALLAZGOS, parseHallazgosDetectados } from "@/lib/inspeccion-ia/prompt";
+import { registrarUsoIa } from "@/lib/ai/registrar-uso";
 
 /**
  * Lee hasta RACK_FOTO_IA_MAX fotos de un rack con Claude Vision (en un solo
@@ -107,8 +108,10 @@ export async function POST(req: NextRequest) {
 
   try {
     const client = new Anthropic();
-    const response = await client.messages.create({
-      model: "claude-opus-5",
+    const response = await client.beta.messages.create({
+      model: "claude-opus-5-5",
+      betas: ["server-side-fallback-2026-07-01"],
+      fallbacks: "default",
       max_tokens: 16000,
       output_config: { effort: "high" },
       system:
@@ -176,6 +179,15 @@ export async function POST(req: NextRequest) {
           ],
         },
       ],
+    });
+
+    await registrarUsoIa(supabase, {
+      endpoint: "racks/leer-foto",
+      modulo: "racks",
+      modelo: response.model,
+      inputTokens: response.usage.input_tokens,
+      outputTokens: response.usage.output_tokens,
+      userId: profile.id,
     });
 
     const textBlock = response.content.find((b) => b.type === "text");

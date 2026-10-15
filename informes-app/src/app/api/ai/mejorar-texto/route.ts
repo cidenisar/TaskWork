@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { requireProfile } from "@/lib/auth";
+import { createClient } from "@/lib/supabase/server";
+import { registrarUsoIa } from "@/lib/ai/registrar-uso";
 
 /**
  * "Mejorar con IA" (spec sección 6.1 / 10, funcionalidad #1): corrige ortografía
@@ -24,10 +26,14 @@ export async function POST(request: Request) {
     );
   }
 
+  const supabase = await createClient();
+
   try {
     const client = new Anthropic();
-    const response = await client.messages.create({
-      model: "claude-opus-5",
+    const response = await client.beta.messages.create({
+      model: "claude-opus-5-5",
+      betas: ["server-side-fallback-2026-07-01"],
+      fallbacks: "default",
       max_tokens: 2048,
       output_config: { effort: "low" },
       system:
@@ -36,6 +42,15 @@ export async function POST(request: Request) {
         "original — solo reescribís lo que ya está. Respondé únicamente con el texto corregido, sin comillas, " +
         "sin explicaciones ni comentarios adicionales.",
       messages: [{ role: "user", content: texto }],
+    });
+
+    await registrarUsoIa(supabase, {
+      endpoint: "ai/mejorar-texto",
+      modulo: "mejorar-texto",
+      modelo: response.model,
+      inputTokens: response.usage.input_tokens,
+      outputTokens: response.usage.output_tokens,
+      userId: profile.id,
     });
 
     const textBlock = response.content.find((b) => b.type === "text");

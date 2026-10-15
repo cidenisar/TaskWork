@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { registrarUsoIa } from "@/lib/ai/registrar-uso";
 
 /**
  * Escaneo puntual de UN solo campo (etiqueta YPF o N° de serie) de un
@@ -65,8 +66,10 @@ export async function POST(req: NextRequest) {
 
   try {
     const client = new Anthropic();
-    const response = await client.messages.create({
-      model: "claude-opus-5",
+    const response = await client.beta.messages.create({
+      model: "claude-opus-5-5",
+      betas: ["server-side-fallback-2026-07-01"],
+      fallbacks: "default",
       max_tokens: 300,
       output_config: { effort: "low" },
       system:
@@ -83,6 +86,15 @@ export async function POST(req: NextRequest) {
           ],
         },
       ],
+    });
+
+    await registrarUsoIa(supabase, {
+      endpoint: "racks/leer-campo",
+      modulo: "racks",
+      modelo: response.model,
+      inputTokens: response.usage.input_tokens,
+      outputTokens: response.usage.output_tokens,
+      userId: profile.id,
     });
 
     const textBlock = response.content.find((b) => b.type === "text");

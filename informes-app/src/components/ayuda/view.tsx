@@ -239,7 +239,7 @@ const MODULOS: Seccion[] = [
   {
     titulo: "Configuración",
     acceso: "admin",
-    resumen: "Ajustes generales de la empresa, catálogos y herramientas de mantenimiento de la app — un hub con 9 secciones, cada una en su propia pantalla.",
+    resumen: "Ajustes generales de la empresa, catálogos y herramientas de mantenimiento de la app — un hub con 10 secciones, cada una en su propia pantalla.",
     pasos: [
       "Empresa: el logo que aparece en todos los PDF generados.",
       "Usuarios: alta de cuentas, rol, torre/cuadrilla asignada, blanqueo de contraseña y baja.",
@@ -250,6 +250,7 @@ const MODULOS: Seccion[] = [
       "Auditoría: quién hizo qué — últimas 100 acciones de administración registradas.",
       "Errores reportados: errores que la app capturó sola en el navegador de los usuarios.",
       "Datos de prueba: herramientas de borrado (un registro puntual, o vaciar todo lo de prueba) — para mientras la app está en pruebas, nunca para uso normal.",
+      "Uso de IA: gasto estimado de tokens de IA (hoy, 7 y 30 días) y por módulo — para el monto exacto facturado, ver la consola de Anthropic.",
     ],
     tip: "Los intervalos de mantenimiento, su checklist y los supuestos de dotación NO están acá — viven en Panel → Mantenimientos → Configuración, porque son del Plan de Mantenimiento específicamente.",
   },
