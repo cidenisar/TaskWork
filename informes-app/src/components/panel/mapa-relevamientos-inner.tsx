@@ -101,6 +101,7 @@ export default function MapaRelevamientosInner({ puntos }: { puntos: PuntoMapaRe
   }, [categoriasEquipo]);
 
   const [soloUrgentes, setSoloUrgentes] = useState(false);
+  const [busqueda, setBusqueda] = useState("");
 
   function toggleModulo(modulo: ModuloMapa) {
     setModulosVisibles((prev) => {
@@ -148,17 +149,26 @@ export default function MapaRelevamientosInner({ puntos }: { puntos: PuntoMapaRe
     const capa = capaMarcadoresRef.current;
     if (!capa) return;
     capa.clearLayers();
+    const q = busqueda.trim().toLowerCase();
     for (const p of puntos) {
       if (!modulosVisibles.has(p.modulo)) continue;
       if (p.categoria && !categoriasVisibles.has(p.categoria)) continue;
       if (soloUrgentes && p.urgencia !== "vencido" && p.urgencia !== "proximo" && p.urgencia !== "nunca") continue;
+      if (q && !p.label.toLowerCase().includes(q) && !p.nombreSitio.toLowerCase().includes(q)) continue;
       const popupHtml = `<b>${p.label}</b><br/>${p.modulo}${p.categoriaLabel ? ` · ${p.categoriaLabel}` : ""}<br/>${p.nombreSitio}<br/><a href="/ubicaciones/${p.ubicacionId}">Ver ficha completa</a>`;
       L.marker([p.lat, p.lng], { icon: iconoMarcador(p.modulo, colorDe(p.urgencia)) }).bindPopup(popupHtml).addTo(capa);
     }
-  }, [puntos, modulosVisibles, categoriasVisibles, soloUrgentes]);
+  }, [puntos, modulosVisibles, categoriasVisibles, soloUrgentes, busqueda]);
 
   return (
     <div>
+      <input
+        type="text"
+        className="search-box"
+        placeholder="Buscar por nombre (tablero, rack, sala...) o sitio..."
+        value={busqueda}
+        onChange={(e) => setBusqueda(e.target.value)}
+      />
       <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
         {MODULOS.map((m) => (
           <button
