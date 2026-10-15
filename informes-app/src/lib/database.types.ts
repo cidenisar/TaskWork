@@ -669,6 +669,33 @@ export type EntregaDepositoRow = {
   created_at: string;
 }
 
+/**
+ * Tabla huérfana: resto del viejo módulo standalone "Instalación", plegado
+ * después dentro de Informe Técnico (ver CRITERIOS_Y_IDEAS.md, sección 5).
+ * El código ya no escribe ni lee acá — se tipa solo para que "Vaciar datos
+ * de prueba" pueda borrar lo que haya quedado cargado de aquella época.
+ */
+export type InstalacionRow = {
+  id: string;
+  numero_generacion: string;
+  ubicacion_id: string;
+  fecha: string;
+  descripcion: string;
+  categoria: string | null;
+  marca_modelo: string | null;
+  numero_serie: string | null;
+  etiqueta_ypf: string | null;
+  cantidad: number;
+  comentario: string | null;
+  remito_foto_url: string | null;
+  remito_numero: string | null;
+  entrega_deposito_numero_generacion: string | null;
+  created_by: string;
+  pdf_url: string | null;
+  pdf_generado_at: string | null;
+  created_at: string;
+}
+
 export type MantenimientoIntervaloRow = {
   id: string;
   tipo_equipo: TipoEquipoMantenimiento;
@@ -1003,6 +1030,11 @@ export interface Database {
         Partial<EntregaDepositoRow> &
           Pick<EntregaDepositoRow, "numero_generacion" | "origen" | "descripcion" | "condicion" | "motivo" | "ubicacion_id" | "fecha" | "created_by">,
         Partial<EntregaDepositoRow>
+      >;
+      instalaciones: Tbl<
+        InstalacionRow,
+        Partial<InstalacionRow> & Pick<InstalacionRow, "numero_generacion" | "ubicacion_id" | "fecha" | "descripcion" | "cantidad" | "created_by">,
+        Partial<InstalacionRow>
       >;
       mantenimiento_intervalos: Tbl<
         MantenimientoIntervaloRow,

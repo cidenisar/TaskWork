@@ -195,11 +195,10 @@ export interface DarDeBajaResult {
  * (`estado = 'baja'`, nunca se borra la fila) y genera un comprobante en
  * PDF para entregar junto con el equipo físico a depósito. Solo Admin/
  * Supervisor — mismo gate que Estadísticas — y por eso corre con el
- * cliente de Service Role: `rack_equipamientos`/`equipos` tienen UPDATE
- * restringido a `is_admin()` por RLS (un Supervisor no pasaría ese check
- * directo), y `tablero_circuitos` no tiene ninguna policy de UPDATE
- * todavía — bypasear RLS acá es controlado porque la action en sí ya
- * valida el rol antes de tocar nada.
+ * cliente de Service Role: `rack_equipamientos`/`equipos`/`tablero_circuitos`
+ * tienen UPDATE restringido a `is_admin()` por RLS (un Supervisor no pasaría
+ * ese check directo) — bypasear RLS acá es controlado porque la action en sí
+ * ya valida el rol antes de tocar nada.
  */
 export async function darDeBajaAction(payload: DarDeBajaPayload): Promise<DarDeBajaResult> {
   const profile = await requireProfile();

@@ -56,7 +56,7 @@ export async function resolverEquipo(
   if (tipoEquipo === "rack_equipamiento") {
     const { data: item } = await service
       .from("rack_equipamientos")
-      .select("texto, categoria_equipo, marca_modelo, etiqueta_ypf, estado, rack_id")
+      .select("texto, categoria_equipo, marca_modelo, numero_serie, etiqueta_ypf, estado, rack_id")
       .eq("id", equipoId)
       .single();
     if (!item) return null;
@@ -66,7 +66,7 @@ export async function resolverEquipo(
       texto: item.texto,
       categoriaLabel: RACK_CATEGORIA_LABEL[item.categoria_equipo],
       marcaModelo: item.marca_modelo,
-      numeroSerie: null,
+      numeroSerie: item.numero_serie,
       etiquetaYpf: item.etiqueta_ypf,
       ubicacionId: rack.ubicacion_id,
       estadoActual: item.estado,

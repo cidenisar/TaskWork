@@ -28,7 +28,11 @@ export function VaciarDatosPruebaCard() {
     setTexto("");
     setResultado(
       res.success
-        ? { ok: true, mensaje: "Listo — Informes, Rendiciones, Tableros, Racks, Equipos y Bajas quedaron en cero." }
+        ? {
+            ok: true,
+            mensaje:
+              "Listo — Informes, Rendiciones, Tableros, Racks, Torres, Equipos, Salas, Mantenimiento, Bajas, Entregas a Depósito e Instalaciones quedaron en cero.",
+          }
         : { ok: false, mensaje: res.error || "No se pudo vaciar." },
     );
   }
@@ -39,8 +43,9 @@ export function VaciarDatosPruebaCard() {
         Vaciar datos de prueba
       </div>
       <p className="hint" style={{ margin: "0 0 14px" }}>
-        Borra <b>TODO</b> lo cargado hasta ahora en Informes Técnicos, Rendiciones de Gastos, Tableros, Racks, Equipos
-        Individuales y Bajas de Equipamiento — el equipo cargado en cada sitio incluido, no solo el historial de
+        Borra <b>TODO</b> lo cargado hasta ahora en Informes Técnicos, Rendiciones de Gastos, Tableros, Racks, Torres
+        de Comunicaciones, Equipos Individuales, Salas, el Plan de Mantenimiento, Bajas de Equipamiento, Entregas a
+        Depósito e Instalaciones — el equipo cargado en cada sitio incluido, no solo el historial de
         mediciones/relevamientos — y vacía los PDFs/fotos del storage. Pensado para limpiar las pruebas antes de
         arrancar en producción real, no para uso diario. <b>No se puede deshacer.</b> No toca Ubicaciones, catálogos,
         usuarios ni el resto de Configuración.

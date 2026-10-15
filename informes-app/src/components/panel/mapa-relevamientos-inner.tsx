@@ -48,6 +48,11 @@ function colorDe(urgencia: PuntoMapaRelevamiento["urgencia"]): string {
   return COLOR_URGENCIA[urgencia ?? "sin_seguimiento"];
 }
 
+/** `label`/`nombreSitio` son texto libre que cualquier técnico escribe al dar de alta un tablero/rack/sala/equipo — Leaflet asigna el HTML del popup a innerHTML sin escapar, así que hay que hacerlo acá (si no, es un XSS persistente). */
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+
 function iconoMarcador(modulo: ModuloMapa, color: string): L.DivIcon {
   const svg = renderToStaticMarkup(
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
@@ -161,7 +166,7 @@ export default function MapaRelevamientosInner({ puntos }: { puntos: PuntoMapaRe
         if (!((filtroVencido && esVencido) || (filtroProximo && esProximo))) continue;
       }
       if (q && !p.label.toLowerCase().includes(q) && !p.nombreSitio.toLowerCase().includes(q)) continue;
-      const popupHtml = `<b>${p.label}</b><br/>${p.modulo}${p.categoriaLabel ? ` · ${p.categoriaLabel}` : ""}<br/>${p.nombreSitio}<br/><a href="/ubicaciones/${p.ubicacionId}">Ver ficha completa</a>`;
+      const popupHtml = `<b>${escapeHtml(p.label)}</b><br/>${p.modulo}${p.categoriaLabel ? ` · ${escapeHtml(p.categoriaLabel)}` : ""}<br/>${escapeHtml(p.nombreSitio)}<br/><a href="/ubicaciones/${encodeURIComponent(p.ubicacionId)}">Ver ficha completa</a>`;
       L.marker([p.lat, p.lng], { icon: iconoMarcador(p.modulo, colorDe(p.urgencia)) }).bindPopup(popupHtml).addTo(capa);
     }
   }, [puntos, modulosVisibles, categoriasVisibles, filtroVencido, filtroProximo, busqueda]);

@@ -92,7 +92,14 @@ const VENTANA_VENCIMIENTOS_DIAS = 60;
 const MAX_VENCIMIENTOS = 25;
 
 function diasRestantes(fechaIso: string, hoy: Date): number {
-  return Math.round((new Date(fechaIso).getTime() - hoy.getTime()) / 86_400_000);
+  // Anclar las dos puntas a medianoche LOCAL (no UTC) — mismo criterio que
+  // el resto de la app (lib/mantenimiento/generar-programacion.ts, lib/panel/
+  // mantenimientos.ts). Sin esto, `new Date(fechaIso)` cae en medianoche UTC
+  // mientras `hoy` es el instante actual, y en Argentina (UTC-3) eso puede
+  // correr el vencimiento un día para cualquier lado cerca del límite.
+  const vencimiento = new Date(`${fechaIso}T00:00:00`);
+  const hoyMedianoche = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
+  return Math.round((vencimiento.getTime() - hoyMedianoche.getTime()) / 86_400_000);
 }
 
 function urgenciaDe(dias: number): UrgenciaVencimiento {
