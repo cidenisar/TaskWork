@@ -1,4 +1,4 @@
-import { masReciente, type PanelSitioResumen } from "./overview";
+import type { PanelSitioResumen } from "./overview";
 
 /**
  * Vista General navega la jerarquía de Ubicaciones (región → provincia →
@@ -54,7 +54,6 @@ export interface NodoJerarquia {
   cantidadEquipamiento: number;
   consumoW: number | null;
   mantenimientoVencidos: number;
-  ultimaVisita: string | null;
 }
 
 /** Más consumo primero (los sitios sin dato de consumo quedan al final); a igualdad, alfabético. */
@@ -83,7 +82,6 @@ export function agruparPor(sitios: PanelSitioResumen[], clave: (s: PanelSitioRes
       cantidadEquipamiento: lista.reduce((acc, s) => acc + s.total, 0),
       consumoW,
       mantenimientoVencidos: lista.filter((s) => s.mantenimientoVencido).length,
-      ultimaVisita: lista.reduce<string | null>((acc, s) => masReciente(acc, s.ultimaVisita), null),
     });
   }
   return nodos.sort(compararNodos);

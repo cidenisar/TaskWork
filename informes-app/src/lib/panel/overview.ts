@@ -7,16 +7,30 @@ type Supabase = Awaited<ReturnType<typeof createClient>>;
 
 export interface PanelKpis {
   totalSitios: number;
-  totalEquipamiento: number;
-  tecnicosActivos: number;
-  vencimientosProximos: number;
   /** Suma de consumoW de todos los sitios — null si ningún sitio tiene el dato. */
   consumoTotalW: number | null;
+  informesPorTipo: PanelConteo[];
+  tecnicosActivos: number;
+  vehiculosTotal: number;
+  mantenimiento: PanelMantenimientoResumen;
+}
+
+export interface PanelConteo {
+  label: string;
+  cantidad: number;
 }
 
 export interface PanelEquipoPorModulo {
   modulo: string;
   cantidad: number;
+}
+
+/** Para el cuadro superior "Plan de Mantenimiento" — cuenta TODOS los ítems con intervalo configurado, sin el tope de 60 que usa la lista del Plan. */
+export interface PanelMantenimientoResumen {
+  hechos: number;
+  porHacer: number;
+  vencidos: number;
+  reprogramados: number;
 }
 
 /** Resumen del ítem de mantenimiento más urgente de un sitio — ver mezclarMasUrgente. */
@@ -118,6 +132,10 @@ export async function getPanelOverview(supabase: Supabase): Promise<PanelOvervie
     profilesRes,
     vehiculosRes,
     itemsMantenimiento,
+    informesTecnicosRes,
+    rendicionesGastosRes,
+    entregasDepositoRes,
+    bajasEquipamientoRes,
   ] = await Promise.all([
     fetchTodasLasUbicaciones(supabase),
     supabase.from("tableros").select("id, ubicacion_id"),
@@ -134,6 +152,10 @@ export async function getPanelOverview(supabase: Supabase): Promise<PanelOvervie
     supabase.from("profiles").select("nombre_completo, rol, activo, dni_vencimiento, licencia_conducir_vencimiento"),
     supabase.from("catalogo_vehiculos").select("patente, vencimiento_tarjeta_verde, vencimiento_rto"),
     computarItemsMantenimiento(supabase),
+    supabase.from("informes_tecnicos").select("id", { count: "exact", head: true }),
+    supabase.from("rendiciones_gastos").select("id", { count: "exact", head: true }),
+    supabase.from("entregas_deposito").select("id", { count: "exact", head: true }),
+    supabase.from("bajas_equipamiento").select("id", { count: "exact", head: true }),
   ]);
 
   const ubicacionPorId = new Map(ubicaciones.map((u) => [u.id, u]));
@@ -210,14 +232,12 @@ export async function getPanelOverview(supabase: Supabase): Promise<PanelOvervie
   }
 
   const equipoPorModuloMap = new Map<string, number>();
-  let totalEquipamiento = 0;
   const sitios: PanelSitioResumen[] = [];
   for (const [ubicacionId, porModulo] of totalPorSitio) {
     const ubicacion = ubicacionPorId.get(ubicacionId);
     if (!ubicacion) continue;
     const total = Object.values(porModulo).reduce((a, b) => a + b, 0);
     if (total === 0) continue;
-    totalEquipamiento += total;
     for (const [modulo, cantidad] of Object.entries(porModulo)) {
       equipoPorModuloMap.set(modulo, (equipoPorModuloMap.get(modulo) ?? 0) + cantidad);
     }
@@ -299,13 +319,32 @@ export async function getPanelOverview(supabase: Supabase): Promise<PanelOvervie
     ? sitios.reduce((acc, s) => acc + (s.consumoW ?? 0), 0)
     : null;
 
+  const informesPorTipo: PanelConteo[] = [
+    { label: "Informe Técnico", cantidad: informesTecnicosRes.count ?? 0 },
+    { label: "Rendición de Gastos", cantidad: rendicionesGastosRes.count ?? 0 },
+    { label: "Entregas a Depósito", cantidad: entregasDepositoRes.count ?? 0 },
+    { label: "Bajas de Equipamiento", cantidad: bajasEquipamientoRes.count ?? 0 },
+  ];
+
+  // Plan de Mantenimiento: sobre TODOS los ítems con intervalo configurado
+  // (itemsMantenimiento no tiene el tope de 60 que sí aplica getPanelMantenimientos
+  // para su propia lista) — "reprogramados" son los que tienen un motivo
+  // cargado (eso solo se completa al reprogramar, no en la programación inicial).
+  const mantenimiento: PanelMantenimientoResumen = {
+    hechos: itemsMantenimiento.filter((i) => i.urgencia === "ok").length,
+    porHacer: itemsMantenimiento.filter((i) => i.urgencia === "proximo" || i.urgencia === "nunca").length,
+    vencidos: itemsMantenimiento.filter((i) => i.urgencia === "vencido").length,
+    reprogramados: itemsMantenimiento.filter((i) => i.motivoLabel != null).length,
+  };
+
   return {
     kpis: {
       totalSitios: sitios.length,
-      totalEquipamiento,
-      tecnicosActivos,
-      vencimientosProximos: vencimientosRelevantes.length,
       consumoTotalW,
+      informesPorTipo,
+      tecnicosActivos,
+      vehiculosTotal: (vehiculosRes.data ?? []).length,
+      mantenimiento,
     },
     equipoPorModulo,
     sitios,

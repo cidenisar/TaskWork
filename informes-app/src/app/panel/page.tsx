@@ -1,7 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { getPanelOverview } from "@/lib/panel/overview";
 import { filtrarSitios, agruparPor, localidadKey, type FiltrosJerarquia } from "@/lib/panel/jerarquia";
-import { BarList } from "@/components/estadisticas/bar-list";
 import { JerarquiaBreadcrumb } from "@/components/panel/jerarquia-breadcrumb";
 import { JerarquiaNodos } from "@/components/panel/jerarquia-nodos";
 import { JerarquiaSitioPicker } from "@/components/panel/jerarquia-sitio-picker";
@@ -24,11 +23,13 @@ interface PanelSearchParams {
  * la jerarquía de Ubicaciones (región → provincia → localidad → sitio),
  * un nivel por vez con breadcrumb, usando los filtros de la URL
  * (searchParams). Cada nivel intermedio agrega lo que cuelga debajo
- * (consumo, cantidad de sitios/equipamiento, mantenimiento vencido, última
- * visita); el nivel final muestra el detalle de un sitio puntual. Todo lo
- * demás (KPIs, Equipamiento por módulo, Vencimientos de flota) se queda
- * como un resumen global — los vencimientos de técnicos/vehículos no están
- * atados a un sitio, no se pueden repartir por zona.
+ * (consumo, cantidad de sitios/equipamiento, mantenimiento vencido); el
+ * nivel final muestra el detalle de un sitio puntual, con la última visita
+ * junto al estado del Plan de Mantenimiento (no tiene sentido mostrarla
+ * suelta en un sitio sin mantenimiento configurado). Los 4 cuadros
+ * superiores y "Vencimientos de flota" se quedan como resumen global — ni
+ * el equipamiento agregado ni los vencimientos de técnicos/vehículos se
+ * pueden repartir por zona.
  */
 export default async function PanelPage({ searchParams }: { searchParams: Promise<PanelSearchParams> }) {
   const sp = await searchParams;
@@ -74,23 +75,68 @@ export default async function PanelPage({ searchParams }: { searchParams: Promis
       </div>
 
       <div className="kpi-grid">
-        <div className="kpi-card">
-          <div className="kpi-value">{kpis.totalSitios}</div>
-          <div className="kpi-label">Sitios con equipamiento</div>
-        </div>
-        <div className="kpi-card">
-          <div className="kpi-value">{kpis.totalEquipamiento}</div>
-          <div className="kpi-label">Equipamiento total</div>
-        </div>
-        <div className="kpi-card">
-          <div className="kpi-value">{kpis.tecnicosActivos}</div>
-          <div className="kpi-label">Técnicos activos</div>
-        </div>
-        <div className="kpi-card">
-          <div className="kpi-value" style={{ color: kpis.vencimientosProximos > 0 ? "var(--warn)" : undefined }}>
-            {kpis.vencimientosProximos}
+        <div className="kpi-card kpi-card-multi">
+          <div className="kpi-multi-title">Equipamiento relevado</div>
+          <div className="kpi-multi-rows">
+            {equipoPorModulo.map((m) => (
+              <div className="kpi-multi-row" key={m.modulo}>
+                <span className="kpi-multi-num">{m.cantidad}</span>
+                <span className="kpi-multi-label">{m.modulo}</span>
+              </div>
+            ))}
           </div>
-          <div className="kpi-label">Vencimientos de flota próximos/vencidos</div>
+        </div>
+
+        <div className="kpi-card kpi-card-multi">
+          <div className="kpi-multi-title">Informes</div>
+          <div className="kpi-multi-rows">
+            {kpis.informesPorTipo.map((i) => (
+              <div className="kpi-multi-row" key={i.label}>
+                <span className="kpi-multi-num">{i.cantidad}</span>
+                <span className="kpi-multi-label">{i.label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="kpi-card kpi-card-multi">
+          <div className="kpi-multi-title">Personal y flota</div>
+          <div className="kpi-multi-rows">
+            <div className="kpi-multi-row">
+              <span className="kpi-multi-num">{kpis.tecnicosActivos}</span>
+              <span className="kpi-multi-label">Técnicos activos</span>
+            </div>
+            <div className="kpi-multi-row">
+              <span className="kpi-multi-num">{kpis.vehiculosTotal}</span>
+              <span className="kpi-multi-label">Vehículos</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="kpi-card kpi-card-multi">
+          <div className="kpi-multi-title">Plan de Mantenimiento</div>
+          <div className="kpi-multi-rows">
+            <div className="kpi-multi-row">
+              <span className="kpi-multi-num" style={{ color: "var(--ok)" }}>
+                {kpis.mantenimiento.hechos}
+              </span>
+              <span className="kpi-multi-label">Al día</span>
+            </div>
+            <div className="kpi-multi-row">
+              <span className="kpi-multi-num">{kpis.mantenimiento.porHacer}</span>
+              <span className="kpi-multi-label">Por hacer</span>
+            </div>
+            <div className="kpi-multi-row">
+              <span className="kpi-multi-num" style={{ color: kpis.mantenimiento.vencidos > 0 ? "var(--accent-2)" : undefined }}>
+                {kpis.mantenimiento.vencidos}
+              </span>
+              <span className="kpi-multi-label">Vencidos</span>
+            </div>
+            <div className="kpi-multi-row">
+              <span className="kpi-multi-num">{kpis.mantenimiento.reprogramados}</span>
+              <span className="kpi-multi-label">Reprogramados</span>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -113,15 +159,6 @@ export default async function PanelPage({ searchParams }: { searchParams: Promis
 
         <div>
           <div className="card">
-            <div className="panel-card-title">
-              <h2>Equipamiento por módulo</h2>
-            </div>
-            <BarList
-              items={equipoPorModulo.map((m) => ({ label: m.modulo, value: m.cantidad, displayValue: String(m.cantidad) }))}
-            />
-          </div>
-
-          <div className="card" style={{ marginTop: 16 }}>
             <div className="panel-card-title">
               <h2>Vencimientos de flota</h2>
               <span className="panel-card-count">próximos {"≤"} 60 días o vencidos</span>

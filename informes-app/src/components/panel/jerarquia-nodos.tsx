@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { Icon } from "@/components/icon";
 import { aQuery, type FiltrosJerarquia, type NodoJerarquia } from "@/lib/panel/jerarquia";
-import { fmtVisitaRelativa } from "@/lib/panel/format";
 
 const LABEL_NIVEL: Record<string, string> = {
   region: "zona",
@@ -41,13 +40,14 @@ export function JerarquiaNodos({
               {n.cantidadSitios} sitio{n.cantidadSitios === 1 ? "" : "s"}
             </span>
             <span className="venc-badge">{n.cantidadEquipamiento} equipos</span>
-            {n.consumoW != null && <span className="venc-badge">{Math.round(n.consumoW).toLocaleString("es-AR")} W</span>}
             {n.mantenimientoVencidos > 0 && (
               <span className="venc-badge danger">
                 <Icon name="warning" size={11} /> {n.mantenimientoVencidos} vencido{n.mantenimientoVencidos === 1 ? "" : "s"}
               </span>
             )}
-            {n.ultimaVisita && <span className="item-sub">Última visita: {fmtVisitaRelativa(n.ultimaVisita)}</span>}
+            {n.consumoW != null && (
+              <span className="item-sub">Consumo estimado: {Math.round(n.consumoW).toLocaleString("es-AR")} W</span>
+            )}
           </div>
         </Link>
       ))}

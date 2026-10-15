@@ -36,14 +36,15 @@ export function SitioDetalleCard({ sitio }: { sitio: PanelSitioResumen }) {
         </div>
       )}
 
-      <div className="item-sub" style={{ marginBottom: 8 }}>
-        Última visita: {sitio.ultimaVisita ? fmtVisitaRelativa(sitio.ultimaVisita) : "sin registro"}
-      </div>
-
       {sitio.masUrgente && (
-        <div className={`venc-badge ${URGENCIA_CLASE[sitio.masUrgente.urgencia]}`} style={{ marginBottom: 8 }}>
-          <Icon name="warning" size={11} /> {sitio.masUrgente.tipoEquipoLabel} · {sitio.masUrgente.texto}: {sitio.masUrgente.mensaje}
-        </div>
+        <>
+          <div className="item-sub" style={{ marginBottom: 4 }}>
+            Última visita: {sitio.ultimaVisita ? fmtVisitaRelativa(sitio.ultimaVisita) : "sin registro"}
+          </div>
+          <div className={`venc-badge ${URGENCIA_CLASE[sitio.masUrgente.urgencia]}`} style={{ marginBottom: 8 }}>
+            <Icon name="warning" size={11} /> {sitio.masUrgente.tipoEquipoLabel} · {sitio.masUrgente.texto}: {sitio.masUrgente.mensaje}
+          </div>
+        </>
       )}
 
       <div style={{ marginTop: 8 }}>
