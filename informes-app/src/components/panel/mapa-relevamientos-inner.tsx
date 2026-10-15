@@ -87,7 +87,7 @@ export default function MapaRelevamientosInner({ puntos }: { puntos: PuntoMapaRe
     const center: [number, number] = puntos.length
       ? [puntos.reduce((s, p) => s + p.lat, 0) / puntos.length, puntos.reduce((s, p) => s + p.lng, 0) / puntos.length]
       : [-34.6, -58.4];
-    const map = L.map(containerRef.current, { center, zoom: puntos.length ? 6 : 4, scrollWheelZoom: false });
+    const map = L.map(containerRef.current, { center, zoom: puntos.length ? 6 : 4, scrollWheelZoom: true });
     mapRef.current = map;
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
