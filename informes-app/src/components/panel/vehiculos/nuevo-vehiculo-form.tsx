@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { altaVehiculoConFotosAction } from "@/app/(app)/configuracion/actions/vehiculos";
+import { altaVehiculoAction, agregarFotosVehiculoAction } from "@/app/(app)/configuracion/actions/vehiculos";
 import { reportarErrorCliente } from "@/lib/client-error-report";
 import { resizeImageToJpeg } from "@/lib/image-resize";
 import { ErrorNote, SuccessNote } from "@/components/notes";
@@ -72,6 +72,7 @@ export function NuevoVehiculoForm({ catalogoHallazgos }: { catalogoHallazgos: { 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [notaFotosFallidas, setNotaFotosFallidas] = useState<string | null>(null);
 
   // Mismo catálogo evaluado desde los dos lotes de fotos (exterior e
   // interior) — arranca sin evaluar (estado null) y cada lectura con IA va
@@ -170,8 +171,40 @@ export function NuevoVehiculoForm({ catalogoHallazgos }: { catalogoHallazgos: { 
     }
   }
 
+  // Tope chico a propósito: juntar muchas fotos ya comprimidas en un solo
+  // pedido (como se hacía antes, las ~14 fotos + el resto del payload en una
+  // sola Server Action) puede superar el límite de tamaño de request que la
+  // plataforma de hosting le impone a una función — ahí el pedido se corta
+  // antes de llegar al servidor, sin dejar ningún rastro ("An unexpected
+  // response was received from the server", sin más detalle, y nada
+  // guardado). Subiendo de a pocas fotos por vez, cada pedido queda bien
+  // por debajo de cualquier límite razonable sin importar cuántas fotos
+  // saque el técnico en total.
+  const FOTOS_POR_TANDA = 3;
+
+  async function subirGaleriaEnTandas(vehiculoId: string, carpeta: "exterior" | "interior", fotos: File[]): Promise<number> {
+    let fallidas = 0;
+    for (let i = 0; i < fotos.length; i += FOTOS_POR_TANDA) {
+      const tanda = fotos.slice(i, i + FOTOS_POR_TANDA);
+      const fd = new FormData();
+      fd.append("vehiculoId", vehiculoId);
+      fd.append("carpeta", carpeta);
+      for (let j = 0; j < tanda.length; j++) {
+        fd.append("fotos", await resizeImageToJpeg(tanda[j]), `${carpeta}-${i + j + 1}.jpg`);
+      }
+      try {
+        const res = await agregarFotosVehiculoAction(fd);
+        if (!res.success) fallidas += tanda.length;
+      } catch {
+        fallidas += tanda.length;
+      }
+    }
+    return fallidas;
+  }
+
   async function guardar() {
     setError(null);
+    setNotaFotosFallidas(null);
     if (!patente.trim()) {
       setError("Falta la patente.");
       return;
@@ -192,17 +225,23 @@ export function NuevoVehiculoForm({ catalogoHallazgos }: { catalogoHallazgos: { 
             .map((h) => ({ itemId: h.itemId, estado: h.estado, comentario: h.comentario.trim() })),
         }),
       );
-      for (let i = 0; i < fotosExteriorGuardar.length; i++) {
-        fd.append("fotosExterior", await resizeImageToJpeg(fotosExteriorGuardar[i]), `exterior-${i + 1}.jpg`);
-      }
-      for (let i = 0; i < fotosInteriorGuardar.length; i++) {
-        fd.append("fotosInterior", await resizeImageToJpeg(fotosInteriorGuardar[i]), `interior-${i + 1}.jpg`);
-      }
-      const res = await altaVehiculoConFotosAction(fd);
-      if (!res.success) {
+      const res = await altaVehiculoAction(fd);
+      if (!res.success || !res.vehiculoId) {
         setError(res.error || "No se pudo dar de alta el vehículo.");
         reportarErrorCliente(res.error || "No se pudo dar de alta el vehículo.", "alta-vehiculo-fotos");
         return;
+      }
+
+      // El vehículo ya quedó dado de alta acá — una foto que falla al subir
+      // no debe hacer parecer que todo el alta falló (nunca se pierde lo
+      // ya guardado por un problema en un paso posterior y opcional).
+      const fallidasExterior = await subirGaleriaEnTandas(res.vehiculoId, "exterior", fotosExteriorGuardar);
+      const fallidasInterior = await subirGaleriaEnTandas(res.vehiculoId, "interior", fotosInteriorGuardar);
+      const totalFallidas = fallidasExterior + fallidasInterior;
+      if (totalFallidas > 0) {
+        setNotaFotosFallidas(
+          `El vehículo se dio de alta, pero ${totalFallidas} foto${totalFallidas === 1 ? "" : "s"} no se pudo subir — volvé a intentarlo más tarde desde la ficha del vehículo.`,
+        );
       }
       setSuccess(true);
     } catch (err) {
@@ -218,6 +257,11 @@ export function NuevoVehiculoForm({ catalogoHallazgos }: { catalogoHallazgos: { 
     return (
       <div className="card">
         <SuccessNote>Vehículo {patente} dado de alta correctamente.</SuccessNote>
+        {notaFotosFallidas && (
+          <div className="hint" style={{ color: "var(--warn)", margin: "8px 0 0" }}>
+            <Icon name="warning" size={12} /> {notaFotosFallidas}
+          </div>
+        )}
         <div className="footer-nav">
           <span />
           <button type="button" className="btn btn-primary" onClick={() => router.push("/panel/vehiculos")}>

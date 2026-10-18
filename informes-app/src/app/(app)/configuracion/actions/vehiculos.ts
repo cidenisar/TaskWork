@@ -157,13 +157,17 @@ export interface AltaVehiculoResult extends ConfigActionResult {
 }
 
 /**
- * Alta de vehículo con fotos (IA): mismo flujo de siempre (la IA lee,
- * el Admin revisa/corrige, los campos finales son los que llegan en el
- * payload, nunca lo que devolvió la IA sin pasar por acá) — guarda TODAS
- * las fotos de cada lote (exterior/interior) como galería del estado del
- * vehículo al momento del alta, no solo una representativa.
+ * Alta de vehículo (IA): mismo flujo de siempre (la IA lee, el Admin
+ * revisa/corrige, los campos finales son los que llegan en el payload,
+ * nunca lo que devolvió la IA sin pasar por acá). Las fotos NO van acá —
+ * se suben aparte, en tandas chicas, con `agregarFotosVehiculoAction` (ver
+ * el comentario de esa función para el motivo: juntar hasta 14 fotos en el
+ * mismo pedido que esto puede superar el límite de tamaño de request que
+ * la plataforma le impone a una función, incluso con `bodySizeLimit` de
+ * Next.js configurado más alto — el pedido se corta antes de llegar acá,
+ * sin crear nada y sin dejar rastro en los logs de la app).
  */
-export async function altaVehiculoConFotosAction(formData: FormData): Promise<AltaVehiculoResult> {
+export async function altaVehiculoAction(formData: FormData): Promise<AltaVehiculoResult> {
   const profile = await requireAdmin();
   const raw = formData.get("payload");
   if (typeof raw !== "string") return { success: false, error: "Datos inválidos." };
@@ -189,30 +193,6 @@ export async function altaVehiculoConFotosAction(formData: FormData): Promise<Al
     return { success: false, error: error?.code === "23505" ? "Ya existe un vehículo con esa patente." : error?.message };
   }
 
-  async function subirGaleria(campo: string, carpeta: "exterior" | "interior"): Promise<string[]> {
-    const fotos = formData.getAll(campo).filter((f): f is File => f instanceof File && f.size > 0);
-    const paths: string[] = [];
-    for (let i = 0; i < fotos.length; i++) {
-      const buffer = Buffer.from(await fotos[i].arrayBuffer());
-      const path = `${vehiculo!.id}/${carpeta}-${i + 1}.jpg`;
-      const { error: upErr } = await supabase.storage.from("vehiculo-docs").upload(path, buffer, { contentType: "image/jpeg", upsert: true });
-      if (!upErr) paths.push(path);
-    }
-    return paths;
-  }
-
-  const fotosExteriorUrls = await subirGaleria("fotosExterior", "exterior");
-  const fotosInteriorUrls = await subirGaleria("fotosInterior", "interior");
-  if (fotosExteriorUrls.length > 0 || fotosInteriorUrls.length > 0) {
-    await supabase
-      .from("catalogo_vehiculos")
-      .update({
-        ...(fotosExteriorUrls.length > 0 ? { fotos_exterior_urls: fotosExteriorUrls } : {}),
-        ...(fotosInteriorUrls.length > 0 ? { fotos_interior_urls: fotosInteriorUrls } : {}),
-      })
-      .eq("id", vehiculo.id);
-  }
-
   // Inspección IA (opcional): solo los ítems que el Admin confirmó/corrigió
   // (estado no nulo) — ver catalogo_inspeccion_ia (modulo="vehiculos").
   if (payload.hallazgos && payload.hallazgos.length > 0) {
@@ -227,7 +207,63 @@ export async function altaVehiculoConFotosAction(formData: FormData): Promise<Al
     );
   }
 
-  await logAudit(supabase, profile, `Dio de alta el vehículo "${patente}" con fotos (IA)`);
+  await logAudit(supabase, profile, `Dio de alta el vehículo "${patente}" (IA)`);
   revalidateAll();
   return { success: true, vehiculoId: vehiculo.id };
+}
+
+export interface AgregarFotosVehiculoResult extends ConfigActionResult {
+  subidas?: number;
+}
+
+/**
+ * Sube UNA tanda chica de fotos (el cliente la llama varias veces seguidas,
+ * de a pocas fotos por vez) a la galería del vehículo — nunca todas las
+ * fotos de exterior+interior juntas en un solo pedido. El motivo es un
+ * límite de tamaño de request a nivel de la plataforma de hosting, que no
+ * se puede subir desde la configuración de la app: con varias fotos reales
+ * (hasta 8 de exterior + 6 de interior) el pedido combinado puede superarlo
+ * — ahí el pedido se corta ANTES de ejecutar este código, sin tirar ningún
+ * error capturable ni dejar nada guardado, y en el cliente se ve como un
+ * genérico "unexpected response" sin pista de la causa real. Mandando pocas
+ * fotos por pedido, cada uno queda bien por debajo de cualquier límite
+ * razonable sin importar cuántas fotos saque el técnico en total.
+ */
+export async function agregarFotosVehiculoAction(formData: FormData): Promise<AgregarFotosVehiculoResult> {
+  await requireAdmin();
+  const vehiculoId = formData.get("vehiculoId");
+  const carpetaRaw = formData.get("carpeta");
+  if (typeof vehiculoId !== "string" || !vehiculoId) return { success: false, error: "Falta el vehículo." };
+  if (carpetaRaw !== "exterior" && carpetaRaw !== "interior") return { success: false, error: "Lote de fotos inválido." };
+  const carpeta = carpetaRaw;
+
+  const fotos = formData.getAll("fotos").filter((f): f is File => f instanceof File && f.size > 0);
+  if (fotos.length === 0) return { success: true, subidas: 0 };
+
+  const supabase = await createClient();
+  const { data: actual } = await supabase
+    .from("catalogo_vehiculos")
+    .select("fotos_exterior_urls, fotos_interior_urls")
+    .eq("id", vehiculoId)
+    .single();
+  const yaSubidas: string[] = (carpeta === "exterior" ? actual?.fotos_exterior_urls : actual?.fotos_interior_urls) ?? [];
+
+  const nuevasUrls: string[] = [];
+  for (let i = 0; i < fotos.length; i++) {
+    const buffer = Buffer.from(await fotos[i].arrayBuffer());
+    const path = `${vehiculoId}/${carpeta}-${yaSubidas.length + nuevasUrls.length + 1}.jpg`;
+    const { error: upErr } = await supabase.storage.from("vehiculo-docs").upload(path, buffer, { contentType: "image/jpeg", upsert: true });
+    if (!upErr) nuevasUrls.push(path);
+  }
+  if (nuevasUrls.length === 0) return { success: false, error: "No se pudo subir ninguna foto de esta tanda." };
+
+  const todasLasUrls = [...yaSubidas, ...nuevasUrls];
+  const { error } = await supabase
+    .from("catalogo_vehiculos")
+    .update(carpeta === "exterior" ? { fotos_exterior_urls: todasLasUrls } : { fotos_interior_urls: todasLasUrls })
+    .eq("id", vehiculoId);
+  if (error) return { success: false, error: error.message };
+
+  revalidateAll();
+  return { success: true, subidas: nuevasUrls.length };
 }
