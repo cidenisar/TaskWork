@@ -758,3 +758,41 @@ en cambio se puede **partir ese contenido en unidades más chicas que caigan
 del lado sano del bug** — casi siempre es la diferencia entre un límite
 arbitrario que alguien va a pisar tarde o temprano y una solución que
 escala sola.
+
+## 11. Server Actions con muchas fotos — límite de tamaño de la plataforma
+
+**Juntar varias fotos ya comprimidas + el resto del payload en UNA sola
+Server Action puede superar un límite de tamaño de request que impone la
+PLATAFORMA de hosting (no Next.js) — y ese límite no se sube tocando
+`bodySizeLimit` en `next.config`, porque ese valor solo controla lo que
+Next.js mismo está dispuesto a aceptar, no lo que la infraestructura de
+abajo deja pasar.** Pasó en Informes con el alta de vehículo con fotos (IA):
+un solo botón "Dar de alta" mandaba el payload + hasta 8 fotos de exterior +
+6 de interior (14 en total, ~300-700KB cada una ya con
+`canvas.toBlob(..., "image/jpeg", 0.85)` a 1600px) en una sola Server
+Action — con varias fotos reales de un vehículo, ese combinado cruza el
+límite de la plataforma. El síntoma es idéntico al de react-pdf colgado
+(mismo mensaje genérico "An unexpected response was received from the
+server") pero la causa y la forma de confirmarla son distintas: acá el
+pedido se corta ANTES de que el código del servidor llegue a correr, así
+que **no queda ninguna fila nueva en la tabla, ni ningún registro en la
+tabla de diagnóstico de la app** (`client_errores`) — eso es lo que separa
+este caso del cuelgue de react-pdf (que si llega a ejecutar, solo que no
+termina): revisar primero si el registro padre se alcanzó a crear es la
+forma más rápida de distinguir "nunca llegó" de "llegó y se colgó".
+
+**El arreglo es el mismo principio que la sección anterior — partir en
+piezas chicas que caen del lado sano del límite, no perseguir el número
+exacto.** Separar el guardado en dos pasos: una Server Action que crea el
+registro principal con el payload de texto (siempre liviano, nunca se
+acerca a ningún límite) y devuelve el id, y una segunda Server Action que
+sube UNA TANDA CHICA de fotos por vez (3 en este caso) a la galería de ese
+registro — el cliente la llama tantas veces como haga falta, en secuencia,
+sin importar cuántas fotos haya en total. Una tanda que falla no debe tirar
+abajo lo que ya se guardó: el registro principal queda igual, y se avisa
+qué fotos no entraron en vez de hacer parecer que toda la operación
+falló. Este mismo patrón (un módulo que junta "payload + bastantes fotos
+ya comprimidas" en una sola Server Action) vale la pena revisarlo en
+cualquier flujo nuevo que guarde una galería completa de fotos en el mismo
+pedido que el resto de los datos — cuantas más fotos admite el módulo por
+diseño, más cerca está de pisar este límite.
