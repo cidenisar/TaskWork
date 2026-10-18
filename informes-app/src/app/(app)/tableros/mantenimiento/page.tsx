@@ -33,6 +33,8 @@ export default async function NuevoMantenimientoPage({ searchParams }: { searchP
       categoriaEquipo: c.categoria_equipo,
       tipoCircuito: c.tipo_circuito,
       cuerpo: "",
+      alimentadoPorUps: false,
+      rolBypassUps: null,
     });
     circuitosPorTablero.set(c.tablero_id, lista);
   }

@@ -28,6 +28,7 @@ export type TableroCategoriaEquipo =
   | "cerradura"
   | "otro";
 export type TableroTipoCircuito = "220v_mono" | "380v_tri" | "24vdc" | "12vdc" | "na";
+export type TableroRolBypassUps = "entrada" | "bypass" | "salida";
 export type RackCategoriaEquipo =
   | "router"
   | "switch"
@@ -324,6 +325,8 @@ export type TableroCircuitoRow = {
   orden: number;
   estado: EstadoEquipamiento;
   cuerpo: string | null;
+  alimentado_por_ups: boolean;
+  rol_bypass_ups: TableroRolBypassUps | null;
   created_at: string;
 }
 

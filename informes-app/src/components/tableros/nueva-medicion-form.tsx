@@ -11,7 +11,14 @@ import { VerPdfLink } from "@/components/ver-pdf-link";
 import { obtenerUrlPdfMedicionAction } from "@/app/(app)/tableros/historial/actions";
 import { UbicacionFields, type GpsCapturado } from "@/components/ubicaciones/ubicacion-fields";
 import type { Ubicacion } from "@/components/ubicaciones/types";
-import type { TableroCategoriaEquipo, TableroEventoTipo, TableroJerarquia, TableroTipo, TableroTipoCircuito } from "@/lib/database.types";
+import type {
+  TableroCategoriaEquipo,
+  TableroEventoTipo,
+  TableroJerarquia,
+  TableroRolBypassUps,
+  TableroTipo,
+  TableroTipoCircuito,
+} from "@/lib/database.types";
 import {
   TABLERO_TIPOS,
   TABLERO_TIPO_LABEL,
@@ -24,6 +31,8 @@ import {
   CATEGORIA_EQUIPO_LABEL,
   TIPO_CIRCUITO_OPCIONES,
   TIPO_CIRCUITO_LABEL,
+  ROL_BYPASS_UPS_OPCIONES,
+  ROL_BYPASS_UPS_LABEL,
   ESTADO_OPCIONES,
   categoriaLlevaAmp,
   itemMideCorriente,
@@ -47,7 +56,12 @@ interface LecturaState {
 }
 
 const LECTURA_VACIA: LecturaState = { estado: "", corrienteF: "", corrienteR: "", corrienteS: "", corrienteT: "", comentario: "" };
-const CIRCUITO_NUEVO_BASE = { categoriaEquipo: "otro" as TableroCategoriaEquipo, tipoCircuito: "na" as TableroTipoCircuito };
+const CIRCUITO_NUEVO_BASE = {
+  categoriaEquipo: "otro" as TableroCategoriaEquipo,
+  tipoCircuito: "na" as TableroTipoCircuito,
+  alimentadoPorUps: false,
+  rolBypassUps: null as TableroRolBypassUps | null,
+};
 
 function toggleEnArray<T>(arr: T[], v: T): T[] {
   return arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v];
@@ -283,6 +297,8 @@ export function NuevaMedicionForm({
           categoriaEquipo: d.categoriaEquipo,
           tipoCircuito: d.tipoCircuito,
           cuerpo: cuerpoActual.trim(),
+          alimentadoPorUps: false,
+          rolBypassUps: null,
           revisar: d.identificado !== true,
         })),
       ]);
@@ -420,6 +436,8 @@ export function NuevaMedicionForm({
               categoriaEquipo: c.categoriaEquipo,
               tipoCircuito: c.tipoCircuito,
               cuerpo: c.cuerpo.trim(),
+              alimentadoPorUps: c.alimentadoPorUps,
+              rolBypassUps: c.rolBypassUps,
               estado: l.estado,
               corrienteF: l.corrienteF,
               corrienteR: l.corrienteR,
@@ -922,6 +940,35 @@ export function NuevaMedicionForm({
                             disabled={submitting}
                           />
                         </div>
+                        <div className="field" style={{ marginBottom: 0, width: 140 }}>
+                          <label style={{ fontSize: 11 }}>Rol en bypass UPS</label>
+                          <select
+                            value={c.rolBypassUps ?? ""}
+                            onChange={(e) =>
+                              actualizarCircuito(i, { rolBypassUps: (e.target.value || null) as TableroRolBypassUps | null })
+                            }
+                            disabled={submitting}
+                          >
+                            <option value="">—</option>
+                            {ROL_BYPASS_UPS_OPCIONES.map((r) => (
+                              <option key={r} value={r}>
+                                {ROL_BYPASS_UPS_LABEL[r]}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <label
+                          className="field"
+                          style={{ marginBottom: 0, display: "flex", alignItems: "center", gap: 6, whiteSpace: "nowrap" }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={c.alimentadoPorUps}
+                            onChange={(e) => actualizarCircuito(i, { alimentadoPorUps: e.target.checked })}
+                            disabled={submitting}
+                          />
+                          <span style={{ fontSize: 11 }}>Circuito de UPS</span>
+                        </label>
                         <button type="button" className="remove-btn" onClick={() => quitarCircuito(i)} disabled={submitting}>
                           <Icon name="x" size={12} />
                         </button>
@@ -933,6 +980,8 @@ export function NuevaMedicionForm({
                       {c.tipoCircuito !== "na" ? ` · ${TIPO_CIRCUITO_LABEL[c.tipoCircuito]}` : ""}
                       {categoriaLlevaAmp(c.categoriaEquipo) && c.ampNominal ? ` (${c.ampNominal})` : ""}
                       {c.cuerpo ? ` · ${c.cuerpo}` : ""}
+                      {c.rolBypassUps ? ` · ${ROL_BYPASS_UPS_LABEL[c.rolBypassUps]}` : ""}
+                      {c.alimentadoPorUps ? " · Circuito de UPS" : ""}
                     </div>
                   )}
 

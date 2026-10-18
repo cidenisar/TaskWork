@@ -9,7 +9,15 @@ import { resolverUbicacionId, tagGpsSiFalta, type PayloadUbicacionNueva, type Pa
 import { calcularResumenEquipamiento, itemMideCorriente } from "@/components/tableros/types";
 import { construirUnifilar, construirUnifilarPaginado, agruparPorCuerpo } from "@/lib/tableros/unifilar";
 import { drawCommandsToDxf } from "@/lib/dxf/writer";
-import type { EstadoChecklist, TableroCategoriaEquipo, TableroEventoTipo, TableroJerarquia, TableroTipo, TableroTipoCircuito } from "@/lib/database.types";
+import type {
+  EstadoChecklist,
+  TableroCategoriaEquipo,
+  TableroEventoTipo,
+  TableroJerarquia,
+  TableroRolBypassUps,
+  TableroTipo,
+  TableroTipoCircuito,
+} from "@/lib/database.types";
 
 interface PayloadHallazgo {
   itemId: string;
@@ -25,6 +33,8 @@ interface PayloadLectura {
   categoriaEquipo: TableroCategoriaEquipo;
   tipoCircuito: TableroTipoCircuito;
   cuerpo: string;
+  alimentadoPorUps: boolean;
+  rolBypassUps: TableroRolBypassUps | null;
   estado: string;
   corrienteF: string;
   corrienteR: string;
@@ -154,6 +164,8 @@ export async function crearMedicionTableroAction(formData: FormData): Promise<Cr
         categoria_equipo: l.categoriaEquipo,
         tipo_circuito: l.tipoCircuito,
         cuerpo: l.cuerpo.trim() || null,
+        alimentado_por_ups: l.alimentadoPorUps,
+        rol_bypass_ups: l.rolBypassUps,
       })
       .select("id")
       .single();
@@ -272,6 +284,8 @@ export async function crearMedicionTableroAction(formData: FormData): Promise<Cr
       tipoCircuito: l.tipoCircuito,
       ampNominal: l.ampNominal || null,
       cuerpo: l.cuerpo.trim() || null,
+      alimentadoPorUps: l.alimentadoPorUps,
+      rolBypassUps: l.rolBypassUps,
     })),
   );
   // El dibujo completo (sin partir) va al DXF, que no pasa por react-pdf y

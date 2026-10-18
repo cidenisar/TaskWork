@@ -52,7 +52,7 @@ export default async function PlanoTableroPublicoPage({ params }: { params: Prom
       service.from("ubicaciones").select("region, provincia, localidad, sitio, planta, oficina").eq("id", tablero.ubicacion_id).single(),
       service
         .from("tablero_circuitos")
-        .select("numero, texto, categoria_equipo, tipo_circuito, amp_nominal, cuerpo")
+        .select("numero, texto, categoria_equipo, tipo_circuito, amp_nominal, cuerpo, alimentado_por_ups, rol_bypass_ups")
         .eq("tablero_id", id)
         .eq("estado", "activo")
         .order("numero"),
@@ -77,6 +77,8 @@ export default async function PlanoTableroPublicoPage({ params }: { params: Prom
     tipoCircuito: c.tipo_circuito,
     ampNominal: c.amp_nominal,
     cuerpo: c.cuerpo,
+    alimentadoPorUps: c.alimentado_por_ups,
+    rolBypassUps: c.rol_bypass_ups,
   }));
   const unifilar = construirUnifilar(agruparPorCuerpo(circuitos), configCalibre);
 

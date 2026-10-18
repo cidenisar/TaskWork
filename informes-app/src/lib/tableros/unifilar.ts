@@ -1,6 +1,6 @@
 import { CATEGORIA_EQUIPO_LABEL, TIPO_CIRCUITO_LABEL } from "@/components/tableros/types";
 import { calcularCalibreCircuito, parseAmperaje, type ConfigCalibreCable } from "./calibre-cable";
-import type { TableroCategoriaEquipo, TableroTipoCircuito } from "@/lib/database.types";
+import type { TableroCategoriaEquipo, TableroRolBypassUps, TableroTipoCircuito } from "@/lib/database.types";
 
 export interface UnifilarCircuito {
   numero: number;
@@ -9,6 +9,63 @@ export interface UnifilarCircuito {
   tipoCircuito: TableroTipoCircuito;
   ampNominal: string | null;
   cuerpo: string | null;
+  alimentadoPorUps: boolean;
+  rolBypassUps: TableroRolBypassUps | null;
+}
+
+/**
+ * Convención de dibujo "a mano" (AutoCAD) que se respeta en todo tablero,
+ * tenga uno o varios cuerpos: de arriba hacia abajo siempre se agrupa
+ * primero la energía de 380V/220V, después 24V/12V, después control de
+ * acceso y por último CCTV — y dentro de cada grupo de energía, lo que sale
+ * del tablero (bornera) va al fondo, para que el técnico nunca tenga que
+ * entrar al tablero a conectar algo de campo. El grupo lo decide la
+ * categoría del equipo cuando es una categoría "de función" (lectora,
+ * cerradura, cámara, inyector PoE) y el voltaje del circuito en el resto
+ * (térmica, disyuntor, bornera, fuente, UPS, batería, conversor DC,
+ * descargador, otro).
+ */
+type GrupoUnifilar = "energia_ac" | "energia_dc" | "control_acceso" | "cctv";
+
+const ORDEN_GRUPOS: GrupoUnifilar[] = ["energia_ac", "energia_dc", "control_acceso", "cctv"];
+
+function grupoDeCircuito(c: UnifilarCircuito): GrupoUnifilar {
+  if (c.categoriaEquipo === "lectora" || c.categoriaEquipo === "cerradura") return "control_acceso";
+  if (c.categoriaEquipo === "camara" || c.categoriaEquipo === "inyector_poe") return "cctv";
+  if (c.tipoCircuito === "380v_tri" || c.tipoCircuito === "220v_mono") return "energia_ac";
+  return "energia_dc";
+}
+
+const ORDEN_ROL_BYPASS: Record<TableroRolBypassUps, number> = { entrada: 0, bypass: 1, salida: 2 };
+
+/**
+ * Dentro de un mismo grupo: primero los circuitos normales, después las 3
+ * térmicas del bypass del UPS (entrada → bypass → salida, siempre juntas y
+ * en ese orden), después los circuitos de carga alimentados por UPS, y al
+ * fondo de todo las borneras (siempre el último paso antes de salir del
+ * tablero).
+ */
+function ordenDentroDeGrupo(c: UnifilarCircuito): number {
+  if (c.categoriaEquipo === "bornera" || c.categoriaEquipo === "bornera_fusible") return 3;
+  if (c.alimentadoPorUps) return 2;
+  if (c.rolBypassUps) return 1;
+  return 0;
+}
+
+/** Aplica el orden de dibujo convencional a una lista de circuitos de un mismo cuerpo, preservando el N° de circuito como desempate final. */
+export function ordenarCircuitosParaUnifilar<T extends UnifilarCircuito>(circuitos: T[]): T[] {
+  return [...circuitos].sort((a, b) => {
+    const grupoA = ORDEN_GRUPOS.indexOf(grupoDeCircuito(a));
+    const grupoB = ORDEN_GRUPOS.indexOf(grupoDeCircuito(b));
+    if (grupoA !== grupoB) return grupoA - grupoB;
+    const ordenA = ordenDentroDeGrupo(a);
+    const ordenB = ordenDentroDeGrupo(b);
+    if (ordenA !== ordenB) return ordenA - ordenB;
+    if (a.rolBypassUps && b.rolBypassUps && a.rolBypassUps !== b.rolBypassUps) {
+      return ORDEN_ROL_BYPASS[a.rolBypassUps] - ORDEN_ROL_BYPASS[b.rolBypassUps];
+    }
+    return a.numero - b.numero;
+  });
 }
 
 export type DrawCommand =
@@ -53,7 +110,8 @@ export function construirUnifilar(
   const commands: DrawCommand[] = [];
   let y = MARGEN;
 
-  for (const [cuerpo, circuitos] of circuitosPorCuerpo) {
+  for (const [cuerpo, circuitosOriginal] of circuitosPorCuerpo) {
+    const circuitos = ordenarCircuitosParaUnifilar(circuitosOriginal);
     const alturaBloque = ALTO_HEADER_CUERPO + circuitos.length * ALTO_FILA;
     const yInicioBloque = y;
 
@@ -142,7 +200,13 @@ export function construirUnifilarPaginado(
   const maxItemsPorGrupo = Math.max(1, Math.floor((ALTO_MAX_BLOQUE_SEGURO - MARGEN - GAP_CUERPO - ALTO_HEADER_CUERPO) / ALTO_FILA));
 
   const grupos: [string, UnifilarCircuito[]][] = [];
-  for (const [cuerpo, circuitos] of circuitosPorCuerpo) {
+  for (const [cuerpo, circuitosOriginal] of circuitosPorCuerpo) {
+    // Se ordena ACÁ (antes de partir en páginas), no solo dentro de
+    // `construirUnifilar` — si se ordenara después de partir, cada parte
+    // quedaría prolija por separado pero el corte entre partes caería en
+    // cualquier lado, mezclando los grupos de categoría entre una parte y
+    // la siguiente.
+    const circuitos = ordenarCircuitosParaUnifilar(circuitosOriginal);
     if (circuitos.length <= maxItemsPorGrupo) {
       grupos.push([cuerpo, circuitos]);
       continue;

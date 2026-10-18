@@ -796,3 +796,42 @@ ya comprimidas" en una sola Server Action) vale la pena revisarlo en
 cualquier flujo nuevo que guarde una galería completa de fotos en el mismo
 pedido que el resto de los datos — cuantas más fotos admite el módulo por
 diseño, más cerca está de pisar este límite.
+
+## 12. Convenciones de dibujo "a mano" (AutoCAD) → reglas de orden en código, no en la IA
+
+**Cuando un usuario pide "enseñarle a la IA" a dibujar/armar algo de una
+forma convencional (un plano, un esquema, un documento con estructura
+fija), la primera pregunta es si ese dibujo lo genera la IA o código
+determinístico — casi siempre es lo segundo, y ahí la tarea es traducir la
+convención a reglas de orden/agrupación en ese código, no a un prompt.**
+Pasó en Informes con el esquema unifilar de Tableros
+(`lib/tableros/unifilar.ts`): el usuario pidió "enseñarle a la IA" a
+dibujar el unifilar con las mismas convenciones que usa a mano en AutoCAD
+(todo lo que sale del tablero va con bornera abajo; de arriba hacia abajo
+siempre 380V/220V → 24V → control de acceso → CCTV, repetido por cuerpo si
+el tablero tiene varios; distinguir "circuitos normales" de "circuitos de
+UPS"). La IA (`/api/tableros/leer-foto`) no tiene ninguna participación en
+el dibujo — solo clasifica cada circuito individual desde la foto
+(categoría, tipo, amperaje); el layout lo arma 100% `construirUnifilar`
+con los datos ya cargados. El trabajo real fue: (1) confirmar con el
+usuario qué parte de la terminología era jerga del oficio que no conocía
+("rodeo" = bypass manual de UPS, 3 térmicas entrada/bypass/salida que se
+maniobran para sacar el UPS de servicio sin cortar los equipos), (2)
+revisar si los campos ya cargados (`categoriaEquipo`, `tipoCircuito`,
+`cuerpo`) alcanzaban para expresar la regla, y (3) para lo que no
+alcanzaba (distinguir "circuito normal" de "circuito de UPS" no se puede
+inferir de nada existente), agregar un campo nuevo chico en vez de forzarlo
+con una convención de texto libre — en este caso dos columnas booleana/enum
+(`alimentado_por_ups`, `rol_bypass_ups`) con su checkbox/select en el form
+de alta, no una migración de datos existentes (los circuitos ya cargados
+quedan con el default `false`/`null`, que es el comportamiento correcto:
+"circuito normal, no es parte de ningún bypass").
+
+**La función de orden se aplica ANTES de cualquier otra lógica que corte o
+pagine la lista, nunca después.** `construirUnifilarPaginado` ya partía
+cada cuerpo en bloques más chicos cuando no entraban en un bloque de PDF
+(ver § 10) — si se ordena cada bloque por separado después de partir, cada
+parte queda prolija por sí sola pero el corte entre partes cae en
+cualquier categoría, mezclando el orden global. Hubo que mover el
+`ordenarCircuitosParaUnifilar(circuitos)` a ANTES del cálculo de
+`maxItemsPorGrupo`/slicing, no dentro de cada slice.

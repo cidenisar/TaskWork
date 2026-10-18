@@ -1,4 +1,11 @@
-import type { TableroCategoriaEquipo, TableroEventoTipo, TableroJerarquia, TableroTipo, TableroTipoCircuito } from "@/lib/database.types";
+import type {
+  TableroCategoriaEquipo,
+  TableroEventoTipo,
+  TableroJerarquia,
+  TableroRolBypassUps,
+  TableroTipo,
+  TableroTipoCircuito,
+} from "@/lib/database.types";
 
 /**
  * Máximo de fotos que se pueden mandar juntas a la lectura con IA de un
@@ -88,6 +95,22 @@ export const TIPO_CIRCUITO_LABEL: Record<TableroTipoCircuito, string> = {
   na: "No aplica",
 };
 
+/**
+ * Rol en el bypass manual de un UPS: las 3 térmicas con la misma
+ * denominación (entrada UPS, bypass, salida UPS) que permiten sacar el UPS
+ * de servicio sin cortar los equipos aguas abajo (se baja entrada+salida,
+ * se sube bypass). Solo tiene sentido en térmicas/disyuntores — no es lo
+ * mismo que `alimentadoPorUps` (que marca un circuito de carga, aguas abajo
+ * de la salida del UPS, como "circuito de UPS" en vez de "circuito normal").
+ */
+export const ROL_BYPASS_UPS_OPCIONES: TableroRolBypassUps[] = ["entrada", "bypass", "salida"];
+
+export const ROL_BYPASS_UPS_LABEL: Record<TableroRolBypassUps, string> = {
+  entrada: "Entrada UPS",
+  bypass: "Bypass",
+  salida: "Salida UPS",
+};
+
 /** Solo térmicas/disyuntores llevan corriente de carga medible por fase. */
 const CATEGORIAS_CON_CORRIENTE: TableroCategoriaEquipo[] = ["termica", "disyuntor"];
 
@@ -152,6 +175,14 @@ export interface CircuitoItem {
    * circuito, igual criterio que el resto de los campos de alta.
    */
   cuerpo: string;
+  /**
+   * true = circuito de carga alimentado por la salida del UPS ("circuito de
+   * UPS"), en vez de un circuito normal (mains directo) — ver también
+   * `rolBypassUps` para las térmicas del bypass del UPS en sí.
+   */
+  alimentadoPorUps: boolean;
+  /** Solo para las 3 térmicas del bypass manual de un UPS — ver ROL_BYPASS_UPS_LABEL. */
+  rolBypassUps: TableroRolBypassUps | null;
   /**
    * Solo transitorio en el form (no se persiste): true cuando lo cargó la
    * lectura de foto con IA sin encontrar una etiqueta legible, así el
