@@ -52,7 +52,9 @@ export default async function PlanoTableroPublicoPage({ params }: { params: Prom
       service.from("ubicaciones").select("region, provincia, localidad, sitio, planta, oficina").eq("id", tablero.ubicacion_id).single(),
       service
         .from("tablero_circuitos")
-        .select("numero, texto, categoria_equipo, tipo_circuito, amp_nominal, cuerpo, alimentado_por_ups, rol_bypass_ups")
+        .select(
+          "id, numero, texto, categoria_equipo, tipo_circuito, amp_nominal, cuerpo, alimentado_por_ups, rol_bypass_ups, circuito_padre_id, etiqueta_cable",
+        )
         .eq("tablero_id", id)
         .eq("estado", "activo")
         .order("numero"),
@@ -70,6 +72,10 @@ export default async function PlanoTableroPublicoPage({ params }: { params: Prom
     ]);
 
   const configCalibre = (calibreRes ?? []).map((c) => ({ amperajeMax: Number(c.amperaje_max), calibreMm2: Number(c.calibre_mm2) }));
+  // circuito_padre_id es un id de otro circuito — el unifilar encadena por N°,
+  // así que acá se resuelve una sola vez con un mapa id→N° de todos los
+  // circuitos activos de este tablero (mismo patrón que tableros/nuevo/page.tsx).
+  const numeroPorId = new Map((circuitosRes ?? []).map((c) => [c.id, c.numero]));
   const circuitos: UnifilarCircuito[] = (circuitosRes ?? []).map((c) => ({
     numero: c.numero,
     texto: c.texto,
@@ -79,6 +85,8 @@ export default async function PlanoTableroPublicoPage({ params }: { params: Prom
     cuerpo: c.cuerpo,
     alimentadoPorUps: c.alimentado_por_ups,
     rolBypassUps: c.rol_bypass_ups,
+    padreNumero: c.circuito_padre_id ? (numeroPorId.get(c.circuito_padre_id) ?? null) : null,
+    etiquetaCable: c.etiqueta_cable,
   }));
   const unifilar = construirUnifilar(agruparPorCuerpo(circuitos), configCalibre);
 

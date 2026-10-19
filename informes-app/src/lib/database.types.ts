@@ -327,6 +327,8 @@ export type TableroCircuitoRow = {
   cuerpo: string | null;
   alimentado_por_ups: boolean;
   rol_bypass_ups: TableroRolBypassUps | null;
+  circuito_padre_id: string | null;
+  etiqueta_cable: string | null;
   created_at: string;
 }
 

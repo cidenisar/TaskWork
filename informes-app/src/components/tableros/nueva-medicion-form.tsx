@@ -61,6 +61,8 @@ const CIRCUITO_NUEVO_BASE = {
   tipoCircuito: "na" as TableroTipoCircuito,
   alimentadoPorUps: false,
   rolBypassUps: null as TableroRolBypassUps | null,
+  padreNumero: null as number | null,
+  etiquetaCable: "",
 };
 
 function toggleEnArray<T>(arr: T[], v: T): T[] {
@@ -299,6 +301,8 @@ export function NuevaMedicionForm({
           cuerpo: cuerpoActual.trim(),
           alimentadoPorUps: false,
           rolBypassUps: null,
+          padreNumero: null,
+          etiquetaCable: "",
           revisar: d.identificado !== true,
         })),
       ]);
@@ -438,6 +442,8 @@ export function NuevaMedicionForm({
               cuerpo: c.cuerpo.trim(),
               alimentadoPorUps: c.alimentadoPorUps,
               rolBypassUps: c.rolBypassUps,
+              padreNumero: c.padreNumero,
+              etiquetaCable: c.etiquetaCable.trim(),
               estado: l.estado,
               corrienteF: l.corrienteF,
               corrienteR: l.corrienteR,
@@ -969,6 +975,33 @@ export function NuevaMedicionForm({
                           />
                           <span style={{ fontSize: 11 }}>Circuito de UPS</span>
                         </label>
+                        <div className="field" style={{ marginBottom: 0, width: 170 }}>
+                          <label style={{ fontSize: 11 }}>Encadenar debajo de</label>
+                          <select
+                            value={c.padreNumero ?? ""}
+                            onChange={(e) => actualizarCircuito(i, { padreNumero: e.target.value ? Number(e.target.value) : null })}
+                            disabled={submitting}
+                          >
+                            <option value="">— (cabeza de columna)</option>
+                            {circuitos
+                              .filter((otro) => otro.numero !== c.numero)
+                              .map((otro) => (
+                                <option key={otro.numero} value={otro.numero}>
+                                  {otro.numero} — {otro.texto || "(sin nombre)"}
+                                </option>
+                              ))}
+                          </select>
+                        </div>
+                        <div className="field" style={{ marginBottom: 0, width: 120 }}>
+                          <label style={{ fontSize: 11 }}>Etiqueta de cable</label>
+                          <input
+                            type="text"
+                            placeholder="Ej: A80"
+                            value={c.etiquetaCable}
+                            onChange={(e) => actualizarCircuito(i, { etiquetaCable: e.target.value })}
+                            disabled={submitting}
+                          />
+                        </div>
                         <button type="button" className="remove-btn" onClick={() => quitarCircuito(i)} disabled={submitting}>
                           <Icon name="x" size={12} />
                         </button>
@@ -981,6 +1014,8 @@ export function NuevaMedicionForm({
                       {categoriaLlevaAmp(c.categoriaEquipo) && c.ampNominal ? ` (${c.ampNominal})` : ""}
                       {c.cuerpo ? ` · ${c.cuerpo}` : ""}
                       {c.rolBypassUps ? ` · ${ROL_BYPASS_UPS_LABEL[c.rolBypassUps]}` : ""}
+                      {c.padreNumero != null ? ` · debajo de N°${c.padreNumero}` : ""}
+                      {c.etiquetaCable ? ` · Cable ${c.etiquetaCable}` : ""}
                       {c.alimentadoPorUps ? " · Circuito de UPS" : ""}
                     </div>
                   )}

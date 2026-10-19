@@ -184,6 +184,16 @@ export interface CircuitoItem {
   /** Solo para las 3 térmicas del bypass manual de un UPS — ver ROL_BYPASS_UPS_LABEL. */
   rolBypassUps: TableroRolBypassUps | null;
   /**
+   * N° de OTRO circuito de este mismo tablero del que "cuelga" este (ej. un
+   * disyuntor diferencial que va pegado debajo de su térmica, en la misma
+   * columna del plano) — null si este circuito es la cabeza de su propia
+   * columna. Se guarda por N° (no por id) porque en el form un circuito
+   * nuevo todavía no tiene id hasta guardar la medición completa.
+   */
+  padreNumero: number | null;
+  /** Número/código de cable tal como lo usa el técnico en sus propios planos (ej. "A80") — texto libre, nunca autogenerado. */
+  etiquetaCable: string;
+  /**
    * Solo transitorio en el form (no se persiste): true cuando lo cargó la
    * lectura de foto con IA sin encontrar una etiqueta legible, así el
    * técnico sabe que el texto es una descripción visual y conviene

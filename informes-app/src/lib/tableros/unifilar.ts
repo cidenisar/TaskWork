@@ -11,6 +11,9 @@ export interface UnifilarCircuito {
   cuerpo: string | null;
   alimentadoPorUps: boolean;
   rolBypassUps: TableroRolBypassUps | null;
+  /** N° de otro circuito del mismo cuerpo del que "cuelga" este (misma columna del plano, un escalón más abajo) — null si es la cabeza de su propia columna. */
+  padreNumero: number | null;
+  etiquetaCable: string | null;
 }
 
 /**
@@ -59,19 +62,60 @@ function ordenDentroDeGrupo(c: UnifilarCircuito): number {
   return 0;
 }
 
+function compararCircuitos(a: UnifilarCircuito, b: UnifilarCircuito): number {
+  const grupoA = ORDEN_GRUPOS.indexOf(grupoDeCircuito(a));
+  const grupoB = ORDEN_GRUPOS.indexOf(grupoDeCircuito(b));
+  if (grupoA !== grupoB) return grupoA - grupoB;
+  const ordenA = ordenDentroDeGrupo(a);
+  const ordenB = ordenDentroDeGrupo(b);
+  if (ordenA !== ordenB) return ordenA - ordenB;
+  if (a.rolBypassUps && b.rolBypassUps && a.rolBypassUps !== b.rolBypassUps) {
+    return ORDEN_ROL_BYPASS[a.rolBypassUps] - ORDEN_ROL_BYPASS[b.rolBypassUps];
+  }
+  return a.numero - b.numero;
+}
+
 /** Aplica el orden de dibujo convencional a una lista de circuitos de un mismo cuerpo, preservando el N° de circuito como desempate final. */
 export function ordenarCircuitosParaUnifilar<T extends UnifilarCircuito>(circuitos: T[]): T[] {
-  return [...circuitos].sort((a, b) => {
-    const grupoA = ORDEN_GRUPOS.indexOf(grupoDeCircuito(a));
-    const grupoB = ORDEN_GRUPOS.indexOf(grupoDeCircuito(b));
-    if (grupoA !== grupoB) return grupoA - grupoB;
-    const ordenA = ordenDentroDeGrupo(a);
-    const ordenB = ordenDentroDeGrupo(b);
-    if (ordenA !== ordenB) return ordenA - ordenB;
-    if (a.rolBypassUps && b.rolBypassUps && a.rolBypassUps !== b.rolBypassUps) {
-      return ORDEN_ROL_BYPASS[a.rolBypassUps] - ORDEN_ROL_BYPASS[b.rolBypassUps];
+  return [...circuitos].sort(compararCircuitos);
+}
+
+/**
+ * Arma las "cadenas" de un cuerpo: cada cadena es un circuito cabeza
+ * (`padreNumero` null, o que apunta a algo que no existe en este cuerpo) más
+ * los circuitos que cuelgan de él en serie, en el orden en que se van
+ * encontrando (cabeza → hijo → nieto...). Se dibujan todos en la MISMA
+ * columna, uno debajo del otro — ver `UnifilarCircuito.padreNumero`.
+ *
+ * Si por error de carga dos circuitos señalan al mismo padre, solo el de
+ * menor N° continúa la cadena — el resto queda como cabeza de su propia
+ * columna en vez de generar una ramificación que el dibujo no sabe mostrar
+ * (acá nunca pasa en la práctica: una térmica real solo tiene UN disyuntor
+ * pegado debajo, no varios).
+ */
+function construirCadenas(circuitos: UnifilarCircuito[]): UnifilarCircuito[][] {
+  const porNumero = new Map(circuitos.map((c) => [c.numero, c]));
+  const hijoDe = new Map<number, UnifilarCircuito>();
+  for (const c of [...circuitos].sort((a, b) => a.numero - b.numero)) {
+    if (c.padreNumero != null && porNumero.has(c.padreNumero) && c.padreNumero !== c.numero && !hijoDe.has(c.padreNumero)) {
+      hijoDe.set(c.padreNumero, c);
     }
-    return a.numero - b.numero;
+  }
+  const sonHijoEncadenado = new Set(Array.from(hijoDe.values(), (c) => c.numero));
+  const cabezas = circuitos.filter((c) => !sonHijoEncadenado.has(c.numero));
+
+  return cabezas.map((cabeza) => {
+    const cadena: UnifilarCircuito[] = [cabeza];
+    const vistos = new Set([cabeza.numero]);
+    let actual = cabeza;
+    while (hijoDe.has(actual.numero)) {
+      const hijo = hijoDe.get(actual.numero)!;
+      if (vistos.has(hijo.numero)) break; // corta ante un ciclo (dato mal cargado), no debería pasar
+      cadena.push(hijo);
+      vistos.add(hijo.numero);
+      actual = hijo;
+    }
+    return cadena;
   });
 }
 
@@ -105,14 +149,13 @@ export interface UnifilarDrawing {
  * "CIRCUITO X — ..." de los planos reales, sin rotar el texto para no
  * complicar el renderer de PDF/DXF).
  *
- * Simplificación deliberada frente al plano real: acá cada circuito es UN
- * solo símbolo por columna — los planos reales a veces encadenan varios
- * dispositivos en la misma columna (ej. bornera de entrada → térmica →
- * disyuntor, los tres en la misma bajada) porque físicamente un circuito
- * pasa por más de una protección en serie. Nuestro modelo de datos
- * (`tablero_circuitos`) guarda cada dispositivo como un circuito
- * independiente, sin relación "este alimenta a este otro" — reproducir la
- * cadena real necesitaría ese dato nuevo, no es solo un cambio de dibujo.
+ * Una columna puede llevar varios dispositivos encadenados (ej. bornera de
+ * entrada → térmica → disyuntor, los tres en la misma bajada, como pasa
+ * físicamente cuando un circuito atraviesa más de una protección en serie
+ * — ver `UnifilarCircuito.padreNumero` y `construirCadenas`): cada eslabón
+ * salvo el último lleva una etiqueta compacta de una sola línea al costado
+ * del símbolo, y el último lleva el bloque de datos completo + la cajita de
+ * identificación, igual que un circuito suelto.
  */
 const ANCHO = 520;
 const MARGEN = 10;
@@ -124,11 +167,21 @@ const GAP_CUERPO = 10;
 
 const BUS_DROP = 8;
 const SIMBOLO_R = 5;
+const PASO_ENCADENADO = SIMBOLO_R * 2 + 3;
 const DROP_A_ETIQUETA = 6;
 const ALTO_LINEA = 7;
 const LINEAS_SPEC = 3;
 const ALTO_ID_BOX = 12;
-const ALTO_FILA_COLUMNAS = BUS_DROP + SIMBOLO_R * 2 + DROP_A_ETIQUETA + LINEAS_SPEC * ALTO_LINEA + 4 + ALTO_ID_BOX;
+
+/** Altura (desde la barra del renglón hasta el pie de la cajita de ID) de una columna con `profundidad` dispositivos encadenados — calculada simulando los mismos pasos que dibuja `renderGrupos`, para que nunca quede corta. */
+function alturaColumna(profundidad: number): number {
+  let yAnchor = 0;
+  for (let nivel = 0; nivel < profundidad; nivel++) {
+    const paso = nivel === 0 ? BUS_DROP : PASO_ENCADENADO;
+    yAnchor = yAnchor + paso + SIMBOLO_R;
+  }
+  return yAnchor + DROP_A_ETIQUETA + LINEAS_SPEC * ALTO_LINEA + 4 + ALTO_ID_BOX;
+}
 
 function truncar(s: string, max: number): string {
   return s.length > max ? `${s.slice(0, max - 1)}…` : s;
@@ -166,30 +219,35 @@ function truncarColumna(s: string): string {
   return truncar(s, 16);
 }
 
-type RenglonUnifilar = { tipo: "header"; texto: string } | { tipo: "columnas"; circuitos: UnifilarCircuito[] };
+/** Trunca la etiqueta compacta de un eslabón intermedio de una cadena (va al costado del símbolo, con menos lugar todavía). */
+function truncarEslabon(s: string): string {
+  return truncar(s, 12);
+}
 
-/** Ordena los circuitos de un cuerpo, intercala un renglón de encabezado por cada cambio de sección (energía AC → DC → control de acceso → CCTV), y agrupa de a `COLUMNAS_POR_FILA` para la barra horizontal tipo escalera. */
+type RenglonUnifilar = { tipo: "header"; texto: string } | { tipo: "columnas"; cadenas: UnifilarCircuito[][] };
+
+/** Ordena las cadenas de un cuerpo (por la cabeza de cada una), intercala un renglón de encabezado por cada cambio de sección (energía AC → DC → control de acceso → CCTV), y agrupa de a `COLUMNAS_POR_FILA` para la barra horizontal tipo escalera. */
 function prepararRenglones(circuitos: UnifilarCircuito[]): RenglonUnifilar[] {
-  const ordenados = ordenarCircuitosParaUnifilar(circuitos);
+  const cadenas = construirCadenas(circuitos).sort((a, b) => compararCircuitos(a[0], b[0]));
   const renglones: RenglonUnifilar[] = [];
   let grupoActual: GrupoUnifilar | null = null;
-  let pendientes: UnifilarCircuito[] = [];
+  let pendientes: UnifilarCircuito[][] = [];
 
   const flush = () => {
     if (pendientes.length > 0) {
-      renglones.push({ tipo: "columnas", circuitos: pendientes });
+      renglones.push({ tipo: "columnas", cadenas: pendientes });
       pendientes = [];
     }
   };
 
-  for (const c of ordenados) {
-    const grupo = grupoDeCircuito(c);
+  for (const cadena of cadenas) {
+    const grupo = grupoDeCircuito(cadena[0]);
     if (grupo !== grupoActual) {
       flush();
       renglones.push({ tipo: "header", texto: LABEL_GRUPO[grupo] });
       grupoActual = grupo;
     }
-    pendientes.push(c);
+    pendientes.push(cadena);
     if (pendientes.length === COLUMNAS_POR_FILA) flush();
   }
   flush();
@@ -197,7 +255,52 @@ function prepararRenglones(circuitos: UnifilarCircuito[]): RenglonUnifilar[] {
 }
 
 function altoRenglon(r: RenglonUnifilar): number {
-  return r.tipo === "header" ? ALTO_HEADER_SECCION : ALTO_FILA_COLUMNAS;
+  if (r.tipo === "header") return ALTO_HEADER_SECCION;
+  const profundidadMax = Math.max(...r.cadenas.map((c) => c.length));
+  return alturaColumna(profundidadMax);
+}
+
+/** Dibuja una columna completa (una cadena de 1 o más dispositivos encadenados) arrancando desde `yBus`. Cada eslabón salvo el último lleva una etiqueta compacta al costado; el último lleva el bloque de datos + la cajita de identificación. */
+function dibujarColumna(commands: DrawCommand[], cadena: UnifilarCircuito[], cx: number, yBus: number, configCalibre: ConfigCalibreCable[]): void {
+  let yAnchor = yBus;
+  cadena.forEach((c, nivel) => {
+    const esUltimo = nivel === cadena.length - 1;
+    const paso = nivel === 0 ? BUS_DROP : PASO_ENCADENADO;
+    const ySymbol = yAnchor + paso;
+    commands.push({ type: "line", x1: cx, y1: yAnchor, x2: cx, y2: ySymbol - SIMBOLO_R });
+    dibujarSimbolo(commands, c.categoriaEquipo, cx, ySymbol);
+    yAnchor = ySymbol + SIMBOLO_R;
+
+    if (!esUltimo) {
+      // Eslabón intermedio (ej. la térmica de la que cuelga un disyuntor): una sola línea compacta al costado del símbolo.
+      const amperaje = parseAmperaje(c.ampNominal);
+      const partes = [CATEGORIA_EQUIPO_LABEL[c.categoriaEquipo], amperaje ? `${amperaje}A` : null].filter((p): p is string => !!p);
+      commands.push({ type: "text", x: cx + SIMBOLO_R + 2, y: ySymbol + 2, text: truncarEslabon(partes.join(" ")), size: 5.5 });
+      return;
+    }
+
+    const yEtiqueta = yAnchor + DROP_A_ETIQUETA;
+    commands.push({ type: "line", x1: cx, y1: yAnchor, x2: cx, y2: yEtiqueta });
+
+    const colLeft = cx - COLUMNA_ANCHO / 2 + 3;
+    const { calibreMm2, colores } = calcularCalibreCircuito(c.categoriaEquipo, c.tipoCircuito, c.ampNominal, configCalibre);
+    const amperaje = parseAmperaje(c.ampNominal);
+    const sufijo = c.rolBypassUps ? ROL_BYPASS_SUFIJO[c.rolBypassUps] : c.alimentadoPorUps ? " (UPS)" : "";
+    const linea1 = `${CATEGORIA_EQUIPO_LABEL[c.categoriaEquipo]}${sufijo}`;
+    const linea2Partes = [c.tipoCircuito !== "na" ? TIPO_CIRCUITO_LABEL[c.tipoCircuito] : null, amperaje ? `${amperaje}A` : null].filter(
+      (p): p is string => !!p,
+    );
+    const linea3Partes = [calibreMm2 ? `${calibreMm2}mm²` : null, colores].filter((p): p is string => !!p);
+    const specs = [linea1, linea2Partes.join(" "), linea3Partes.join(" ")].filter((s) => s.length > 0);
+    specs.slice(0, LINEAS_SPEC).forEach((s, li) => {
+      commands.push({ type: "text", x: colLeft, y: yEtiqueta + ALTO_LINEA * (li + 1), text: truncarColumna(s), size: 6, bold: li === 0 });
+    });
+
+    const yId = yEtiqueta + LINEAS_SPEC * ALTO_LINEA + 4;
+    commands.push({ type: "rect", x: colLeft - 1, y: yId, width: COLUMNA_ANCHO - 8, height: ALTO_ID_BOX });
+    const etiquetaId = c.etiquetaCable ? `${c.numero} — ${c.texto} (${c.etiquetaCable})` : `${c.numero} — ${c.texto}`;
+    commands.push({ type: "text", x: colLeft + 2, y: yId + 9, text: truncarColumna(etiquetaId), size: 6.5, bold: true });
+  });
 }
 
 /** Arma los draw commands de un cuerpo ya resuelto en renglones (columnas de circuitos + encabezados de sección). Compartido por `construirUnifilar` y `construirUnifilarPaginado` para que el dibujo de a pedazos (paginado) sea idéntico al dibujo completo. */
@@ -221,48 +324,16 @@ function renderGrupos(grupos: [string, RenglonUnifilar[]][], configCalibre: Conf
       }
 
       const yBus = yRenglon + 3;
-      const ySymbol = yBus + BUS_DROP;
-      const centros = renglon.circuitos.map((_, i) => MARGEN + i * COLUMNA_ANCHO + COLUMNA_ANCHO / 2);
+      const centros = renglon.cadenas.map((_, i) => MARGEN + i * COLUMNA_ANCHO + COLUMNA_ANCHO / 2);
       // Barra horizontal del renglón (doble línea) de la primera a la última columna usada.
       if (centros.length > 1) {
         commands.push({ type: "line", x1: centros[0], y1: yBus, x2: centros[centros.length - 1], y2: yBus });
         commands.push({ type: "line", x1: centros[0], y1: yBus + 1.2, x2: centros[centros.length - 1], y2: yBus + 1.2 });
       }
 
-      renglon.circuitos.forEach((c, i) => {
-        const cx = centros[i];
-        commands.push({ type: "line", x1: cx, y1: yBus, x2: cx, y2: ySymbol - SIMBOLO_R });
-        dibujarSimbolo(commands, c.categoriaEquipo, cx, ySymbol);
-        const yEtiqueta = ySymbol + SIMBOLO_R + DROP_A_ETIQUETA;
-        commands.push({ type: "line", x1: cx, y1: ySymbol + SIMBOLO_R, x2: cx, y2: yEtiqueta });
+      renglon.cadenas.forEach((cadena, i) => dibujarColumna(commands, cadena, centros[i], yBus, configCalibre));
 
-        const colLeft = cx - COLUMNA_ANCHO / 2 + 3;
-        const amperaje = parseAmperaje(c.ampNominal);
-        const { calibreMm2, colores } = calcularCalibreCircuito(c.categoriaEquipo, c.tipoCircuito, c.ampNominal, configCalibre);
-        const sufijo = c.rolBypassUps ? ROL_BYPASS_SUFIJO[c.rolBypassUps] : c.alimentadoPorUps ? " (UPS)" : "";
-        const linea1 = `${CATEGORIA_EQUIPO_LABEL[c.categoriaEquipo]}${sufijo}`;
-        const linea2Partes = [c.tipoCircuito !== "na" ? TIPO_CIRCUITO_LABEL[c.tipoCircuito] : null, amperaje ? `${amperaje}A` : null].filter(
-          (p): p is string => !!p,
-        );
-        const linea3Partes = [calibreMm2 ? `${calibreMm2}mm²` : null, colores].filter((p): p is string => !!p);
-        const specs = [linea1, linea2Partes.join(" "), linea3Partes.join(" ")].filter((s) => s.length > 0);
-        specs.slice(0, LINEAS_SPEC).forEach((s, li) => {
-          commands.push({ type: "text", x: colLeft, y: yEtiqueta + ALTO_LINEA * (li + 1), text: truncarColumna(s), size: 6, bold: li === 0 });
-        });
-
-        const yId = yEtiqueta + LINEAS_SPEC * ALTO_LINEA + 4;
-        commands.push({ type: "rect", x: colLeft - 1, y: yId, width: COLUMNA_ANCHO - 8, height: ALTO_ID_BOX });
-        commands.push({
-          type: "text",
-          x: colLeft + 2,
-          y: yId + 9,
-          text: truncarColumna(`${c.numero} — ${c.texto}`),
-          size: 6.5,
-          bold: true,
-        });
-      });
-
-      yRenglon += ALTO_FILA_COLUMNAS;
+      yRenglon += altoRenglon(renglon);
     }
 
     y = yInicioBloque + alturaBloque + GAP_CUERPO;

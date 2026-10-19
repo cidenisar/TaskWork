@@ -954,3 +954,107 @@ este otro", y no hay coordenadas físicas de montaje — harían falta campos
 nuevos (relación entre circuitos, posición X/Y), no solo una función de
 dibujo distinta. Documentado y comunicado explícitamente al usuario en vez
 de fingir una réplica 1 a 1 que el dato disponible no sostiene.
+
+## 16. Encadenado de circuitos en una columna: cerrando el límite de la § 15
+
+Cierra una de las dos brechas documentadas en la § 15 (la de "bornera →
+térmica → disyuntor en la misma bajada" — la vista topográfica con
+coordenadas X/Y sigue sin implementarse, esa sí requiere un modelo de
+datos totalmente distinto). El patrón que terminó andando:
+
+- **Campo de relación por N°, no por id.** `circuito_padre_id` (uuid, FK a
+  `tablero_circuitos`) es lo que se persiste, pero el formulario de alta
+  elige el padre por **número de circuito** (`padreNumero` en el tipo de
+  UI), no por id — porque en el form un circuito recién agregado en la
+  misma visita todavía no tiene id hasta guardar. La resolución
+  N°→id pasa a una segunda pasada DESPUÉS del insert loop (`actions.ts`):
+  se insertan todos los circuitos primero, se arma un mapa N°→id con los
+  ids ya generados, y recién ahí se hace el `update` de
+  `circuito_padre_id` — así no importa si el padre y el hijo se cargaron
+  en el mismo visita o si el padre ya existía de una visita anterior.
+- **Altura simulada, no estimada.** El riesgo real al agregar "más de un
+  dispositivo por columna" es que la función que calcula cuánto mide cada
+  bloque (para el corte seguro de react-pdf, ver § 10/§ 14) empiece a
+  **subestimar** la altura real dibujada — si eso pasa, el bloque se
+  arma por debajo del límite seguro en el cálculo pero el dibujo real lo
+  supera, y vuelve el cuelgue silencioso. La función
+  `alturaColumna(profundidad)` evita ese riesgo literalmente replicando
+  paso a paso el mismo avance de `y` que hace el loop real de dibujo
+  (`dibujarColumna`), en vez de una fórmula aproximada — cualquier cambio
+  futuro al loop de dibujo que no se refleje en `alturaColumna` es un bug
+  de altura por construcción, no silencioso: alcanza con mirar que ambas
+  funciones avancen `y` de la misma forma.
+- **Un solo hijo por padre, con fallback silencioso documentado como tal.**
+  Si dos circuitos distintos apuntan al mismo padre (dato mal cargado),
+  solo el de N° más bajo continúa la cadena — los demás quedan como
+  cabeza de su propia columna en vez de fallar o loopear. Nunca pasa con
+  el uso real (una térmica tiene un único disyuntor aguas abajo), pero es
+  mejor un fallback predecible que una excepción en el render de un PDF
+  de producción.
+- **Validado con el mismo método de la § 14, ahora con cadenas reales.**
+  Antes de confiar en el rediseño de altura, se corrió el mismo tipo de
+  prueba (patch temporal a `@react-pdf/hyphenate` + `tsx` + reversión) con
+  un tablero sintético de 78 circuitos incluyendo cadenas de profundidad 2
+  y 3 — el bloque más alto dio 446pt (seguro, el límite es 480pt) y
+  renderizó en <500ms sin colgarse.
+
+**Lo que se dejó explícitamente para después (acordado con el usuario, no
+un olvido):** la detección automática de encadenado desde la foto (que la
+IA de `leer-foto` reconozca "esta térmica tiene un disyuntor pegado abajo"
+y pre-cargue `padreNumero`) no se implementó en este incremento — el campo
+se carga a mano en el form. Igual con la etiqueta de cable
+(`etiqueta_cable`): es texto libre que tipea el técnico, nunca
+autogenerado, porque el esquema de numeración propio del cliente
+(continuidad entre planos, por ejemplo "A80") no es algo que el sistema
+pueda inventar de forma confiable sin ver el resto de los planos del
+sitio.
+
+## 17. Por qué una herramienta generativa (foto → dibujo en un paso) y un pipeline determinístico no son la misma solución al mismo problema
+
+El usuario comparó este feature con pasarle una foto a Claude Cowork y
+pedirle que dibuje el plano directo — con menos correcciones de ida y
+vuelta que las rondas que costó este unifilar. Vale la pena dejarlo
+escrito porque es una pregunta que va a volver a aparecer con cualquier
+output "visual" que el sistema tenga que generar:
+
+- **Cowork resuelve "dibujame esto una vez, que se parezca"**: un modelo
+  con visión mira la foto/PDF de referencia y genera directamente el
+  dibujo final (SVG/código de dibujo) en un solo paso, usando su criterio
+  de qué es "parecido" sobre ESE caso puntual. Barato en iteración
+  porque no hay pipeline que mantener, pero el resultado no es
+  reproducible (la misma foto dos veces puede salir distinta), no
+  escala a miles de tableros sin re-pagar el costo de IA por cada uno, y
+  no da garantías de que el PDF/DXF resultante sea válido para abrir en
+  AutoCAD real (texto bien formado, entidades correctas, campos
+  editables) — el output es "una imagen que se ve bien", no un plano
+  técnico con estructura de datos detrás.
+- **Esta app resuelve "de estos datos estructurados (circuitos, amperaje,
+  categoría, relación padre-hijo), generá SIEMPRE el mismo dibujo
+  correcto"**: la IA de `leer-foto` solo clasifica circuitos individuales
+  desde una foto (texto, categoría, amperaje) — el layout del unifilar
+  (`lib/tableros/unifilar.ts`) es código determinístico, cero IA, que
+  arma el mismo dibujo pixel-exacto a partir de los mismos datos, sin
+  importar cuántas veces se regenere. Esto es necesario acá porque: (1)
+  el PDF/DXF se vuelve a generar en cada visita y tiene que seguir
+  viéndose igual de prolijo sin reintentos ni revisión manual; (2) tiene
+  que abrir sin errores en AutoCAD real (de ahí los bugs de § 13); (3) el
+  costo de IA por imagen no se puede pagar por cada uno de los miles de
+  tableros relevados; (4) cualquier corrección al estilo de dibujo (como
+  el encadenado de la § 16) tiene que aplicarse retroactivamente a TODOS
+  los tableros existentes con un solo cambio de código, no volviendo a
+  generar imagen por imagen.
+- **La contrapartida real**: cuando el layout determinístico no reconoce
+  un patrón nuevo de los planos reales (como pasó con el encadenado antes
+  de la § 16), hay que programarlo a mano — no "simplemente funciona"
+  como con un modelo generativo. Por eso la lección de la § 15 (pedir la
+  referencia real cuanto antes) importa tanto acá: cada patrón nuevo que
+  el código no contempla todavía es una ronda de ida y vuelta, a
+  diferencia de una herramienta generativa que "adivina" razonablemente
+  bien sobre casos que nunca vio.
+
+**Conclusión para el próximo proyecto con un output visual similar:** si
+el resultado tiene que ser reproducible, barato de regenerar en volumen,
+y válido para un formato técnico externo (CAD, no solo una imagen), un
+pipeline determinístico (datos estructurados → reglas de dibujo en
+código) es la elección correcta aunque cueste más iteración inicial que
+pedirle a un modelo con visión que lo dibuje directo.

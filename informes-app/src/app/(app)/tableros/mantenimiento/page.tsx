@@ -35,6 +35,8 @@ export default async function NuevoMantenimientoPage({ searchParams }: { searchP
       cuerpo: "",
       alimentadoPorUps: false,
       rolBypassUps: null,
+      padreNumero: null,
+      etiquetaCable: "",
     });
     circuitosPorTablero.set(c.tablero_id, lista);
   }

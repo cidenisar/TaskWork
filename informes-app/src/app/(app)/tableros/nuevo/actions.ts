@@ -35,6 +35,8 @@ interface PayloadLectura {
   cuerpo: string;
   alimentadoPorUps: boolean;
   rolBypassUps: TableroRolBypassUps | null;
+  padreNumero: number | null;
+  etiquetaCable: string;
   estado: string;
   corrienteF: string;
   corrienteR: string;
@@ -166,6 +168,7 @@ export async function crearMedicionTableroAction(formData: FormData): Promise<Cr
         cuerpo: l.cuerpo.trim() || null,
         alimentado_por_ups: l.alimentadoPorUps,
         rol_bypass_ups: l.rolBypassUps,
+        etiqueta_cable: l.etiquetaCable.trim() || null,
       })
       .select("id")
       .single();
@@ -173,6 +176,21 @@ export async function crearMedicionTableroAction(formData: FormData): Promise<Cr
       return { success: false, error: `No se pudo guardar el circuito "${l.texto}": ${circErr?.message ?? "error desconocido"}` };
     }
     circuitoIdPorIndice.push(nuevoCircuito.id);
+  }
+
+  // Encadenado (circuito_padre_id): se resuelve DESPUÉS de insertar todos los
+  // circuitos nuevos, porque `padreNumero` puede apuntar a un circuito que
+  // recién se creó en esta misma medición (y hasta ahí no tenía id) — se
+  // busca por N°, no por orden de carga, así no importa en qué orden el
+  // técnico los fue agregando. Puede encadenar tanto un circuito nuevo como
+  // uno que ya existía de una visita anterior.
+  const idPorNumero = new Map(payload.lecturas.map((l, i) => [l.numero, circuitoIdPorIndice[i]]));
+  for (let i = 0; i < payload.lecturas.length; i++) {
+    const l = payload.lecturas[i];
+    if (l.padreNumero == null) continue;
+    const padreId = idPorNumero.get(l.padreNumero);
+    if (!padreId) continue;
+    await supabase.from("tablero_circuitos").update({ circuito_padre_id: padreId }).eq("id", circuitoIdPorIndice[i]!);
   }
 
   // N° de generación único (TAB-{año}-{4 dígitos}), con reintento ante colisión.
@@ -286,6 +304,8 @@ export async function crearMedicionTableroAction(formData: FormData): Promise<Cr
       cuerpo: l.cuerpo.trim() || null,
       alimentadoPorUps: l.alimentadoPorUps,
       rolBypassUps: l.rolBypassUps,
+      padreNumero: l.padreNumero,
+      etiquetaCable: l.etiquetaCable.trim() || null,
     })),
   );
   // El dibujo completo (sin partir) va al DXF, que no pasa por react-pdf y

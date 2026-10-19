@@ -14,7 +14,9 @@ export default async function NuevaMedicionPage({ searchParams }: { searchParams
     supabase.from("tableros").select("id, subsistemas, denominacion, ubicacion_id").order("denominacion"),
     supabase
       .from("tablero_circuitos")
-      .select("id, tablero_id, numero, texto, amp_nominal, categoria_equipo, tipo_circuito, cuerpo, alimentado_por_ups, rol_bypass_ups")
+      .select(
+        "id, tablero_id, numero, texto, amp_nominal, categoria_equipo, tipo_circuito, cuerpo, alimentado_por_ups, rol_bypass_ups, circuito_padre_id, etiqueta_cable",
+      )
       .eq("estado", "activo")
       .order("numero"),
     fetchTodasLasUbicaciones(supabase),
@@ -25,6 +27,11 @@ export default async function NuevaMedicionPage({ searchParams }: { searchParams
   const ubicacionesPorId = new Map(ubicaciones.map((u) => [u.id, u]));
   const provincias = (provinciasRes.data ?? []).map((p) => p.nombre);
   const catalogoHallazgos = hallazgosRes.data ?? [];
+
+  // circuito_padre_id es un id de otro circuito — el form elige el padre por
+  // N° (más estable mientras se está armando la medición), así que acá se
+  // resuelve una sola vez con un mapa id→N° de todos los circuitos leídos.
+  const numeroPorId = new Map((circuitosRes.data ?? []).map((c) => [c.id, c.numero]));
 
   const circuitosPorTablero = new Map<string, TableroConCircuitos["circuitos"]>();
   for (const c of circuitosRes.data ?? []) {
@@ -39,6 +46,8 @@ export default async function NuevaMedicionPage({ searchParams }: { searchParams
       cuerpo: c.cuerpo ?? "",
       alimentadoPorUps: c.alimentado_por_ups,
       rolBypassUps: c.rol_bypass_ups,
+      padreNumero: c.circuito_padre_id ? (numeroPorId.get(c.circuito_padre_id) ?? null) : null,
+      etiquetaCable: c.etiqueta_cable ?? "",
     });
     circuitosPorTablero.set(c.tablero_id, lista);
   }
