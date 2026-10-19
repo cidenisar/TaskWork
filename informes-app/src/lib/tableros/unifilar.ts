@@ -82,27 +82,12 @@ const LABEL_GRUPO: Record<GrupoUnifilar, string> = {
   cctv: "CCTV",
 };
 
-type FilaUnifilar = { tipo: "header"; texto: string } | { tipo: "circuito"; circuito: UnifilarCircuito };
-
-/** Ordena los circuitos de un cuerpo y les intercala un renglón de encabezado cada vez que cambia el grupo (energía AC → DC → control de acceso → CCTV) — así el plano se lee en secciones, no como una lista plana. */
-function prepararFilas(circuitos: UnifilarCircuito[]): FilaUnifilar[] {
-  const ordenados = ordenarCircuitosParaUnifilar(circuitos);
-  const filas: FilaUnifilar[] = [];
-  let grupoActual: GrupoUnifilar | null = null;
-  for (const c of ordenados) {
-    const grupo = grupoDeCircuito(c);
-    if (grupo !== grupoActual) {
-      filas.push({ tipo: "header", texto: LABEL_GRUPO[grupo] });
-      grupoActual = grupo;
-    }
-    filas.push({ tipo: "circuito", circuito: c });
-  }
-  return filas;
-}
+const ROL_BYPASS_SUFIJO: Record<TableroRolBypassUps, string> = { entrada: " (E)", bypass: " (BYP)", salida: " (S)" };
 
 export type DrawCommand =
   | { type: "line"; x1: number; y1: number; x2: number; y2: number }
   | { type: "rect"; x: number; y: number; width: number; height: number }
+  | { type: "circle"; x: number; y: number; r: number }
   | { type: "text"; x: number; y: number; text: string; size: number; bold?: boolean };
 
 export interface UnifilarDrawing {
@@ -111,16 +96,39 @@ export interface UnifilarDrawing {
   height: number;
 }
 
-const ANCHO = 500;
+/**
+ * Layout tipo "escalera" (barra horizontal arriba, cada circuito cuelga
+ * hacia abajo en su propia columna) — calcado de cómo lo dibuja el técnico
+ * en AutoCAD: columnas de ~5 por fila (como en los planos reales), símbolo
+ * de llave/borne/equipo, bloque de datos debajo, y una cajita de
+ * identificación del circuito al pie de cada columna (el equivalente a los
+ * "CIRCUITO X — ..." de los planos reales, sin rotar el texto para no
+ * complicar el renderer de PDF/DXF).
+ *
+ * Simplificación deliberada frente al plano real: acá cada circuito es UN
+ * solo símbolo por columna — los planos reales a veces encadenan varios
+ * dispositivos en la misma columna (ej. bornera de entrada → térmica →
+ * disyuntor, los tres en la misma bajada) porque físicamente un circuito
+ * pasa por más de una protección en serie. Nuestro modelo de datos
+ * (`tablero_circuitos`) guarda cada dispositivo como un circuito
+ * independiente, sin relación "este alimenta a este otro" — reproducir la
+ * cadena real necesitaría ese dato nuevo, no es solo un cambio de dibujo.
+ */
+const ANCHO = 520;
 const MARGEN = 10;
 const ALTO_HEADER_CUERPO = 18;
-const ALTO_FILA = 16;
+const COLUMNA_ANCHO = 100;
+const COLUMNAS_POR_FILA = Math.max(1, Math.floor((ANCHO - MARGEN * 2) / COLUMNA_ANCHO));
+const ALTO_HEADER_SECCION = 12;
 const GAP_CUERPO = 10;
-const BUS_X = MARGEN + 14;
-const BREAKER_X = BUS_X + 30;
-const BREAKER_SIZE = 9;
-const TEXTO_X = BREAKER_X + BREAKER_SIZE + 10;
-const MAX_CHARS_TEXTO = 72;
+
+const BUS_DROP = 8;
+const SIMBOLO_R = 5;
+const DROP_A_ETIQUETA = 6;
+const ALTO_LINEA = 7;
+const LINEAS_SPEC = 3;
+const ALTO_ID_BOX = 12;
+const ALTO_FILA_COLUMNAS = BUS_DROP + SIMBOLO_R * 2 + DROP_A_ETIQUETA + LINEAS_SPEC * ALTO_LINEA + 4 + ALTO_ID_BOX;
 
 function truncar(s: string, max: number): string {
   return s.length > max ? `${s.slice(0, max - 1)}…` : s;
@@ -130,76 +138,132 @@ const CATEGORIAS_BREAKER: TableroCategoriaEquipo[] = ["termica", "disyuntor"];
 const CATEGORIAS_BORNERA: TableroCategoriaEquipo[] = ["bornera", "bornera_fusible"];
 
 /**
- * Símbolo por categoría en vez de un cuadrado vacío genérico (que a simple
- * vista se leía como un casillero de checklist, no como un plano): térmica/
- * disyuntor dibuja el símbolo clásico de llave/interruptor (caja + diagonal),
- * bornera dibuja el símbolo de borne de salida (dos trazos cortos, el punto
- * de conexión de campo), y el resto de las categorías (fuente, UPS, batería,
- * conversor, descargador, cámara, lectora, cerradura, inyector PoE, otro)
- * usa una caja simple de equipo.
+ * Símbolo por categoría en vez de un cuadrado vacío genérico: térmica/
+ * disyuntor dibuja el símbolo clásico de llave seccionadora (dos bornes +
+ * la cuchilla en diagonal), bornera dibuja el banco de bornes (dos círculos,
+ * el punto de conexión de campo, como en los planos reales), y el resto de
+ * las categorías usa una caja simple de equipo.
  */
-function dibujarSimbolo(commands: DrawCommand[], categoria: TableroCategoriaEquipo, yFila: number): void {
+function dibujarSimbolo(commands: DrawCommand[], categoria: TableroCategoriaEquipo, cx: number, cy: number): void {
   if (CATEGORIAS_BREAKER.includes(categoria)) {
-    commands.push({ type: "rect", x: BREAKER_X, y: yFila - BREAKER_SIZE / 2, width: BREAKER_SIZE, height: BREAKER_SIZE });
-    commands.push({
-      type: "line",
-      x1: BREAKER_X,
-      y1: yFila + BREAKER_SIZE / 2,
-      x2: BREAKER_X + BREAKER_SIZE,
-      y2: yFila - BREAKER_SIZE / 2,
-    });
+    const yTop = cy - SIMBOLO_R;
+    const yBot = cy + SIMBOLO_R;
+    commands.push({ type: "circle", x: cx, y: yTop, r: 1.2 });
+    commands.push({ type: "circle", x: cx, y: yBot, r: 1.2 });
+    commands.push({ type: "line", x1: cx, y1: yBot, x2: cx + SIMBOLO_R * 0.8, y2: yTop + SIMBOLO_R * 0.3 });
     return;
   }
   if (CATEGORIAS_BORNERA.includes(categoria)) {
-    const x1 = BREAKER_X + BREAKER_SIZE * 0.3;
-    const x2 = BREAKER_X + BREAKER_SIZE * 0.7;
-    commands.push({ type: "line", x1, y1: yFila - BREAKER_SIZE / 2, x2: x1, y2: yFila + BREAKER_SIZE / 2 });
-    commands.push({ type: "line", x1: x2, y1: yFila - BREAKER_SIZE / 2, x2: x2, y2: yFila + BREAKER_SIZE / 2 });
+    commands.push({ type: "circle", x: cx, y: cy - SIMBOLO_R * 0.5, r: 1.6 });
+    commands.push({ type: "circle", x: cx, y: cy + SIMBOLO_R * 0.5, r: 1.6 });
     return;
   }
-  commands.push({ type: "rect", x: BREAKER_X, y: yFila - BREAKER_SIZE / 2, width: BREAKER_SIZE, height: BREAKER_SIZE });
+  commands.push({ type: "rect", x: cx - SIMBOLO_R, y: cy - SIMBOLO_R, width: SIMBOLO_R * 2, height: SIMBOLO_R * 2 });
 }
 
-/** Arma los draw commands de un cuerpo ya resuelto en filas (circuitos ordenados + encabezados de sección intercalados). Compartido por `construirUnifilar` y `construirUnifilarPaginado` para que el dibujo de a pedazos (paginado) sea idéntico al dibujo completo. */
-function renderGrupos(grupos: [string, FilaUnifilar[]][], configCalibre: ConfigCalibreCable[]): UnifilarDrawing {
+/** Trunca a un ancho de columna angosto (~100pt) — los planos reales también abrevian agresivamente en cada rama. */
+function truncarColumna(s: string): string {
+  return truncar(s, 16);
+}
+
+type RenglonUnifilar = { tipo: "header"; texto: string } | { tipo: "columnas"; circuitos: UnifilarCircuito[] };
+
+/** Ordena los circuitos de un cuerpo, intercala un renglón de encabezado por cada cambio de sección (energía AC → DC → control de acceso → CCTV), y agrupa de a `COLUMNAS_POR_FILA` para la barra horizontal tipo escalera. */
+function prepararRenglones(circuitos: UnifilarCircuito[]): RenglonUnifilar[] {
+  const ordenados = ordenarCircuitosParaUnifilar(circuitos);
+  const renglones: RenglonUnifilar[] = [];
+  let grupoActual: GrupoUnifilar | null = null;
+  let pendientes: UnifilarCircuito[] = [];
+
+  const flush = () => {
+    if (pendientes.length > 0) {
+      renglones.push({ tipo: "columnas", circuitos: pendientes });
+      pendientes = [];
+    }
+  };
+
+  for (const c of ordenados) {
+    const grupo = grupoDeCircuito(c);
+    if (grupo !== grupoActual) {
+      flush();
+      renglones.push({ tipo: "header", texto: LABEL_GRUPO[grupo] });
+      grupoActual = grupo;
+    }
+    pendientes.push(c);
+    if (pendientes.length === COLUMNAS_POR_FILA) flush();
+  }
+  flush();
+  return renglones;
+}
+
+function altoRenglon(r: RenglonUnifilar): number {
+  return r.tipo === "header" ? ALTO_HEADER_SECCION : ALTO_FILA_COLUMNAS;
+}
+
+/** Arma los draw commands de un cuerpo ya resuelto en renglones (columnas de circuitos + encabezados de sección). Compartido por `construirUnifilar` y `construirUnifilarPaginado` para que el dibujo de a pedazos (paginado) sea idéntico al dibujo completo. */
+function renderGrupos(grupos: [string, RenglonUnifilar[]][], configCalibre: ConfigCalibreCable[]): UnifilarDrawing {
   const commands: DrawCommand[] = [];
   let y = MARGEN;
 
-  for (const [cuerpo, filas] of grupos) {
-    const alturaBloque = ALTO_HEADER_CUERPO + filas.length * ALTO_FILA;
+  for (const [cuerpo, renglones] of grupos) {
+    const alturaBloque = ALTO_HEADER_CUERPO + renglones.reduce((acc, r) => acc + altoRenglon(r), 0);
     const yInicioBloque = y;
 
     commands.push({ type: "rect", x: MARGEN, y: yInicioBloque, width: ANCHO - MARGEN * 2, height: alturaBloque });
     commands.push({ type: "text", x: MARGEN + 6, y: yInicioBloque + 12, text: cuerpo || "Sin cuerpo asignado", size: 9, bold: true });
 
-    const yBusInicio = yInicioBloque + ALTO_HEADER_CUERPO;
-    const yBusFin = yBusInicio + filas.length * ALTO_FILA;
-    // Barra doble (dos líneas pegadas) para que se lea como una barra real, no como un simple renglón de lista.
-    commands.push({ type: "line", x1: BUS_X, y1: yBusInicio, x2: BUS_X, y2: yBusFin });
-    commands.push({ type: "line", x1: BUS_X + 1.2, y1: yBusInicio, x2: BUS_X + 1.2, y2: yBusFin });
-
-    filas.forEach((fila, i) => {
-      const yFila = yBusInicio + i * ALTO_FILA + ALTO_FILA / 2;
-
-      if (fila.tipo === "header") {
-        commands.push({ type: "text", x: TEXTO_X, y: yFila + 3, text: fila.texto, size: 7, bold: true });
-        return;
+    let yRenglon = yInicioBloque + ALTO_HEADER_CUERPO;
+    for (const renglon of renglones) {
+      if (renglon.tipo === "header") {
+        commands.push({ type: "text", x: MARGEN + 6, y: yRenglon + 9, text: renglon.texto, size: 7.5, bold: true });
+        yRenglon += ALTO_HEADER_SECCION;
+        continue;
       }
 
-      const c = fila.circuito;
-      commands.push({ type: "line", x1: BUS_X, y1: yFila, x2: BREAKER_X, y2: yFila });
-      dibujarSimbolo(commands, c.categoriaEquipo, yFila);
-      commands.push({ type: "line", x1: BREAKER_X + BREAKER_SIZE, y1: yFila, x2: TEXTO_X - 4, y2: yFila });
+      const yBus = yRenglon + 3;
+      const ySymbol = yBus + BUS_DROP;
+      const centros = renglon.circuitos.map((_, i) => MARGEN + i * COLUMNA_ANCHO + COLUMNA_ANCHO / 2);
+      // Barra horizontal del renglón (doble línea) de la primera a la última columna usada.
+      if (centros.length > 1) {
+        commands.push({ type: "line", x1: centros[0], y1: yBus, x2: centros[centros.length - 1], y2: yBus });
+        commands.push({ type: "line", x1: centros[0], y1: yBus + 1.2, x2: centros[centros.length - 1], y2: yBus + 1.2 });
+      }
 
-      const amperaje = parseAmperaje(c.ampNominal);
-      const { calibreMm2, colores } = calcularCalibreCircuito(c.categoriaEquipo, c.tipoCircuito, c.ampNominal, configCalibre);
-      const partes = [`${c.numero} — ${c.texto}`, CATEGORIA_EQUIPO_LABEL[c.categoriaEquipo]];
-      if (c.tipoCircuito !== "na") partes.push(TIPO_CIRCUITO_LABEL[c.tipoCircuito]);
-      if (amperaje) partes.push(`${amperaje}A`);
-      if (calibreMm2) partes.push(`${calibreMm2}mm²`);
-      if (colores) partes.push(colores);
-      commands.push({ type: "text", x: TEXTO_X, y: yFila + 3, text: truncar(partes.join(" · "), MAX_CHARS_TEXTO), size: 7 });
-    });
+      renglon.circuitos.forEach((c, i) => {
+        const cx = centros[i];
+        commands.push({ type: "line", x1: cx, y1: yBus, x2: cx, y2: ySymbol - SIMBOLO_R });
+        dibujarSimbolo(commands, c.categoriaEquipo, cx, ySymbol);
+        const yEtiqueta = ySymbol + SIMBOLO_R + DROP_A_ETIQUETA;
+        commands.push({ type: "line", x1: cx, y1: ySymbol + SIMBOLO_R, x2: cx, y2: yEtiqueta });
+
+        const colLeft = cx - COLUMNA_ANCHO / 2 + 3;
+        const amperaje = parseAmperaje(c.ampNominal);
+        const { calibreMm2, colores } = calcularCalibreCircuito(c.categoriaEquipo, c.tipoCircuito, c.ampNominal, configCalibre);
+        const sufijo = c.rolBypassUps ? ROL_BYPASS_SUFIJO[c.rolBypassUps] : c.alimentadoPorUps ? " (UPS)" : "";
+        const linea1 = `${CATEGORIA_EQUIPO_LABEL[c.categoriaEquipo]}${sufijo}`;
+        const linea2Partes = [c.tipoCircuito !== "na" ? TIPO_CIRCUITO_LABEL[c.tipoCircuito] : null, amperaje ? `${amperaje}A` : null].filter(
+          (p): p is string => !!p,
+        );
+        const linea3Partes = [calibreMm2 ? `${calibreMm2}mm²` : null, colores].filter((p): p is string => !!p);
+        const specs = [linea1, linea2Partes.join(" "), linea3Partes.join(" ")].filter((s) => s.length > 0);
+        specs.slice(0, LINEAS_SPEC).forEach((s, li) => {
+          commands.push({ type: "text", x: colLeft, y: yEtiqueta + ALTO_LINEA * (li + 1), text: truncarColumna(s), size: 6, bold: li === 0 });
+        });
+
+        const yId = yEtiqueta + LINEAS_SPEC * ALTO_LINEA + 4;
+        commands.push({ type: "rect", x: colLeft - 1, y: yId, width: COLUMNA_ANCHO - 8, height: ALTO_ID_BOX });
+        commands.push({
+          type: "text",
+          x: colLeft + 2,
+          y: yId + 9,
+          text: truncarColumna(`${c.numero} — ${c.texto}`),
+          size: 6.5,
+          bold: true,
+        });
+      });
+
+      yRenglon += ALTO_FILA_COLUMNAS;
+    }
 
     y = yInicioBloque + alturaBloque + GAP_CUERPO;
   }
@@ -222,9 +286,9 @@ export function construirUnifilar(
   circuitosPorCuerpo: Iterable<[string, UnifilarCircuito[]]>,
   configCalibre: ConfigCalibreCable[],
 ): UnifilarDrawing {
-  const grupos: [string, FilaUnifilar[]][] = [];
+  const grupos: [string, RenglonUnifilar[]][] = [];
   for (const [cuerpo, circuitos] of circuitosPorCuerpo) {
-    grupos.push([cuerpo, prepararFilas(circuitos)]);
+    grupos.push([cuerpo, prepararRenglones(circuitos)]);
   }
   return renderGrupos(grupos, configCalibre);
 }
@@ -257,33 +321,45 @@ export function construirUnifilarPaginado(
   circuitosPorCuerpo: Map<string, UnifilarCircuito[]>,
   configCalibre: ConfigCalibreCable[],
 ): UnifilarDrawing[] {
-  const maxItemsPorGrupo = Math.max(1, Math.floor((ALTO_MAX_BLOQUE_SEGURO - MARGEN - GAP_CUERPO - ALTO_HEADER_CUERPO) / ALTO_FILA));
+  const maxAlturaRenglones = ALTO_MAX_BLOQUE_SEGURO - MARGEN - GAP_CUERPO - ALTO_HEADER_CUERPO;
 
-  const grupos: [string, FilaUnifilar[]][] = [];
+  const grupos: [string, RenglonUnifilar[]][] = [];
   for (const [cuerpo, circuitosOriginal] of circuitosPorCuerpo) {
-    // Se arman las filas (orden + encabezados de sección) ACÁ, antes de
-    // partir en páginas, no solo dentro de `renderGrupos` — si se armaran
-    // después de partir, cada parte quedaría prolija por separado pero el
-    // corte entre partes caería en cualquier lado, mezclando los grupos de
-    // categoría entre una parte y la siguiente. Los encabezados cuentan como
-    // una fila más para el cálculo de altura, igual que un circuito.
-    const filas = prepararFilas(circuitosOriginal);
-    if (filas.length <= maxItemsPorGrupo) {
-      grupos.push([cuerpo, filas]);
+    // Se arman los renglones (orden + encabezados de sección + columnas) ACÁ,
+    // antes de partir en páginas, no solo dentro de `renderGrupos` — si se
+    // armaran después de partir, cada parte quedaría prolija por separado
+    // pero el corte entre partes caería en cualquier lado, mezclando los
+    // grupos de categoría entre una parte y la siguiente.
+    const renglones = prepararRenglones(circuitosOriginal);
+    const alturaTotal = renglones.reduce((acc, r) => acc + altoRenglon(r), 0);
+    if (alturaTotal <= maxAlturaRenglones) {
+      grupos.push([cuerpo, renglones]);
       continue;
     }
-    const partes = Math.ceil(filas.length / maxItemsPorGrupo);
-    for (let p = 0; p < partes; p++) {
-      const slice = filas.slice(p * maxItemsPorGrupo, (p + 1) * maxItemsPorGrupo);
-      grupos.push([`${cuerpo || "Sin cuerpo asignado"} (parte ${p + 1}/${partes})`, slice]);
+    // Un cuerpo que por sí solo supera el máximo se parte por renglón
+    // (nunca a mitad de una fila de columnas) en "parte N/M".
+    const partes: RenglonUnifilar[][] = [];
+    let parteActual: RenglonUnifilar[] = [];
+    let alturaParte = 0;
+    for (const r of renglones) {
+      const alturaR = altoRenglon(r);
+      if (parteActual.length > 0 && alturaParte + alturaR > maxAlturaRenglones) {
+        partes.push(parteActual);
+        parteActual = [];
+        alturaParte = 0;
+      }
+      parteActual.push(r);
+      alturaParte += alturaR;
     }
+    if (parteActual.length > 0) partes.push(parteActual);
+    partes.forEach((p, i) => grupos.push([`${cuerpo || "Sin cuerpo asignado"} (parte ${i + 1}/${partes.length})`, p]));
   }
 
   const bloques: UnifilarDrawing[] = [];
-  let actual: [string, FilaUnifilar[]][] = [];
+  let actual: [string, RenglonUnifilar[]][] = [];
   let alturaActual = MARGEN;
   for (const grupo of grupos) {
-    const alturaGrupo = ALTO_HEADER_CUERPO + grupo[1].length * ALTO_FILA + GAP_CUERPO;
+    const alturaGrupo = ALTO_HEADER_CUERPO + grupo[1].reduce((acc, r) => acc + altoRenglon(r), 0) + GAP_CUERPO;
     if (actual.length > 0 && alturaActual + alturaGrupo > ALTO_MAX_BLOQUE_SEGURO) {
       bloques.push(renderGrupos(actual, configCalibre));
       actual = [];

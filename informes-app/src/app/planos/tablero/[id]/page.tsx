@@ -171,6 +171,9 @@ export default async function PlanoTableroPublicoPage({ params }: { params: Prom
                       <rect key={i} x={cmd.x} y={cmd.y} width={cmd.width} height={cmd.height} stroke="currentColor" strokeWidth={0.75} fill="none" />
                     );
                   }
+                  if (cmd.type === "circle") {
+                    return <circle key={i} cx={cmd.x} cy={cmd.y} r={cmd.r} stroke="currentColor" strokeWidth={0.75} fill="none" />;
+                  }
                   return (
                     <text key={i} x={cmd.x} y={cmd.y} fontSize={cmd.size} fontWeight={cmd.bold ? 700 : 400} fill="currentColor">
                       {cmd.text}

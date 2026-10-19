@@ -1,4 +1,4 @@
-import { Document, Page, Text, View, Image, StyleSheet, Svg, Line, Rect } from "@react-pdf/renderer";
+import { Document, Page, Text, View, Image, StyleSheet, Svg, Line, Rect, Circle } from "@react-pdf/renderer";
 import { BORDER, commonStyles, KeyValueRow, PdfHeader, PdfFooter, formatFechaArg } from "./common";
 import {
   CATEGORIA_EQUIPO_LABEL,
@@ -200,6 +200,9 @@ export function TableroPdf(props: TableroPdfProps) {
                           fill="none"
                         />
                       );
+                    }
+                    if (cmd.type === "circle") {
+                      return <Circle key={i} cx={cmd.x} cy={cmd.y} r={cmd.r} stroke="#1a1a1a" strokeWidth={0.75} fill="none" />;
                     }
                     return null;
                   })}

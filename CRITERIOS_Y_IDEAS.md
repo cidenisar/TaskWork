@@ -881,3 +881,76 @@ texto estructurado escrito a mano (DXF, pero el principio vale para
 cualquier otro), "la sintaxis cierra" no es lo mismo que "un lector real lo
 entiende" — conseguir o instalar un lector/validador real del formato y
 probar contra él, no quedarse en inspección visual del texto generado.
+
+## 14. Probar react-pdf fuera de Next.js con `tsx`: el error no es del código
+
+**Al intentar reproducir localmente el cuelgue de react-pdf (§10) con `npx
+tsx algo.ts` importando `@react-pdf/renderer` directo (sin pasar por
+Next.js), el import falla con
+`ERR_PACKAGE_PATH_NOT_EXPORTED: Package subpath './en-us' is not defined by
+"exports" in .../@react-pdf/hyphenate/package.json` — no es un bug en nuestro
+código ni en react-pdf, es que `@react-pdf/hyphenate` solo declara condición
+`"import"` en su `exports` (es un paquete ESM puro), y el hook de resolución
+de módulos de `tsx` intenta resolver ese subpath también por el lado
+`require` (CJS) y lo rechaza. Next.js/webpack nunca pisan este problema
+porque resuelven distinto (no aplican la validación estricta de `exports`
+de Node), así que en producción esto no afecta en absoluto — es
+exclusivamente un problema de correr el paquete suelto con `tsx`.**
+Workaround para poder probar: copiar
+`node_modules/@react-pdf/hyphenate/package.json`, agregarle a mano un
+campo `"require"` igual al `"import"` existente en cada entrada de
+`exports` (`"."` y `"./*"`), correr la prueba, y restaurar el archivo
+original de la copia al terminar (no es un cambio para commitear — vive en
+`node_modules`, y una reinstalación lo pisa solo). Con ese parche temporal,
+un script `.ts` dentro del propio `informes-app/` (tiene que estar ahí
+para que la resolución de `node_modules` llegue) puede llamar
+`renderToBuffer(...)` directo y cronometrar/confirmar que un caso grande
+(ej. 120 circuitos, el bloque más denso con 142 `<Text>` en 477pt) termina
+rápido y no cuelga — exactamente la prueba que hacía falta antes de
+confiar en un rediseño del dibujo del unifilar que cambió mucho la
+densidad de comandos por punto de altura (ver § 15) sin tener la certeza
+de que el límite de altura seguro (`ALTO_MAX_BLOQUE_SEGURO`, ver § 10)
+seguía siendo válido con ese nuevo layout.
+
+## 15. Rediseño del unifilar a "escalera" (barra arriba, columnas abajo) — fiel a los planos reales, no al criterio propio
+
+**Cuando el usuario ya definió a mano cómo tiene que verse algo (le mostró
+varios PDF reales de AutoCAD con el estilo que usa en el trabajo), la
+referencia es esa, no una interpretación "razonable" de la convención
+general — y conviene pedirla/leerla ANTES de iterar más veces a ciegas.**
+Pasó en Informes con el esquema unifilar de Tableros: después de dos
+rondas de ajustes (symbolos + agrupación por categoría, segunda ronda con
+más símbolos reales) el usuario seguía diciendo "sigue dibujando igual" —
+recién cuando adjuntó 4 planos reales de AutoCAD (tableros TSBT, CAS,
+unifilares 24V/220V) quedó claro que el problema no era de símbolos sino de
+**orientación**: los planos reales usan una barra horizontal arriba con
+cada circuito colgando hacia abajo en su propia columna (estilo
+"escalera"), agrupados de a ~5 columnas por fila con un símbolo de llave
+seccionadora real (dos bornes + cuchilla diagonal) o de borne de salida
+(par de círculos), un bloque de 2-3 líneas de datos debajo, y una cajita de
+identificación del circuito al pie — nada que ver con la lista vertical
+(aunque ya tuviera buenos símbolos) que se había armado en las rondas
+anteriores. Dos lecciones:
+
+1. **Pedir la referencia real apenas el usuario la mencione como
+   disponible** ("te voy a buscar un ejemplo de cómo lo dibujo en
+   AutoCAD") en vez de seguir iterando sobre la propia interpretación —
+   cuesta una ronda de ida y vuelta, pero ahorra varias rondas de "no es
+   eso" después.
+2. **El dato real de los planos (nomenclatura, numeración de circuitos
+   C1/D1, IDs de cable A80/A81, "CIRCUITO X — ...") es información de
+   producto, no solo de estilo** — confirma qué campos hacen falta y cómo
+   nombrarlos, más allá de la geometría.
+
+**Límite aceptado a propósito, no un descuido:** los planos reales a veces
+encadenan más de un dispositivo en la misma columna (ej. bornera de
+entrada → térmica → disyuntor, los tres en la misma bajada, porque
+físicamente un circuito pasa por más de una protección en serie) y también
+incluyen una vista "topográfica" aparte (dónde queda cada módulo
+físicamente dentro del gabinete, con sus medidas). Ninguna de las dos cosas
+se replicó: el modelo de datos actual (`tablero_circuitos`) guarda cada
+dispositivo como un circuito independiente sin relación "este alimenta a
+este otro", y no hay coordenadas físicas de montaje — harían falta campos
+nuevos (relación entre circuitos, posición X/Y), no solo una función de
+dibujo distinta. Documentado y comunicado explícitamente al usuario en vez
+de fingir una réplica 1 a 1 que el dato disponible no sostiene.

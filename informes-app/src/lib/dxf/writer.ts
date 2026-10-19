@@ -39,6 +39,11 @@ function dxfRect(x: number, y: number, width: number, height: number): string {
   return lines.join("\n");
 }
 
+/** CIRCLE es válida desde las versiones más viejas de DXF (a diferencia de LWPOLYLINE), sin truco ninguno. */
+function dxfCircle(x: number, y: number, r: number): string {
+  return ["0", "CIRCLE", "8", "0", "10", x.toFixed(3), "20", y.toFixed(3), "30", "0.0", "40", r.toFixed(3)].join("\n");
+}
+
 function dxfText(x: number, y: number, text: string, size: number): string {
   // DXF no tolera saltos de línea ni ciertos caracteres de control dentro de un TEXT — se sanitiza por las dudas.
   const limpio = text.replace(/[\r\n]+/g, " ");
@@ -105,6 +110,8 @@ export function drawCommandsToDxf(commands: DrawCommand[], height: number): Buff
       entidades.push(dxfLine(cmd.x1, flipY(cmd.y1), cmd.x2, flipY(cmd.y2)));
     } else if (cmd.type === "rect") {
       entidades.push(dxfRect(cmd.x, flipY(cmd.y + cmd.height), cmd.width, cmd.height));
+    } else if (cmd.type === "circle") {
+      entidades.push(dxfCircle(cmd.x, flipY(cmd.y), cmd.r));
     } else {
       // TEXT en DXF se ancla abajo-a-la-izquierda del texto; nuestro modelo usa el mismo criterio que react-pdf (y = línea de base), así que alcanza con invertir Y.
       entidades.push(dxfText(cmd.x, flipY(cmd.y), cmd.text, cmd.size));
