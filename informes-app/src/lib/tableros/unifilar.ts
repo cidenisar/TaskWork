@@ -75,6 +75,31 @@ export function ordenarCircuitosParaUnifilar<T extends UnifilarCircuito>(circuit
   });
 }
 
+const LABEL_GRUPO: Record<GrupoUnifilar, string> = {
+  energia_ac: "ENERGÍA 380V/220V",
+  energia_dc: "ENERGÍA 24V/12V",
+  control_acceso: "CONTROL DE ACCESO",
+  cctv: "CCTV",
+};
+
+type FilaUnifilar = { tipo: "header"; texto: string } | { tipo: "circuito"; circuito: UnifilarCircuito };
+
+/** Ordena los circuitos de un cuerpo y les intercala un renglón de encabezado cada vez que cambia el grupo (energía AC → DC → control de acceso → CCTV) — así el plano se lee en secciones, no como una lista plana. */
+function prepararFilas(circuitos: UnifilarCircuito[]): FilaUnifilar[] {
+  const ordenados = ordenarCircuitosParaUnifilar(circuitos);
+  const filas: FilaUnifilar[] = [];
+  let grupoActual: GrupoUnifilar | null = null;
+  for (const c of ordenados) {
+    const grupo = grupoDeCircuito(c);
+    if (grupo !== grupoActual) {
+      filas.push({ tipo: "header", texto: LABEL_GRUPO[grupo] });
+      grupoActual = grupo;
+    }
+    filas.push({ tipo: "circuito", circuito: c });
+  }
+  return filas;
+}
+
 export type DrawCommand =
   | { type: "line"; x1: number; y1: number; x2: number; y2: number }
   | { type: "rect"; x: number; y: number; width: number; height: number }
@@ -101,57 +126,69 @@ function truncar(s: string, max: number): string {
   return s.length > max ? `${s.slice(0, max - 1)}…` : s;
 }
 
+const CATEGORIAS_BREAKER: TableroCategoriaEquipo[] = ["termica", "disyuntor"];
+const CATEGORIAS_BORNERA: TableroCategoriaEquipo[] = ["bornera", "bornera_fusible"];
+
 /**
- * Arma un esquema unifilar simplificado (no es un plano a escala — ver
- * README): una barra vertical por cuerpo con cada térmica/disyuntor
- * ramificando en fila, calibre de cable determinado por catalogo_calibre_
- * cable según el amperaje ya cargado — nunca estimado/inventado. Devuelve
- * "draw commands" abstractos (líneas/rectángulos/texto) que después se
- * renderizan tanto en el PDF (Svg de react-pdf) como en el DXF — una sola
- * fuente de verdad para los dos formatos.
+ * Símbolo por categoría en vez de un cuadrado vacío genérico (que a simple
+ * vista se leía como un casillero de checklist, no como un plano): térmica/
+ * disyuntor dibuja el símbolo clásico de llave/interruptor (caja + diagonal),
+ * bornera dibuja el símbolo de borne de salida (dos trazos cortos, el punto
+ * de conexión de campo), y el resto de las categorías (fuente, UPS, batería,
+ * conversor, descargador, cámara, lectora, cerradura, inyector PoE, otro)
+ * usa una caja simple de equipo.
  */
-export function construirUnifilar(
-  circuitosPorCuerpo: Iterable<[string, UnifilarCircuito[]]>,
-  configCalibre: ConfigCalibreCable[],
-): UnifilarDrawing {
+function dibujarSimbolo(commands: DrawCommand[], categoria: TableroCategoriaEquipo, yFila: number): void {
+  if (CATEGORIAS_BREAKER.includes(categoria)) {
+    commands.push({ type: "rect", x: BREAKER_X, y: yFila - BREAKER_SIZE / 2, width: BREAKER_SIZE, height: BREAKER_SIZE });
+    commands.push({
+      type: "line",
+      x1: BREAKER_X,
+      y1: yFila + BREAKER_SIZE / 2,
+      x2: BREAKER_X + BREAKER_SIZE,
+      y2: yFila - BREAKER_SIZE / 2,
+    });
+    return;
+  }
+  if (CATEGORIAS_BORNERA.includes(categoria)) {
+    const x1 = BREAKER_X + BREAKER_SIZE * 0.3;
+    const x2 = BREAKER_X + BREAKER_SIZE * 0.7;
+    commands.push({ type: "line", x1, y1: yFila - BREAKER_SIZE / 2, x2: x1, y2: yFila + BREAKER_SIZE / 2 });
+    commands.push({ type: "line", x1: x2, y1: yFila - BREAKER_SIZE / 2, x2: x2, y2: yFila + BREAKER_SIZE / 2 });
+    return;
+  }
+  commands.push({ type: "rect", x: BREAKER_X, y: yFila - BREAKER_SIZE / 2, width: BREAKER_SIZE, height: BREAKER_SIZE });
+}
+
+/** Arma los draw commands de un cuerpo ya resuelto en filas (circuitos ordenados + encabezados de sección intercalados). Compartido por `construirUnifilar` y `construirUnifilarPaginado` para que el dibujo de a pedazos (paginado) sea idéntico al dibujo completo. */
+function renderGrupos(grupos: [string, FilaUnifilar[]][], configCalibre: ConfigCalibreCable[]): UnifilarDrawing {
   const commands: DrawCommand[] = [];
   let y = MARGEN;
 
-  for (const [cuerpo, circuitosOriginal] of circuitosPorCuerpo) {
-    const circuitos = ordenarCircuitosParaUnifilar(circuitosOriginal);
-    const alturaBloque = ALTO_HEADER_CUERPO + circuitos.length * ALTO_FILA;
+  for (const [cuerpo, filas] of grupos) {
+    const alturaBloque = ALTO_HEADER_CUERPO + filas.length * ALTO_FILA;
     const yInicioBloque = y;
 
-    commands.push({
-      type: "rect",
-      x: MARGEN,
-      y: yInicioBloque,
-      width: ANCHO - MARGEN * 2,
-      height: alturaBloque,
-    });
-    commands.push({
-      type: "text",
-      x: MARGEN + 6,
-      y: yInicioBloque + 12,
-      text: cuerpo || "Sin cuerpo asignado",
-      size: 9,
-      bold: true,
-    });
+    commands.push({ type: "rect", x: MARGEN, y: yInicioBloque, width: ANCHO - MARGEN * 2, height: alturaBloque });
+    commands.push({ type: "text", x: MARGEN + 6, y: yInicioBloque + 12, text: cuerpo || "Sin cuerpo asignado", size: 9, bold: true });
 
     const yBusInicio = yInicioBloque + ALTO_HEADER_CUERPO;
-    const yBusFin = yBusInicio + circuitos.length * ALTO_FILA;
+    const yBusFin = yBusInicio + filas.length * ALTO_FILA;
+    // Barra doble (dos líneas pegadas) para que se lea como una barra real, no como un simple renglón de lista.
     commands.push({ type: "line", x1: BUS_X, y1: yBusInicio, x2: BUS_X, y2: yBusFin });
+    commands.push({ type: "line", x1: BUS_X + 1.2, y1: yBusInicio, x2: BUS_X + 1.2, y2: yBusFin });
 
-    circuitos.forEach((c, i) => {
+    filas.forEach((fila, i) => {
       const yFila = yBusInicio + i * ALTO_FILA + ALTO_FILA / 2;
+
+      if (fila.tipo === "header") {
+        commands.push({ type: "text", x: TEXTO_X, y: yFila + 3, text: fila.texto, size: 7, bold: true });
+        return;
+      }
+
+      const c = fila.circuito;
       commands.push({ type: "line", x1: BUS_X, y1: yFila, x2: BREAKER_X, y2: yFila });
-      commands.push({
-        type: "rect",
-        x: BREAKER_X,
-        y: yFila - BREAKER_SIZE / 2,
-        width: BREAKER_SIZE,
-        height: BREAKER_SIZE,
-      });
+      dibujarSimbolo(commands, c.categoriaEquipo, yFila);
       commands.push({ type: "line", x1: BREAKER_X + BREAKER_SIZE, y1: yFila, x2: TEXTO_X - 4, y2: yFila });
 
       const amperaje = parseAmperaje(c.ampNominal);
@@ -161,19 +198,35 @@ export function construirUnifilar(
       if (amperaje) partes.push(`${amperaje}A`);
       if (calibreMm2) partes.push(`${calibreMm2}mm²`);
       if (colores) partes.push(colores);
-      commands.push({
-        type: "text",
-        x: TEXTO_X,
-        y: yFila + 3,
-        text: truncar(partes.join(" · "), MAX_CHARS_TEXTO),
-        size: 7,
-      });
+      commands.push({ type: "text", x: TEXTO_X, y: yFila + 3, text: truncar(partes.join(" · "), MAX_CHARS_TEXTO), size: 7 });
     });
 
     y = yInicioBloque + alturaBloque + GAP_CUERPO;
   }
 
   return { commands, width: ANCHO, height: y };
+}
+
+/**
+ * Arma un esquema unifilar simplificado (no es un plano a escala — ver
+ * README): una barra vertical por cuerpo con cada elemento ramificando en
+ * fila (símbolo según categoría — llave, borne o caja de equipo — agrupado
+ * en secciones energía AC/DC → control de acceso → CCTV, ver
+ * `ordenarCircuitosParaUnifilar`), calibre de cable determinado por
+ * catalogo_calibre_cable según el amperaje ya cargado — nunca estimado/
+ * inventado. Devuelve "draw commands" abstractos (líneas/rectángulos/texto)
+ * que después se renderizan tanto en el PDF (Svg de react-pdf) como en el
+ * DXF — una sola fuente de verdad para los dos formatos.
+ */
+export function construirUnifilar(
+  circuitosPorCuerpo: Iterable<[string, UnifilarCircuito[]]>,
+  configCalibre: ConfigCalibreCable[],
+): UnifilarDrawing {
+  const grupos: [string, FilaUnifilar[]][] = [];
+  for (const [cuerpo, circuitos] of circuitosPorCuerpo) {
+    grupos.push([cuerpo, prepararFilas(circuitos)]);
+  }
+  return renderGrupos(grupos, configCalibre);
 }
 
 /**
@@ -206,39 +259,40 @@ export function construirUnifilarPaginado(
 ): UnifilarDrawing[] {
   const maxItemsPorGrupo = Math.max(1, Math.floor((ALTO_MAX_BLOQUE_SEGURO - MARGEN - GAP_CUERPO - ALTO_HEADER_CUERPO) / ALTO_FILA));
 
-  const grupos: [string, UnifilarCircuito[]][] = [];
+  const grupos: [string, FilaUnifilar[]][] = [];
   for (const [cuerpo, circuitosOriginal] of circuitosPorCuerpo) {
-    // Se ordena ACÁ (antes de partir en páginas), no solo dentro de
-    // `construirUnifilar` — si se ordenara después de partir, cada parte
-    // quedaría prolija por separado pero el corte entre partes caería en
-    // cualquier lado, mezclando los grupos de categoría entre una parte y
-    // la siguiente.
-    const circuitos = ordenarCircuitosParaUnifilar(circuitosOriginal);
-    if (circuitos.length <= maxItemsPorGrupo) {
-      grupos.push([cuerpo, circuitos]);
+    // Se arman las filas (orden + encabezados de sección) ACÁ, antes de
+    // partir en páginas, no solo dentro de `renderGrupos` — si se armaran
+    // después de partir, cada parte quedaría prolija por separado pero el
+    // corte entre partes caería en cualquier lado, mezclando los grupos de
+    // categoría entre una parte y la siguiente. Los encabezados cuentan como
+    // una fila más para el cálculo de altura, igual que un circuito.
+    const filas = prepararFilas(circuitosOriginal);
+    if (filas.length <= maxItemsPorGrupo) {
+      grupos.push([cuerpo, filas]);
       continue;
     }
-    const partes = Math.ceil(circuitos.length / maxItemsPorGrupo);
+    const partes = Math.ceil(filas.length / maxItemsPorGrupo);
     for (let p = 0; p < partes; p++) {
-      const slice = circuitos.slice(p * maxItemsPorGrupo, (p + 1) * maxItemsPorGrupo);
+      const slice = filas.slice(p * maxItemsPorGrupo, (p + 1) * maxItemsPorGrupo);
       grupos.push([`${cuerpo || "Sin cuerpo asignado"} (parte ${p + 1}/${partes})`, slice]);
     }
   }
 
   const bloques: UnifilarDrawing[] = [];
-  let actual: [string, UnifilarCircuito[]][] = [];
+  let actual: [string, FilaUnifilar[]][] = [];
   let alturaActual = MARGEN;
   for (const grupo of grupos) {
     const alturaGrupo = ALTO_HEADER_CUERPO + grupo[1].length * ALTO_FILA + GAP_CUERPO;
     if (actual.length > 0 && alturaActual + alturaGrupo > ALTO_MAX_BLOQUE_SEGURO) {
-      bloques.push(construirUnifilar(actual, configCalibre));
+      bloques.push(renderGrupos(actual, configCalibre));
       actual = [];
       alturaActual = MARGEN;
     }
     actual.push(grupo);
     alturaActual += alturaGrupo;
   }
-  if (actual.length > 0) bloques.push(construirUnifilar(actual, configCalibre));
+  if (actual.length > 0) bloques.push(renderGrupos(actual, configCalibre));
   return bloques;
 }
 

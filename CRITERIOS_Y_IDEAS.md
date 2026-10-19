@@ -835,3 +835,49 @@ parte queda prolija por sí sola pero el corte entre partes cae en
 cualquier categoría, mezclando el orden global. Hubo que mover el
 `ordenarCircuitosParaUnifilar(circuitos)` a ANTES del cálculo de
 `maxItemsPorGrupo`/slicing, no dentro de cada slice.
+
+## 13. Escribir DXF a mano: versión de entidades y codepage de texto, no solo sintaxis
+
+**Un archivo DXF "ASCII mínimo" escrito a mano (sin librería) puede tener
+sintaxis perfecta — secciones bien cerradas, EOF al final — y aun así abrir
+vacío o con texto corrupto, por dos motivos invisibles si solo se mira "¿el
+archivo tiene la forma de un DXF?": la versión de cada ENTIDAD declarada, y
+el codepage del TEXTO.** Pasó en Informes con el DXF del esquema unifilar
+de Tableros (`lib/dxf/writer.ts`): el usuario reportó "el DXF no muestra
+nada" después de probar un tablero de prueba. Dos bugs reales, ninguno
+visible leyendo el código por arriba:
+
+1. **LWPOLYLINE no existe en DXF R12 (`$ACADVER AC1009`)** — se agregó
+   recién en R14 (1997). El archivo declaraba R12 en el header pero usaba
+   LWPOLYLINE para los rectángulos (más compacta de escribir a mano que la
+   POLYLINE clásica), una combinación inválida que varios lectores de DXF
+   (sobre todo visores livianos que implementan un subset estricto por
+   versión, no AutoCAD en sí) rechazan **entero** en vez de ignorar solo esa
+   entidad — de ahí "no muestra nada" en vez de "le faltan los cuadraditos".
+   Arreglo: usar POLYLINE clásica (grupo 66+70) + VERTEX + SEQEND, que es
+   válida desde las versiones más viejas de DXF.
+2. **Un TEXT de DXF ASCII no es UTF-8** — son bytes crudos interpretados
+   según el codepage que declara el header (`$DWGCODEPAGE`, típicamente
+   `ANSI_1252`/Windows-1252), nunca UTF-8. Escribir el archivo con
+   `Buffer.from(contenido, "utf-8")` deja cualquier tilde/ñ/° corrupta
+   aunque el DXF abra perfecto. La tentación obvia — escapar los caracteres
+   no-ASCII como `\U+XXXX` — es la notación real del formato DXF, pero
+   **solo existe para MTEXT** (que ni siquiera existe en R12): un TEXT
+   común con esa notación la deja tal cual, literal, en el dibujo (peor que
+   el acento roto). El arreglo correcto es escribir el archivo entero en
+   Windows-1252 (coincide con Unicode 1 a 1 salvo un puñado de símbolos en
+   0x80-0x9F que necesitan su propia tabla) y declarar `$DWGCODEPAGE` en el
+   header.
+
+**Cómo se verificó de verdad, no "a ojo":** el bug original pasó
+desapercibido en el code review porque el archivo "se veía bien" como
+texto — todas las secciones, todas las entidades con sus pares de grupo
+correctos. La única forma de confirmarlo fue abrirlo con un lector de DXF
+real (`ezdxf`, Python, instalable con `pip install ezdxf matplotlib` en el
+sandbox) y renderizarlo a PNG — ahí aparecieron tanto el rechazo total del
+archivo (antes del fix 1) como el texto corrupto/literal (durante el fix a
+medias del punto 2). Para cualquier generador de un formato binario/de
+texto estructurado escrito a mano (DXF, pero el principio vale para
+cualquier otro), "la sintaxis cierra" no es lo mismo que "un lector real lo
+entiende" — conseguir o instalar un lector/validador real del formato y
+probar contra él, no quedarse en inspección visual del texto generado.
