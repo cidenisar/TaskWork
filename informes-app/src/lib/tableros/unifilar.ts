@@ -21,8 +21,9 @@ export interface UnifilarCircuito {
  * del tablero (bornera) va al fondo, para que el técnico nunca tenga que
  * entrar al tablero a conectar algo de campo. El grupo lo decide la
  * categoría del equipo cuando es una categoría "de función" (lectora,
- * cerradura, cámara, inyector PoE) y el voltaje del circuito en el resto
- * (térmica, disyuntor, bornera, fuente, UPS, batería, conversor DC,
+ * cerradura, cámara, inyector PoE), la UPS por defecto va con la energía
+ * AC (ver `grupoDeCircuito`), y el voltaje del circuito decide el resto
+ * (térmica, disyuntor, bornera, fuente, batería, conversor DC,
  * descargador, otro).
  */
 type GrupoUnifilar = "energia_ac" | "energia_dc" | "control_acceso" | "cctv";
@@ -32,6 +33,12 @@ const ORDEN_GRUPOS: GrupoUnifilar[] = ["energia_ac", "energia_dc", "control_acce
 function grupoDeCircuito(c: UnifilarCircuito): GrupoUnifilar {
   if (c.categoriaEquipo === "lectora" || c.categoriaEquipo === "cerradura") return "control_acceso";
   if (c.categoriaEquipo === "camara" || c.categoriaEquipo === "inyector_poe") return "cctv";
+  // La UPS casi siempre respalda el lado de 220V/380V (se busca la mayor
+  // durabilidad: cuando se agota esa UPS, recién ahí sigue una UPS de 24V
+  // aparte) — por eso una UPS sin tipo de circuito cargado ("No aplica", lo
+  // más común) va con la energía AC por defecto, y solo cae en 24V/12V
+  // cuando el técnico la carga explícitamente así (la UPS de 24V en sí).
+  if (c.categoriaEquipo === "ups_industrial" && c.tipoCircuito !== "24vdc" && c.tipoCircuito !== "12vdc") return "energia_ac";
   if (c.tipoCircuito === "380v_tri" || c.tipoCircuito === "220v_mono") return "energia_ac";
   return "energia_dc";
 }
