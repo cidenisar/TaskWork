@@ -1786,6 +1786,18 @@ general que salió de esto.
     equipos "de instalación" (bornera, fuente, UPS, batería, conversor
     DC, inyector PoE, descargador) — las protecciones (térmica/
     disyuntor) ya se identifican por su N° de circuito.
+  - **Rótulo (cuadro de título) al pie de cada hoja**, con Sitio, Tablero,
+    Fecha, Realizó, N° de plano (el mismo `numero_generacion` del
+    tablero, `TAB-{año}-{nnnn}`) y HOJA i/N — todo con datos que ya
+    existen en la medición, sin relevar nada nuevo.
+    `agregarRotulo()` en `unifilar.ts` se aplica DESPUÉS de resolver
+    todas las hojas (solo ahí se sabe cuántas son en total: ver
+    `construirUnifilarPaginado`), y reserva su propio alto en el
+    presupuesto de cada bloque para no acercarse al límite que cuelga
+    react-pdf. No es la grilla/sello de un plano CAD real — es el
+    mínimo para identificar de qué plano se trata si se lo encuentra
+    suelto, no (todavía) un sistema completo de hojas por tipo
+    (potencia/24V/topográfico).
 
 - **Tableros: visor público del plano con QR, para pegar en el tablero
   físico y dejar de imprimir papel.** Cierra la idea del unifilar: ahora

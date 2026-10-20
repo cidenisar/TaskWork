@@ -16,6 +16,15 @@ export interface UnifilarCircuito {
   etiquetaCable: string | null;
 }
 
+/** Datos del cuadro de título (rótulo) que se agrega al pie de cada dibujo — todos ya existentes en la medición, nunca un dato nuevo que haya que cargar aparte. */
+export interface RotuloUnifilar {
+  sitio: string;
+  tablero: string;
+  fecha: string;
+  realizo: string;
+  numeroGeneracion: string;
+}
+
 /**
  * Convención de dibujo "a mano" (AutoCAD) que se respeta en todo tablero,
  * tenga uno o varios cuerpos: de arriba hacia abajo siempre se agrupa
@@ -466,6 +475,48 @@ function renderGrupos(grupos: [string, RenglonUnifilar[], Map<number, string>][]
   return { commands, width: ANCHO, height: y };
 }
 
+/** Alto del cuadro de título (rótulo) que se agrega al pie de cada dibujo. */
+const ALTO_ROTULO = 28;
+
+/**
+ * Agrega el cuadro de título al pie de un dibujo ya armado — no es parte de
+ * `renderGrupos` porque la numeración de hoja (`hojaActual`/`hojaTotal`) solo
+ * se conoce después de resolver TODAS las hojas (ver
+ * `construirUnifilarPaginado`, que arma primero todos los bloques y recién
+ * ahí sabe cuántos son en total). Solo dos líneas de texto dentro de un
+ * marco — no es la grilla/sello de un plano CAD real, es lo mínimo para
+ * identificar de qué plano se trata si se lo encuentra suelto.
+ */
+function agregarRotulo(drawing: UnifilarDrawing, rotulo: RotuloUnifilar, hojaActual: number, hojaTotal: number): UnifilarDrawing {
+  const y = drawing.height;
+  const w = drawing.width - MARGEN * 2;
+  const commands: DrawCommand[] = [
+    ...drawing.commands,
+    { type: "rect", x: MARGEN, y, width: w, height: ALTO_ROTULO, layer: "MARCO" },
+    {
+      type: "text",
+      x: MARGEN + 6,
+      y: y + 11,
+      text: truncar(`SITIO: ${rotulo.sitio}   ·   TABLERO: ${rotulo.tablero}`, 80),
+      size: 7,
+      bold: true,
+      layer: "ROTULO",
+    },
+    {
+      type: "text",
+      x: MARGEN + 6,
+      y: y + 22,
+      text: truncar(
+        `FECHA: ${rotulo.fecha}   ·   REALIZÓ: ${rotulo.realizo}   ·   N° PLANO: ${rotulo.numeroGeneracion}   ·   HOJA ${hojaActual}/${hojaTotal}`,
+        100,
+      ),
+      size: 6,
+      layer: "ROTULO",
+    },
+  ];
+  return { commands, width: drawing.width, height: y + ALTO_ROTULO + MARGEN };
+}
+
 /**
  * Arma un esquema unifilar simplificado (no es un plano a escala — ver
  * README): una barra vertical por cuerpo con cada elemento ramificando en
@@ -476,17 +527,20 @@ function renderGrupos(grupos: [string, RenglonUnifilar[], Map<number, string>][]
  * inventado. Devuelve "draw commands" abstractos (líneas/rectángulos/texto,
  * cada uno con su capa DXF) que después se renderizan tanto en el PDF (Svg
  * de react-pdf, que ignora la capa) como en el DXF (que sí la usa) — una
- * sola fuente de verdad para los dos formatos.
+ * sola fuente de verdad para los dos formatos. `rotulo`, si se pasa, agrega
+ * el cuadro de título al pie (hoja única 1/1 — este dibujo nunca se parte).
  */
 export function construirUnifilar(
   circuitosPorCuerpo: Iterable<[string, UnifilarCircuito[]]>,
   configCalibre: ConfigCalibreCable[],
+  rotulo?: RotuloUnifilar,
 ): UnifilarDrawing {
   const grupos: [string, RenglonUnifilar[], Map<number, string>][] = [];
   for (const [cuerpo, circuitos] of circuitosPorCuerpo) {
     grupos.push([cuerpo, prepararRenglones(circuitos), calcularCodigosEquipo(circuitos)]);
   }
-  return renderGrupos(grupos, configCalibre);
+  const drawing = renderGrupos(grupos, configCalibre);
+  return rotulo ? agregarRotulo(drawing, rotulo, 1, 1) : drawing;
 }
 
 /**
@@ -512,12 +566,20 @@ const ALTO_MAX_BLOQUE_SEGURO = 480;
  * no desperdiciar espacio con un bloque por cuerpo cuando no hace falta.
  * El DXF (que no pasa por react-pdf y no tiene este problema) sigue
  * usando `construirUnifilar` directo, con el dibujo completo sin partir.
+ * `rotulo`, si se pasa, agrega el cuadro de título al pie de CADA hoja, con
+ * "HOJA i/N" — N solo se conoce acá, después de resolver todos los bloques.
  */
 export function construirUnifilarPaginado(
   circuitosPorCuerpo: Map<string, UnifilarCircuito[]>,
   configCalibre: ConfigCalibreCable[],
+  rotulo?: RotuloUnifilar,
 ): UnifilarDrawing[] {
-  const maxAlturaRenglones = ALTO_MAX_BLOQUE_SEGURO - MARGEN - GAP_CUERPO - ALTO_HEADER_CUERPO;
+  // Se reserva el espacio del rótulo acá (aunque no se termine agregando)
+  // para que ningún bloque, con o sin rótulo, se acerque al alto real que
+  // cuelga react-pdf (ver comentario de ALTO_MAX_BLOQUE_SEGURO) — más
+  // margen de sobra nunca es un problema, solo parte en una hoja más.
+  const limiteBloque = ALTO_MAX_BLOQUE_SEGURO - ALTO_ROTULO - MARGEN;
+  const maxAlturaRenglones = limiteBloque - MARGEN - GAP_CUERPO - ALTO_HEADER_CUERPO;
 
   const grupos: [string, RenglonUnifilar[], Map<number, string>][] = [];
   for (const [cuerpo, circuitosOriginal] of circuitosPorCuerpo) {
@@ -561,7 +623,7 @@ export function construirUnifilarPaginado(
   let alturaActual = MARGEN;
   for (const grupo of grupos) {
     const alturaGrupo = ALTO_HEADER_CUERPO + grupo[1].reduce((acc, r) => acc + altoRenglon(r), 0) + GAP_CUERPO;
-    if (actual.length > 0 && alturaActual + alturaGrupo > ALTO_MAX_BLOQUE_SEGURO) {
+    if (actual.length > 0 && alturaActual + alturaGrupo > limiteBloque) {
       bloques.push(renderGrupos(actual, configCalibre));
       actual = [];
       alturaActual = MARGEN;
@@ -570,7 +632,7 @@ export function construirUnifilarPaginado(
     alturaActual += alturaGrupo;
   }
   if (actual.length > 0) bloques.push(renderGrupos(actual, configCalibre));
-  return bloques;
+  return rotulo ? bloques.map((b, i) => agregarRotulo(b, rotulo, i + 1, bloques.length)) : bloques;
 }
 
 /** Agrupa circuitos por cuerpo preservando el orden de aparición (los sin cuerpo quedan en un grupo aparte, al final). */

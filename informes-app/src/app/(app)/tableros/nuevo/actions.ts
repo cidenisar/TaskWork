@@ -7,7 +7,7 @@ import { renderTableroPdf } from "@/lib/pdf/render";
 import { buildTableroFilename } from "@/lib/pdf/filename";
 import { resolverUbicacionId, tagGpsSiFalta, type PayloadUbicacionNueva, type PayloadGps } from "@/lib/ubicaciones/resolver";
 import { calcularResumenEquipamiento, itemMideCorriente } from "@/components/tableros/types";
-import { construirUnifilar, construirUnifilarPaginado, agruparPorCuerpo } from "@/lib/tableros/unifilar";
+import { construirUnifilar, construirUnifilarPaginado, agruparPorCuerpo, type RotuloUnifilar } from "@/lib/tableros/unifilar";
 import { drawCommandsToDxf } from "@/lib/dxf/writer";
 import type {
   EstadoChecklist,
@@ -312,12 +312,21 @@ export async function crearMedicionTableroAction(formData: FormData): Promise<Cr
       etiquetaCable: l.etiquetaCable.trim() || null,
     })),
   );
+  // Rótulo (cuadro de título al pie de cada hoja) con datos que ya existen
+  // en la medición — nunca un dato nuevo que haya que cargar aparte.
+  const rotulo: RotuloUnifilar = {
+    sitio: ubicacionTablero.sitio,
+    tablero: tableroRow.denominacion,
+    fecha: payload.fecha,
+    realizo: profile.nombreCompleto,
+    numeroGeneracion,
+  };
   // El dibujo completo (sin partir) va al DXF, que no pasa por react-pdf y
   // no tiene límite de altura por bloque. Para el PDF se usa la versión
   // paginada: react-pdf queda colgado (sin excepción) si un bloque del
   // esquema supera cierta altura — ver CRITERIOS_Y_IDEAS.md § 10.
-  const unifilar = construirUnifilar(circuitosPorCuerpo, configCalibre);
-  const unifilarBloques = construirUnifilarPaginado(circuitosPorCuerpo, configCalibre);
+  const unifilar = construirUnifilar(circuitosPorCuerpo, configCalibre, rotulo);
+  const unifilarBloques = construirUnifilarPaginado(circuitosPorCuerpo, configCalibre, rotulo);
 
   const hallazgosConfirmados = (payload.hallazgos ?? []).filter((h) => h.estado);
   let hallazgosPdf: { texto: string; estado: EstadoChecklist; comentario: string | null }[] = [];
