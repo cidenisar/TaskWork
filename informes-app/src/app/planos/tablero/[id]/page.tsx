@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
 import { labelSubsistemas, TABLERO_EVENTO_LABEL } from "@/components/tableros/types";
-import { agruparPorCuerpo, construirUnifilar, type UnifilarCircuito } from "@/lib/tableros/unifilar";
+import { agruparPorCuerpo, construirUnifilar, type RotuloUnifilar, type UnifilarCircuito } from "@/lib/tableros/unifilar";
 
 function fmtFecha(fecha: string) {
   const [y, m, d] = fecha.split("-");
@@ -61,7 +61,7 @@ export default async function PlanoTableroPublicoPage({ params }: { params: Prom
       service.from("catalogo_calibre_cable").select("amperaje_max, calibre_mm2"),
       service
         .from("tablero_mediciones")
-        .select("id, fecha, numero_generacion, tipo_evento, pdf_url, dxf_url")
+        .select("id, fecha, numero_generacion, tipo_evento, pdf_url, dxf_url, created_by")
         .eq("tablero_id", id)
         .order("fecha", { ascending: false })
         .limit(1)
@@ -88,7 +88,22 @@ export default async function PlanoTableroPublicoPage({ params }: { params: Prom
     padreNumero: c.circuito_padre_id ? (numeroPorId.get(c.circuito_padre_id) ?? null) : null,
     etiquetaCable: c.etiqueta_cable,
   }));
-  const unifilar = construirUnifilar(agruparPorCuerpo(circuitos), configCalibre);
+  // Rótulo con los mismos datos que ya se muestran arriba en "Estado" —
+  // nunca un dato nuevo que haya que consultar aparte. Si el tablero
+  // todavía no tiene ninguna medición cargada, queda con placeholders.
+  let realizoUltimaMedicion: string | null = null;
+  if (medicion?.created_by) {
+    const { data: autor } = await service.from("profiles").select("nombre_completo").eq("id", medicion.created_by).single();
+    realizoUltimaMedicion = autor?.nombre_completo ?? null;
+  }
+  const rotulo: RotuloUnifilar = {
+    sitio: ubicacion?.sitio ?? "—",
+    tablero: tablero.denominacion,
+    fecha: medicion ? fmtFecha(medicion.fecha) : "—",
+    realizo: realizoUltimaMedicion ?? "—",
+    numeroGeneracion: medicion?.numero_generacion ?? "—",
+  };
+  const unifilar = construirUnifilar(agruparPorCuerpo(circuitos), configCalibre, rotulo);
 
   let pdfUrl: string | null = null;
   let dxfUrl: string | null = null;
