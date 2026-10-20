@@ -20,7 +20,9 @@ export default async function HistorialBajasPage() {
   // RLS (bajas_equipamiento_select) ya limita esto a Admin/Supervisor.
   const { data: bajasData } = await supabase
     .from("bajas_equipamiento")
-    .select("id, numero_generacion, tipo_equipo, equipo_texto, equipo_categoria, motivo, comentario, fecha, ubicacion_id, pdf_url")
+    .select(
+      "id, numero_generacion, tipo_equipo, equipo_texto, equipo_categoria, motivo, comentario, fecha, ubicacion_id, pdf_url, entregado_deposito_at",
+    )
     .order("fecha", { ascending: false });
 
   const ubicacionIds = [...new Set((bajasData ?? []).map((b) => b.ubicacion_id))];
@@ -46,6 +48,7 @@ export default async function HistorialBajasPage() {
       fecha: b.fecha,
       ubicacionLabel: ubicacion ? labelUbicacion(ubicacion) : "—",
       pdfDisponible: Boolean(b.pdf_url),
+      entregadoDepositoAt: b.entregado_deposito_at,
     };
   });
 

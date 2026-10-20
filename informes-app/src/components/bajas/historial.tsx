@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { obtenerUrlPdfBajaAction } from "@/app/(app)/bajas/historial/actions";
+import { obtenerUrlPdfBajaAction, confirmarEntregaDepositoAction } from "@/app/(app)/bajas/historial/actions";
 import { Icon } from "@/components/icon";
 import { MOTIVO_BAJA_LABEL, TIPO_EQUIPO_BAJA_LABEL } from "./types";
 import type { MotivoBaja, TipoEquipoBaja } from "@/lib/database.types";
@@ -17,11 +17,18 @@ export interface HistorialBajaRow {
   fecha: string;
   ubicacionLabel: string;
   pdfDisponible: boolean;
+  entregadoDepositoAt: string | null;
 }
 
 function fmtFecha(fecha: string) {
   const [y, m, d] = fecha.split("-");
   return d && m && y ? `${d}/${m}/${y}` : fecha;
+}
+
+function fmtFechaHora(iso: string) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
 export function HistorialBajas({ bajas }: { bajas: HistorialBajaRow[] }) {
@@ -51,6 +58,20 @@ export function HistorialBajas({ bajas }: { bajas: HistorialBajaRow[] }) {
     window.open(res.url, "_blank", "noopener,noreferrer");
   }
 
+  const [entregas, setEntregas] = useState<Record<string, string>>({});
+
+  async function confirmarEntrega(id: string) {
+    setBusyId(id);
+    setNotice(null);
+    const res = await confirmarEntregaDepositoAction(id);
+    setBusyId(null);
+    if (!res.success) {
+      setNotice(res.error || "No se pudo confirmar la entrega.");
+      return;
+    }
+    setEntregas((prev) => ({ ...prev, [id]: new Date().toISOString() }));
+  }
+
   return (
     <div>
       <div className="page-heading">
@@ -70,36 +91,54 @@ export function HistorialBajas({ bajas }: { bajas: HistorialBajaRow[] }) {
           <div className="empty-note">No se encontraron bajas con esa búsqueda.</div>
         ) : (
           <div className="list-grid">
-            {filtradas.map((b) => (
-              <div className={`hist-item${b.pdfDisponible ? "" : " archived"}`} key={b.id}>
-                <div className="info">
-                  <div className="hist-main">
-                    <div className="hist-title">
-                      {b.equipoTexto}
-                      <span className={`hist-status ${b.pdfDisponible ? "ok" : "gone"}`}>
-                        {b.pdfDisponible ? "PDF disponible" : "Solo registro"}
-                      </span>
+            {filtradas.map((b) => {
+              const entregadoAt = entregas[b.id] ?? b.entregadoDepositoAt;
+              return (
+                <div className={`hist-item${b.pdfDisponible ? "" : " archived"}`} key={b.id}>
+                  <div className="info">
+                    <div className="hist-main">
+                      <div className="hist-title">
+                        {b.equipoTexto}
+                        <span className={`hist-status ${b.pdfDisponible ? "ok" : "gone"}`}>
+                          {b.pdfDisponible ? "PDF disponible" : "Solo registro"}
+                        </span>
+                        {entregadoAt && (
+                          <span className="hist-status ok" title={`Confirmado ${fmtFechaHora(entregadoAt)}`}>
+                            Entregado a depósito
+                          </span>
+                        )}
+                      </div>
+                      <div className="hist-meta">
+                        {b.numeroGeneracion} · {TIPO_EQUIPO_BAJA_LABEL[b.tipoEquipo]} ({b.equipoCategoria}) · {MOTIVO_BAJA_LABEL[b.motivo]} ·{" "}
+                        {b.ubicacionLabel} · {fmtFecha(b.fecha)}
+                      </div>
+                      {b.comentario && <div className="hist-meta" style={{ marginTop: 4 }}>{b.comentario}</div>}
                     </div>
-                    <div className="hist-meta">
-                      {b.numeroGeneracion} · {TIPO_EQUIPO_BAJA_LABEL[b.tipoEquipo]} ({b.equipoCategoria}) · {MOTIVO_BAJA_LABEL[b.motivo]} ·{" "}
-                      {b.ubicacionLabel} · {fmtFecha(b.fecha)}
-                    </div>
-                    {b.comentario && <div className="hist-meta" style={{ marginTop: 4 }}>{b.comentario}</div>}
+                  </div>
+                  <div className="hist-actions">
+                    {!entregadoAt && (
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        disabled={busyId === b.id}
+                        onClick={() => confirmarEntrega(b.id)}
+                      >
+                        {busyId === b.id ? "…" : "Confirmar entrega a depósito"}
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className="icon-btn"
+                      title={b.pdfDisponible ? "Ver comprobante" : "Sin comprobante disponible"}
+                      disabled={!b.pdfDisponible || busyId === b.id}
+                      onClick={() => verComprobante(b.id)}
+                    >
+                      {busyId === b.id ? "…" : <Icon name="eye" size={15} />}
+                    </button>
                   </div>
                 </div>
-                <div className="hist-actions">
-                  <button
-                    type="button"
-                    className="icon-btn"
-                    title={b.pdfDisponible ? "Ver comprobante" : "Sin comprobante disponible"}
-                    disabled={!b.pdfDisponible || busyId === b.id}
-                    onClick={() => verComprobante(b.id)}
-                  >
-                    {busyId === b.id ? "…" : <Icon name="eye" size={15} />}
-                  </button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

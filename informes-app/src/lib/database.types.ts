@@ -651,6 +651,9 @@ export type BajaEquipamientoRow = {
   created_by: string;
   pdf_url: string | null;
   pdf_generado_at: string | null;
+  /** Confirmación de que el equipo ya llegó físicamente al depósito — distinta de la baja en sí, puede pasar días/semanas después. */
+  entregado_deposito_at: string | null;
+  entregado_deposito_por: string | null;
   created_at: string;
 }
 

@@ -160,6 +160,17 @@ export const ICON_PATHS: Record<string, React.ReactNode> = {
       <circle cx="12" cy="17" r="0.6" fill="currentColor" stroke="none" />
     </>
   ),
+  planos: (
+    <>
+      <rect x="3.5" y="3.5" width="6" height="6" rx="1" />
+      <rect x="14.5" y="3.5" width="6" height="6" rx="1" />
+      <rect x="3.5" y="14.5" width="6" height="6" rx="1" />
+      <rect x="15" y="15" width="2.2" height="2.2" fill="currentColor" stroke="none" />
+      <rect x="18.5" y="15" width="2" height="2" fill="currentColor" stroke="none" />
+      <rect x="15" y="18.5" width="2" height="2" fill="currentColor" stroke="none" />
+      <rect x="18.5" y="18.5" width="2.2" height="2.2" fill="currentColor" stroke="none" />
+    </>
+  ),
   "datos-prueba": (
     <>
       <path d="M5 7h14M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />

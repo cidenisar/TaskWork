@@ -108,6 +108,10 @@ const NAV_CONFIG: Record<string, ModuleConfig> = {
     brand: "Sitios",
     tabs: [{ href: "/ubicaciones", label: "Todos los Sitios" }],
   },
+  "planos-qr": {
+    brand: "Planos y QR",
+    tabs: [],
+  },
   bajas: {
     brand: "Bajas de Equipamiento",
     tabs: [{ href: "/bajas/historial", label: "Historial" }],
@@ -163,7 +167,11 @@ export function AppShell({ profile, children }: { profile: Profile; children: Re
   // carga (nuevo/mantenimiento) del mismo módulo son formularios angostos,
   // no se benefician de más ancho.
   const anchoCompleto =
-    moduleKey === "estadisticas" || moduleKey === "ubicaciones" || pathname.endsWith("/historial") || esConfigSubpagina;
+    moduleKey === "estadisticas" ||
+    moduleKey === "ubicaciones" ||
+    moduleKey === "planos-qr" ||
+    pathname.endsWith("/historial") ||
+    esConfigSubpagina;
 
   return (
     <div className={anchoCompleto ? "app app-wide" : "app"}>
