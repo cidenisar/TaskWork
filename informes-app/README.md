@@ -1751,6 +1751,31 @@ general que salió de esto.
     varía por sitio — quedan hardcodeados a propósito, no hace falta una
     tabla para un valor que siempre es el mismo. El color ahora se
     imprime junto al calibre en cada fila del unifilar.
+  - **Encadenado con patrón "grupo" (una protección con varias cargas
+    colgando), no solo cadena lineal.** `circuito_padre_id` ya permitía
+    que varios circuitos apuntaran al mismo padre (sin restricción en la
+    base), pero el dibujo (`construirCadenas`) solo tomaba el de N°
+    más bajo y dejaba el resto como columnas sueltas — un disyuntor
+    general con 3 térmicas debajo (patrón real de tablero industrial) se
+    veía mal. Ahora `lib/tableros/unifilar.ts` arma un **árbol** real
+    (`construirArboles`), no una cadena: un nodo con varios hijos abre un
+    sub-bus y cada hijo pasa a tener su propia sub-columna (mismo ancho
+    que un circuito suelto, para no achicar el texto). El caso de un solo
+    hijo (lo más común: térmica → disyuntor) dibuja exactamente igual que
+    antes — no cambió nada visualmente para los tableros ya cargados.
+  - **Formación de cable en notación de plano real** (`2X1.5mm` en vez de
+    `1.5mm²`): `formatearFormacionCable()` en `calibre-cable.ts` agrega la
+    cantidad de conductores (220V mono=2, 380V tri=4, 24V/12V DC=2) antes
+    del calibre — solo cuando el tipo de circuito la deja inequívoca; el
+    resto (categorías de función sin tipo de circuito, como
+    lectora/cámara) sigue mostrando solo el calibre, para no inventar un
+    conteo de hilos que no se sabe.
+  - **Capas DXF con color AutoCAD**, para poder apagar/prender partes del
+    plano por separado al abrirlo (antes todo iba a una sola capa "0"):
+    MARCO, BARRA, SIMBOLOS, ROTULO y TEXTO, cada una con su color ACI
+    fijo — `lib/dxf/writer.ts` ahora declara una tabla `LAYER` en el
+    header y cada entidad lleva su capa en el grupo 8 (antes siempre
+    `"0"`).
 
 - **Tableros: visor público del plano con QR, para pegar en el tablero
   físico y dejar de imprimir papel.** Cierra la idea del unifilar: ahora

@@ -80,3 +80,25 @@ export function calcularCalibreCircuito(
   if (tipoCircuito === "24vdc" || tipoCircuito === "12vdc") return CALIBRE_FIJO_DC;
   return { calibreMm2: null, colores: null };
 }
+
+/**
+ * Cantidad de conductores del cable según el tipo de circuito — solo para
+ * los tipos donde el número de hilos es inequívoco (220V monofásico: F+N;
+ * 380V trifásico: R+S+T+N; 24V/12V DC: +/-). El resto (categorías de
+ * función como lectora/cámara/bornera sin tipo de circuito cargado) no
+ * tiene una cantidad de hilos fija conocida — ahí se muestra solo el
+ * calibre, sin inventar un conteo.
+ */
+const CONDUCTORES_POR_TIPO: Partial<Record<TableroTipoCircuito, number>> = {
+  "220v_mono": 2,
+  "380v_tri": 4,
+  "24vdc": 2,
+  "12vdc": 2,
+};
+
+/** Formación de cable en la notación de plano real: "<conductores>X<calibre>mm" (ej. "2X1.5mm"), o "<calibre>mm²" cuando no se conoce la cantidad de hilos. */
+export function formatearFormacionCable(calibreMm2: number | null, tipoCircuito: TableroTipoCircuito): string | null {
+  if (calibreMm2 == null) return null;
+  const conductores = CONDUCTORES_POR_TIPO[tipoCircuito];
+  return conductores != null ? `${conductores}X${calibreMm2}mm` : `${calibreMm2}mm²`;
+}

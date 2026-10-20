@@ -11,10 +11,25 @@ import type { DrawCommand } from "@/lib/tableros/unifilar";
  * usan origen abajo-a-la-izquierda y nuestro modelo (como el PDF) usa
  * origen arriba-a-la-izquierda.
  */
-function dxfLine(x1: number, y1: number, x2: number, y2: number): string {
-  return ["0", "LINE", "8", "0", "10", x1.toFixed(3), "20", y1.toFixed(3), "30", "0.0", "11", x2.toFixed(3), "21", y2.toFixed(3), "31", "0.0"].join(
-    "\n",
-  );
+function dxfLine(x1: number, y1: number, x2: number, y2: number, layer: string): string {
+  return [
+    "0",
+    "LINE",
+    "8",
+    layer,
+    "10",
+    x1.toFixed(3),
+    "20",
+    y1.toFixed(3),
+    "30",
+    "0.0",
+    "11",
+    x2.toFixed(3),
+    "21",
+    y2.toFixed(3),
+    "31",
+    "0.0",
+  ].join("\n");
 }
 
 /**
@@ -26,28 +41,53 @@ function dxfLine(x1: number, y1: number, x2: number, y2: number): string {
  * VERTEX + SEQEND, que es el formato válido desde las versiones más viejas
  * de DXF.
  */
-function dxfRect(x: number, y: number, width: number, height: number): string {
+function dxfRect(x: number, y: number, width: number, height: number, layer: string): string {
   const puntos: [number, number][] = [
     [x, y],
     [x + width, y],
     [x + width, y + height],
     [x, y + height],
   ];
-  const lines: string[] = ["0", "POLYLINE", "8", "0", "66", "1", "70", "1"];
-  for (const [px, py] of puntos) lines.push("0", "VERTEX", "8", "0", "10", px.toFixed(3), "20", py.toFixed(3), "30", "0.0");
+  const lines: string[] = ["0", "POLYLINE", "8", layer, "66", "1", "70", "1"];
+  for (const [px, py] of puntos) lines.push("0", "VERTEX", "8", layer, "10", px.toFixed(3), "20", py.toFixed(3), "30", "0.0");
   lines.push("0", "SEQEND");
   return lines.join("\n");
 }
 
 /** CIRCLE es válida desde las versiones más viejas de DXF (a diferencia de LWPOLYLINE), sin truco ninguno. */
-function dxfCircle(x: number, y: number, r: number): string {
-  return ["0", "CIRCLE", "8", "0", "10", x.toFixed(3), "20", y.toFixed(3), "30", "0.0", "40", r.toFixed(3)].join("\n");
+function dxfCircle(x: number, y: number, r: number, layer: string): string {
+  return ["0", "CIRCLE", "8", layer, "10", x.toFixed(3), "20", y.toFixed(3), "30", "0.0", "40", r.toFixed(3)].join("\n");
 }
 
-function dxfText(x: number, y: number, text: string, size: number): string {
+function dxfText(x: number, y: number, text: string, size: number, layer: string): string {
   // DXF no tolera saltos de línea ni ciertos caracteres de control dentro de un TEXT — se sanitiza por las dudas.
   const limpio = text.replace(/[\r\n]+/g, " ");
-  return ["0", "TEXT", "8", "0", "10", x.toFixed(3), "20", y.toFixed(3), "30", "0.0", "40", size.toFixed(2), "1", limpio].join("\n");
+  return ["0", "TEXT", "8", layer, "10", x.toFixed(3), "20", y.toFixed(3), "30", "0.0", "40", size.toFixed(2), "1", limpio].join("\n");
+}
+
+/**
+ * Capas DXF con color AutoCAD (ACI) fijo por capa, para que al abrir el
+ * plano en AutoCAD se pueda apagar/prender el marco, la barra, los
+ * símbolos, el rótulo o el texto por separado — antes todo iba a la capa
+ * "0" sin distinción. Colores elegidos por convención (7=blanco, 5=azul,
+ * 2=amarillo, 3=verde), no por norma de ninguna obra en particular.
+ */
+const COLOR_ACI_POR_CAPA: Record<string, number> = {
+  MARCO: 7,
+  BARRA: 5,
+  SIMBOLOS: 2,
+  ROTULO: 3,
+  TEXTO: 7,
+};
+
+function tablaDeCapas(): string[] {
+  const capas = Object.keys(COLOR_ACI_POR_CAPA);
+  const lines: string[] = ["0", "SECTION", "2", "TABLES", "0", "TABLE", "2", "LAYER", "70", String(capas.length)];
+  for (const capa of capas) {
+    lines.push("0", "LAYER", "2", capa, "70", "0", "62", String(COLOR_ACI_POR_CAPA[capa]), "6", "CONTINUOUS");
+  }
+  lines.push("0", "ENDTAB", "0", "ENDSEC");
+  return lines;
 }
 
 /**
@@ -107,14 +147,14 @@ export function drawCommandsToDxf(commands: DrawCommand[], height: number): Buff
 
   for (const cmd of commands) {
     if (cmd.type === "line") {
-      entidades.push(dxfLine(cmd.x1, flipY(cmd.y1), cmd.x2, flipY(cmd.y2)));
+      entidades.push(dxfLine(cmd.x1, flipY(cmd.y1), cmd.x2, flipY(cmd.y2), cmd.layer));
     } else if (cmd.type === "rect") {
-      entidades.push(dxfRect(cmd.x, flipY(cmd.y + cmd.height), cmd.width, cmd.height));
+      entidades.push(dxfRect(cmd.x, flipY(cmd.y + cmd.height), cmd.width, cmd.height, cmd.layer));
     } else if (cmd.type === "circle") {
-      entidades.push(dxfCircle(cmd.x, flipY(cmd.y), cmd.r));
+      entidades.push(dxfCircle(cmd.x, flipY(cmd.y), cmd.r, cmd.layer));
     } else {
       // TEXT en DXF se ancla abajo-a-la-izquierda del texto; nuestro modelo usa el mismo criterio que react-pdf (y = línea de base), así que alcanza con invertir Y.
-      entidades.push(dxfText(cmd.x, flipY(cmd.y), cmd.text, cmd.size));
+      entidades.push(dxfText(cmd.x, flipY(cmd.y), cmd.text, cmd.size, cmd.layer));
     }
   }
 
@@ -133,6 +173,7 @@ export function drawCommandsToDxf(commands: DrawCommand[], height: number): Buff
     "ANSI_1252",
     "0",
     "ENDSEC",
+    ...tablaDeCapas(),
     "0",
     "SECTION",
     "2",
