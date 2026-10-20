@@ -108,8 +108,8 @@ const NAV_CONFIG: Record<string, ModuleConfig> = {
     brand: "Sitios",
     tabs: [{ href: "/ubicaciones", label: "Todos los Sitios" }],
   },
-  "planos-qr": {
-    brand: "Planos y QR",
+  "escanear-qr": {
+    brand: "Escanear QR",
     tabs: [],
   },
   bajas: {
@@ -166,12 +166,7 @@ export function AppShell({ profile, children }: { profile: Profile; children: Re
   // historiales entran por ruta, no por módulo entero: las pantallas de
   // carga (nuevo/mantenimiento) del mismo módulo son formularios angostos,
   // no se benefician de más ancho.
-  const anchoCompleto =
-    moduleKey === "estadisticas" ||
-    moduleKey === "ubicaciones" ||
-    moduleKey === "planos-qr" ||
-    pathname.endsWith("/historial") ||
-    esConfigSubpagina;
+  const anchoCompleto = moduleKey === "estadisticas" || moduleKey === "ubicaciones" || pathname.endsWith("/historial") || esConfigSubpagina;
 
   return (
     <div className={anchoCompleto ? "app app-wide" : "app"}>

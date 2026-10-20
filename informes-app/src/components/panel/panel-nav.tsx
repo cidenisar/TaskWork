@@ -8,6 +8,7 @@ const ITEMS: { href: string; label: string; icon: IconName }[] = [
   { href: "/panel", label: "Vista general", icon: "building" },
   { href: "/panel/mantenimientos", label: "Mantenimientos", icon: "wrench" },
   { href: "/panel/vehiculos", label: "Vehículos", icon: "truck" },
+  { href: "/panel/planos-qr", label: "Planos y QR", icon: "document" },
   { href: "/estadisticas", label: "Estadísticas", icon: "chart" },
   { href: "/configuracion", label: "Configuración", icon: "settings" },
 ];

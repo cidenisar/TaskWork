@@ -47,9 +47,11 @@ export function PlanosQrView({ tableros, salas, esAdmin }: { tableros: PlanoTabl
 
   return (
     <div>
-      <div className="page-heading">
-        <h1>Planos y QR</h1>
-        <p>Descargá el QR o manejá los archivos de plano de cualquier tablero/sala, de cualquier sitio, sin entrar a su ficha</p>
+      <div className="panel-topbar">
+        <div>
+          <h1>Planos y QR</h1>
+          <p>Descargá el QR o manejá los archivos de plano de cualquier tablero/sala, de cualquier sitio, sin entrar a su ficha</p>
+        </div>
       </div>
 
       <div className="card">

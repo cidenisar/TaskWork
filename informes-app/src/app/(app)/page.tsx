@@ -71,14 +71,12 @@ export default async function HomePage() {
             Navegá Región → Provincia → Sitio y mirá todo lo cargado en cada lugar — informes, rendiciones, tableros, racks y equipos
           </div>
         </Link>
-        <Link href="/planos-qr" className="module-card">
+        <Link href="/escanear-qr" className="module-card">
           <div className="module-ico">
-            <ModuleIcon name="planos" />
+            <ModuleIcon name="escanear" />
           </div>
-          <div className="module-title">Planos y QR</div>
-          <div className="module-sub">
-            Descargá el QR de un tablero o sala, y subí o bajá sus archivos de plano — todos los sitios en una sola lista
-          </div>
+          <div className="module-title">Escanear QR</div>
+          <div className="module-sub">Apuntá la cámara al QR de un tablero o sala y abrí su plano al toque</div>
         </Link>
         <Link href="/bajas/historial" className="module-card">
           <div className="module-ico">

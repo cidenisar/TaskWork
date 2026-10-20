@@ -6,13 +6,15 @@ import { PlanosQrView, type PlanoTableroRow, type PlanoSalaRow } from "@/compone
 import type { AdjuntoTableroItem } from "@/components/tableros/adjuntos-tablero";
 
 /**
- * Antes había que entrar sitio por sitio (ficha de Sitio) para bajar el QR
- * de un tablero/sala o subir/bajar sus archivos — acá queda TODO junto, de
- * todos los sitios, para no tener que ir navegando uno por uno cuando lo
- * que se necesita es justamente eso (ej. imprimir varios QR de una, o
- * revisar qué tableros todavía no tienen DXF cargado).
+ * Vive en el Panel de Supervisión (Admin/Supervisor, ver panel/layout.tsx)
+ * porque es trabajo de revisión/gestión de escritorio — todos los
+ * tableros/salas de todos los sitios en una sola lista, con QR, plano en
+ * vivo, PDF/DXF de la última visita y adjuntos, sin entrar a la ficha de
+ * cada sitio uno por uno. La CARGA de un adjunto en el momento (desde el
+ * celular, parado frente al tablero) sigue disponible para cualquier
+ * técnico vía la ficha de Sitio (ubicaciones/[id]) — ahí no se tocó nada.
  */
-export default async function PlanosQrPage() {
+export default async function PanelPlanosQrPage() {
   const profile = await requireProfile();
   const supabase = await createClient();
 
@@ -25,13 +27,11 @@ export default async function PlanosQrPage() {
   const tableroIds = tableros.map((t) => t.id);
 
   // tablero_mediciones está RLS-scopeado a "las propias, o todas si sos
-  // Admin/Supervisor" (ver tablero_mediciones_select_own) — correcto para
-  // el Historial de un técnico, pero ACÁ cualquier logueado tiene que poder
-  // bajar el PDF/DXF de CUALQUIER tablero (mismo criterio que el visor
-  // público por QR, que ya usa Service Role por la misma razón: el control
-  // de acceso real es llegar al sitio físico, no quién cargó la última
-  // visita). Por eso esta consulta puntual usa Service Role en vez del
-  // cliente de la sesión.
+  // Admin/Supervisor" (ver tablero_mediciones_select_own) — acá ya se
+  // garantiza Admin/Supervisor por el layout del Panel, pero igual se usa
+  // Service Role para traer el PDF/DXF de CUALQUIER tablero sin depender
+  // de quién cargó la última visita (mismo criterio que el visor público
+  // por QR).
   let service: ReturnType<typeof createServiceRoleClient> | null = null;
   try {
     service = createServiceRoleClient();

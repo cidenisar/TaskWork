@@ -14,7 +14,7 @@ const ADJUNTO_TAMANO_MAX_MB = 25;
 
 function revalidarFicha() {
   revalidatePath("/ubicaciones/[id]", "page");
-  revalidatePath("/planos-qr");
+  revalidatePath("/panel/planos-qr");
 }
 
 /**
