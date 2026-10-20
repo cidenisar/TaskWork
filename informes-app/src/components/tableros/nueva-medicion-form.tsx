@@ -286,6 +286,7 @@ export function NuevaMedicionForm({
         tipoCircuito: TableroTipoCircuito;
         identificado: boolean;
         estadoDetectado: string | null;
+        padreNumero: number | null;
       }[] = data.circuitos ?? [];
       if (detectados.length === 0) {
         setIaNote(
@@ -297,6 +298,13 @@ export function NuevaMedicionForm({
       }
       const siguienteBase = circuitos.length ? Math.max(...circuitos.map((c) => c.numero)) : 0;
       const baseIndex = circuitos.length;
+      // La IA encadena protecciones usando SU PROPIO "numero" (posición
+      // dentro de esta lectura, no el N° final de circuito) — acá se
+      // traduce a los N° reales que van a quedar en el formulario (que
+      // arrancan después de lo que ya había cargado), para que "Encadenar
+      // debajo de" quede resuelto solo, sin que el técnico tenga que
+      // repetir a mano lo que la IA ya vio en la foto.
+      const numeroRealPorNumeroIa = new Map(detectados.map((d, i) => [d.numero, siguienteBase + i + 1]));
       setCircuitos((prev) => [
         ...prev,
         ...detectados.map((d, i) => ({
@@ -309,7 +317,7 @@ export function NuevaMedicionForm({
           cuerpo: cuerpoActual.trim(),
           alimentadoPorUps: false,
           rolBypassUps: null,
-          padreNumero: null,
+          padreNumero: d.padreNumero != null ? (numeroRealPorNumeroIa.get(d.padreNumero) ?? null) : null,
           etiquetaCable: "",
           revisar: d.identificado !== true,
         })),

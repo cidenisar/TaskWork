@@ -236,7 +236,25 @@ npm run dev
   de circuito además de leer la etiqueta — cuando no hay etiqueta legible
   describe el elemento por lo que ve físicamente (polos, grosor de cable,
   contactor/fotocélula al lado, tipo de cámara, etc.) en vez de inventar un
-  nombre, y marca esos casos para que el técnico los revise. Aparte de esas
+  nombre, y marca esos casos para que el técnico los revise.
+  - **Encadenado sugerido por la IA** (`padreNumero` en la respuesta de
+    `leer-foto`): antes el técnico tenía que ir circuito por circuito
+    eligiendo "Encadenar debajo de" a mano — en un tablero de varias
+    decenas de circuitos (ej. una térmica + disyuntor por cada salida)
+    nadie lo hacía, y el unifilar terminaba con cada protección como
+    columna suelta en vez de una sola columna por circuito físico. Ahora
+    el prompt le enseña a la IA el mismo criterio de `construirArboles`
+    (`lib/tableros/unifilar.ts`): si una protección va en serie
+    inmediatamente después de otra del mismo circuito (térmica→disyuntor,
+    o un disyuntor general con varias térmicas de carga colgando — el
+    patrón "grupo"), sugiere el encadenado; las 3 térmicas/disyuntores
+    del bypass manual de UPS quedan explícitamente afuera (son 3
+    circuitos independientes, no uno colgando del otro). La IA referencia
+    el "numero" interno de SU propia lista, así que `nueva-medicion-form.tsx`
+    lo traduce al N° de circuito real del formulario al combinarlo con lo
+    que ya había cargado — el técnico sigue pudiendo revisar/corregir en
+    el mismo selector de siempre, nunca se guarda sin que lo vea primero.
+  Aparte de esas
   fotos (que solo se usan para la lectura y no se guardan), el técnico puede
   cargar una **foto general del tablero** opcional por visita — se sube al
   bucket `informe-fotos` (`tablero_mediciones.foto_general_url`) y queda

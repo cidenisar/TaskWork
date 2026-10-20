@@ -42,6 +42,7 @@ interface CircuitoDetectado {
   tipoCircuito: TableroTipoCircuito;
   identificado: boolean;
   estadoDetectado: string | null;
+  padreNumero: number | null;
 }
 
 const CATEGORIAS_TEXTO = CATEGORIA_EQUIPO_OPCIONES.map((c) => `"${c}" (${CATEGORIA_EQUIPO_LABEL[c]})`).join(", ");
@@ -185,14 +186,24 @@ export async function POST(req: NextRequest) {
         'energizado): palanca hacia ARRIBA → "Cerrado". Palanca hacia ABAJO → "Abierto". Palanca en una posición intermedia entre arriba y ' +
         'abajo, o el interruptor muestra una marca/bandera/ventana de color (normalmente roja) indicando que saltó → "Disparado". Si no se ' +
         've la palanca con claridad (ángulo, obstruida, foto borrosa) → null (nunca inventes el estado). Para cualquier otra ' +
-        "categoriaEquipo, estadoDetectado siempre null.\n\n" +
-        "No inventes elementos que no estén en la foto, y no adivines un amperaje, tensión o estado que no puedas justificar por lo que " +
-        'ves — pero "texto" y "categoriaEquipo" son obligatorios en todos los casos, con tu mejor estimación visual si hace falta.' +
+        "categoriaEquipo, estadoDetectado siempre null.\n" +
+        '- "padreNumero": cuándo este elemento es una protección (térmica o disyuntor) que va EN SERIE después de otra protección de esta ' +
+        "misma lista, dentro del mismo circuito físico (no hay ningún otro circuito independiente entre las dos) — por ejemplo una térmica " +
+        "seguida de un disyuntor diferencial que protege lo mismo, o un disyuntor general del que cuelgan varias térmicas de carga, cada una " +
+        'yendo a su propio destino. Poné acá el "numero" de la OTRA protección de la lista (la que está más cerca de la barra de entrada, ' +
+        "la que alimenta a esta). null si este elemento es la cabeza de su propio circuito (no recibe la corriente desde otra protección de " +
+        "la lista) o si no podés distinguir el orden con la foto. Una misma protección puede ser el padreNumero de VARIOS elementos a la vez " +
+        "(un disyuntor general con varias térmicas de carga colgando, cada una con su propia salida). EXCEPCIÓN IMPORTANTE: las 3 térmicas/" +
+        "disyuntores de un bypass manual de UPS (entrada del UPS, bypass, salida del UPS — normalmente 3 interruptores iguales juntos) NUNCA " +
+        "se encadenan entre sí con padreNumero aunque estén físicamente pegados: son 3 circuitos independientes al mismo nivel, ninguno " +
+        "cuelga del otro.\n\n" +
+        "No inventes elementos que no estén en la foto, y no adivines un amperaje, tensión, estado o padreNumero que no puedas justificar " +
+        'por lo que ves — pero "texto" y "categoriaEquipo" son obligatorios en todos los casos, con tu mejor estimación visual si hace falta.' +
         `${instruccionHallazgos}\n\n` +
         'Respondé ÚNICAMENTE con un JSON válido: un objeto {"circuitos": [...], "hallazgos": [...]} donde "circuitos" es un array de ' +
         'objetos {"numero": number, "texto": string, "ampNominal": string, "categoriaEquipo": string, "tipoCircuito": string, ' +
-        `"identificado": boolean, "estadoDetectado": string | null} y ${INSTRUCCION_RESPUESTA_HALLAZGOS}. Sin texto antes ni después, ` +
-        "sin bloque de código markdown.",
+        '"identificado": boolean, "estadoDetectado": string | null, "padreNumero": number | null} y ' +
+        `${INSTRUCCION_RESPUESTA_HALLAZGOS}. Sin texto antes ni después, sin bloque de código markdown.`,
       messages: [
         {
           role: "user",
@@ -246,25 +257,36 @@ export async function POST(req: NextRequest) {
     const tiposCircuitoValidos = new Set<string>(TIPO_CIRCUITO_OPCIONES);
     const estadosPalancaValidos = new Set<string>(ESTADOS_PALANCA);
 
+    // padreNumero referencia el "numero" de OTRO elemento de esta misma
+    // lista (no un id de la base) — se sanea en dos pasadas: primero se
+    // arma la lista sin tocar padreNumero, recién después se descarta
+    // cualquier padreNumero que apunte a sí mismo o a un "numero" que no
+    // existe en la lista final (dato mal formado de la IA).
+    const circuitosFiltrados = circuitos.filter((c) => c && typeof c.texto === "string" && c.texto.trim());
+    const circuitosBase = circuitosFiltrados.map((c, i) => {
+      const categoriaEquipo = (categoriasValidas.has(c.categoriaEquipo) ? c.categoriaEquipo : "otro") as TableroCategoriaEquipo;
+      const estadoDetectado =
+        CATEGORIAS_CON_PALANCA.includes(categoriaEquipo) && typeof c.estadoDetectado === "string" && estadosPalancaValidos.has(c.estadoDetectado)
+          ? c.estadoDetectado
+          : null;
+      return {
+        numero: Number.isFinite(c.numero) ? c.numero : i + 1,
+        texto: String(c.texto).trim().slice(0, 120),
+        ampNominal: typeof c.ampNominal === "string" ? c.ampNominal.trim().slice(0, 20) : "",
+        categoriaEquipo,
+        tipoCircuito: (tiposCircuitoValidos.has(c.tipoCircuito) ? c.tipoCircuito : "na") as TableroTipoCircuito,
+        identificado: c.identificado === true,
+        estadoDetectado,
+        padreNumeroCrudo: Number.isFinite(c.padreNumero) ? (c.padreNumero as number) : null,
+      };
+    });
+    const numerosValidos = new Set(circuitosBase.map((c) => c.numero));
+
     return NextResponse.json({
-      circuitos: circuitos
-        .filter((c) => c && typeof c.texto === "string" && c.texto.trim())
-        .map((c, i) => {
-          const categoriaEquipo = (categoriasValidas.has(c.categoriaEquipo) ? c.categoriaEquipo : "otro") as TableroCategoriaEquipo;
-          const estadoDetectado =
-            CATEGORIAS_CON_PALANCA.includes(categoriaEquipo) && typeof c.estadoDetectado === "string" && estadosPalancaValidos.has(c.estadoDetectado)
-              ? c.estadoDetectado
-              : null;
-          return {
-            numero: Number.isFinite(c.numero) ? c.numero : i + 1,
-            texto: String(c.texto).trim().slice(0, 120),
-            ampNominal: typeof c.ampNominal === "string" ? c.ampNominal.trim().slice(0, 20) : "",
-            categoriaEquipo,
-            tipoCircuito: (tiposCircuitoValidos.has(c.tipoCircuito) ? c.tipoCircuito : "na") as TableroTipoCircuito,
-            identificado: c.identificado === true,
-            estadoDetectado,
-          };
-        }),
+      circuitos: circuitosBase.map(({ padreNumeroCrudo, ...c }) => ({
+        ...c,
+        padreNumero: padreNumeroCrudo != null && padreNumeroCrudo !== c.numero && numerosValidos.has(padreNumeroCrudo) ? padreNumeroCrudo : null,
+      })),
       hallazgos: parseHallazgosDetectados(resultado?.hallazgos, hallazgosItems),
     });
   } catch (err) {
