@@ -106,6 +106,7 @@ export default async function PanelPlanosQrPage() {
       id: t.id,
       denominacion: t.denominacion,
       subsistemasLabel: labelSubsistemas(t.subsistemas),
+      ubicacionId: t.ubicacion_id,
       ubicacionLabel: ubicacion ? labelUbicacion(ubicacion) : "—",
       ultimaFecha: ultima?.fecha ?? null,
       pdfUrl: ultima?.pdfUrl ? (urlFirmadaPorPath.get(ultima.pdfUrl) ?? null) : null,
@@ -119,6 +120,7 @@ export default async function PanelPlanosQrPage() {
     return {
       id: s.id,
       denominacion: s.denominacion,
+      ubicacionId: s.ubicacion_id,
       ubicacionLabel: ubicacion ? labelUbicacion(ubicacion) : "—",
       pdfUrl: s.pdf_url ? (urlFirmadaPorPath.get(s.pdf_url) ?? null) : null,
     };
