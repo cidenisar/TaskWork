@@ -379,7 +379,11 @@ function dibujarNodo(
   if (nodo.hijos.length > 0) {
     // Eslabón intermedio (ej. la térmica/disyuntor general de la que cuelga lo siguiente): una sola línea compacta al costado del símbolo.
     const amperaje = parseAmperaje(c.ampNominal);
-    const partes = [CATEGORIA_EQUIPO_LABEL[c.categoriaEquipo], codigo, amperaje ? `${amperaje}A` : null].filter((p): p is string => !!p);
+    // El código va PRIMERO (no al final): varias categorías tienen nombre
+    // largo ("Disyuntor/Diferencial", "Bornera doble piso c/ fusible") que
+    // por sí solo ya agota el ancho truncado de un eslabón intermedio — si
+    // el código fuera al final, nunca llegaría a verse.
+    const partes = [codigo, CATEGORIA_EQUIPO_LABEL[c.categoriaEquipo], amperaje ? `${amperaje}A` : null].filter((p): p is string => !!p);
     commands.push({ type: "text", x: cx + SIMBOLO_R + 2, y: ySymbol + 2, text: truncarEslabon(partes.join(" ")), size: 5.5, layer: "TEXTO" });
 
     let offset = 0;
@@ -404,7 +408,9 @@ function dibujarNodo(
   const { calibreMm2, colores } = calcularCalibreCircuito(c.categoriaEquipo, c.tipoCircuito, c.ampNominal, configCalibre);
   const amperaje = parseAmperaje(c.ampNominal);
   const sufijo = c.rolBypassUps ? ROL_BYPASS_SUFIJO[c.rolBypassUps] : c.alimentadoPorUps ? " (UPS)" : "";
-  const linea1 = `${CATEGORIA_EQUIPO_LABEL[c.categoriaEquipo]}${sufijo}${codigo ? ` · ${codigo}` : ""}`;
+  // Mismo criterio que arriba: el código va PRIMERO para que sobreviva al
+  // truncado aunque el nombre de la categoría sea largo.
+  const linea1 = codigo ? `${codigo} — ${CATEGORIA_EQUIPO_LABEL[c.categoriaEquipo]}${sufijo}` : `${CATEGORIA_EQUIPO_LABEL[c.categoriaEquipo]}${sufijo}`;
   const linea2Partes = [c.tipoCircuito !== "na" ? TIPO_CIRCUITO_LABEL[c.tipoCircuito] : null, amperaje ? `${amperaje}A` : null].filter(
     (p): p is string => !!p,
   );
