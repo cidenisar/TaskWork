@@ -10,7 +10,7 @@ export default async function LoginPage({
   return (
     <div className="app">
       <div className="login-wrap">
-        <span className="brand">Informes</span>
+        <span className="brand">TaskWork</span>
         <div className="login-sub">Ingresá para cargar o revisar informes y rendiciones</div>
         <LoginForm next={next} desactivado={desactivado} />
       </div>

@@ -283,7 +283,7 @@ export async function crearRelevamientoRackAction(formData: FormData): Promise<C
       comentario: l.comentario || null,
     })),
     logoBuffer,
-    appName: "Informe Técnico App",
+    appName: "TaskWork",
     realizoNombre: profile.nombreCompleto,
   });
 

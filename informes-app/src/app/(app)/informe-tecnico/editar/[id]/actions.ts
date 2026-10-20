@@ -310,7 +310,7 @@ export async function actualizarInformeTecnicoAction(
     hallazgos: hallazgosPdf,
     entregaDepositoNumeroGeneracion: informeActual.entrega_deposito_numero_generacion,
     logoBuffer,
-    appName: "Informe Técnico App",
+    appName: "TaskWork",
     realizoNombre: profile.nombreCompleto,
   });
 

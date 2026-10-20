@@ -527,7 +527,7 @@ export async function crearInformeTecnicoAction(formData: FormData): Promise<Cre
     hallazgos: hallazgosPdf,
     entregaDepositoNumeroGeneracion,
     logoBuffer,
-    appName: "Informe Técnico App",
+    appName: "TaskWork",
     realizoNombre: profile.nombreCompleto,
   });
 

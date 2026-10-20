@@ -89,7 +89,7 @@ export async function POST(req: NextRequest) {
   try {
     const res = await fetch(
       `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&zoom=14&addressdetails=1`,
-      { headers: { "User-Agent": "InformesApp/1.0 (uso interno)" } },
+      { headers: { "User-Agent": "TaskWorkApp/1.0 (uso interno)" } },
     );
     if (res.ok) {
       const data = await res.json();

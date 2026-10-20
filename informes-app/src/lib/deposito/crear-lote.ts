@@ -130,7 +130,7 @@ export async function crearEntregaDepositoLote(params: CrearEntregaDepositoLoteP
     })),
     fotosEvidenciaBuffers: fotosEvidenciaBuffers.length > 0 ? fotosEvidenciaBuffers : null,
     logoBuffer,
-    appName: "Informe Técnico App",
+    appName: "TaskWork",
     realizoNombre,
   });
 

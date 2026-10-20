@@ -152,7 +152,7 @@ export function AppShell({ profile, children }: { profile: Profile; children: Re
   // hub, un nivel por vez, mismo criterio que "Volver a Relevamiento".
   const esConfigHub = pathname === "/configuracion";
   const esConfigSubpagina = pathname.startsWith("/configuracion/");
-  const brand = moduleConfig?.brand ?? (esConfigHub || esConfigSubpagina ? "Configuración" : "Informes");
+  const brand = moduleConfig?.brand ?? (esConfigHub || esConfigSubpagina ? "Configuración" : "TaskWork");
   const backHref = moduleConfig?.backHref ?? (esConfigHub ? "/panel" : esConfigSubpagina ? "/configuracion" : "/");
   const backLabel = moduleConfig?.backHref
     ? "Volver a Relevamiento de Equipos"
@@ -254,7 +254,7 @@ export function AppShell({ profile, children }: { profile: Profile; children: Re
 
       <main>{children}</main>
 
-      <div className="wire-note">Informes — Informe Técnico &amp; Rendición de Gastos</div>
+      <div className="wire-note">TaskWork — Informe Técnico &amp; Rendición de Gastos</div>
     </div>
   );
 }

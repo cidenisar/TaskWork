@@ -368,7 +368,7 @@ export async function crearMedicionTableroAction(formData: FormData): Promise<Cr
       };
     }),
     logoBuffer,
-    appName: "Informe Técnico App",
+    appName: "TaskWork",
     realizoNombre: profile.nombreCompleto,
   });
 

@@ -147,7 +147,7 @@ export function EscanearQr() {
                 </a>
               ) : (
                 <div className="hint" style={{ color: "var(--warn)" }}>
-                  Esto no parece un QR de Informes — no se abre automáticamente.
+                  Esto no parece un QR de TaskWork — no se abre automáticamente.
                 </div>
               )}
               <button

@@ -294,7 +294,7 @@ export async function darDeBajaAction(payload: DarDeBajaPayload): Promise<DarDeB
     motivo: payload.motivo,
     comentario: payload.comentario.trim() || null,
     logoBuffer,
-    appName: "Informe Técnico App",
+    appName: "TaskWork",
     realizoNombre: profile.nombreCompleto,
   });
 
@@ -436,7 +436,7 @@ export async function entregarEquipoADepositoAction(payload: EntregarEquipoADepo
     ],
     fotosEvidenciaBuffers: null,
     logoBuffer,
-    appName: "Informe Técnico App",
+    appName: "TaskWork",
     realizoNombre: profile.nombreCompleto,
   });
 

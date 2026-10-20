@@ -274,7 +274,7 @@ export async function crearRelevamientoEquiposAction(formData: FormData): Promis
       comentario: l.comentario || null,
     })),
     logoBuffer,
-    appName: "Informe Técnico App",
+    appName: "TaskWork",
     realizoNombre: profile.nombreCompleto,
   });
 

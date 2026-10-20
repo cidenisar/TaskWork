@@ -6,11 +6,5 @@
     </linearGradient>
   </defs>
   <rect width="192" height="192" rx="40" fill="#0a0a0b"/>
-  <rect x="16" y="16" width="160" height="160" rx="28" fill="url(#g)"/>
-  <g fill="#0a0a0b">
-    <rect x="52" y="52" width="88" height="10" rx="5"/>
-    <rect x="52" y="78" width="88" height="10" rx="5"/>
-    <rect x="52" y="104" width="60" height="10" rx="5"/>
-    <rect x="52" y="130" width="40" height="10" rx="5"/>
-  </g>
+  <text x="96" y="128" text-anchor="middle" font-family="Inter, -apple-system, 'Segoe UI', Roboto, system-ui, sans-serif" font-weight="900" font-size="100" letter-spacing="-5" fill="url(#g)">TW</text>
 </svg>

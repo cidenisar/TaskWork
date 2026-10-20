@@ -121,7 +121,7 @@ export async function crearSalaAction(formData: FormData): Promise<CrearSalaResu
     fecha: payload.fecha,
     fotosGeneralesBuffers: fotosGeneralesBuffers.length > 0 ? fotosGeneralesBuffers : null,
     logoBuffer,
-    appName: "Informe Técnico App",
+    appName: "TaskWork",
     realizoNombre: profile.nombreCompleto,
   });
 

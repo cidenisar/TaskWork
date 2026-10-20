@@ -283,7 +283,7 @@ export async function crearRelevamientoTorreComunicacionAction(formData: FormDat
       comentario: l.comentario || null,
     })),
     logoBuffer,
-    appName: "Informe Técnico App",
+    appName: "TaskWork",
     realizoNombre: profile.nombreCompleto,
   });
 

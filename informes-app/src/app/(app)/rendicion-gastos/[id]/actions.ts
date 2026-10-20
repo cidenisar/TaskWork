@@ -180,7 +180,7 @@ export async function cerrarRendicionAction(rendicionId: string): Promise<Cerrar
     totalGastado,
     saldo,
     logoBuffer,
-    appName: "Rendición de Gastos App",
+    appName: "TaskWork",
     realizoNombre: profile.nombreCompleto,
   });
 

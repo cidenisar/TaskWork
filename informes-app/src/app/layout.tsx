@@ -10,13 +10,13 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Informes",
+  title: "TaskWork",
   description: "Informe Técnico y Rendición de Gastos para técnicos de campo",
   manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "Informes",
+    title: "TaskWork",
   },
 };
 
