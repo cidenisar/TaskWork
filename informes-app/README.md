@@ -1776,6 +1776,16 @@ general que salió de esto.
     fijo — `lib/dxf/writer.ts` ahora declara una tabla `LAYER` en el
     header y cada entidad lleva su capa en el grupo 8 (antes siempre
     `"0"`).
+  - **Código de equipo correlativo por categoría** (`BNR-01`, `FT-1`,
+    `U-1`, `BT-1`, `CV-1`, `POE-01`, `PS-1`), para poder nombrar un
+    equipo puntual del plano sin usar su N° de circuito. Se calcula en
+    `calcularCodigosEquipo()` (`unifilar.ts`) a partir de los circuitos
+    ya cargados — numerado dentro de cada cuerpo, nunca persistido ni
+    cargado a mano, mismo criterio que el resto del unifilar (un dato
+    derivado, no uno nuevo que haya que tipear). Solo llevan código los
+    equipos "de instalación" (bornera, fuente, UPS, batería, conversor
+    DC, inyector PoE, descargador) — las protecciones (térmica/
+    disyuntor) ya se identifican por su N° de circuito.
 
 - **Tableros: visor público del plano con QR, para pegar en el tablero
   físico y dejar de imprimir papel.** Cierra la idea del unifilar: ahora
