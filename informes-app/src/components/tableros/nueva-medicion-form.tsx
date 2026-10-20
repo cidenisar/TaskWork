@@ -29,6 +29,7 @@ import {
   TABLERO_JERARQUIA_LABEL,
   CATEGORIA_EQUIPO_OPCIONES,
   CATEGORIA_EQUIPO_LABEL,
+  TABLERO_EQUIPO_ESPERADO_OPCIONES,
   TIPO_CIRCUITO_OPCIONES,
   TIPO_CIRCUITO_LABEL,
   ROL_BYPASS_UPS_OPCIONES,
@@ -99,6 +100,8 @@ export function NuevaMedicionForm({
   const [filtroSubsistemas, setFiltroSubsistemas] = useState<TableroTipo[]>([]);
   const [tableroId, setTableroId] = useState<string>(tableroInicial?.id ?? ""); // "" = sin elegir, "__new" = crear
   const [subsistemasNuevo, setSubsistemasNuevo] = useState<TableroTipo[]>([]);
+  const [equipamientoEsperadoNuevo, setEquipamientoEsperadoNuevo] = useState<TableroCategoriaEquipo[]>([]);
+  const [tieneBypassUpsNuevo, setTieneBypassUpsNuevo] = useState(false);
   const [denominacionNueva, setDenominacionNueva] = useState("");
   const [jerarquiaNueva, setJerarquiaNueva] = useState<TableroJerarquia | "">("");
   const [tableroPadreId, setTableroPadreId] = useState("");
@@ -154,6 +157,9 @@ export function NuevaMedicionForm({
   }, [tableros, ubicacionId, filtroSubsistemas]);
   const tableroExistente = useMemo(() => tableros.find((t) => t.id === tableroId) ?? null, [tableros, tableroId]);
   const subsistemasActuales = tableroId === "__new" ? subsistemasNuevo : (tableroExistente?.subsistemas ?? []);
+  const equipamientoEsperadoActual =
+    tableroId === "__new" ? equipamientoEsperadoNuevo : (tableroExistente?.equipamientoEsperado ?? []);
+  const tieneBypassUpsActual = tableroId === "__new" ? tieneBypassUpsNuevo : (tableroExistente?.tieneBypassUps ?? false);
   const tieneEnergia = subsistemasActuales.includes("energia");
   // Solo si el tablero tiene energía tiene sentido distinguir medición de
   // relevamiento — CCTV/Control de Acceso puros siempre son relevamiento
@@ -263,6 +269,8 @@ export function NuevaMedicionForm({
         return;
       }
       fd.append("subsistemas", subsistemasActuales.join(","));
+      fd.append("equipamientoEsperado", equipamientoEsperadoActual.join(","));
+      if (tieneBypassUpsActual) fd.append("tieneBypassUps", "1");
       const res = await fetch("/api/tableros/leer-foto", { method: "POST", body: fd });
       const data = await res.json();
       if (!res.ok) {
@@ -427,6 +435,8 @@ export function NuevaMedicionForm({
           gps,
           tableroId: tableroId === "__new" ? null : tableroId,
           denominacionNueva,
+          equipamientoEsperadoNuevo,
+          tieneBypassUpsNuevo,
           jerarquiaNueva: jerarquiaNueva || null,
           tableroPadreId: jerarquiaNueva === "secundario" && tableroPadreId ? tableroPadreId : null,
           fecha,
@@ -602,6 +612,37 @@ export function NuevaMedicionForm({
                     </button>
                   ))}
                 </div>
+              </div>
+              <div className="field">
+                <label>
+                  Equipamiento especial presente <span className="opt">(opcional)</span>
+                </label>
+                <div className="hint" style={{ margin: "-2px 0 8px" }}>
+                  Marcalo de antemano, antes de sacar las fotos — así sabés qué buscar en el gabinete, y la lectura con IA lo usa como
+                  pista para interpretar mejor lo que ve (sin inventar nada que no esté en la foto).
+                </div>
+                <div className="tech-form-grid" style={{ gridTemplateColumns: "repeat(3, 1fr)" }}>
+                  {TABLERO_EQUIPO_ESPERADO_OPCIONES.map((c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      className={`btn ${equipamientoEsperadoNuevo.includes(c) ? "btn-primary" : "btn-secondary"}`}
+                      onClick={() => setEquipamientoEsperadoNuevo((prev) => toggleEnArray(prev, c))}
+                      disabled={submitting}
+                    >
+                      {CATEGORIA_EQUIPO_LABEL[c]}
+                    </button>
+                  ))}
+                </div>
+                <label style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+                  <input
+                    type="checkbox"
+                    checked={tieneBypassUpsNuevo}
+                    onChange={(e) => setTieneBypassUpsNuevo(e.target.checked)}
+                    disabled={submitting}
+                  />
+                  Tiene bypass manual de UPS (3 térmicas: entrada / bypass / salida)
+                </label>
               </div>
               <div className="field">
                 <label>

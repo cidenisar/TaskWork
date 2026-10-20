@@ -11,7 +11,10 @@ export default async function NuevaMedicionPage({ searchParams }: { searchParams
   const supabase = await createClient();
 
   const [tablerosRes, circuitosRes, ubicaciones, provinciasRes, hallazgosRes] = await Promise.all([
-    supabase.from("tableros").select("id, subsistemas, denominacion, ubicacion_id").order("denominacion"),
+    supabase
+      .from("tableros")
+      .select("id, subsistemas, denominacion, ubicacion_id, equipamiento_esperado, tiene_bypass_ups")
+      .order("denominacion"),
     supabase
       .from("tablero_circuitos")
       .select(
@@ -63,6 +66,8 @@ export default async function NuevaMedicionPage({ searchParams }: { searchParams
         ubicacionId: t.ubicacion_id,
         ubicacionLabel: labelUbicacion(ubicacion),
         circuitos: circuitosPorTablero.get(t.id) ?? [],
+        equipamientoEsperado: t.equipamiento_esperado,
+        tieneBypassUps: t.tiene_bypass_ups,
       };
     })
     .filter((t): t is TableroConCircuitos => t !== null);

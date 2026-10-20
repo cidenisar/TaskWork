@@ -310,6 +310,10 @@ export type TableroRow = {
   jerarquia: TableroJerarquia | null;
   /** El tablero del que "cuelga" este (puede ser un principal u OTRO secundario — una cadena). Solo tiene sentido cuando jerarquia='secundario'. */
   tablero_padre_id: string | null;
+  /** Equipamiento especial que se sabe que tiene este tablero (fuente, UPS, conversor DC, etc.) — se carga una vez al dar de alta, no por visita. */
+  equipamiento_esperado: TableroCategoriaEquipo[];
+  /** true si el tablero tiene un bypass manual de UPS (3 térmicas: entrada/bypass/salida) — ver TableroRolBypassUps. */
+  tiene_bypass_ups: boolean;
   created_by: string | null;
   created_at: string;
 }

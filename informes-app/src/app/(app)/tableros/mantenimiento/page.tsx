@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { NuevoMantenimientoForm } from "@/components/tableros/nuevo-mantenimiento-form";
 import { labelUbicacion } from "@/components/ubicaciones/types";
 import type { TableroConCircuitos } from "@/components/tableros/types";
+import type { TableroCategoriaEquipo } from "@/lib/database.types";
 import { fetchTodasLasUbicaciones } from "@/lib/ubicaciones/fetch-todas";
 
 export default async function NuevoMantenimientoPage({ searchParams }: { searchParams: Promise<{ tableroId?: string }> }) {
@@ -52,6 +53,8 @@ export default async function NuevoMantenimientoPage({ searchParams }: { searchP
         ubicacionId: t.ubicacion_id,
         ubicacionLabel: labelUbicacion(ubicacion),
         circuitos: circuitosPorTablero.get(t.id) ?? [],
+        equipamientoEsperado: [] as TableroCategoriaEquipo[],
+        tieneBypassUps: false,
       };
     })
     .filter((t): t is TableroConCircuitos => t !== null);

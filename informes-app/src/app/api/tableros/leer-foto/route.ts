@@ -86,6 +86,13 @@ export async function POST(req: NextRequest) {
     .split(",")
     .map((s) => s.trim())
     .filter((s): s is TableroTipo => s === "energia" || s === "cctv" || s === "control_acceso");
+  const equipamientoEsperadoParam = (formData.get("equipamientoEsperado") as string | null) ?? "";
+  const categoriasValidasParam = new Set<string>(CATEGORIA_EQUIPO_OPCIONES);
+  const equipamientoEsperado = equipamientoEsperadoParam
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s): s is TableroCategoriaEquipo => categoriasValidasParam.has(s));
+  const tieneBypassUps = (formData.get("tieneBypassUps") as string | null) === "1";
   if (files.length === 0) {
     return NextResponse.json({ error: "Falta al menos una foto." }, { status: 400 });
   }
@@ -115,6 +122,26 @@ export async function POST(req: NextRequest) {
     subsistemas.length > 0
       ? ` Este tablero en particular tiene relevado: ${subsistemas.map((s) => TABLERO_TIPO_LABEL[s]).join(", ")} — pero puede ser mixto, así que igual clasificá cada elemento por lo que ves, no asumas que todo pertenece a esos subsistemas.`
       : "";
+  // Checklist que el técnico cargó al dar de alta el tablero, ANTES de sacar
+  // las fotos (ver tableros.equipamiento_esperado/tiene_bypass_ups) — es
+  // contexto para DESAMBIGUAR lo que se ve en la foto, nunca una directiva
+  // de "buscá esto": si no hay base visual real, no se marca igual.
+  const pistasEquipamiento: string[] = [];
+  if (equipamientoEsperado.length > 0) {
+    pistasEquipamiento.push(`puede tener: ${equipamientoEsperado.map((c) => CATEGORIA_EQUIPO_LABEL[c]).join(", ")}`);
+  }
+  if (tieneBypassUps) {
+    pistasEquipamiento.push(
+      "tiene un bypass manual de UPS (3 térmicas/disyuntores juntos: entrada del UPS, bypass, y salida del UPS) — si ves un grupo de " +
+        "3 interruptores iguales que encaja con esa descripción, es más probable que sea eso que 3 circuitos de carga sueltos",
+    );
+  }
+  const contextoEquipamiento =
+    pistasEquipamiento.length > 0
+      ? ` De antemano se sabe que este tablero ${pistasEquipamiento.join("; ")} — usá esto SOLO para interpretar mejor lo que ves en la ` +
+        "foto (por ejemplo, para no confundir un conversor DC con \"otro\"), nunca para inventar un elemento que la foto no muestra: si " +
+        "no hay base visual, no lo agregues igual."
+      : "";
   const contextoFotos =
     imagenes.length > 1
       ? ` Te paso ${imagenes.length} fotos del MISMO tablero (pueden ser ángulos distintos, secciones distintas de un tablero grande, o un ` +
@@ -136,7 +163,7 @@ export async function POST(req: NextRequest) {
       system:
         "Sos un asistente que ayuda a un técnico de campo a relevar un tablero eléctrico, que puede ser mixto: interruptores/térmicas " +
         "de energía, fuentes/UPS/baterías/conversores, y también elementos de CCTV o control de acceso (cámaras, lectoras, cerraduras) " +
-        `conviviendo en el mismo gabinete.${contextoSubsistemas}${contextoFotos}\n\n` +
+        `conviviendo en el mismo gabinete.${contextoSubsistemas}${contextoEquipamiento}${contextoFotos}\n\n` +
         "Listá cada circuito/elemento identificable, en el orden en que aparecen físicamente (de arriba hacia abajo y de izquierda a " +
         "derecha). Devolvé SIEMPRE al menos los elementos que puedas distinguir, aunque no tengan etiqueta — describilos por su aspecto " +
         "en vez de omitirlos; solo dejá la lista vacía si la foto no muestra ningún tablero o elemento reconocible.\n\n" +

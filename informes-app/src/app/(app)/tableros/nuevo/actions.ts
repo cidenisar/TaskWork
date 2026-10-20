@@ -53,6 +53,8 @@ export interface CrearMedicionPayload {
   gps: PayloadGps | null;
   tableroId: string | null;
   denominacionNueva: string;
+  equipamientoEsperadoNuevo: TableroCategoriaEquipo[];
+  tieneBypassUpsNuevo: boolean;
   jerarquiaNueva: TableroJerarquia | null;
   tableroPadreId: string | null;
   fecha: string;
@@ -117,6 +119,8 @@ export async function crearMedicionTableroAction(formData: FormData): Promise<Cr
         subsistemas: payload.subsistemas,
         denominacion: payload.denominacionNueva.trim(),
         ubicacion_id: ubicacion.id,
+        equipamiento_esperado: payload.equipamientoEsperadoNuevo,
+        tiene_bypass_ups: payload.tieneBypassUpsNuevo,
         jerarquia: payload.jerarquiaNueva,
         tablero_padre_id: payload.jerarquiaNueva === "secundario" ? payload.tableroPadreId : null,
         created_by: profile.id,

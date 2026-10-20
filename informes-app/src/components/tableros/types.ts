@@ -85,6 +85,22 @@ export const CATEGORIA_EQUIPO_LABEL: Record<TableroCategoriaEquipo, string> = {
   otro: "Otro",
 };
 
+/**
+ * Subconjunto de categorías para el checklist de "equipamiento esperado"
+ * del tablero (se carga una vez al dar de alta, antes de las fotos) — deja
+ * afuera térmica/disyuntor/bornera/bornera_fusible (están en básicamente
+ * todos los tableros, no aportan como checklist) y cámara/lectora/
+ * cerradura (ya cubiertas por el subsistema CCTV/Control de Acceso).
+ */
+export const TABLERO_EQUIPO_ESPERADO_OPCIONES: TableroCategoriaEquipo[] = [
+  "fuente_industrial",
+  "ups_industrial",
+  "bateria",
+  "conversor_dc",
+  "descargador_gaseoso",
+  "inyector_poe",
+];
+
 export const TIPO_CIRCUITO_OPCIONES: TableroTipoCircuito[] = ["220v_mono", "380v_tri", "24vdc", "12vdc", "na"];
 
 export const TIPO_CIRCUITO_LABEL: Record<TableroTipoCircuito, string> = {
@@ -211,6 +227,10 @@ export interface TableroConCircuitos {
   circuitos: CircuitoItem[];
   jerarquia?: TableroJerarquia | null;
   tableroPadreId?: string | null;
+  /** Equipamiento especial que se sabe que tiene este tablero — ver TABLERO_EQUIPO_ESPERADO_OPCIONES. */
+  equipamientoEsperado: TableroCategoriaEquipo[];
+  /** true si el tablero tiene bypass manual de UPS (entrada/bypass/salida). */
+  tieneBypassUps: boolean;
 }
 
 export interface MantenimientoRow {
