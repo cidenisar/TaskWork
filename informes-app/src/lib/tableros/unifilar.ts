@@ -104,6 +104,17 @@ export function ordenarCircuitosParaUnifilar<T extends UnifilarCircuito>(circuit
 export interface NodoArbol {
   circuito: UnifilarCircuito;
   hijos: NodoArbol[];
+  /**
+   * Solo cuando este nodo es UNA PARTE de un "grupo" demasiado ancho/con
+   * demasiados destinos para entrar en una sola hoja, partido en varias
+   * copias del mismo nodo cabeza con un subconjunto de `hijos` cada una —
+   * ver `partirArbolSiHaceFalta`. `continuaEn`/`vieneDe` comparten la misma
+   * clave de corte entre la parte de "antes" y la de "después"; se resuelven
+   * a "HOJA n" recién en `resolverContinuaciones` (solo ahí se sabe el
+   * número de hoja final de cada bloque).
+   */
+  continuaEn?: string;
+  vieneDe?: string;
 }
 
 /**
@@ -411,6 +422,66 @@ const ANCHO_TEXTO_COLUMNA = COLUMNA_ANCHO - 14;
 type RenglonUnifilar = { tipo: "header"; texto: string } | { tipo: "columnas"; arboles: NodoArbol[] };
 
 /**
+ * Prefijo de los marcadores de continuación (ver `partirArbolSiHaceFalta`):
+ * el texto completo del `DrawCommand` ES el sentinel (prefijo + clave de
+ * corte) hasta que `resolverContinuaciones` lo reemplaza por el texto final
+ * con el número de hoja real — recién se sabe ahí, no al dibujar.
+ */
+const SENTINEL_CONT = "\u0001CONT:";
+const SENTINEL_VIENE = "\u0001VIENE:";
+
+/**
+ * Si un árbol (patrón "grupo": un nodo con varios hijos) es demasiado ancho
+ * o tiene demasiados destinos para entrar en una sola hoja A3, lo parte en
+ * VARIAS copias del mismo nodo cabeza, cada una con un subconjunto de sus
+ * hijos que sí entra — en vez de dejar circuitos dibujados fuera del borde
+ * físico de la hoja (caso real confirmado: la térmica general de "Tablero
+ * de Prueba 11" alimenta 28 circuitos directos sin protección propia, muy
+ * por encima de los ~11 que entran por ancho y de los 8 de B2). Cada parte
+ * redibuja el nodo cabeza completo (mismo símbolo + código, A8 del
+ * estándar: "continúa en hoja n") para que se entienda que es la MISMA
+ * protección continuando, no un circuito nuevo. Nunca parte un hijo
+ * individual — si ni agrupando de a uno solo entra (un único hijo ya
+ * excede el límite por sí mismo), se deja sin partir, igual que antes.
+ * Solo tiene efecto para el PDF paginado (ver `permitirPartir` en
+ * `prepararRenglones`) — el DXF/visor público dibujan un único lienzo sin
+ * límite de ancho real, así que ahí un árbol ancho simplemente se dibuja
+ * más ancho, sin necesidad de partirlo.
+ */
+function partirArbolSiHaceFalta(nodo: NodoArbol): NodoArbol[] {
+  if (anchoEnSlots(nodo) <= COLUMNAS_POR_FILA && hojasDeArbol(nodo).length <= CIRCUITOS_MAX_POR_HOJA) return [nodo];
+  if (nodo.hijos.length <= 1) return [nodo];
+
+  const partesHijos: NodoArbol[][] = [];
+  let actual: NodoArbol[] = [];
+  let slots = 0;
+  let destinos = 0;
+  for (const h of nodo.hijos) {
+    const slotsH = anchoEnSlots(h);
+    const destinosH = hojasDeArbol(h).length;
+    if (actual.length > 0 && (slots + slotsH > COLUMNAS_POR_FILA || destinos + destinosH > CIRCUITOS_MAX_POR_HOJA)) {
+      partesHijos.push(actual);
+      actual = [];
+      slots = 0;
+      destinos = 0;
+    }
+    actual.push(h);
+    slots += slotsH;
+    destinos += destinosH;
+  }
+  if (actual.length > 0) partesHijos.push(actual);
+  if (partesHijos.length <= 1) return [nodo];
+
+  const claveBase = `cont-${nodo.circuito.numero}`;
+  return partesHijos.map((hijos, i) => ({
+    circuito: nodo.circuito,
+    hijos,
+    vieneDe: i > 0 ? `${claveBase}-${i - 1}` : undefined,
+    continuaEn: i < partesHijos.length - 1 ? `${claveBase}-${i}` : undefined,
+  }));
+}
+
+/**
  * Ordena los árboles de un cuerpo (por la cabeza de cada uno), intercala un
  * renglón de encabezado por cada cambio de sección (energía AC → DC →
  * control de acceso → CCTV), y agrupa por fila respetando DOS límites a la
@@ -422,9 +493,13 @@ type RenglonUnifilar = { tipo: "header"; texto: string } | { tipo: "columnas"; a
  * arranca cada renglón nuevo, igual que en el plano de referencia (una
  * hoja = un renglón de hasta 8 circuitos). Un árbol más ancho que un
  * renglón entero (por cualquiera de los dos límites) igual se dibuja solo
- * en su propia fila — nunca se parte un árbol a la mitad.
+ * en su propia fila — nunca se parte un árbol a la mitad, SALVO que
+ * `permitirPartir` esté activo (solo el PDF paginado lo pasa: ver
+ * `partirArbolSiHaceFalta`), en cuyo caso un árbol tipo "grupo" (varios
+ * hijos) que no entra se parte en varias filas con referencia cruzada
+ * entre ellas en vez de desbordar el ancho físico de la hoja.
  */
-function prepararRenglones(circuitos: UnifilarCircuito[]): RenglonUnifilar[] {
+function prepararRenglones(circuitos: UnifilarCircuito[], permitirPartir: boolean): RenglonUnifilar[] {
   const arboles = construirArboles(circuitos).sort((a, b) => compararCircuitos(a.circuito, b.circuito));
   const renglones: RenglonUnifilar[] = [];
   let grupoActual: GrupoUnifilar | null = null;
@@ -441,20 +516,23 @@ function prepararRenglones(circuitos: UnifilarCircuito[]): RenglonUnifilar[] {
     }
   };
 
-  for (const arbol of arboles) {
-    const grupo = grupoDeCircuito(arbol.circuito);
-    if (grupo !== grupoActual) {
-      flush();
-      renglones.push({ tipo: "header", texto: LABEL_GRUPO[grupo] });
-      grupoActual = grupo;
+  for (const arbolOriginal of arboles) {
+    const partes = permitirPartir ? partirArbolSiHaceFalta(arbolOriginal) : [arbolOriginal];
+    for (const arbol of partes) {
+      const grupo = grupoDeCircuito(arbol.circuito);
+      if (grupo !== grupoActual) {
+        flush();
+        renglones.push({ tipo: "header", texto: LABEL_GRUPO[grupo] });
+        grupoActual = grupo;
+      }
+      const slots = anchoEnSlots(arbol);
+      const destinos = hojasDeArbol(arbol).length;
+      if (pendientes.length > 0 && (slotsPendientes + slots > COLUMNAS_POR_FILA || destinosPendientes + destinos > CIRCUITOS_MAX_POR_HOJA)) flush();
+      pendientes.push(arbol);
+      slotsPendientes += slots;
+      destinosPendientes += destinos;
+      if (slotsPendientes >= COLUMNAS_POR_FILA || destinosPendientes >= CIRCUITOS_MAX_POR_HOJA) flush();
     }
-    const slots = anchoEnSlots(arbol);
-    const destinos = hojasDeArbol(arbol).length;
-    if (pendientes.length > 0 && (slotsPendientes + slots > COLUMNAS_POR_FILA || destinosPendientes + destinos > CIRCUITOS_MAX_POR_HOJA)) flush();
-    pendientes.push(arbol);
-    slotsPendientes += slots;
-    destinosPendientes += destinos;
-    if (slotsPendientes >= COLUMNAS_POR_FILA || destinosPendientes >= CIRCUITOS_MAX_POR_HOJA) flush();
   }
   flush();
   return renglones;
@@ -536,6 +614,20 @@ function dibujarNodo(
     if (subTramos.length > 1) {
       const subCentros = subTramos.map((t) => (t.xLeft + t.xRight) / 2);
       commands.push({ type: "line", x1: subCentros[0], y1: yDespues, x2: subCentros[subCentros.length - 1], y2: yDespues, layer: "POTENCIA" });
+    }
+    // Marcadores de continuación (A8): solo presentes cuando este nodo es
+    // una de las partes de un "grupo" partido entre hojas por no entrar
+    // entero (ver `partirArbolSiHaceFalta`) — el texto real ("→ CONTINÚA EN
+    // HOJA n" / "← VIENE DE HOJA n") recién se resuelve en
+    // `resolverContinuaciones`, cuando ya se sabe en qué hoja cayó cada
+    // parte; acá solo se deja el sentinel en la posición correcta.
+    if (nodo.continuaEn) {
+      const xUltimo = subTramos[subTramos.length - 1].xRight;
+      commands.push({ type: "text", x: xUltimo - COLUMNA_ANCHO + 3, y: yDespues - 2, text: `${SENTINEL_CONT}${nodo.continuaEn}`, size: 5.5, bold: true, layer: "ETIQUETAS" });
+    }
+    if (nodo.vieneDe) {
+      const xPrimero = subTramos[0].xLeft;
+      commands.push({ type: "text", x: xPrimero + 3, y: yDespues - 2, text: `${SENTINEL_VIENE}${nodo.vieneDe}`, size: 5.5, bold: true, layer: "ETIQUETAS" });
     }
     subTramos.forEach((t) => dibujarNodo(commands, t.hijo, t.xLeft, t.xRight, yDespues, nivel + 1, configCalibre, codigos, ctr));
     return;
@@ -918,7 +1010,11 @@ export function construirUnifilar(
 ): UnifilarDrawing {
   const grupos: [string, RenglonUnifilar[], Map<number, CodigoEquipo>][] = [];
   for (const [cuerpo, circuitos] of circuitosPorCuerpo) {
-    grupos.push([cuerpo, prepararRenglones(circuitos), calcularCodigosUnificados(circuitos)]);
+    // `permitirPartir: false` — este es el dibujo único sin límite de ancho
+    // real (DXF/visor público, ver `partirArbolSiHaceFalta`): un árbol
+    // ancho se dibuja más ancho, nunca hace falta partirlo entre "hojas"
+    // porque acá no hay hojas.
+    grupos.push([cuerpo, prepararRenglones(circuitos, false), calcularCodigosUnificados(circuitos)]);
   }
   const drawing = renderGrupos(grupos, configCalibre);
   if (!rotulo) return drawing;
@@ -954,6 +1050,47 @@ export function construirUnifilar(
 const ALTO_MAX_BLOQUE_SEGURO = 480;
 
 /**
+ * Reemplaza los sentinels de continuación (ver `partirArbolSiHaceFalta`/
+ * `SENTINEL_CONT`/`SENTINEL_VIENE`) por su texto final con el número de
+ * hoja real — recién se sabe acá, una vez que `bloques` ya está armado y
+ * cada índice (0-based) corresponde al número de hoja `i + 1` (mismo
+ * criterio que usa `agregarMarcoYRotulo` más abajo, así que el orden de
+ * `bloques` nunca debe cambiar entre esta función y esa numeración). Dos
+ * pasadas: la primera arma clave→hoja de cada lado del corte (antes y
+ * después); la segunda reemplaza cada sentinel por el texto final usando
+ * el número de hoja del OTRO lado del corte. Si un bloque no tiene ningún
+ * sentinel (el caso normal, sin tableros con grupos tan anchos), esta
+ * función es un no-op barato.
+ */
+function resolverContinuaciones(bloques: UnifilarDrawing[]): UnifilarDrawing[] {
+  const hojaAntes = new Map<string, number>();
+  const hojaDespues = new Map<string, number>();
+  bloques.forEach((b, i) => {
+    for (const cmd of b.commands) {
+      if (cmd.type !== "text") continue;
+      if (cmd.text.startsWith(SENTINEL_CONT)) hojaAntes.set(cmd.text.slice(SENTINEL_CONT.length), i + 1);
+      else if (cmd.text.startsWith(SENTINEL_VIENE)) hojaDespues.set(cmd.text.slice(SENTINEL_VIENE.length), i + 1);
+    }
+  });
+  if (hojaAntes.size === 0 && hojaDespues.size === 0) return bloques;
+  return bloques.map((b) => ({
+    ...b,
+    commands: b.commands.map((cmd) => {
+      if (cmd.type !== "text") return cmd;
+      if (cmd.text.startsWith(SENTINEL_CONT)) {
+        const destino = hojaDespues.get(cmd.text.slice(SENTINEL_CONT.length));
+        return { ...cmd, text: destino ? `→ CONTINÚA EN HOJA ${destino}` : "→ CONTINÚA" };
+      }
+      if (cmd.text.startsWith(SENTINEL_VIENE)) {
+        const origen = hojaAntes.get(cmd.text.slice(SENTINEL_VIENE.length));
+        return { ...cmd, text: origen ? `← VIENE DE HOJA ${origen}` : "← VIENE DE" };
+      }
+      return cmd;
+    }),
+  }));
+}
+
+/**
  * Versión paginada de `construirUnifilar`, pensada para el PDF: en vez de
  * un solo dibujo gigante (que puede superar el alto seguro de un bloque),
  * devuelve una lista de dibujos más chicos — cada uno garantizado por
@@ -987,7 +1124,10 @@ export function construirUnifilarPaginado(
     // armaran después de partir, cada parte quedaría prolija por separado
     // pero el corte entre partes caería en cualquier lado, mezclando los
     // grupos de categoría entre una parte y la siguiente.
-    const renglones = prepararRenglones(circuitosOriginal);
+    // `permitirPartir: true` — acá sí hay un límite de ancho real por hoja
+    // A3, así que un árbol tipo "grupo" que no entra se parte con
+    // referencia cruzada en vez de dibujarse fuera del borde físico.
+    const renglones = prepararRenglones(circuitosOriginal, true);
     // Los códigos de equipo son por CUERPO completo (no por parte): se
     // calculan una sola vez acá y se reutilizan en todas las partes de
     // este mismo cuerpo, para que una bornera no cambie de código según
@@ -1070,7 +1210,13 @@ export function construirUnifilarPaginado(
   bloques.push(...bloquesTierra);
   tensionesPorBloque.push(...bloquesTierra.map(() => ""));
 
-  return rotulo ? bloques.map((b, i) => agregarMarcoYRotulo(b, rotulo, i + 1, bloques.length, tensionesPorBloque[i])) : bloques;
+  // Recién acá se sabe el número de hoja final de cada bloque (índice + 1,
+  // mismo criterio que el `agregarMarcoYRotulo` de abajo) — por eso los
+  // marcadores de continuación se resuelven en este punto, no al dibujar.
+  const bloquesResueltos = resolverContinuaciones(bloques);
+  return rotulo
+    ? bloquesResueltos.map((b, i) => agregarMarcoYRotulo(b, rotulo, i + 1, bloquesResueltos.length, tensionesPorBloque[i]))
+    : bloquesResueltos;
 }
 
 /** Agrupa circuitos por cuerpo preservando el orden de aparición (los sin cuerpo quedan en un grupo aparte, al final). */
