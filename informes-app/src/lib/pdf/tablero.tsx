@@ -195,52 +195,72 @@ export function TableroPdf(props: TableroPdfProps) {
         )}
 
         {unifilarBloques && unifilarBloques.length > 0 && (
-          <>
-            <Text style={commonStyles.sectionTitle}>Esquema Unifilar</Text>
-            <Text style={{ fontSize: 7, color: "#555", marginBottom: 4 }}>
-              Esquema simplificado a partir de los circuitos relevados — no es un plano a escala. Calibre de cable según catálogo
-              configurado (verificar contra la norma vigente).
-            </Text>
-            {unifilarBloques.map((bloque, b) => (
-              <View key={b} style={{ position: "relative", width: bloque.width, height: bloque.height, marginBottom: 8 }} wrap={false}>
-                <Svg width={bloque.width} height={bloque.height}>
-                  {bloque.commands.map((cmd, i) => {
-                    const color = COLOR_POR_CAPA[cmd.layer] ?? "#1a1a1a";
-                    if (cmd.type === "line") {
-                      return <Line key={i} x1={cmd.x1} y1={cmd.y1} x2={cmd.x2} y2={cmd.y2} stroke={color} strokeWidth={0.75} />;
-                    }
-                    if (cmd.type === "rect") {
-                      return (
-                        <Rect key={i} x={cmd.x} y={cmd.y} width={cmd.width} height={cmd.height} stroke={color} strokeWidth={0.75} fill={cmd.fill ? color : "none"} />
-                      );
-                    }
-                    if (cmd.type === "circle") {
-                      return <Circle key={i} cx={cmd.x} cy={cmd.y} r={cmd.r} stroke={color} strokeWidth={0.75} fill="none" />;
-                    }
-                    return null;
-                  })}
-                </Svg>
-                {bloque.commands.map((cmd, i) =>
-                  cmd.type === "text" ? (
-                    <Text
-                      key={`t${i}`}
-                      style={{
-                        position: "absolute",
-                        left: cmd.x,
-                        top: cmd.y - cmd.size,
-                        fontSize: cmd.size,
-                        fontFamily: cmd.bold ? "Helvetica-Bold" : "Helvetica",
-                        color: COLOR_POR_CAPA[cmd.layer] ?? "#1a1a1a",
-                      }}
-                    >
-                      {cmd.text}
-                    </Text>
-                  ) : null,
-                )}
-              </View>
-            ))}
-          </>
+          <Text style={{ fontSize: 7, color: "#555", marginTop: 6 }}>
+            Esquema Unifilar: ver hoja{unifilarBloques.length === 1 ? "" : "s"} A3 a continuación.
+          </Text>
         )}
+
+        <PdfFooter realizo={realizoNombre.toUpperCase()} documentoLinea={documentoLinea} />
+      </Page>
+
+      {unifilarBloques && unifilarBloques.length > 0 && (
+        <Page size="A3" orientation="landscape" style={commonStyles.unifilarPage} wrap>
+          {unifilarBloques.map((bloque, b) => (
+            // `break`: cada hoja ya es un plano completo con su propio
+            // marco/grilla/rótulo (A2 del estándar) — tiene que arrancar
+            // SIEMPRE en una página física A3 nueva, nunca compartir hoja
+            // con otra (el ajuste automático de react-pdf, sin `break`,
+            // amontonaba 2-3 hojas chicas en la misma página porque
+            // entraban por altura — visualmente incorrecto, un plano real
+            // nunca mete dos números de hoja distintos en la misma lámina).
+            <View key={b} break={b > 0} style={{ position: "relative", width: bloque.width, height: bloque.height }} wrap={false}>
+              <Svg width={bloque.width} height={bloque.height}>
+                {bloque.commands.map((cmd, i) => {
+                  const color = COLOR_POR_CAPA[cmd.layer] ?? "#1a1a1a";
+                  if (cmd.type === "line") {
+                    return <Line key={i} x1={cmd.x1} y1={cmd.y1} x2={cmd.x2} y2={cmd.y2} stroke={color} strokeWidth={0.75} />;
+                  }
+                  if (cmd.type === "rect") {
+                    return (
+                      <Rect key={i} x={cmd.x} y={cmd.y} width={cmd.width} height={cmd.height} stroke={color} strokeWidth={0.75} fill={cmd.fill ? color : "none"} />
+                    );
+                  }
+                  if (cmd.type === "circle") {
+                    return <Circle key={i} cx={cmd.x} cy={cmd.y} r={cmd.r} stroke={color} strokeWidth={0.75} fill="none" />;
+                  }
+                  return null;
+                })}
+              </Svg>
+              {bloque.commands.map((cmd, i) =>
+                cmd.type === "text" ? (
+                  <Text
+                    key={`t${i}`}
+                    style={{
+                      position: "absolute",
+                      left: cmd.x,
+                      top: cmd.y - cmd.size,
+                      fontSize: cmd.size,
+                      fontFamily: cmd.bold ? "Helvetica-Bold" : "Helvetica",
+                      color: COLOR_POR_CAPA[cmd.layer] ?? "#1a1a1a",
+                    }}
+                  >
+                    {cmd.text}
+                  </Text>
+                ) : null,
+              )}
+            </View>
+          ))}
+        </Page>
+      )}
+
+      <Page size="A4" style={commonStyles.page} wrap>
+        <PdfHeader
+          documentoLabel={documentoLabel}
+          titulo={denominacion}
+          fechaLabel={fechaLabel}
+          numeroGeneracion={numeroGeneracion}
+          logoBuffer={logoBuffer}
+        />
 
         {hallazgos.length > 0 && (
           <>

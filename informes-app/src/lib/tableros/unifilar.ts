@@ -215,11 +215,50 @@ export interface UnifilarDrawing {
  * alimenta varias cargas (patrón "grupo": un disyuntor con varias
  * térmicas debajo, cada una yendo a su propio destino) — ver `dibujarNodo`.
  */
-const ANCHO = 520;
+/**
+ * Ancho de hoja del unifilar — A3 apaisado (1190.55pt de ancho real) menos
+ * el padding elegido para esa página del PDF (ver `UNIFILAR_PAGE_PADDING`
+ * en `lib/pdf/common.tsx`: 20pt a cada lado → 1150.55pt útiles; acá se deja
+ * un margen de seguridad igual que el A4 anterior tenía, 520 contra
+ * ~531pt calculados, así que 1140 contra ~1150). Antes era 520 (ancho de
+ * A4 con el padding del resto del informe, de cuando el unifilar vivía en
+ * la misma hoja que el resto de la medición). Es un valor COMPARTIDO por
+ * los 3 consumidores (DXF, PDF paginado, visor público en vivo) porque
+ * los tres usan el mismo layout "escalera" — solo afecta
+ * `COLUMNAS_POR_FILA` (cuántas columnas entran antes de pasar a un
+ * renglón nuevo); la geometría de cada columna (`dibujarNodo`/
+ * `renderGrupos`) no se toca.
+ */
+const ANCHO_HOJA = 1140;
 const MARGEN = 10;
 const ALTO_HEADER_CUERPO = 18;
 const COLUMNA_ANCHO = 100;
-const COLUMNAS_POR_FILA = Math.max(1, Math.floor((ANCHO - MARGEN * 2) / COLUMNA_ANCHO));
+const COLUMNAS_POR_FILA = Math.max(1, Math.floor((ANCHO_HOJA - MARGEN * 2) / COLUMNA_ANCHO));
+/**
+ * Máximo de circuitos (destinos reales) por hoja — B2 del estándar
+ * TerraLogic: "8 circuitos por hoja, separación constante". Es un límite
+ * del ESTÁNDAR, no solo del ancho físico de la hoja (a `COLUMNAS_POR_FILA`
+ * le entrarían más de 8 en A3) — por eso se aplica aparte, en
+ * `prepararRenglones` (ningún renglón empieza a armar un circuito más allá
+ * del 8°) y en `construirUnifilarPaginado` (ninguna hoja junta más de 8
+ * circuitos entre renglones/cuerpos distintos). Un árbol que por sí solo
+ * ya tiene más de 8 destinos (patrón "grupo" muy ancho) igual se dibuja
+ * completo en su propio renglón/hoja — nunca se parte un árbol a la
+ * mitad, mismo criterio que ya aplicaba al límite de `COLUMNAS_POR_FILA`.
+ *
+ * Caso real confirmado con datos de producción (Tablero de Prueba 11): la
+ * térmica general de ese tablero alimenta ~26 circuitos directos sin
+ * disyuntor propio (el patrón "D T T T" / zona común de REGLAS_UNIFILAR.md
+ * G4) — ese único árbol termina ocupando una hoja de 26+ circuitos, muy
+ * por encima de 8. No es un bug de esta función: es la regla "nunca
+ * partir un árbol" (ya existente, ver arriba) chocando con un tablero
+ * real cuya topología no es la que B2 da por sentada (circuitos con
+ * protección propia). Partir un grupo así en varias hojas requeriría
+ * implementar las referencias entre hojas de A8 ("HOJA n" en el corte) —
+ * fuera del alcance de esta función; queda pendiente de decidir con el
+ * usuario si hace falta.
+ */
+const CIRCUITOS_MAX_POR_HOJA = 8;
 const ALTO_HEADER_SECCION = 12;
 const GAP_CUERPO = 10;
 
@@ -371,19 +410,34 @@ const ANCHO_TEXTO_COLUMNA = COLUMNA_ANCHO - 14;
 
 type RenglonUnifilar = { tipo: "header"; texto: string } | { tipo: "columnas"; arboles: NodoArbol[] };
 
-/** Ordena los árboles de un cuerpo (por la cabeza de cada uno), intercala un renglón de encabezado por cada cambio de sección (energía AC → DC → control de acceso → CCTV), y agrupa por fila respetando el ancho en slots de cada árbol (un árbol con ramas puede ocupar varios slots) hasta llenar `COLUMNAS_POR_FILA`. Un árbol más ancho que una fila entera igual se dibuja solo en su propia fila — nunca se parte un árbol a la mitad. */
+/**
+ * Ordena los árboles de un cuerpo (por la cabeza de cada uno), intercala un
+ * renglón de encabezado por cada cambio de sección (energía AC → DC →
+ * control de acceso → CCTV), y agrupa por fila respetando DOS límites a la
+ * vez: el físico (ancho en slots de cada árbol hasta llenar
+ * `COLUMNAS_POR_FILA`) y el del estándar TerraLogic (`CIRCUITOS_MAX_POR_HOJA`
+ * = 8 destinos reales por renglón, B2 de REGLAS_UNIFILAR.md) — en A3 el
+ * físico solo rara vez es el que corta primero (entran ~11 columnas), así
+ * que en la práctica el límite de 8 circuitos es el que define dónde
+ * arranca cada renglón nuevo, igual que en el plano de referencia (una
+ * hoja = un renglón de hasta 8 circuitos). Un árbol más ancho que un
+ * renglón entero (por cualquiera de los dos límites) igual se dibuja solo
+ * en su propia fila — nunca se parte un árbol a la mitad.
+ */
 function prepararRenglones(circuitos: UnifilarCircuito[]): RenglonUnifilar[] {
   const arboles = construirArboles(circuitos).sort((a, b) => compararCircuitos(a.circuito, b.circuito));
   const renglones: RenglonUnifilar[] = [];
   let grupoActual: GrupoUnifilar | null = null;
   let pendientes: NodoArbol[] = [];
   let slotsPendientes = 0;
+  let destinosPendientes = 0;
 
   const flush = () => {
     if (pendientes.length > 0) {
       renglones.push({ tipo: "columnas", arboles: pendientes });
       pendientes = [];
       slotsPendientes = 0;
+      destinosPendientes = 0;
     }
   };
 
@@ -395,13 +449,21 @@ function prepararRenglones(circuitos: UnifilarCircuito[]): RenglonUnifilar[] {
       grupoActual = grupo;
     }
     const slots = anchoEnSlots(arbol);
-    if (pendientes.length > 0 && slotsPendientes + slots > COLUMNAS_POR_FILA) flush();
+    const destinos = hojasDeArbol(arbol).length;
+    if (pendientes.length > 0 && (slotsPendientes + slots > COLUMNAS_POR_FILA || destinosPendientes + destinos > CIRCUITOS_MAX_POR_HOJA)) flush();
     pendientes.push(arbol);
     slotsPendientes += slots;
-    if (slotsPendientes >= COLUMNAS_POR_FILA) flush();
+    destinosPendientes += destinos;
+    if (slotsPendientes >= COLUMNAS_POR_FILA || destinosPendientes >= CIRCUITOS_MAX_POR_HOJA) flush();
   }
   flush();
   return renglones;
+}
+
+/** Cantidad de destinos reales (hojas de árbol) que ocupa un renglón — mismo criterio que `filasTierra`, pero contado antes de dibujar, para la partición por cantidad de circuitos por hoja (B2 del estándar: máximo 8). Un renglón de encabezado no cuenta (no es un circuito). */
+function destinosDeRenglon(r: RenglonUnifilar): number {
+  if (r.tipo === "header") return 0;
+  return r.arboles.reduce((acc, a) => acc + hojasDeArbol(a).length, 0);
 }
 
 function altoRenglon(r: RenglonUnifilar): number {
@@ -532,7 +594,7 @@ function renderGrupos(grupos: [string, RenglonUnifilar[], Map<number, CodigoEqui
     // `nuevoContadorConductor`).
     const ctr = nuevoContadorConductor();
 
-    commands.push({ type: "rect", x: MARGEN, y: yInicioBloque, width: ANCHO - MARGEN * 2, height: alturaBloque, layer: "MARCO" });
+    commands.push({ type: "rect", x: MARGEN, y: yInicioBloque, width: ANCHO_HOJA - MARGEN * 2, height: alturaBloque, layer: "MARCO" });
     commands.push({ type: "text", x: MARGEN + 6, y: yInicioBloque + 12, text: cuerpo || "Sin cuerpo asignado", size: 9, bold: true, layer: "ETIQUETAS" });
 
     let yRenglon = yInicioBloque + ALTO_HEADER_CUERPO;
@@ -566,7 +628,7 @@ function renderGrupos(grupos: [string, RenglonUnifilar[], Map<number, CodigoEqui
     y = yInicioBloque + alturaBloque + GAP_CUERPO;
   }
 
-  return { commands, width: ANCHO, height: y };
+  return { commands, width: ANCHO_HOJA, height: y };
 }
 
 /** Alto del cuadro de título (rótulo) que se agrega al pie de cada hoja. */
@@ -589,19 +651,52 @@ function trasladarComandos(commands: DrawCommand[], dx: number, dy: number): Dra
   });
 }
 
+/** Bucket de tensión para la 2ª línea del título (A2: `UNIFILAR <tensión> HOJA n`) — agrupa 220v_mono/380v_tri en "380V/220V" y 24vdc/12vdc en "24V/12V"; "na" (borneras/equipos sin tensión AC/DC propia) no aporta ningún bucket. Orden fijo (AC antes que DC) para que el título no cambie de texto según el orden en que aparecen los circuitos. */
+const ORDEN_BUCKET_TENSION = ["380V/220V", "24V/12V"];
+function bucketTension(tipo: TableroTipoCircuito): string | null {
+  if (tipo === "220v_mono" || tipo === "380v_tri") return "380V/220V";
+  if (tipo === "24vdc" || tipo === "12vdc") return "24V/12V";
+  return null;
+}
+
+/** Todos los circuitos de un árbol (no solo las hojas, como `hojasDeArbol`) — hace falta para el título: un circuito 24V puede colgar de una cadena cuya hoja es 220V (ej. una fuente), así que mirar solo las hojas podría pasar por alto una tensión presente. */
+function todosLosCircuitosDeArbol(nodo: NodoArbol): UnifilarCircuito[] {
+  return [nodo.circuito, ...nodo.hijos.flatMap(todosLosCircuitosDeArbol)];
+}
+
+/** Texto de tensión para el título de una hoja ya armada en `grupos` (cuerpo/parte + renglones) — ver `bucketTension`. Vacío si no hay ningún circuito con tensión reconocible (p. ej. una hoja que es solo una tabla). */
+function tensionDeGrupos(grupos: [string, RenglonUnifilar[], Map<number, CodigoEquipo>][]): string {
+  const presentes = new Set<string>();
+  for (const [, renglones] of grupos) {
+    for (const r of renglones) {
+      if (r.tipo !== "columnas") continue;
+      for (const arbol of r.arboles) {
+        for (const c of todosLosCircuitosDeArbol(arbol)) {
+          const b = bucketTension(c.tipoCircuito);
+          if (b) presentes.add(b);
+        }
+      }
+    }
+  }
+  return ORDEN_BUCKET_TENSION.filter((b) => presentes.has(b)).join("+");
+}
+
 /**
  * Convierte un bloque de contenido ya armado (cuerpos + circuitos) en una
  * hoja completa del estándar de dibujo (ver REGLAS_UNIFILAR.md parte A2):
  * marco con grilla 1-16 arriba/abajo y A-H izq/der con flechas de
  * centrado en los 4 lados, bloque de revisiones arriba a la derecha,
- * título arriba a la izquierda (2 líneas), sello "PARA REVISIÓN" mientras
- * no esté aprobado, y el rótulo de cuadro de título al pie (cliente/
- * contratista/obra/etc. — contenido completo en `armarTextoRotulo`, ver
- * `tableros/nuevo/actions.ts`). No es parte de `renderGrupos` porque la
- * numeración de hoja (`hojaActual`/`hojaTotal`) solo se conoce después de
- * resolver TODAS las hojas (ver `construirUnifilarPaginado`).
+ * título arriba a la izquierda (2 líneas: `TABLERO <nombre>` y
+ * `UNIFILAR <tensión> HOJA n` — `tension` vacío cae al formato viejo sin
+ * tensión, para hojas que no son de circuitos como la tabla de tierra),
+ * sello "PARA REVISIÓN" mientras no esté aprobado, y el rótulo de cuadro
+ * de título al pie (cliente/contratista/obra/etc. — contenido completo en
+ * `armarTextoRotulo`, ver `tableros/nuevo/actions.ts`). No es parte de
+ * `renderGrupos` porque la numeración de hoja (`hojaActual`/`hojaTotal`)
+ * solo se conoce después de resolver TODAS las hojas (ver
+ * `construirUnifilarPaginado`).
  */
-function agregarMarcoYRotulo(drawing: UnifilarDrawing, rotulo: RotuloUnifilar, hojaActual: number, hojaTotal: number): UnifilarDrawing {
+function agregarMarcoYRotulo(drawing: UnifilarDrawing, rotulo: RotuloUnifilar, hojaActual: number, hojaTotal: number, tension = ""): UnifilarDrawing {
   const contenido = trasladarComandos(drawing.commands, BANDA_GRID, BANDA_GRID + BANDA_TITULO);
   const anchoInterior = drawing.width;
   const altoInterior = BANDA_TITULO + drawing.height + ALTO_ROTULO;
@@ -650,7 +745,7 @@ function agregarMarcoYRotulo(drawing: UnifilarDrawing, rotulo: RotuloUnifilar, h
   // Título arriba a la izquierda (2 líneas: tablero, y hoja actual/total).
   commands.push(
     { type: "text", x: bx + 6, y: by + 13, text: truncar(`TABLERO ${rotulo.tablero}`, 48), size: 9, bold: true, layer: "MARCO" },
-    { type: "text", x: bx + 6, y: by + 24, text: `UNIFILAR — HOJA ${hojaActual}/${hojaTotal}`, size: 5, layer: "MARCO" },
+    { type: "text", x: bx + 6, y: by + 24, text: tension ? `UNIFILAR ${tension} HOJA ${hojaActual}/${hojaTotal}` : `UNIFILAR — HOJA ${hojaActual}/${hojaTotal}`, size: 5, layer: "MARCO" },
   );
 
   // Bloque de revisiones arriba a la derecha.
@@ -769,7 +864,7 @@ const FILAS_POR_BLOQUE_TIERRA = MAX_FILAS_POR_COLUMNA_TIERRA * MAX_COLUMNAS_TIER
 function construirTablaTierra(filas: FilaTierra[]): UnifilarDrawing {
   const columnas = Math.min(MAX_COLUMNAS_TIERRA, Math.max(1, Math.ceil(filas.length / MAX_FILAS_POR_COLUMNA_TIERRA)));
   const filasPorColumna = Math.ceil(filas.length / columnas);
-  const colW = (ANCHO - MARGEN * 2) / columnas;
+  const colW = (ANCHO_HOJA - MARGEN * 2) / columnas;
   const yTitulo = MARGEN + 12;
   const yInicioFilas = yTitulo + 10;
 
@@ -790,8 +885,8 @@ function construirTablaTierra(filas: FilaTierra[]): UnifilarDrawing {
   });
 
   const height = yInicioFilas + filasPorColumna * ALTO_FILA_TIERRA + MARGEN;
-  commands.unshift({ type: "rect", x: MARGEN, y: MARGEN, width: ANCHO - MARGEN * 2, height: height - MARGEN * 2, layer: "DESTINOS" });
-  return { commands, width: ANCHO, height };
+  commands.unshift({ type: "rect", x: MARGEN, y: MARGEN, width: ANCHO_HOJA - MARGEN * 2, height: height - MARGEN * 2, layer: "DESTINOS" });
+  return { commands, width: ANCHO_HOJA, height };
 }
 
 /** Parte la tabla de tierra en varios bloques si no entra en uno solo (tablero con muchísimos circuitos) — mismo criterio de partición que `construirUnifilarPaginado`. */
@@ -827,22 +922,23 @@ export function construirUnifilar(
   }
   const drawing = renderGrupos(grupos, configCalibre);
   if (!rotulo) return drawing;
+  const tension = tensionDeGrupos(grupos);
 
   // Tabla de PUESTA A TIERRA (A7) al pie del mismo dibujo — el DXF es
   // siempre una hoja única (sin límite de altura por bloque, a diferencia
   // del PDF), así que entra como más contenido de la misma hoja.
   const filasT = filasTierra(grupos);
-  if (filasT.length === 0) return agregarMarcoYRotulo(drawing, rotulo, 1, 1);
+  if (filasT.length === 0) return agregarMarcoYRotulo(drawing, rotulo, 1, 1, tension);
   const tabla = construirBloquesTierra(filasT).reduce<UnifilarDrawing>(
     (acc, b) => ({ commands: [...acc.commands, ...trasladarComandos(b.commands, 0, acc.height)], width: Math.max(acc.width, b.width), height: acc.height + b.height }),
-    { commands: [], width: ANCHO, height: 0 },
+    { commands: [], width: ANCHO_HOJA, height: 0 },
   );
   const combinado: UnifilarDrawing = {
     commands: [...drawing.commands, ...trasladarComandos(tabla.commands, 0, drawing.height)],
     width: Math.max(drawing.width, tabla.width),
     height: drawing.height + tabla.height,
   };
-  return agregarMarcoYRotulo(combinado, rotulo, 1, 1);
+  return agregarMarcoYRotulo(combinado, rotulo, 1, 1, tension);
 }
 
 /**
@@ -898,51 +994,83 @@ export function construirUnifilarPaginado(
     // en qué parte terminó cayendo.
     const codigos = calcularCodigosUnificados(circuitosOriginal);
     const alturaTotal = renglones.reduce((acc, r) => acc + altoRenglon(r), 0);
-    if (alturaTotal <= maxAlturaRenglones) {
+    const destinosTotal = renglones.reduce((acc, r) => acc + destinosDeRenglon(r), 0);
+    // El camino corto (sin partir) solo vale si el cuerpo entra YA por los
+    // dos límites a la vez — altura Y cantidad de circuitos (B2: máximo 8
+    // por hoja). `prepararRenglones` ya evita que UN renglón individual
+    // pase de 8, pero un cuerpo con varios renglones chicos (ej. 3 de 8
+    // circuitos cada uno) puede entrar de sobra por altura y aun así sumar
+    // mucho más de 8 destinos en total — por eso hace falta el chequeo acá
+    // también, no alcanza con el de más abajo (que solo agrupa CUERPOS/
+    // partes ya resueltos, nunca los parte).
+    if (alturaTotal <= maxAlturaRenglones && destinosTotal <= CIRCUITOS_MAX_POR_HOJA) {
       grupos.push([cuerpo, renglones, codigos]);
       continue;
     }
-    // Un cuerpo que por sí solo supera el máximo se parte por renglón
-    // (nunca a mitad de una fila de columnas) en "parte N/M".
+    // Un cuerpo que por sí solo supera cualquiera de los dos límites se
+    // parte por renglón (nunca a mitad de una fila de columnas) en
+    // "parte N/M".
     const partes: RenglonUnifilar[][] = [];
     let parteActual: RenglonUnifilar[] = [];
     let alturaParte = 0;
+    let destinosParte = 0;
     for (const r of renglones) {
       const alturaR = altoRenglon(r);
-      if (parteActual.length > 0 && alturaParte + alturaR > maxAlturaRenglones) {
+      const destinosR = destinosDeRenglon(r);
+      // Nunca cortar mientras lo acumulado sea solo encabezados de sección
+      // (0 destinos) — si no, un header ("ENERGÍA...") que cae justo antes
+      // de un árbol grande (ej. la térmica general con muchos hijos, que
+      // por la excepción de arriba nunca se parte) queda solo en su propia
+      // parte, una hoja entera sin ningún circuito dibujado.
+      const tieneCircuitos = destinosParte > 0;
+      if (tieneCircuitos && parteActual.length > 0 && (alturaParte + alturaR > maxAlturaRenglones || destinosParte + destinosR > CIRCUITOS_MAX_POR_HOJA)) {
         partes.push(parteActual);
         parteActual = [];
         alturaParte = 0;
+        destinosParte = 0;
       }
       parteActual.push(r);
       alturaParte += alturaR;
+      destinosParte += destinosR;
     }
     if (parteActual.length > 0) partes.push(parteActual);
     partes.forEach((p, i) => grupos.push([`${cuerpo || "Sin cuerpo asignado"} (parte ${i + 1}/${partes.length})`, p, codigos]));
   }
 
   const bloques: UnifilarDrawing[] = [];
+  const tensionesPorBloque: string[] = [];
   let actual: [string, RenglonUnifilar[], Map<number, CodigoEquipo>][] = [];
   let alturaActual = MARGEN;
+  let destinosActual = 0;
+  const cerrarBloqueActual = () => {
+    bloques.push(renderGrupos(actual, configCalibre));
+    tensionesPorBloque.push(tensionDeGrupos(actual));
+    actual = [];
+    alturaActual = MARGEN;
+    destinosActual = 0;
+  };
   for (const grupo of grupos) {
     const alturaGrupo = ALTO_HEADER_CUERPO + grupo[1].reduce((acc, r) => acc + altoRenglon(r), 0) + GAP_CUERPO;
-    if (actual.length > 0 && alturaActual + alturaGrupo > limiteBloque) {
-      bloques.push(renderGrupos(actual, configCalibre));
-      actual = [];
-      alturaActual = MARGEN;
+    const destinosGrupo = grupo[1].reduce((acc, r) => acc + destinosDeRenglon(r), 0);
+    if (actual.length > 0 && (alturaActual + alturaGrupo > limiteBloque || destinosActual + destinosGrupo > CIRCUITOS_MAX_POR_HOJA)) {
+      cerrarBloqueActual();
     }
     actual.push(grupo);
     alturaActual += alturaGrupo;
+    destinosActual += destinosGrupo;
   }
-  if (actual.length > 0) bloques.push(renderGrupos(actual, configCalibre));
+  if (actual.length > 0) cerrarBloqueActual();
 
   // Tabla de PUESTA A TIERRA (A7) como su propia hoja al final — usa
   // `grupos` completo (antes de partir en bloques) para que Tn recorra
   // TODOS los circuitos del tablero en orden, no solo los del último
-  // bloque armado arriba.
-  bloques.push(...construirBloquesTierra(filasTierra(grupos)));
+  // bloque armado arriba. No tiene una tensión propia (mezcla todos los
+  // circuitos del tablero), así que queda con el título genérico.
+  const bloquesTierra = construirBloquesTierra(filasTierra(grupos));
+  bloques.push(...bloquesTierra);
+  tensionesPorBloque.push(...bloquesTierra.map(() => ""));
 
-  return rotulo ? bloques.map((b, i) => agregarMarcoYRotulo(b, rotulo, i + 1, bloques.length)) : bloques;
+  return rotulo ? bloques.map((b, i) => agregarMarcoYRotulo(b, rotulo, i + 1, bloques.length, tensionesPorBloque[i])) : bloques;
 }
 
 /** Agrupa circuitos por cuerpo preservando el orden de aparición (los sin cuerpo quedan en un grupo aparte, al final). */

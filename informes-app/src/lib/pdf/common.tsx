@@ -13,6 +13,13 @@ export const RED = "#B33A3A";
 
 export const commonStyles = StyleSheet.create({
   page: { padding: "28 32 70", fontSize: 9, fontFamily: "Helvetica", color: "#1a1a1a" },
+  // Hoja A3 apaisado dedicada al esquema unifilar (ver REGLAS_UNIFILAR.md
+  // A1/A2) — padding chico porque cada bloque YA trae su propio marco/
+  // rótulo (grilla 1-16/A-H, cuadro de título) dibujado adentro; a
+  // diferencia de `page`, esta hoja no lleva PdfHeader/PdfFooter (fixed),
+  // así que no necesita el padding inferior grande que esas dos franjas
+  // reservan en `page`.
+  unifilarPage: { padding: "20 20 20", fontFamily: "Helvetica", color: "#1a1a1a" },
 
   headerTable: { flexDirection: "row", border: `1pt solid ${BORDER}`, marginBottom: 14 },
   headerLogoCell: { width: 90, borderRight: `1pt solid ${BORDER}`, alignItems: "center", justifyContent: "center", padding: 6 },
