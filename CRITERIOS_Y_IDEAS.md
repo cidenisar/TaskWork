@@ -1220,3 +1220,59 @@ representa "cuánto se va a agregar después" (una reserva, un offset,
 un margen calculado), buscarlo y actualizarlo explícitamente en el
 mismo commit que cambia lo que ese número reserva — no asumir que
 porque el valor anterior "andaba" sigue siendo correcto.
+
+## 20. Etapa 3 del mismo rediseño: tabla de PUESTA A TIERRA — el mismo bug de presupuesto de altura, ahora en un bloque nuevo que nunca pasó por el chequeo viejo
+
+Seguimiento directo de la § 19. La Etapa 3 agregó la tabla PUESTA A
+TIERRA (A7 del estándar) al generador real: cada circuito que es un
+destino real (hoja del árbol de encadenado, no un eslabón intermedio
+como una térmica con un disyuntor colgando) recibe un `Tn` correlativo
+único para todo el tablero, listado en una tabla aparte al pie del
+DXF (hoja única) o como su propia hoja final en el PDF paginado.
+
+**La hoja de cabecera fija (alimentación/térmica general/protector de
+sobretensión/borneras BNR-01-02) quedó fuera a propósito — no por
+quedarse corta de tiempo, por no inventar estructura que el dato no
+sostiene.** Esa parte del estándar (A1/B1 de REGLAS_UNIFILAR) asume
+una topología FIJA (bornera de entrada → térmica general → bornera de
+reparto → protector/distribución) que no tiene equivalente en el
+modelo actual de circuitos (un árbol flexible, sin concepto de "origen
+de la alimentación" ni de "bornera de entrada" separados de los
+circuitos). Ya hay una categoría `descargador_gaseoso` que cubre el
+protector de sobretensión como un circuito más — construir la
+cabecera fija completa pediría campos nuevos (de dónde viene la
+alimentación, como mínimo) que nadie confirmó todavía. Mismo criterio
+que la § 15 de este mismo documento (vista topográfica, nunca
+replicada por la misma razón): documentarlo como decisión pendiente
+de producto, no fingir una réplica que el dato disponible no sostiene.
+
+**El mismo bug de presupuesto de altura de la § 19 — exactamente el
+mismo tipo de error, en código nuevo que nunca pasó por el chequeo
+anterior.** La tabla de tierra parte sus filas en bloques cuando no
+entran en una sola hoja (`construirBloquesTierra`, mismo criterio de
+partición que `construirUnifilarPaginado`), con un número de filas por
+columna calculado a mano para quedar "bien debajo" del límite seguro
+de 480pt. El error: ese cálculo se hizo contra los 480pt directo, sin
+restar `ALTURA_MARCO_HOJA` (lo que agrega después `agregarMarcoYRotulo`
+— grilla + banda de título + rótulo, ~90pt) — el mismo error conceptual
+de la § 19, pero en una función nueva que nunca se benefició del fix
+anterior porque ese fix solo tocó `construirUnifilarPaginado`, no este
+código nuevo. Se encontró con el mismo método (tablero sintético de
+550 circuitos / 350 destinos reales, forzando que la tabla de tierra
+necesitara partirse en más de un bloque): el último bloque dio 486pt,
+por encima del límite. Arreglo: se extrajo `ALTURA_MARCO_HOJA` como una
+constante compartida (antes calculada inline, duplicada, dentro de
+`construirUnifilarPaginado`) y se recalculó el presupuesto de filas de
+la tabla de tierra contra `ALTO_MAX_BLOQUE_SEGURO - ALTURA_MARCO_HOJA`,
+igual que ya hacía `limiteBloque`. Confirmado después: 24 bloques
+(antes 23), el más alto en 462pt, renderiza en 7.4s sin colgarse.
+**Lección que no se puede marcar "aprendida" después de aplicarse una
+vez**: una constante compartida que describe "cuánto agrega el marco"
+protege solo al código que la usa — cualquier función nueva que
+calcule su propio presupuesto de altura a mano, aunque sea "bien por
+debajo" a ojo, puede reintroducir el mismo bug si no deriva su número
+de esa misma constante. Antes de escribir un número "seguro" a mano
+para un presupuesto de altura en este archivo, buscar primero si ya
+existe una constante que lo describe (`ALTURA_MARCO_HOJA`,
+`ALTO_MAX_BLOQUE_SEGURO`) y calcular contra esas, nunca contra un
+número redondo elegido por intuición.

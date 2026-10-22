@@ -215,7 +215,7 @@ const ROL_BYPASS_SUFIJO: Record<TableroRolBypassUps, string> = { entrada: " (E)"
  * separado, en vez de recibir todo en una sola capa "0" (ver
  * `lib/dxf/writer.ts`). El PDF ignora este campo (siempre se ve todo junto).
  */
-export type CapaDxf = "MARCO" | "BARRA" | "SIMBOLOS" | "ROTULO" | "TEXTO" | "BORNES" | "CABLES" | "SELLO";
+export type CapaDxf = "MARCO" | "BARRA" | "SIMBOLOS" | "ROTULO" | "TEXTO" | "BORNES" | "CABLES" | "SELLO" | "TIERRA";
 
 export type DrawCommand =
   | { type: "line"; x1: number; y1: number; x2: number; y2: number; layer: CapaDxf }
@@ -586,6 +586,8 @@ const BANDA_TITULO = 34;
 const GRID_COLS = 16;
 const GRID_ROWS = 8;
 const LETRAS_GRID = "ABCDEFGH";
+/** Alto que `agregarMarcoYRotulo` agrega a CUALQUIER contenido (grilla + banda de título + rótulo) — toda altura de contenido tiene que presupuestar esto para no superar `ALTO_MAX_BLOQUE_SEGURO` una vez envuelta en su hoja (ver construirUnifilarPaginado y construirTablaTierra). */
+const ALTURA_MARCO_HOJA = BANDA_GRID * 2 + 8 + BANDA_TITULO + ALTO_ROTULO;
 
 function trasladarComandos(commands: DrawCommand[], dx: number, dy: number): DrawCommand[] {
   return commands.map((c) => {
@@ -718,6 +720,94 @@ function agregarMarcoYRotulo(drawing: UnifilarDrawing, rotulo: RotuloUnifilar, h
   };
 }
 
+/** Circuitos "hoja" (destinos reales, sin hijos) de un árbol de encadenado, en el mismo orden en que `dibujarNodo` los recorre. */
+function hojasDeArbol(nodo: NodoArbol): UnifilarCircuito[] {
+  if (nodo.hijos.length === 0) return [nodo.circuito];
+  return nodo.hijos.flatMap(hojasDeArbol);
+}
+
+interface FilaTierra {
+  tn: number;
+  etiqueta: string;
+}
+
+/**
+ * Arma las filas T1..Tn de la tabla de PUESTA A TIERRA (A7 del estándar):
+ * un Tn correlativo por cada destino real del tablero (hoja del árbol de
+ * encadenado — un eslabón intermedio como una térmica general no es un
+ * destino en sí), único para TODO el tablero, no por cuerpo — recorre
+ * `grupos` en el mismo orden en que se dibuja, así Tn sigue el orden
+ * visual de los circuitos.
+ */
+function filasTierra(grupos: [string, RenglonUnifilar[], Map<number, string>][]): FilaTierra[] {
+  const filas: FilaTierra[] = [];
+  let tn = 1;
+  for (const [, renglones, codigos] of grupos) {
+    for (const renglon of renglones) {
+      if (renglon.tipo === "header") continue;
+      for (const arbol of renglon.arboles) {
+        for (const hoja of hojasDeArbol(arbol)) {
+          const codigo = codigos.get(hoja.numero);
+          const etiqueta = truncar(codigo ? `${codigo} — ${hoja.texto}` : hoja.texto, 26);
+          filas.push({ tn: tn++, etiqueta });
+        }
+      }
+    }
+  }
+  return filas;
+}
+
+const ALTO_FILA_TIERRA = 6;
+/**
+ * El contenido de esta tabla, igual que cualquier otro bloque, se envuelve
+ * después con `agregarMarcoYRotulo` (que agrega `ALTURA_MARCO_HOJA`) — así
+ * que el presupuesto de filas tiene que calar contra
+ * `ALTO_MAX_BLOQUE_SEGURO - ALTURA_MARCO_HOJA`, no contra 480 directo (un
+ * bug real: con 60 filas/columna el contenido entraba bien pero, sumado el
+ * marco, superaba el límite seguro de react-pdf — ver CRITERIOS_Y_IDEAS.md
+ * § 19). 55 filas × 6pt = 330pt de filas + ~42pt de título/márgenes ≈ 372pt
+ * de contenido, con margen de sobra debajo del presupuesto real (390pt).
+ */
+const MAX_FILAS_POR_COLUMNA_TIERRA = 55;
+const MAX_COLUMNAS_TIERRA = 6;
+const FILAS_POR_BLOQUE_TIERRA = MAX_FILAS_POR_COLUMNA_TIERRA * MAX_COLUMNAS_TIERRA;
+
+/** Dibuja hasta `FILAS_POR_BLOQUE_TIERRA` filas de la tabla PUESTA A TIERRA como un bloque de contenido propio (mismas coordenadas locales que un bloque de `renderGrupos`), repartidas en columnas para no superar el alto seguro. */
+function construirTablaTierra(filas: FilaTierra[]): UnifilarDrawing {
+  const columnas = Math.min(MAX_COLUMNAS_TIERRA, Math.max(1, Math.ceil(filas.length / MAX_FILAS_POR_COLUMNA_TIERRA)));
+  const filasPorColumna = Math.ceil(filas.length / columnas);
+  const colW = (ANCHO - MARGEN * 2) / columnas;
+  const yTitulo = MARGEN + 12;
+  const yInicioFilas = yTitulo + 10;
+
+  const commands: DrawCommand[] = [{ type: "text", x: MARGEN + 6, y: yTitulo, text: "PUESTA A TIERRA", size: 9, bold: true, layer: "TIERRA" }];
+  filas.forEach((f, i) => {
+    const col = Math.floor(i / filasPorColumna);
+    const row = i % filasPorColumna;
+    commands.push({
+      type: "text",
+      x: MARGEN + 4 + col * colW,
+      y: yInicioFilas + row * ALTO_FILA_TIERRA + 4,
+      text: `T${f.tn}  ${f.etiqueta}`,
+      size: 5,
+      layer: "TIERRA",
+    });
+  });
+
+  const height = yInicioFilas + filasPorColumna * ALTO_FILA_TIERRA + MARGEN;
+  commands.unshift({ type: "rect", x: MARGEN, y: MARGEN, width: ANCHO - MARGEN * 2, height: height - MARGEN * 2, layer: "TIERRA" });
+  return { commands, width: ANCHO, height };
+}
+
+/** Parte la tabla de tierra en varios bloques si no entra en uno solo (tablero con muchísimos circuitos) — mismo criterio de partición que `construirUnifilarPaginado`. */
+function construirBloquesTierra(filas: FilaTierra[]): UnifilarDrawing[] {
+  const bloques: UnifilarDrawing[] = [];
+  for (let i = 0; i < filas.length; i += FILAS_POR_BLOQUE_TIERRA) {
+    bloques.push(construirTablaTierra(filas.slice(i, i + FILAS_POR_BLOQUE_TIERRA)));
+  }
+  return bloques;
+}
+
 /**
  * Arma un esquema unifilar simplificado (no es un plano a escala — ver
  * README): una barra vertical por cuerpo con cada elemento ramificando en
@@ -741,7 +831,23 @@ export function construirUnifilar(
     grupos.push([cuerpo, prepararRenglones(circuitos), calcularCodigosEquipo(circuitos)]);
   }
   const drawing = renderGrupos(grupos, configCalibre);
-  return rotulo ? agregarMarcoYRotulo(drawing, rotulo, 1, 1) : drawing;
+  if (!rotulo) return drawing;
+
+  // Tabla de PUESTA A TIERRA (A7) al pie del mismo dibujo — el DXF es
+  // siempre una hoja única (sin límite de altura por bloque, a diferencia
+  // del PDF), así que entra como más contenido de la misma hoja.
+  const filasT = filasTierra(grupos);
+  if (filasT.length === 0) return agregarMarcoYRotulo(drawing, rotulo, 1, 1);
+  const tabla = construirBloquesTierra(filasT).reduce<UnifilarDrawing>(
+    (acc, b) => ({ commands: [...acc.commands, ...trasladarComandos(b.commands, 0, acc.height)], width: Math.max(acc.width, b.width), height: acc.height + b.height }),
+    { commands: [], width: ANCHO, height: 0 },
+  );
+  const combinado: UnifilarDrawing = {
+    commands: [...drawing.commands, ...trasladarComandos(tabla.commands, 0, drawing.height)],
+    width: Math.max(drawing.width, tabla.width),
+    height: drawing.height + tabla.height,
+  };
+  return agregarMarcoYRotulo(combinado, rotulo, 1, 1);
 }
 
 /**
@@ -780,8 +886,7 @@ export function construirUnifilarPaginado(
   // — para que ningún bloque, con o sin marco, se acerque al alto real que
   // cuelga react-pdf (ver comentario de ALTO_MAX_BLOQUE_SEGURO). Más
   // margen de sobra nunca es un problema, solo parte en una hoja más.
-  const alturaMarco = BANDA_GRID * 2 + 8 + BANDA_TITULO + ALTO_ROTULO;
-  const limiteBloque = ALTO_MAX_BLOQUE_SEGURO - alturaMarco;
+  const limiteBloque = ALTO_MAX_BLOQUE_SEGURO - ALTURA_MARCO_HOJA;
   const maxAlturaRenglones = limiteBloque - MARGEN - GAP_CUERPO - ALTO_HEADER_CUERPO;
 
   const grupos: [string, RenglonUnifilar[], Map<number, string>][] = [];
@@ -835,6 +940,13 @@ export function construirUnifilarPaginado(
     alturaActual += alturaGrupo;
   }
   if (actual.length > 0) bloques.push(renderGrupos(actual, configCalibre));
+
+  // Tabla de PUESTA A TIERRA (A7) como su propia hoja al final — usa
+  // `grupos` completo (antes de partir en bloques) para que Tn recorra
+  // TODOS los circuitos del tablero en orden, no solo los del último
+  // bloque armado arriba.
+  bloques.push(...construirBloquesTierra(filasTierra(grupos)));
+
   return rotulo ? bloques.map((b, i) => agregarMarcoYRotulo(b, rotulo, i + 1, bloques.length)) : bloques;
 }
 

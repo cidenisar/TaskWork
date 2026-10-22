@@ -21,6 +21,7 @@ const COLOR_POR_CAPA: Record<CapaDxf, string> = {
   BORNES: "#2a4d8f",
   CABLES: "#8a2be2",
   SELLO: "#c0392b",
+  TIERRA: "#1a7a3c",
 };
 
 /**
