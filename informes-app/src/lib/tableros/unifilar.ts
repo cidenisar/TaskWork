@@ -7,6 +7,7 @@ import {
   type ConfigCalibreCable,
 } from "./calibre-cable";
 import type { TableroCategoriaEquipo, TableroRolBypassUps, TableroTipoCircuito } from "@/lib/database.types";
+import { calcularCodigosUnificados, type CodigoEquipo } from "./codigos-equipo";
 
 export interface UnifilarCircuito {
   numero: number;
@@ -100,7 +101,7 @@ export function ordenarCircuitosParaUnifilar<T extends UnifilarCircuito>(circuit
 }
 
 /** Un nodo del árbol de encadenado: el circuito propio más los circuitos que cuelgan directamente de él (0, 1, o varios — varios es el patrón "grupo": una protección común con varias cargas). */
-interface NodoArbol {
+export interface NodoArbol {
   circuito: UnifilarCircuito;
   hijos: NodoArbol[];
 }
@@ -118,7 +119,7 @@ interface NodoArbol {
  * A), se corta en el primer circuito repetido dentro de la misma rama en
  * vez de recursar infinito.
  */
-function construirArboles(circuitos: UnifilarCircuito[]): NodoArbol[] {
+export function construirArboles(circuitos: UnifilarCircuito[]): NodoArbol[] {
   const porNumero = new Map(circuitos.map((c) => [c.numero, c]));
   const hijosDe = new Map<number, UnifilarCircuito[]>();
   for (const c of circuitos) {
@@ -152,52 +153,6 @@ function anchoEnSlots(nodo: NodoArbol): number {
 function profundidadMax(nodo: NodoArbol): number {
   if (nodo.hijos.length === 0) return 1;
   return 1 + Math.max(...nodo.hijos.map(profundidadMax));
-}
-
-/**
- * Prefijo de código de equipo por categoría — solo para equipos "de
- * instalación" que conviene poder nombrar por su cuenta en el plano
- * (bornera, fuente, UPS, batería, conversor DC, inyector PoE,
- * descargador). Las protecciones (térmica/disyuntor) no llevan código
- * propio: ya se identifican por el N° de circuito (la cajita de ID al
- * pie de cada columna), igual que categorías de función (cámara,
- * lectora, cerradura) u "otro".
- */
-const PREFIJO_CODIGO_EQUIPO: Partial<Record<TableroCategoriaEquipo, string>> = {
-  bornera: "BNR",
-  bornera_fusible: "BNR",
-  fuente_industrial: "FT",
-  ups_industrial: "U",
-  bateria: "BT",
-  conversor_dc: "CV",
-  inyector_poe: "POE",
-  descargador_gaseoso: "PS",
-};
-
-/** BNR y POE siguen la notación de 2 dígitos del plano real (BNR-01, POE-02); el resto va con 1 dígito (FT-1, U-1, BT-1, CV-1, PS-1) — ambas convenciones vienen directo del documento de referencia. */
-const PREFIJOS_DOS_DIGITOS = new Set(["BNR", "POE"]);
-
-/**
- * Código correlativo por categoría de equipo, numerado dentro del mismo
- * cuerpo en orden de N° de circuito — así dos borneras del mismo cuerpo
- * nunca comparten código, y el orden es estable sin importar en qué
- * orden se cargaron. No se persiste en la base: se recalcula cada vez
- * que se arma el dibujo, a partir de los circuitos ya cargados (mismo
- * criterio que el resto del unifilar — nunca un dato nuevo que haya que
- * cargar aparte).
- */
-function calcularCodigosEquipo(circuitos: UnifilarCircuito[]): Map<number, string> {
-  const contador = new Map<string, number>();
-  const codigos = new Map<number, string>();
-  for (const c of [...circuitos].sort((a, b) => a.numero - b.numero)) {
-    const prefijo = PREFIJO_CODIGO_EQUIPO[c.categoriaEquipo];
-    if (!prefijo) continue;
-    const n = (contador.get(prefijo) ?? 0) + 1;
-    contador.set(prefijo, n);
-    const numeroStr = PREFIJOS_DOS_DIGITOS.has(prefijo) ? String(n).padStart(2, "0") : String(n);
-    codigos.set(c.numero, `${prefijo}-${numeroStr}`);
-  }
-  return codigos;
 }
 
 const LABEL_GRUPO: Record<GrupoUnifilar, string> = {
@@ -353,7 +308,7 @@ function dibujarSimbolo(commands: DrawCommand[], categoria: TableroCategoriaEqui
   commands.push({ type: "rect", x: cx - SIMBOLO_R, y: cy - SIMBOLO_R, width: SIMBOLO_R * 2, height: SIMBOLO_R * 2, layer: "SIMBOLOS" });
 }
 
-/** Contador correlativo de conductores ("A n", A4 del estándar) — un objeto mutable en vez de un argumento de retorno porque se comparte entre toda la recursión de un mismo cuerpo (mismo criterio que `codigos`, ver `calcularCodigosEquipo`). Arranca de nuevo en cada cuerpo — no hay una single fuente de verdad de "todos los cuerpos de este tablero" en un solo lugar antes de dibujar, y reiniciar por cuerpo evita que la numeración dependa de en qué parte/página terminó cayendo cada bloque (ver `construirUnifilarPaginado`). */
+/** Contador correlativo de conductores ("A n", A4 del estándar) — un objeto mutable en vez de un argumento de retorno porque se comparte entre toda la recursión de un mismo cuerpo (mismo criterio que `codigos`, ver `calcularCodigosUnificados` en `codigos-equipo.ts`). Arranca de nuevo en cada cuerpo — no hay una single fuente de verdad de "todos los cuerpos de este tablero" en un solo lugar antes de dibujar, y reiniciar por cuerpo evita que la numeración dependa de en qué parte/página terminó cayendo cada bloque (ver `construirUnifilarPaginado`). */
 interface ContadorConductor {
   siguiente: number;
 }
@@ -476,11 +431,11 @@ function dibujarNodo(
   yAnchor: number,
   nivel: number,
   configCalibre: ConfigCalibreCable[],
-  codigos: Map<number, string>,
+  codigos: Map<number, CodigoEquipo>,
   ctr: ContadorConductor,
 ): void {
   const c = nodo.circuito;
-  const codigo = codigos.get(c.numero);
+  const codigo = codigos.get(c.numero)?.texto;
   const cx = (xLeft + xRight) / 2;
 
   // Tramo de entrada a este dispositivo: cable con su marca de formación
@@ -565,7 +520,7 @@ function dibujarNodo(
 }
 
 /** Arma los draw commands de un cuerpo ya resuelto en renglones (columnas de circuitos + encabezados de sección) y su mapa de códigos de equipo. Compartido por `construirUnifilar` y `construirUnifilarPaginado` para que el dibujo de a pedazos (paginado) sea idéntico al dibujo completo. */
-function renderGrupos(grupos: [string, RenglonUnifilar[], Map<number, string>][], configCalibre: ConfigCalibreCable[]): UnifilarDrawing {
+function renderGrupos(grupos: [string, RenglonUnifilar[], Map<number, CodigoEquipo>][], configCalibre: ConfigCalibreCable[]): UnifilarDrawing {
   const commands: DrawCommand[] = [];
   let y = MARGEN;
 
@@ -776,7 +731,7 @@ interface FilaTierra {
  * `grupos` en el mismo orden en que se dibuja, así Tn sigue el orden
  * visual de los circuitos.
  */
-function filasTierra(grupos: [string, RenglonUnifilar[], Map<number, string>][]): FilaTierra[] {
+function filasTierra(grupos: [string, RenglonUnifilar[], Map<number, CodigoEquipo>][]): FilaTierra[] {
   const filas: FilaTierra[] = [];
   let tn = 1;
   for (const [, renglones, codigos] of grupos) {
@@ -784,7 +739,7 @@ function filasTierra(grupos: [string, RenglonUnifilar[], Map<number, string>][])
       if (renglon.tipo === "header") continue;
       for (const arbol of renglon.arboles) {
         for (const hoja of hojasDeArbol(arbol)) {
-          const codigo = codigos.get(hoja.numero);
+          const codigo = codigos.get(hoja.numero)?.texto;
           // Sin truncar acá: el ancho real de columna solo se conoce en `construirTablaTierra`, recién cuando se sabe en cuántas columnas entró la tabla completa.
           const etiqueta = codigo ? `${codigo} — ${hoja.texto}` : hoja.texto;
           filas.push({ tn: tn++, etiqueta });
@@ -866,9 +821,9 @@ export function construirUnifilar(
   configCalibre: ConfigCalibreCable[],
   rotulo?: RotuloUnifilar,
 ): UnifilarDrawing {
-  const grupos: [string, RenglonUnifilar[], Map<number, string>][] = [];
+  const grupos: [string, RenglonUnifilar[], Map<number, CodigoEquipo>][] = [];
   for (const [cuerpo, circuitos] of circuitosPorCuerpo) {
-    grupos.push([cuerpo, prepararRenglones(circuitos), calcularCodigosEquipo(circuitos)]);
+    grupos.push([cuerpo, prepararRenglones(circuitos), calcularCodigosUnificados(circuitos)]);
   }
   const drawing = renderGrupos(grupos, configCalibre);
   if (!rotulo) return drawing;
@@ -929,7 +884,7 @@ export function construirUnifilarPaginado(
   const limiteBloque = ALTO_MAX_BLOQUE_SEGURO - ALTURA_MARCO_HOJA;
   const maxAlturaRenglones = limiteBloque - MARGEN - GAP_CUERPO - ALTO_HEADER_CUERPO;
 
-  const grupos: [string, RenglonUnifilar[], Map<number, string>][] = [];
+  const grupos: [string, RenglonUnifilar[], Map<number, CodigoEquipo>][] = [];
   for (const [cuerpo, circuitosOriginal] of circuitosPorCuerpo) {
     // Se arman los renglones (orden + encabezados de sección + columnas) ACÁ,
     // antes de partir en páginas, no solo dentro de `renderGrupos` — si se
@@ -941,7 +896,7 @@ export function construirUnifilarPaginado(
     // calculan una sola vez acá y se reutilizan en todas las partes de
     // este mismo cuerpo, para que una bornera no cambie de código según
     // en qué parte terminó cayendo.
-    const codigos = calcularCodigosEquipo(circuitosOriginal);
+    const codigos = calcularCodigosUnificados(circuitosOriginal);
     const alturaTotal = renglones.reduce((acc, r) => acc + altoRenglon(r), 0);
     if (alturaTotal <= maxAlturaRenglones) {
       grupos.push([cuerpo, renglones, codigos]);
@@ -967,7 +922,7 @@ export function construirUnifilarPaginado(
   }
 
   const bloques: UnifilarDrawing[] = [];
-  let actual: [string, RenglonUnifilar[], Map<number, string>][] = [];
+  let actual: [string, RenglonUnifilar[], Map<number, CodigoEquipo>][] = [];
   let alturaActual = MARGEN;
   for (const grupo of grupos) {
     const alturaGrupo = ALTO_HEADER_CUERPO + grupo[1].reduce((acc, r) => acc + altoRenglon(r), 0) + GAP_CUERPO;
