@@ -291,6 +291,27 @@ function truncar(s: string, max: number): string {
   return s.length > max ? `${s.slice(0, max - 1)}…` : s;
 }
 
+/**
+ * Ancho medio de carácter en Helvetica, como fracción del tamaño de fuente
+ * — mismo criterio empírico que ya usaba `selloAncho` más abajo (0.62 para
+ * texto en mayúsculas/negrita). Es una estimación, no una medida real del
+ * glifo, pero alcanza para no truncar muy por debajo de lo que la caja
+ * puede mostrar (que es justo el bug real: antes se truncaba a un número
+ * fijo de caracteres —16, 12, 26— calibrado a mano con texto de prueba
+ * corto, sin relación con el ancho real disponible, así que un texto real
+ * como "Disyuntor/Diferencial" o "RACK Nº 05 / CKT 5 - INT. TERMOM."
+ * quedaba cortado a la mitad aunque la caja tuviera lugar de sobra).
+ */
+function maxCharsEnAncho(anchoDisponible: number, size: number, bold = false): number {
+  const factorAncho = bold ? 0.62 : 0.52;
+  return Math.max(4, Math.floor(anchoDisponible / (size * factorAncho)));
+}
+
+/** Trunca `s` al máximo de caracteres que entran en `anchoDisponible` (puntos) para ese tamaño/peso de fuente — ver `maxCharsEnAncho`. */
+function truncarA(s: string, anchoDisponible: number, size: number, bold = false): string {
+  return truncar(s, maxCharsEnAncho(anchoDisponible, size, bold));
+}
+
 const CATEGORIAS_BREAKER: TableroCategoriaEquipo[] = ["termica", "disyuntor"];
 const CATEGORIAS_BORNERA: TableroCategoriaEquipo[] = ["bornera", "bornera_fusible"];
 
@@ -370,15 +391,14 @@ function marcaCable(commands: DrawCommand[], cx: number, yTop: number, yBot: num
   }
 }
 
-/** Trunca a un ancho de columna angosto (~100pt) — los planos reales también abrevian agresivamente en cada rama. */
-function truncarColumna(s: string): string {
-  return truncar(s, 16);
-}
-
-/** Trunca la etiqueta compacta de un eslabón intermedio de una cadena (va al costado del símbolo, con menos lugar todavía). */
-function truncarEslabon(s: string): string {
-  return truncar(s, 12);
-}
+/**
+ * Ancho real disponible para el texto dentro de una columna del unifilar
+ * (ancho de columna, menos el margen fijo de la cajita de ID y el padding
+ * del texto hasta el borde) — los planos reales también abrevian
+ * agresivamente en cada rama, pero acá se trunca al máximo real que entra,
+ * no a un número de caracteres fijo (ver `truncarA`/`maxCharsEnAncho`).
+ */
+const ANCHO_TEXTO_COLUMNA = COLUMNA_ANCHO - 14;
 
 type RenglonUnifilar = { tipo: "header"; texto: string } | { tipo: "columnas"; arboles: NodoArbol[] };
 
@@ -471,7 +491,9 @@ function dibujarNodo(
     // por sí solo ya agota el ancho truncado de un eslabón intermedio — si
     // el código fuera al final, nunca llegaría a verse.
     const partes = [codigo, CATEGORIA_EQUIPO_LABEL[c.categoriaEquipo], amperaje ? `${amperaje}A` : null].filter((p): p is string => !!p);
-    commands.push({ type: "text", x: cx + SIMBOLO_R + 2, y: ySymbol + 2, text: truncarEslabon(partes.join(" ")), size: 5.5, layer: "TEXTO" });
+    // Ancho real disponible: desde el texto (al costado del símbolo, centrado en la sub-columna) hasta el borde derecho de esa sub-columna — no un número fijo, porque una sub-columna de un "grupo" puede ser más angosta que una columna entera.
+    const anchoEslabon = xRight - (cx + SIMBOLO_R + 2) - 2;
+    commands.push({ type: "text", x: cx + SIMBOLO_R + 2, y: ySymbol + 2, text: truncarA(partes.join(" "), anchoEslabon, 5.5), size: 5.5, layer: "TEXTO" });
 
     let offset = 0;
     const subTramos = nodo.hijos.map((hijo) => {
@@ -510,13 +532,14 @@ function dibujarNodo(
   const linea3Partes = [formacion, colores].filter((p): p is string => !!p);
   const specs = [linea1, linea2Partes.join(" "), linea3Partes.join(" ")].filter((s) => s.length > 0);
   specs.slice(0, LINEAS_SPEC).forEach((s, li) => {
+    const bold = li === 0;
     commands.push({
       type: "text",
       x: colLeft,
       y: yEtiqueta + ALTO_LINEA * (li + 1),
-      text: truncarColumna(s),
+      text: truncarA(s, ANCHO_TEXTO_COLUMNA, 6, bold),
       size: 6,
-      bold: li === 0,
+      bold,
       layer: "TEXTO",
     });
   });
@@ -524,7 +547,7 @@ function dibujarNodo(
   const yId = yEtiqueta + LINEAS_SPEC * ALTO_LINEA + 4;
   commands.push({ type: "rect", x: colLeft - 1, y: yId, width: COLUMNA_ANCHO - 8, height: ALTO_ID_BOX, layer: "ROTULO" });
   const etiquetaId = c.etiquetaCable ? `${c.numero} — ${c.texto} (${c.etiquetaCable})` : `${c.numero} — ${c.texto}`;
-  commands.push({ type: "text", x: colLeft + 2, y: yId + 9, text: truncarColumna(etiquetaId), size: 6.5, bold: true, layer: "ROTULO" });
+  commands.push({ type: "text", x: colLeft + 2, y: yId + 9, text: truncarA(etiquetaId, ANCHO_TEXTO_COLUMNA, 6.5, true), size: 6.5, bold: true, layer: "ROTULO" });
 }
 
 /** Arma los draw commands de un cuerpo ya resuelto en renglones (columnas de circuitos + encabezados de sección) y su mapa de códigos de equipo. Compartido por `construirUnifilar` y `construirUnifilarPaginado` para que el dibujo de a pedazos (paginado) sea idéntico al dibujo completo. */
@@ -748,7 +771,8 @@ function filasTierra(grupos: [string, RenglonUnifilar[], Map<number, string>][])
       for (const arbol of renglon.arboles) {
         for (const hoja of hojasDeArbol(arbol)) {
           const codigo = codigos.get(hoja.numero);
-          const etiqueta = truncar(codigo ? `${codigo} — ${hoja.texto}` : hoja.texto, 26);
+          // Sin truncar acá: el ancho real de columna solo se conoce en `construirTablaTierra`, recién cuando se sabe en cuántas columnas entró la tabla completa.
+          const etiqueta = codigo ? `${codigo} — ${hoja.texto}` : hoja.texto;
           filas.push({ tn: tn++, etiqueta });
         }
       }
@@ -780,6 +804,8 @@ function construirTablaTierra(filas: FilaTierra[]): UnifilarDrawing {
   const yTitulo = MARGEN + 12;
   const yInicioFilas = yTitulo + 10;
 
+  // Ancho real de ESTA columna (depende de en cuántas columnas entró la tabla completa, por eso se trunca acá y no en `filasTierra`).
+  const anchoTextoTierra = colW - 8;
   const commands: DrawCommand[] = [{ type: "text", x: MARGEN + 6, y: yTitulo, text: "PUESTA A TIERRA", size: 9, bold: true, layer: "TIERRA" }];
   filas.forEach((f, i) => {
     const col = Math.floor(i / filasPorColumna);
@@ -788,7 +814,7 @@ function construirTablaTierra(filas: FilaTierra[]): UnifilarDrawing {
       type: "text",
       x: MARGEN + 4 + col * colW,
       y: yInicioFilas + row * ALTO_FILA_TIERRA + 4,
-      text: `T${f.tn}  ${f.etiqueta}`,
+      text: truncarA(`T${f.tn}  ${f.etiqueta}`, anchoTextoTierra, 5),
       size: 5,
       layer: "TIERRA",
     });
