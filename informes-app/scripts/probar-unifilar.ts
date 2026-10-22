@@ -34,14 +34,14 @@ mkdirSync(outDir, { recursive: true });
 // la app) para no crear un acoplamiento nuevo solo para probar.
 const COLOR_POR_CAPA: Record<CapaDxf, string> = {
   MARCO: "#1a1a1a",
-  BARRA: "#2a4d8f",
+  POTENCIA: "#2a4d8f",
   SIMBOLOS: "#8a6d1a",
-  ROTULO: "#1a7a3c",
-  TEXTO: "#1a1a1a",
   BORNES: "#2a4d8f",
+  NUM_CONDUCTOR: "#2a4d8f",
   CABLES: "#8a2be2",
-  SELLO: "#c0392b",
-  TIERRA: "#1a7a3c",
+  ETIQUETAS: "#1a7a3c",
+  DESTINOS: "#1a7a3c",
+  A_CONFIRMAR: "#d9730d",
 };
 
 const rotulo: RotuloUnifilar = {
@@ -80,7 +80,7 @@ const DocumentoPrueba = () =>
             bloque.commands.map((cmd, i) => {
               const color = COLOR_POR_CAPA[cmd.layer] ?? "#1a1a1a";
               if (cmd.type === "line") return React.createElement(Line, { key: i, x1: cmd.x1, y1: cmd.y1, x2: cmd.x2, y2: cmd.y2, stroke: color, strokeWidth: 0.75 });
-              if (cmd.type === "rect") return React.createElement(Rect, { key: i, x: cmd.x, y: cmd.y, width: cmd.width, height: cmd.height, stroke: color, strokeWidth: 0.75, fill: "none" });
+              if (cmd.type === "rect") return React.createElement(Rect, { key: i, x: cmd.x, y: cmd.y, width: cmd.width, height: cmd.height, stroke: color, strokeWidth: 0.75, fill: cmd.fill ? color : "none" });
               if (cmd.type === "circle") return React.createElement(Circle, { key: i, cx: cmd.x, cy: cmd.y, r: cmd.r, stroke: color, strokeWidth: 0.75, fill: "none" });
               return null;
             }),

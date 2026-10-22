@@ -11,17 +11,25 @@ import { HALLAZGO_ESTADO_LABEL } from "@/lib/inspeccion-ia/types";
 import type { CapaDxf, UnifilarDrawing } from "@/lib/tableros/unifilar";
 import type { EstadoChecklist, TableroCategoriaEquipo, TableroEventoTipo, TableroTipo, TableroTipoCircuito } from "@/lib/database.types";
 
-/** Mismo criterio de color por capa que `lib/dxf/writer.ts` (COLOR_ACI_POR_CAPA) — una sola convención de color para los dos formatos, aproximando cada ACI a un hex legible sobre fondo blanco. */
+/**
+ * Mismo criterio de color por capa que `lib/dxf/writer.ts`
+ * (COLOR_ACI_POR_CAPA) — una sola convención de color para los dos
+ * formatos, aproximando cada ACI a un hex legible sobre fondo blanco. 9
+ * capas del estándar TerraLogic (ver docs/referencias-unifilar/
+ * REGLAS_UNIFILAR.md, sección A9); A_CONFIRMAR en naranja (ACI 30) para
+ * que un dato faltante salte a la vista — sin ningún `DrawCommand` que la
+ * use todavía.
+ */
 const COLOR_POR_CAPA: Record<CapaDxf, string> = {
   MARCO: "#1a1a1a",
-  BARRA: "#2a4d8f",
+  POTENCIA: "#2a4d8f",
   SIMBOLOS: "#8a6d1a",
-  ROTULO: "#1a7a3c",
-  TEXTO: "#1a1a1a",
   BORNES: "#2a4d8f",
+  NUM_CONDUCTOR: "#2a4d8f",
   CABLES: "#8a2be2",
-  SELLO: "#c0392b",
-  TIERRA: "#1a7a3c",
+  ETIQUETAS: "#1a7a3c",
+  DESTINOS: "#1a7a3c",
+  A_CONFIRMAR: "#d9730d",
 };
 
 /**
@@ -203,7 +211,7 @@ export function TableroPdf(props: TableroPdfProps) {
                     }
                     if (cmd.type === "rect") {
                       return (
-                        <Rect key={i} x={cmd.x} y={cmd.y} width={cmd.width} height={cmd.height} stroke={color} strokeWidth={0.75} fill="none" />
+                        <Rect key={i} x={cmd.x} y={cmd.y} width={cmd.width} height={cmd.height} stroke={color} strokeWidth={0.75} fill={cmd.fill ? color : "none"} />
                       );
                     }
                     if (cmd.type === "circle") {

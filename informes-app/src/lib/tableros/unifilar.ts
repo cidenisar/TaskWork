@@ -211,15 +211,29 @@ const ROL_BYPASS_SUFIJO: Record<TableroRolBypassUps, string> = { entrada: " (E)"
 
 /**
  * Capa DXF de cada comando — permite que quien abra el plano en AutoCAD
- * apague/prenda el marco, la barra, los símbolos, el rótulo o el texto por
- * separado, en vez de recibir todo en una sola capa "0" (ver
- * `lib/dxf/writer.ts`). El PDF ignora este campo (siempre se ve todo junto).
+ * apague/prenda cada grupo por separado, en vez de recibir todo en una sola
+ * capa "0" (ver `lib/dxf/writer.ts`). El PDF ignora este campo (siempre se
+ * ve todo junto). 9 capas tomadas del estándar de dibujo TerraLogic (ver
+ * docs/referencias-unifilar/REGLAS_UNIFILAR.md, sección A9) — reemplaza el
+ * set anterior (MARCO/BARRA/SIMBOLOS/ROTULO/TEXTO/BORNES/CABLES/SELLO/
+ * TIERRA) con un mapeo mecánico 1 a 1 por elemento, sin tocar coordenadas:
+ * BARRA→POTENCIA, SIMBOLOS→SIMBOLOS, ROTULO(borde)→MARCO,
+ * ROTULO(texto)/TEXTO→ETIQUETAS, BORNES→BORNES, CABLES→CABLES,
+ * SELLO→ETIQUETAS, TIERRA→DESTINOS — salvo el número de conductor ("N A n"
+ * / "F A n" de `dibujarBorneNumerado`), que pasa a su propia capa
+ * NUM_CONDUCTOR en vez de ETIQUETAS. A_CONFIRMAR queda declarada acá y en
+ * `COLOR_ACI_POR_CAPA` del writer, pero todavía sin ningún `DrawCommand`
+ * que la use — la usa recién la capa visual "A CONFIRMAR" de datos
+ * faltantes (polos/IDN/clase) de una etapa posterior de este mismo motor.
  */
-export type CapaDxf = "MARCO" | "BARRA" | "SIMBOLOS" | "ROTULO" | "TEXTO" | "BORNES" | "CABLES" | "SELLO" | "TIERRA";
+export type CapaDxf = "MARCO" | "POTENCIA" | "SIMBOLOS" | "BORNES" | "NUM_CONDUCTOR" | "CABLES" | "ETIQUETAS" | "DESTINOS" | "A_CONFIRMAR";
 
 export type DrawCommand =
   | { type: "line"; x1: number; y1: number; x2: number; y2: number; layer: CapaDxf }
-  | { type: "rect"; x: number; y: number; width: number; height: number; layer: CapaDxf }
+  // `fill`: solo lo usa el DXF (ver `drawCommandsToDxf`) para decidir entre
+  // un rectángulo sin relleno (LWPOLYLINE) o relleno (SOLID) — el PDF/SVG
+  // públicos deciden el relleno con su propio prop, no leen este campo.
+  | { type: "rect"; x: number; y: number; width: number; height: number; layer: CapaDxf; fill?: boolean }
   | { type: "circle"; x: number; y: number; r: number; layer: CapaDxf }
   | { type: "text"; x: number; y: number; text: string; size: number; bold?: boolean; layer: CapaDxf };
 
@@ -360,8 +374,8 @@ function dibujarBorneNumerado(commands: DrawCommand[], cx: number, cy: number, c
   const r = 0.9;
   commands.push({ type: "circle", x: cx, y: cy, r, layer: "BORNES" });
   commands.push({ type: "line", x1: cx - r * 0.7, y1: cy - r * 0.7, x2: cx + r * 0.7, y2: cy + r * 0.7, layer: "BORNES" });
-  commands.push({ type: "text", x: cx + 2, y: cy - 3, text: `N  A${nN}`, size: 3.2, layer: "TEXTO" });
-  commands.push({ type: "text", x: cx + 2, y: cy + 2.5, text: `F  A${nF}`, size: 3.2, layer: "TEXTO" });
+  commands.push({ type: "text", x: cx + 2, y: cy - 3, text: `N  A${nN}`, size: 3.2, layer: "NUM_CONDUCTOR" });
+  commands.push({ type: "text", x: cx + 2, y: cy + 2.5, text: `F  A${nF}`, size: 3.2, layer: "NUM_CONDUCTOR" });
   return [nN, nF];
 }
 
@@ -372,7 +386,7 @@ function dibujarBorneNumerado(commands: DrawCommand[], cx: number, cy: number, c
  * decide cuántos hilos tiene el cable, no se inventa.
  */
 function marcaCable(commands: DrawCommand[], cx: number, yTop: number, yBot: number, formacion: string | null, tipoCircuito: TableroTipoCircuito): void {
-  commands.push({ type: "line", x1: cx, y1: yTop, x2: cx, y2: yBot, layer: "BARRA" });
+  commands.push({ type: "line", x1: cx, y1: yTop, x2: cx, y2: yBot, layer: "POTENCIA" });
   const ym = (yTop + yBot) / 2;
   const doble = (CONDUCTORES_POR_TIPO[tipoCircuito] ?? 2) >= 3;
   const largo = 2.2;
@@ -479,7 +493,7 @@ function dibujarNodo(
   marcaCable(commands, cx, yAnchor, yBorneEntrada, formacion, c.tipoCircuito);
   dibujarBorneNumerado(commands, cx, yBorneEntrada, ctr);
   const ySymbol = yBorneEntrada + BORNE_ALTO / 2 + POST_BORNE_GAP + SIMBOLO_R;
-  commands.push({ type: "line", x1: cx, y1: yBorneEntrada, x2: cx, y2: ySymbol - SIMBOLO_R, layer: "BARRA" });
+  commands.push({ type: "line", x1: cx, y1: yBorneEntrada, x2: cx, y2: ySymbol - SIMBOLO_R, layer: "POTENCIA" });
   dibujarSimbolo(commands, c.categoriaEquipo, cx, ySymbol);
   const yDespues = ySymbol + SIMBOLO_R;
 
@@ -493,7 +507,7 @@ function dibujarNodo(
     const partes = [codigo, CATEGORIA_EQUIPO_LABEL[c.categoriaEquipo], amperaje ? `${amperaje}A` : null].filter((p): p is string => !!p);
     // Ancho real disponible: desde el texto (al costado del símbolo, centrado en la sub-columna) hasta el borde derecho de esa sub-columna — no un número fijo, porque una sub-columna de un "grupo" puede ser más angosta que una columna entera.
     const anchoEslabon = xRight - (cx + SIMBOLO_R + 2) - 2;
-    commands.push({ type: "text", x: cx + SIMBOLO_R + 2, y: ySymbol + 2, text: truncarA(partes.join(" "), anchoEslabon, 5.5), size: 5.5, layer: "TEXTO" });
+    commands.push({ type: "text", x: cx + SIMBOLO_R + 2, y: ySymbol + 2, text: truncarA(partes.join(" "), anchoEslabon, 5.5), size: 5.5, layer: "ETIQUETAS" });
 
     let offset = 0;
     const subTramos = nodo.hijos.map((hijo) => {
@@ -504,7 +518,7 @@ function dibujarNodo(
     });
     if (subTramos.length > 1) {
       const subCentros = subTramos.map((t) => (t.xLeft + t.xRight) / 2);
-      commands.push({ type: "line", x1: subCentros[0], y1: yDespues, x2: subCentros[subCentros.length - 1], y2: yDespues, layer: "BARRA" });
+      commands.push({ type: "line", x1: subCentros[0], y1: yDespues, x2: subCentros[subCentros.length - 1], y2: yDespues, layer: "POTENCIA" });
     }
     subTramos.forEach((t) => dibujarNodo(commands, t.hijo, t.xLeft, t.xRight, yDespues, nivel + 1, configCalibre, codigos, ctr));
     return;
@@ -518,7 +532,7 @@ function dibujarNodo(
   marcaCable(commands, cx, yDespues, yBorneDestino, formacion, c.tipoCircuito);
   dibujarBorneNumerado(commands, cx, yBorneDestino, ctr);
   const yEtiqueta = yBorneDestino + BORNE_ALTO / 2 + 3;
-  commands.push({ type: "line", x1: cx, y1: yBorneDestino, x2: cx, y2: yEtiqueta, layer: "BARRA" });
+  commands.push({ type: "line", x1: cx, y1: yBorneDestino, x2: cx, y2: yEtiqueta, layer: "POTENCIA" });
 
   const colLeft = xLeft + 3;
   const amperaje = parseAmperaje(c.ampNominal);
@@ -540,14 +554,14 @@ function dibujarNodo(
       text: truncarA(s, ANCHO_TEXTO_COLUMNA, 6, bold),
       size: 6,
       bold,
-      layer: "TEXTO",
+      layer: "ETIQUETAS",
     });
   });
 
   const yId = yEtiqueta + LINEAS_SPEC * ALTO_LINEA + 4;
-  commands.push({ type: "rect", x: colLeft - 1, y: yId, width: COLUMNA_ANCHO - 8, height: ALTO_ID_BOX, layer: "ROTULO" });
+  commands.push({ type: "rect", x: colLeft - 1, y: yId, width: COLUMNA_ANCHO - 8, height: ALTO_ID_BOX, layer: "MARCO" });
   const etiquetaId = c.etiquetaCable ? `${c.numero} — ${c.texto} (${c.etiquetaCable})` : `${c.numero} — ${c.texto}`;
-  commands.push({ type: "text", x: colLeft + 2, y: yId + 9, text: truncarA(etiquetaId, ANCHO_TEXTO_COLUMNA, 6.5, true), size: 6.5, bold: true, layer: "ROTULO" });
+  commands.push({ type: "text", x: colLeft + 2, y: yId + 9, text: truncarA(etiquetaId, ANCHO_TEXTO_COLUMNA, 6.5, true), size: 6.5, bold: true, layer: "ETIQUETAS" });
 }
 
 /** Arma los draw commands de un cuerpo ya resuelto en renglones (columnas de circuitos + encabezados de sección) y su mapa de códigos de equipo. Compartido por `construirUnifilar` y `construirUnifilarPaginado` para que el dibujo de a pedazos (paginado) sea idéntico al dibujo completo. */
@@ -564,12 +578,12 @@ function renderGrupos(grupos: [string, RenglonUnifilar[], Map<number, string>][]
     const ctr = nuevoContadorConductor();
 
     commands.push({ type: "rect", x: MARGEN, y: yInicioBloque, width: ANCHO - MARGEN * 2, height: alturaBloque, layer: "MARCO" });
-    commands.push({ type: "text", x: MARGEN + 6, y: yInicioBloque + 12, text: cuerpo || "Sin cuerpo asignado", size: 9, bold: true, layer: "TEXTO" });
+    commands.push({ type: "text", x: MARGEN + 6, y: yInicioBloque + 12, text: cuerpo || "Sin cuerpo asignado", size: 9, bold: true, layer: "ETIQUETAS" });
 
     let yRenglon = yInicioBloque + ALTO_HEADER_CUERPO;
     for (const renglon of renglones) {
       if (renglon.tipo === "header") {
-        commands.push({ type: "text", x: MARGEN + 6, y: yRenglon + 9, text: renglon.texto, size: 7.5, bold: true, layer: "TEXTO" });
+        commands.push({ type: "text", x: MARGEN + 6, y: yRenglon + 9, text: renglon.texto, size: 7.5, bold: true, layer: "ETIQUETAS" });
         yRenglon += ALTO_HEADER_SECCION;
         continue;
       }
@@ -585,8 +599,8 @@ function renderGrupos(grupos: [string, RenglonUnifilar[], Map<number, string>][]
       const centros = tramos.map((t) => (t.xLeft + t.xRight) / 2);
       // Barra horizontal del renglón (doble línea) de la primera a la última columna usada.
       if (centros.length > 1) {
-        commands.push({ type: "line", x1: centros[0], y1: yBus, x2: centros[centros.length - 1], y2: yBus, layer: "BARRA" });
-        commands.push({ type: "line", x1: centros[0], y1: yBus + 1.2, x2: centros[centros.length - 1], y2: yBus + 1.2, layer: "BARRA" });
+        commands.push({ type: "line", x1: centros[0], y1: yBus, x2: centros[centros.length - 1], y2: yBus, layer: "POTENCIA" });
+        commands.push({ type: "line", x1: centros[0], y1: yBus + 1.2, x2: centros[centros.length - 1], y2: yBus + 1.2, layer: "POTENCIA" });
       }
 
       tramos.forEach((t) => dibujarNodo(commands, t.arbol, t.xLeft, t.xRight, yBus, 0, configCalibre, codigos, ctr));
@@ -709,7 +723,7 @@ function agregarMarcoYRotulo(drawing: UnifilarDrawing, rotulo: RotuloUnifilar, h
   // que el texto nunca se corte contra el borde derecho de la hoja.
   const selloTexto = "PARA REVISIÓN";
   const selloAncho = selloTexto.length * 11 * 0.62;
-  commands.push({ type: "text", x: rbX + rbW - selloAncho, y: rbY + 24, text: selloTexto, size: 11, bold: true, layer: "SELLO" });
+  commands.push({ type: "text", x: rbX + rbW - selloAncho, y: rbY + 24, text: selloTexto, size: 11, bold: true, layer: "ETIQUETAS" });
 
   // Rótulo (cuadro de título) al pie, abajo a la derecha.
   const rotY = by + BANDA_TITULO + drawing.height;
@@ -722,7 +736,7 @@ function agregarMarcoYRotulo(drawing: UnifilarDrawing, rotulo: RotuloUnifilar, h
     text: truncar(`CLIENTE: ${rotulo.cliente}   ·   CONTRATISTA: ${rotulo.contratista}   ·   OBRA: ${rotulo.sitio}`, 90),
     size: 6.5,
     bold: true,
-    layer: "ROTULO",
+    layer: "ETIQUETAS",
   });
   commands.push({
     type: "text",
@@ -733,7 +747,7 @@ function agregarMarcoYRotulo(drawing: UnifilarDrawing, rotulo: RotuloUnifilar, h
       100,
     ),
     size: 6,
-    layer: "ROTULO",
+    layer: "ETIQUETAS",
   });
 
   return {
@@ -806,7 +820,7 @@ function construirTablaTierra(filas: FilaTierra[]): UnifilarDrawing {
 
   // Ancho real de ESTA columna (depende de en cuántas columnas entró la tabla completa, por eso se trunca acá y no en `filasTierra`).
   const anchoTextoTierra = colW - 8;
-  const commands: DrawCommand[] = [{ type: "text", x: MARGEN + 6, y: yTitulo, text: "PUESTA A TIERRA", size: 9, bold: true, layer: "TIERRA" }];
+  const commands: DrawCommand[] = [{ type: "text", x: MARGEN + 6, y: yTitulo, text: "PUESTA A TIERRA", size: 9, bold: true, layer: "DESTINOS" }];
   filas.forEach((f, i) => {
     const col = Math.floor(i / filasPorColumna);
     const row = i % filasPorColumna;
@@ -816,12 +830,12 @@ function construirTablaTierra(filas: FilaTierra[]): UnifilarDrawing {
       y: yInicioFilas + row * ALTO_FILA_TIERRA + 4,
       text: truncarA(`T${f.tn}  ${f.etiqueta}`, anchoTextoTierra, 5),
       size: 5,
-      layer: "TIERRA",
+      layer: "DESTINOS",
     });
   });
 
   const height = yInicioFilas + filasPorColumna * ALTO_FILA_TIERRA + MARGEN;
-  commands.unshift({ type: "rect", x: MARGEN, y: MARGEN, width: ANCHO - MARGEN * 2, height: height - MARGEN * 2, layer: "TIERRA" });
+  commands.unshift({ type: "rect", x: MARGEN, y: MARGEN, width: ANCHO - MARGEN * 2, height: height - MARGEN * 2, layer: "DESTINOS" });
   return { commands, width: ANCHO, height };
 }
 
