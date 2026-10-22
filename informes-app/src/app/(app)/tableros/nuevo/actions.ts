@@ -53,6 +53,7 @@ export interface CrearMedicionPayload {
   gps: PayloadGps | null;
   tableroId: string | null;
   denominacionNueva: string;
+  clienteNuevo: string;
   equipamientoEsperadoNuevo: TableroCategoriaEquipo[];
   tieneBypassUpsNuevo: boolean;
   jerarquiaNueva: TableroJerarquia | null;
@@ -96,6 +97,9 @@ export async function crearMedicionTableroAction(formData: FormData): Promise<Cr
   if (!payload.tableroId && !payload.denominacionNueva.trim()) {
     return { success: false, error: "Completá la denominación del tablero nuevo." };
   }
+  if (!payload.tableroId && !payload.clienteNuevo.trim()) {
+    return { success: false, error: "Completá el cliente del tablero nuevo." };
+  }
   if (!payload.tableroId && payload.subsistemas.length === 0) {
     return { success: false, error: "Elegí al menos un subsistema para el tablero nuevo." };
   }
@@ -113,11 +117,20 @@ export async function crearMedicionTableroAction(formData: FormData): Promise<Cr
     const ubicacion = await resolverUbicacionId(supabase, payload, profile.id, "el tablero");
     if ("error" in ubicacion) return { success: false, error: ubicacion.error };
 
+    // Cliente al catálogo compartido (alta al vuelo) — mismo criterio que
+    // Informe Técnico (ver informe-tecnico/nuevo/actions.ts): si ya existe
+    // no pasa nada (ignoreDuplicates), y queda sugerido la próxima vez.
+    const clienteValue = payload.clienteNuevo.trim();
+    if (clienteValue) {
+      await supabase.from("catalogo_clientes").upsert({ nombre: clienteValue }, { onConflict: "nombre", ignoreDuplicates: true });
+    }
+
     const { data: nuevoTablero, error: tableroErr } = await supabase
       .from("tableros")
       .insert({
         subsistemas: payload.subsistemas,
         denominacion: payload.denominacionNueva.trim(),
+        cliente: clienteValue || "YPF",
         ubicacion_id: ubicacion.id,
         equipamiento_esperado: payload.equipamientoEsperadoNuevo,
         tiene_bypass_ups: payload.tieneBypassUpsNuevo,
@@ -135,7 +148,7 @@ export async function crearMedicionTableroAction(formData: FormData): Promise<Cr
 
   const { data: tableroRow, error: tableroReadErr } = await supabase
     .from("tableros")
-    .select("denominacion, subsistemas, ubicacion_id")
+    .select("denominacion, subsistemas, ubicacion_id, cliente")
     .eq("id", tableroId)
     .single();
   if (tableroReadErr || !tableroRow) {
@@ -312,11 +325,14 @@ export async function crearMedicionTableroAction(formData: FormData): Promise<Cr
       etiquetaCable: l.etiquetaCable.trim() || null,
     })),
   );
+  const { data: configEmpresa } = await supabase.from("config_general").select("nombre_empresa").eq("id", 1).single();
   // Rótulo (cuadro de título al pie de cada hoja) con datos que ya existen
   // en la medición — nunca un dato nuevo que haya que cargar aparte.
   const rotulo: RotuloUnifilar = {
     sitio: ubicacionTablero.sitio,
     tablero: tableroRow.denominacion,
+    cliente: tableroRow.cliente,
+    contratista: configEmpresa?.nombre_empresa ?? "",
     fecha: payload.fecha,
     realizo: profile.nombreCompleto,
     numeroGeneracion,

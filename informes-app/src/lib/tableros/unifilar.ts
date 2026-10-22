@@ -26,6 +26,10 @@ export interface UnifilarCircuito {
 export interface RotuloUnifilar {
   sitio: string;
   tablero: string;
+  /** Cliente del tablero (tableros.cliente, ej. "YPF") — nunca inventado, ver tableros/nuevo/actions.ts. */
+  cliente: string;
+  /** Nombre de la empresa contratista (config_general.nombre_empresa, ej. "SONDA") — configurable, nunca hardcodeado en el dibujo. */
+  contratista: string;
   fecha: string;
   realizo: string;
   numeroGeneracion: string;
@@ -211,7 +215,7 @@ const ROL_BYPASS_SUFIJO: Record<TableroRolBypassUps, string> = { entrada: " (E)"
  * separado, en vez de recibir todo en una sola capa "0" (ver
  * `lib/dxf/writer.ts`). El PDF ignora este campo (siempre se ve todo junto).
  */
-export type CapaDxf = "MARCO" | "BARRA" | "SIMBOLOS" | "ROTULO" | "TEXTO" | "BORNES" | "CABLES";
+export type CapaDxf = "MARCO" | "BARRA" | "SIMBOLOS" | "ROTULO" | "TEXTO" | "BORNES" | "CABLES" | "SELLO";
 
 export type DrawCommand =
   | { type: "line"; x1: number; y1: number; x2: number; y2: number; layer: CapaDxf }
@@ -573,46 +577,145 @@ function renderGrupos(grupos: [string, RenglonUnifilar[], Map<number, string>][]
   return { commands, width: ANCHO, height: y };
 }
 
-/** Alto del cuadro de título (rótulo) que se agrega al pie de cada dibujo. */
+/** Alto del cuadro de título (rótulo) que se agrega al pie de cada hoja. */
 const ALTO_ROTULO = 28;
+/** Espacio reservado alrededor del contenido para la grilla 1-16/A-H (números/letras + flechas de centrado, A2 del estándar) — por fuera del marco de la hoja. */
+const BANDA_GRID = 10;
+/** Espacio reservado ARRIBA, dentro del marco, para el título (2 líneas), el bloque de revisiones y el sello — el contenido del circuito empieza debajo de esta banda, nunca la pisa. */
+const BANDA_TITULO = 34;
+const GRID_COLS = 16;
+const GRID_ROWS = 8;
+const LETRAS_GRID = "ABCDEFGH";
+
+function trasladarComandos(commands: DrawCommand[], dx: number, dy: number): DrawCommand[] {
+  return commands.map((c) => {
+    if (c.type === "line") return { ...c, x1: c.x1 + dx, y1: c.y1 + dy, x2: c.x2 + dx, y2: c.y2 + dy };
+    if (c.type === "circle") return { ...c, x: c.x + dx, y: c.y + dy };
+    return { ...c, x: c.x + dx, y: c.y + dy };
+  });
+}
 
 /**
- * Agrega el cuadro de título al pie de un dibujo ya armado — no es parte de
- * `renderGrupos` porque la numeración de hoja (`hojaActual`/`hojaTotal`) solo
- * se conoce después de resolver TODAS las hojas (ver
- * `construirUnifilarPaginado`, que arma primero todos los bloques y recién
- * ahí sabe cuántos son en total). Solo dos líneas de texto dentro de un
- * marco — no es la grilla/sello de un plano CAD real, es lo mínimo para
- * identificar de qué plano se trata si se lo encuentra suelto.
+ * Convierte un bloque de contenido ya armado (cuerpos + circuitos) en una
+ * hoja completa del estándar de dibujo (ver REGLAS_UNIFILAR.md parte A2):
+ * marco con grilla 1-16 arriba/abajo y A-H izq/der con flechas de
+ * centrado en los 4 lados, bloque de revisiones arriba a la derecha,
+ * título arriba a la izquierda (2 líneas), sello "PARA REVISIÓN" mientras
+ * no esté aprobado, y el rótulo de cuadro de título al pie (cliente/
+ * contratista/obra/etc. — contenido completo en `armarTextoRotulo`, ver
+ * `tableros/nuevo/actions.ts`). No es parte de `renderGrupos` porque la
+ * numeración de hoja (`hojaActual`/`hojaTotal`) solo se conoce después de
+ * resolver TODAS las hojas (ver `construirUnifilarPaginado`).
  */
-function agregarRotulo(drawing: UnifilarDrawing, rotulo: RotuloUnifilar, hojaActual: number, hojaTotal: number): UnifilarDrawing {
-  const y = drawing.height;
-  const w = drawing.width - MARGEN * 2;
-  const commands: DrawCommand[] = [
-    ...drawing.commands,
-    { type: "rect", x: MARGEN, y, width: w, height: ALTO_ROTULO, layer: "MARCO" },
-    {
-      type: "text",
-      x: MARGEN + 6,
-      y: y + 11,
-      text: truncar(`SITIO: ${rotulo.sitio}   ·   TABLERO: ${rotulo.tablero}`, 80),
-      size: 7,
-      bold: true,
-      layer: "ROTULO",
-    },
-    {
-      type: "text",
-      x: MARGEN + 6,
-      y: y + 22,
-      text: truncar(
-        `FECHA: ${rotulo.fecha}   ·   REALIZÓ: ${rotulo.realizo}   ·   N° PLANO: ${rotulo.numeroGeneracion}   ·   HOJA ${hojaActual}/${hojaTotal}`,
-        100,
-      ),
-      size: 6,
-      layer: "ROTULO",
-    },
+function agregarMarcoYRotulo(drawing: UnifilarDrawing, rotulo: RotuloUnifilar, hojaActual: number, hojaTotal: number): UnifilarDrawing {
+  const contenido = trasladarComandos(drawing.commands, BANDA_GRID, BANDA_GRID + BANDA_TITULO);
+  const anchoInterior = drawing.width;
+  const altoInterior = BANDA_TITULO + drawing.height + ALTO_ROTULO;
+  const bx = BANDA_GRID;
+  const by = BANDA_GRID;
+  const commands: DrawCommand[] = [...contenido];
+
+  // Marco (borde de la hoja).
+  commands.push({ type: "rect", x: bx, y: by, width: anchoInterior, height: altoInterior, layer: "MARCO" });
+
+  // Grilla 1-16 arriba/abajo, A-H izq/der, con flechas de centrado en los 4 lados.
+  const colW = anchoInterior / GRID_COLS;
+  const rowH = altoInterior / GRID_ROWS;
+  for (let i = 0; i <= GRID_COLS; i++) {
+    const x = bx + i * colW;
+    commands.push({ type: "line", x1: x, y1: by, x2: x, y2: by + 3, layer: "MARCO" });
+    commands.push({ type: "line", x1: x, y1: by + altoInterior - 3, x2: x, y2: by + altoInterior, layer: "MARCO" });
+    if (i < GRID_COLS) {
+      commands.push({ type: "text", x: x + colW / 2 - 2, y: by - 2, text: String(i + 1), size: 3, layer: "MARCO" });
+      commands.push({ type: "text", x: x + colW / 2 - 2, y: by + altoInterior + 6, text: String(i + 1), size: 3, layer: "MARCO" });
+    }
+  }
+  for (let i = 0; i <= GRID_ROWS; i++) {
+    const y = by + i * rowH;
+    commands.push({ type: "line", x1: bx, y1: y, x2: bx + 3, y2: y, layer: "MARCO" });
+    commands.push({ type: "line", x1: bx + anchoInterior - 3, y1: y, x2: bx + anchoInterior, y2: y, layer: "MARCO" });
+    if (i < GRID_ROWS) {
+      commands.push({ type: "text", x: bx - 6, y: y + rowH / 2 + 2, text: LETRAS_GRID[i], size: 3, layer: "MARCO" });
+      commands.push({ type: "text", x: bx + anchoInterior + 3, y: y + rowH / 2 + 2, text: LETRAS_GRID[i], size: 3, layer: "MARCO" });
+    }
+  }
+  const midX = bx + anchoInterior / 2;
+  const midY = by + altoInterior / 2;
+  const fl = 3;
+  commands.push(
+    { type: "line", x1: midX - fl, y1: by, x2: midX, y2: by - fl * 1.5, layer: "MARCO" },
+    { type: "line", x1: midX + fl, y1: by, x2: midX, y2: by - fl * 1.5, layer: "MARCO" },
+    { type: "line", x1: midX - fl, y1: by + altoInterior, x2: midX, y2: by + altoInterior + fl * 1.5, layer: "MARCO" },
+    { type: "line", x1: midX + fl, y1: by + altoInterior, x2: midX, y2: by + altoInterior + fl * 1.5, layer: "MARCO" },
+    { type: "line", x1: bx, y1: midY - fl, x2: bx - fl * 1.5, y2: midY, layer: "MARCO" },
+    { type: "line", x1: bx, y1: midY + fl, x2: bx - fl * 1.5, y2: midY, layer: "MARCO" },
+    { type: "line", x1: bx + anchoInterior, y1: midY - fl, x2: bx + anchoInterior + fl * 1.5, y2: midY, layer: "MARCO" },
+    { type: "line", x1: bx + anchoInterior, y1: midY + fl, x2: bx + anchoInterior + fl * 1.5, y2: midY, layer: "MARCO" },
+  );
+
+  // Título arriba a la izquierda (2 líneas: tablero, y hoja actual/total).
+  commands.push(
+    { type: "text", x: bx + 6, y: by + 13, text: truncar(`TABLERO ${rotulo.tablero}`, 48), size: 9, bold: true, layer: "MARCO" },
+    { type: "text", x: bx + 6, y: by + 24, text: `UNIFILAR — HOJA ${hojaActual}/${hojaTotal}`, size: 5, layer: "MARCO" },
+  );
+
+  // Bloque de revisiones arriba a la derecha.
+  const rbW = 150;
+  const rbH = 9;
+  const rbX = bx + anchoInterior - rbW;
+  const rbY = by;
+  commands.push({ type: "rect", x: rbX, y: rbY, width: rbW, height: rbH, layer: "MARCO" });
+  const colsRev = [
+    { label: "RevNo", w: 16 },
+    { label: "Revision note", w: 62 },
+    { label: "Date", w: 24 },
+    { label: "Signature", w: 24 },
+    { label: "Checked", w: 24 },
   ];
-  return { commands, width: drawing.width, height: y + ALTO_ROTULO + MARGEN };
+  let cx = rbX;
+  for (const col of colsRev) {
+    commands.push({ type: "text", x: cx + 1.5, y: rbY + rbH / 2 + 1.5, text: col.label, size: 3, layer: "MARCO" });
+    cx += col.w;
+    if (cx < rbX + rbW) commands.push({ type: "line", x1: cx, y1: rbY, x2: cx, y2: rbY + rbH, layer: "MARCO" });
+  }
+
+  // Sello "PARA REVISIÓN" (se quita en la versión final aprobada) — ancho
+  // estimado a mano (no hay alineación "derecha" en DrawCommand.text) para
+  // que el texto nunca se corte contra el borde derecho de la hoja.
+  const selloTexto = "PARA REVISIÓN";
+  const selloAncho = selloTexto.length * 11 * 0.62;
+  commands.push({ type: "text", x: rbX + rbW - selloAncho, y: rbY + 24, text: selloTexto, size: 11, bold: true, layer: "SELLO" });
+
+  // Rótulo (cuadro de título) al pie, abajo a la derecha.
+  const rotY = by + BANDA_TITULO + drawing.height;
+  const rotW = anchoInterior - MARGEN;
+  commands.push({ type: "rect", x: bx + MARGEN, y: rotY, width: rotW, height: ALTO_ROTULO, layer: "MARCO" });
+  commands.push({
+    type: "text",
+    x: bx + MARGEN + 6,
+    y: rotY + 11,
+    text: truncar(`CLIENTE: ${rotulo.cliente}   ·   CONTRATISTA: ${rotulo.contratista}   ·   OBRA: ${rotulo.sitio}`, 90),
+    size: 6.5,
+    bold: true,
+    layer: "ROTULO",
+  });
+  commands.push({
+    type: "text",
+    x: bx + MARGEN + 6,
+    y: rotY + 22,
+    text: truncar(
+      `FECHA: ${rotulo.fecha}   ·   REALIZÓ: ${rotulo.realizo}   ·   N° PLANO: ${rotulo.numeroGeneracion}   ·   HOJA ${hojaActual}/${hojaTotal}`,
+      100,
+    ),
+    size: 6,
+    layer: "ROTULO",
+  });
+
+  return {
+    commands,
+    width: anchoInterior + BANDA_GRID * 2 + 8,
+    height: altoInterior + BANDA_GRID * 2 + 8,
+  };
 }
 
 /**
@@ -638,7 +741,7 @@ export function construirUnifilar(
     grupos.push([cuerpo, prepararRenglones(circuitos), calcularCodigosEquipo(circuitos)]);
   }
   const drawing = renderGrupos(grupos, configCalibre);
-  return rotulo ? agregarRotulo(drawing, rotulo, 1, 1) : drawing;
+  return rotulo ? agregarMarcoYRotulo(drawing, rotulo, 1, 1) : drawing;
 }
 
 /**
@@ -672,11 +775,13 @@ export function construirUnifilarPaginado(
   configCalibre: ConfigCalibreCable[],
   rotulo?: RotuloUnifilar,
 ): UnifilarDrawing[] {
-  // Se reserva el espacio del rótulo acá (aunque no se termine agregando)
-  // para que ningún bloque, con o sin rótulo, se acerque al alto real que
-  // cuelga react-pdf (ver comentario de ALTO_MAX_BLOQUE_SEGURO) — más
+  // Se reserva el espacio del marco completo (grilla + título + sello +
+  // rótulo, ver `agregarMarcoYRotulo`) acá, aunque no se termine agregando
+  // — para que ningún bloque, con o sin marco, se acerque al alto real que
+  // cuelga react-pdf (ver comentario de ALTO_MAX_BLOQUE_SEGURO). Más
   // margen de sobra nunca es un problema, solo parte en una hoja más.
-  const limiteBloque = ALTO_MAX_BLOQUE_SEGURO - ALTO_ROTULO - MARGEN;
+  const alturaMarco = BANDA_GRID * 2 + 8 + BANDA_TITULO + ALTO_ROTULO;
+  const limiteBloque = ALTO_MAX_BLOQUE_SEGURO - alturaMarco;
   const maxAlturaRenglones = limiteBloque - MARGEN - GAP_CUERPO - ALTO_HEADER_CUERPO;
 
   const grupos: [string, RenglonUnifilar[], Map<number, string>][] = [];
@@ -730,7 +835,7 @@ export function construirUnifilarPaginado(
     alturaActual += alturaGrupo;
   }
   if (actual.length > 0) bloques.push(renderGrupos(actual, configCalibre));
-  return rotulo ? bloques.map((b, i) => agregarRotulo(b, rotulo, i + 1, bloques.length)) : bloques;
+  return rotulo ? bloques.map((b, i) => agregarMarcoYRotulo(b, rotulo, i + 1, bloques.length)) : bloques;
 }
 
 /** Agrupa circuitos por cuerpo preservando el orden de aparición (los sin cuerpo quedan en un grupo aparte, al final). */

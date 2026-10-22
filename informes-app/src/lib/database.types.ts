@@ -307,6 +307,8 @@ export type TableroRow = {
   id: string;
   subsistemas: TableroTipo[];
   denominacion: string;
+  /** Cliente del tablero (ej. "YPF") — mismo catálogo compartido que Informe Técnico (catalogo_clientes), alta al vuelo. Se usa en el rótulo del esquema unifilar. */
+  cliente: string;
   ubicacion_id: string;
   /** Principal/Secundario — null = sin clasificar. Base para sumar cargas de secundarios hacia su principal más adelante. */
   jerarquia: TableroJerarquia | null;

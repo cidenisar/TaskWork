@@ -44,11 +44,19 @@ export default async function PlanoTableroPublicoPage({ params }: { params: Prom
   const { id } = await params;
   const service = createServiceRoleClient();
 
-  const { data: tablero } = await service.from("tableros").select("id, denominacion, subsistemas, ubicacion_id").eq("id", id).single();
+  const { data: tablero } = await service.from("tableros").select("id, denominacion, subsistemas, ubicacion_id, cliente").eq("id", id).single();
   if (!tablero) notFound();
 
-  const [{ data: ubicacion }, { data: circuitosRes }, { data: calibreRes }, { data: medicion }, { data: mantenimiento }, profile, { data: adjuntosRes }] =
-    await Promise.all([
+  const [
+    { data: ubicacion },
+    { data: circuitosRes },
+    { data: calibreRes },
+    { data: medicion },
+    { data: mantenimiento },
+    profile,
+    { data: adjuntosRes },
+    { data: configEmpresa },
+  ] = await Promise.all([
       service.from("ubicaciones").select("region, provincia, localidad, sitio, planta, oficina").eq("id", tablero.ubicacion_id).single(),
       service
         .from("tablero_circuitos")
@@ -69,6 +77,7 @@ export default async function PlanoTableroPublicoPage({ params }: { params: Prom
       service.from("tablero_mantenimientos").select("fecha, descripcion").eq("tablero_id", id).order("fecha", { ascending: false }).limit(1).maybeSingle(),
       getCurrentProfile(),
       service.from("tablero_adjuntos").select("id, nombre, archivo_url").eq("tablero_id", id).order("created_at"),
+      service.from("config_general").select("nombre_empresa").eq("id", 1).single(),
     ]);
 
   const configCalibre = (calibreRes ?? []).map((c) => ({ amperajeMax: Number(c.amperaje_max), calibreMm2: Number(c.calibre_mm2) }));
@@ -99,6 +108,8 @@ export default async function PlanoTableroPublicoPage({ params }: { params: Prom
   const rotulo: RotuloUnifilar = {
     sitio: ubicacion?.sitio ?? "—",
     tablero: tablero.denominacion,
+    cliente: tablero.cliente,
+    contratista: configEmpresa?.nombre_empresa ?? "",
     fecha: medicion ? fmtFecha(medicion.fecha) : "—",
     realizo: realizoUltimaMedicion ?? "—",
     numeroGeneracion: medicion?.numero_generacion ?? "—",

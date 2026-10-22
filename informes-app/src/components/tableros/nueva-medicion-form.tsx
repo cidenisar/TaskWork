@@ -10,6 +10,7 @@ import { Spinner } from "@/components/spinner";
 import { VerPdfLink } from "@/components/ver-pdf-link";
 import { obtenerUrlPdfMedicionAction } from "@/app/(app)/tableros/historial/actions";
 import { UbicacionFields, type GpsCapturado } from "@/components/ubicaciones/ubicacion-fields";
+import { AutocompleteInput } from "@/components/ui/autocomplete-input";
 import type { Ubicacion } from "@/components/ubicaciones/types";
 import type {
   TableroCategoriaEquipo,
@@ -76,12 +77,14 @@ export function NuevaMedicionForm({
   provincias,
   tableroIdInicial,
   catalogoHallazgos,
+  clientes,
 }: {
   tableros: TableroConCircuitos[];
   ubicaciones: Ubicacion[];
   provincias: string[];
   tableroIdInicial?: string | null;
   catalogoHallazgos: { id: string; texto: string }[];
+  clientes: string[];
 }) {
   // Si se llega acá desde el QR del tablero (deep-link con ?tableroId=), se
   // preselecciona tanto la ubicación como el tablero — el técnico ya está
@@ -103,6 +106,7 @@ export function NuevaMedicionForm({
   const [equipamientoEsperadoNuevo, setEquipamientoEsperadoNuevo] = useState<TableroCategoriaEquipo[]>([]);
   const [tieneBypassUpsNuevo, setTieneBypassUpsNuevo] = useState(false);
   const [denominacionNueva, setDenominacionNueva] = useState("");
+  const [clienteNuevo, setClienteNuevo] = useState("YPF");
   const [jerarquiaNueva, setJerarquiaNueva] = useState<TableroJerarquia | "">("");
   const [tableroPadreId, setTableroPadreId] = useState("");
   const [tipoEventoElegido, setTipoEventoElegido] = useState<TableroEventoTipo>("medicion");
@@ -409,6 +413,10 @@ export function NuevaMedicionForm({
       setError("Completá la denominación del tablero nuevo.");
       return;
     }
+    if (tableroId === "__new" && !clienteNuevo.trim()) {
+      setError("Completá el cliente del tablero nuevo.");
+      return;
+    }
     if (tableroId === "__new" && subsistemasNuevo.length === 0) {
       setError("Elegí al menos un subsistema presente en el tablero nuevo.");
       return;
@@ -443,6 +451,7 @@ export function NuevaMedicionForm({
           gps,
           tableroId: tableroId === "__new" ? null : tableroId,
           denominacionNueva,
+          clienteNuevo,
           equipamientoEsperadoNuevo,
           tieneBypassUpsNuevo,
           jerarquiaNueva: jerarquiaNueva || null,
@@ -598,6 +607,19 @@ export function NuevaMedicionForm({
                   value={denominacionNueva}
                   onChange={(e) => setDenominacionNueva(e.target.value)}
                   disabled={submitting}
+                />
+              </div>
+              <div className="field">
+                <label>
+                  Cliente <span className="req">*</span>
+                </label>
+                <AutocompleteInput
+                  value={clienteNuevo}
+                  onChange={setClienteNuevo}
+                  suggestions={clientes}
+                  placeholder="Nombre del cliente"
+                  disabled={submitting}
+                  required
                 />
               </div>
               <div className="field">

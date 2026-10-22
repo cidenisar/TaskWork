@@ -10,7 +10,7 @@ export default async function NuevaMedicionPage({ searchParams }: { searchParams
   const { tableroId } = await searchParams;
   const supabase = await createClient();
 
-  const [tablerosRes, circuitosRes, ubicaciones, provinciasRes, hallazgosRes] = await Promise.all([
+  const [tablerosRes, circuitosRes, ubicaciones, provinciasRes, hallazgosRes, clientesRes] = await Promise.all([
     supabase
       .from("tableros")
       .select("id, subsistemas, denominacion, ubicacion_id, equipamiento_esperado, tiene_bypass_ups")
@@ -25,7 +25,9 @@ export default async function NuevaMedicionPage({ searchParams }: { searchParams
     fetchTodasLasUbicaciones(supabase),
     supabase.from("catalogo_provincias").select("nombre").order("nombre"),
     supabase.from("catalogo_inspeccion_ia").select("id, texto").eq("modulo", "tableros").order("orden"),
+    supabase.from("catalogo_clientes").select("nombre").order("nombre"),
   ]);
+  const clientes = (clientesRes.data ?? []).map((c) => c.nombre);
 
   const ubicacionesPorId = new Map(ubicaciones.map((u) => [u.id, u]));
   const provincias = (provinciasRes.data ?? []).map((p) => p.nombre);
@@ -80,6 +82,7 @@ export default async function NuevaMedicionPage({ searchParams }: { searchParams
         provincias={provincias}
         tableroIdInicial={tableroId ?? null}
         catalogoHallazgos={catalogoHallazgos}
+        clientes={clientes}
       />
     </div>
   );

@@ -1149,3 +1149,74 @@ bloques de hasta 470pt — justo debajo del límite — y renderizó en
 máximo 470pt) renderizó en 3.7s, también sano. Conclusión: el límite
 de 480 seguía siendo válido, pero solo se supo probándolo de nuevo con
 el layout real, no reusando la confianza de la medición anterior.
+
+## 19. Etapa 2 del mismo rediseño: marco ISO + rótulo completo — un presupuesto de altura "reservado" hay que actualizarlo en el mismo commit que lo que reserva
+
+Seguimiento directo de la § 18 (Etapa 1: bornes + numeración + marca de
+cable). La Etapa 2 agregó al generador real de Tableros
+(`lib/tableros/unifilar.ts`) el resto del estándar de dibujo por hoja:
+grilla 1-16 arriba/abajo y A-H izq/der con flechas de centrado en los 4
+lados, bloque de revisiones (RevNo/Revision note/Date/Signature/
+Checked), título arriba a la izquierda, sello "PARA REVISIÓN", y el
+rótulo completo abajo a la derecha (antes solo tenía sitio/tablero/
+fecha/realizó/plano/hoja en 2 líneas; ahora suma CLIENTE y CONTRATISTA).
+
+**Dos datos nuevos del rótulo que no existían en el modelo — se agregó
+el campo real, no un texto fijo.** "Cliente" no existía en Tableros
+(sí en Informe Técnico, con `catalogo_clientes` + alta al vuelo —
+mismo patrón reusado acá: `tableros.cliente`, autocompletado, default
+`"YPF"`). "Contratista" tampoco existía como texto en ningún lado
+(`config_general` solo tenía el logo como imagen) — se agregó
+`config_general.nombre_empresa` junto al logo en Configuración →
+Datos de la Empresa (default `"SONDA"`, el nombre real, confirmado
+por el usuario — nunca el que había usado el script manual de la § 18,
+que resultó inventado). Mismo criterio en los dos casos: un dato que
+"suena" fijo (el nombre de la propia empresa) se pregunta, nunca se
+asume ni se copia de un ejemplo anterior.
+
+**Texto sin alineación "derecha" en el formato de draw commands propio
+— hay que calcular el ancho a mano para que no se corte contra el
+borde.** `DrawCommand.text` (de este mismo proyecto, ver § 13) solo
+tiene `x` (ancla izquierda) — no existe un modo "texto justificado a la
+derecha". El sello "PARA REVISIÓN", pensado para terminar pegado al
+borde derecho de la hoja, al principio se ancló directo en `x = borde`
+(texto arrancando ahí, extendiéndose hacia afuera) y quedó cortado
+fuera del lienzo en el render de prueba — invisible en cualquier lector
+real, no solo "se ve distinto". Arreglo: estimar el ancho del texto a
+mano (`texto.length * size * factor`, mismo criterio que ya usa
+`truncar`/`truncarColumna` en este archivo para no pasarse de ancho) y
+restarlo de la coordenada del borde antes de ubicar el `x`. Generaliza
+a cualquier texto "ancla a la derecha/centrado" en un formato de dibujo
+propio sin layout real: nunca asumir que un texto largo "entra", medir
+u orientar el ancla para que el peor caso (el texto más largo posible)
+siga adentro del lienzo — y confirmarlo con el mismo chequeo de
+superposición/límites por coordenadas (no solo a ojo en un render)
+que ya viene usándose para este archivo.
+
+**Un presupuesto de altura "reservado para lo que se agrega después"
+hay que actualizarlo en el MISMO cambio que agranda lo que reserva —
+si no, el presupuesto queda mintiendo con el aspecto de seguir
+vigente.** `construirUnifilarPaginado` ya reservaba espacio para el
+rótulo ANTES de que existiera (`limiteBloque = ALTO_MAX_BLOQUE_SEGURO
+- ALTO_ROTULO - MARGEN`, ver § 10) — ese cálculo seguía ahí, intacto,
+compilando sin error, cuando el marco nuevo pasó a agregar ~90pt por
+hoja (grilla + banda de título + rótulo) en vez de los ~38pt de antes.
+Nada en el tipo ni en el build avisa que una reserva de altura quedó
+desactualizada: es un número que sigue siendo "válido" sintácticamente
+pero ya no describe lo que de verdad se agrega — el error solo
+aparece como un bloque real que supera el límite seguro de
+react-pdf, en producción, con un tablero real lo bastante grande.
+Se encontró ANTES de pushear porque la Etapa 1 ya había dejado
+instalado el hábito (§ 18) de revalidar el límite con el método de la
+§ 14 cada vez que cambia la densidad de comandos — correr esa misma
+prueba con el marco agregado mostró bloques superando 480pt hasta que
+se corrigió `limiteBloque` para restar la altura real del marco
+completo (`alturaMarco = BANDA_GRID*2 + 8 + BANDA_TITULO +
+ALTO_ROTULO`), no solo la del rótulo viejo. Confirmado después con el
+mismo tablero sintético de 390 circuitos: ahora parte en 14 bloques en
+vez de 11 (cada uno con menos circuitos, por el overhead extra), todos
+por debajo de 480pt, sin colgarse. Regla general: cuando un número
+representa "cuánto se va a agregar después" (una reserva, un offset,
+un margen calculado), buscarlo y actualizarlo explícitamente en el
+mismo commit que cambia lo que ese número reserva — no asumir que
+porque el valor anterior "andaba" sigue siendo correcto.

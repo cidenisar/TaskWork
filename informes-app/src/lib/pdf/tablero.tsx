@@ -8,8 +8,20 @@ import {
   type ResumenEquipamiento,
 } from "@/components/tableros/types";
 import { HALLAZGO_ESTADO_LABEL } from "@/lib/inspeccion-ia/types";
-import type { UnifilarDrawing } from "@/lib/tableros/unifilar";
+import type { CapaDxf, UnifilarDrawing } from "@/lib/tableros/unifilar";
 import type { EstadoChecklist, TableroCategoriaEquipo, TableroEventoTipo, TableroTipo, TableroTipoCircuito } from "@/lib/database.types";
+
+/** Mismo criterio de color por capa que `lib/dxf/writer.ts` (COLOR_ACI_POR_CAPA) — una sola convención de color para los dos formatos, aproximando cada ACI a un hex legible sobre fondo blanco. */
+const COLOR_POR_CAPA: Record<CapaDxf, string> = {
+  MARCO: "#1a1a1a",
+  BARRA: "#2a4d8f",
+  SIMBOLOS: "#8a6d1a",
+  ROTULO: "#1a7a3c",
+  TEXTO: "#1a1a1a",
+  BORNES: "#2a4d8f",
+  CABLES: "#8a2be2",
+  SELLO: "#c0392b",
+};
 
 /**
  * Reemplaza la planilla Excel manual de medición de consumo — misma cabecera
@@ -184,25 +196,17 @@ export function TableroPdf(props: TableroPdfProps) {
               <View key={b} style={{ position: "relative", width: bloque.width, height: bloque.height, marginBottom: 8 }} wrap={false}>
                 <Svg width={bloque.width} height={bloque.height}>
                   {bloque.commands.map((cmd, i) => {
+                    const color = COLOR_POR_CAPA[cmd.layer] ?? "#1a1a1a";
                     if (cmd.type === "line") {
-                      return <Line key={i} x1={cmd.x1} y1={cmd.y1} x2={cmd.x2} y2={cmd.y2} stroke="#1a1a1a" strokeWidth={0.75} />;
+                      return <Line key={i} x1={cmd.x1} y1={cmd.y1} x2={cmd.x2} y2={cmd.y2} stroke={color} strokeWidth={0.75} />;
                     }
                     if (cmd.type === "rect") {
                       return (
-                        <Rect
-                          key={i}
-                          x={cmd.x}
-                          y={cmd.y}
-                          width={cmd.width}
-                          height={cmd.height}
-                          stroke="#1a1a1a"
-                          strokeWidth={0.75}
-                          fill="none"
-                        />
+                        <Rect key={i} x={cmd.x} y={cmd.y} width={cmd.width} height={cmd.height} stroke={color} strokeWidth={0.75} fill="none" />
                       );
                     }
                     if (cmd.type === "circle") {
-                      return <Circle key={i} cx={cmd.x} cy={cmd.y} r={cmd.r} stroke="#1a1a1a" strokeWidth={0.75} fill="none" />;
+                      return <Circle key={i} cx={cmd.x} cy={cmd.y} r={cmd.r} stroke={color} strokeWidth={0.75} fill="none" />;
                     }
                     return null;
                   })}
@@ -217,6 +221,7 @@ export function TableroPdf(props: TableroPdfProps) {
                         top: cmd.y - cmd.size,
                         fontSize: cmd.size,
                         fontFamily: cmd.bold ? "Helvetica-Bold" : "Helvetica",
+                        color: COLOR_POR_CAPA[cmd.layer] ?? "#1a1a1a",
                       }}
                     >
                       {cmd.text}
