@@ -89,7 +89,7 @@ export function calcularCalibreCircuito(
  * tiene una cantidad de hilos fija conocida — ahí se muestra solo el
  * calibre, sin inventar un conteo.
  */
-const CONDUCTORES_POR_TIPO: Partial<Record<TableroTipoCircuito, number>> = {
+export const CONDUCTORES_POR_TIPO: Partial<Record<TableroTipoCircuito, number>> = {
   "220v_mono": 2,
   "380v_tri": 4,
   "24vdc": 2,

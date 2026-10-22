@@ -12,15 +12,15 @@ export default async function ConfiguracionEmpresaPage() {
   }
 
   const supabase = await createClient();
-  const { data } = await supabase.from("config_general").select("logo_empresa_url").eq("id", 1).single();
+  const { data } = await supabase.from("config_general").select("logo_empresa_url, nombre_empresa").eq("id", 1).single();
 
   return (
     <div>
       <div className="page-heading">
         <h1>Empresa</h1>
-        <p>Logo que aparece en la cabecera de todos los PDF que se generan</p>
+        <p>Logo y nombre que aparecen en los PDF y planos que se generan</p>
       </div>
-      <EmpresaCard logoUrl={data?.logo_empresa_url ?? null} />
+      <EmpresaCard logoUrl={data?.logo_empresa_url ?? null} nombre={data?.nombre_empresa ?? ""} />
     </div>
   );
 }

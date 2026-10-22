@@ -78,6 +78,8 @@ const COLOR_ACI_POR_CAPA: Record<string, number> = {
   SIMBOLOS: 2,
   ROTULO: 3,
   TEXTO: 7,
+  BORNES: 5,
+  CABLES: 6,
 };
 
 function tablaDeCapas(): string[] {

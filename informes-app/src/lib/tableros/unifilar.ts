@@ -1,5 +1,11 @@
 import { CATEGORIA_EQUIPO_LABEL, TIPO_CIRCUITO_LABEL } from "@/components/tableros/types";
-import { calcularCalibreCircuito, formatearFormacionCable, parseAmperaje, type ConfigCalibreCable } from "./calibre-cable";
+import {
+  calcularCalibreCircuito,
+  CONDUCTORES_POR_TIPO,
+  formatearFormacionCable,
+  parseAmperaje,
+  type ConfigCalibreCable,
+} from "./calibre-cable";
 import type { TableroCategoriaEquipo, TableroRolBypassUps, TableroTipoCircuito } from "@/lib/database.types";
 
 export interface UnifilarCircuito {
@@ -205,7 +211,7 @@ const ROL_BYPASS_SUFIJO: Record<TableroRolBypassUps, string> = { entrada: " (E)"
  * separado, en vez de recibir todo en una sola capa "0" (ver
  * `lib/dxf/writer.ts`). El PDF ignora este campo (siempre se ve todo junto).
  */
-export type CapaDxf = "MARCO" | "BARRA" | "SIMBOLOS" | "ROTULO" | "TEXTO";
+export type CapaDxf = "MARCO" | "BARRA" | "SIMBOLOS" | "ROTULO" | "TEXTO" | "BORNES" | "CABLES";
 
 export type DrawCommand =
   | { type: "line"; x1: number; y1: number; x2: number; y2: number; layer: CapaDxf }
@@ -244,22 +250,37 @@ const COLUMNAS_POR_FILA = Math.max(1, Math.floor((ANCHO - MARGEN * 2) / COLUMNA_
 const ALTO_HEADER_SECCION = 12;
 const GAP_CUERPO = 10;
 
-const BUS_DROP = 8;
 const SIMBOLO_R = 5;
-const PASO_ENCADENADO = SIMBOLO_R * 2 + 3;
-const DROP_A_ETIQUETA = 6;
 const ALTO_LINEA = 7;
 const LINEAS_SPEC = 3;
 const ALTO_ID_BOX = 12;
 
+/**
+ * Numeración de conductores (A4 del estándar de dibujo): cada punto donde un
+ * cable entra a un dispositivo (térmica, disyuntor, bornera, o al destino
+ * final) lleva un par de bornes N/F con su propio "A n" correlativo — el
+ * número cambia al atravesar cada protección, nunca a lo largo de un mismo
+ * tramo de cable. A diferencia del plano a mano (que redibuja el mismo par
+ * en los dos extremos de cada tramo), acá se dibuja una sola vez por
+ * dispositivo — mismo criterio de "esquema simplificado, no a escala" que ya
+ * tiene el resto de este archivo (ver cabecera del módulo), elegido a
+ * propósito para no triplicar el alto de cada columna (ver §10/§14/§16 de
+ * CRITERIOS_Y_IDEAS.md — @react-pdf/renderer se cuelga arriba de cierta
+ * altura de bloque, así que cada línea nueva de verdad cuesta).
+ */
+const CABLE_SEG = 5;
+const PRE_BORNE_GAP = 2;
+const BORNE_ALTO = 4.5;
+const POST_BORNE_GAP = 2;
+/** Tramo completo "cable con marca de formación + par de bornes numerado" antes de cada dispositivo (ver `dibujarBorneNumerado`/`marcaCable` en `dibujarNodo`) — mismo paso para el primero de la columna (baja de la barra) y para cualquier encadenado, porque ambos casos dibujan exactamente lo mismo. */
+const PASO_DISPOSITIVO = CABLE_SEG + PRE_BORNE_GAP + BORNE_ALTO + POST_BORNE_GAP + SIMBOLO_R * 2;
+/** Mismo tramo pero más corto, para el cable final que entra al destino (no hay otro dispositivo después, así que no hace falta el aire extra post-símbolo). */
+const PASO_A_DESTINO = CABLE_SEG + PRE_BORNE_GAP + BORNE_ALTO;
+
 /** Altura (desde la barra del renglón hasta el pie de la cajita de ID) de una columna con `profundidad` dispositivos encadenados en la rama más larga — calculada simulando los mismos pasos que dibuja `dibujarNodo`, para que nunca quede corta. Una rama que se abre en varias sub-columnas (patrón "grupo") no agrega altura extra: el sub-bus se apoya exactamente donde terminaría el siguiente escalón de una cadena lineal, así que la altura depende solo de la profundidad máxima, nunca de cuántas ramas hay. */
 function alturaColumna(profundidad: number): number {
-  let yAnchor = 0;
-  for (let nivel = 0; nivel < profundidad; nivel++) {
-    const paso = nivel === 0 ? BUS_DROP : PASO_ENCADENADO;
-    yAnchor = yAnchor + paso + SIMBOLO_R;
-  }
-  return yAnchor + DROP_A_ETIQUETA + LINEAS_SPEC * ALTO_LINEA + 4 + ALTO_ID_BOX;
+  const yDespuesUltimoDispositivo = profundidad * PASO_DISPOSITIVO;
+  return yDespuesUltimoDispositivo + PASO_A_DESTINO + 3 + LINEAS_SPEC * ALTO_LINEA + 4 + ALTO_ID_BOX;
 }
 
 function truncar(s: string, max: number): string {
@@ -291,6 +312,58 @@ function dibujarSimbolo(commands: DrawCommand[], categoria: TableroCategoriaEqui
     return;
   }
   commands.push({ type: "rect", x: cx - SIMBOLO_R, y: cy - SIMBOLO_R, width: SIMBOLO_R * 2, height: SIMBOLO_R * 2, layer: "SIMBOLOS" });
+}
+
+/** Contador correlativo de conductores ("A n", A4 del estándar) — un objeto mutable en vez de un argumento de retorno porque se comparte entre toda la recursión de un mismo cuerpo (mismo criterio que `codigos`, ver `calcularCodigosEquipo`). Arranca de nuevo en cada cuerpo — no hay una single fuente de verdad de "todos los cuerpos de este tablero" en un solo lugar antes de dibujar, y reiniciar por cuerpo evita que la numeración dependa de en qué parte/página terminó cayendo cada bloque (ver `construirUnifilarPaginado`). */
+interface ContadorConductor {
+  siguiente: number;
+}
+
+function nuevoContadorConductor(): ContadorConductor {
+  return { siguiente: 1 };
+}
+
+/**
+ * A5 BORNE: círculo con diagonal (tornillo), con su par de números "A n"
+ * (neutro arriba, fase abajo — A4 regla 3) a la derecha. Devuelve el par de
+ * números usado, por si hace falta (no se usa hoy, pero documenta qué
+ * números quedaron en este punto).
+ */
+function dibujarBorneNumerado(commands: DrawCommand[], cx: number, cy: number, ctr: ContadorConductor): [number, number] {
+  const nN = ctr.siguiente++;
+  const nF = ctr.siguiente++;
+  const r = 0.9;
+  commands.push({ type: "circle", x: cx, y: cy, r, layer: "BORNES" });
+  commands.push({ type: "line", x1: cx - r * 0.7, y1: cy - r * 0.7, x2: cx + r * 0.7, y2: cy + r * 0.7, layer: "BORNES" });
+  commands.push({ type: "text", x: cx + 2, y: cy - 3, text: `N  A${nN}`, size: 3.2, layer: "TEXTO" });
+  commands.push({ type: "text", x: cx + 2, y: cy + 2.5, text: `F  A${nF}`, size: 3.2, layer: "TEXTO" });
+  return [nN, nF];
+}
+
+/**
+ * A6: marca diagonal sobre la línea de conductor + texto de formación a la
+ * izquierda. Doble trazo para 380V trifásico (3F+N, "marca doble" del
+ * estándar), simple para el resto — `conductoresDe`/`CONDUCTORES_POR_TIPO`
+ * decide cuántos hilos tiene el cable, no se inventa.
+ */
+function marcaCable(commands: DrawCommand[], cx: number, yTop: number, yBot: number, formacion: string | null, tipoCircuito: TableroTipoCircuito): void {
+  commands.push({ type: "line", x1: cx, y1: yTop, x2: cx, y2: yBot, layer: "BARRA" });
+  const ym = (yTop + yBot) / 2;
+  const doble = (CONDUCTORES_POR_TIPO[tipoCircuito] ?? 2) >= 3;
+  const largo = 2.2;
+  for (const off of doble ? [-0.8, 0.8] : [0]) {
+    commands.push({
+      type: "line",
+      x1: cx - largo / 2 + off,
+      y1: ym - largo / 2,
+      x2: cx + largo / 2 + off,
+      y2: ym + largo / 2,
+      layer: "CABLES",
+    });
+  }
+  if (formacion) {
+    commands.push({ type: "text", x: cx - 20, y: ym + 1, text: formacion, size: 3.4, layer: "CABLES" });
+  }
 }
 
 /** Trunca a un ancho de columna angosto (~100pt) — los planos reales también abrevian agresivamente en cada rama. */
@@ -366,13 +439,23 @@ function dibujarNodo(
   nivel: number,
   configCalibre: ConfigCalibreCable[],
   codigos: Map<number, string>,
+  ctr: ContadorConductor,
 ): void {
   const c = nodo.circuito;
   const codigo = codigos.get(c.numero);
   const cx = (xLeft + xRight) / 2;
-  const paso = nivel === 0 ? BUS_DROP : PASO_ENCADENADO;
-  const ySymbol = yAnchor + paso;
-  commands.push({ type: "line", x1: cx, y1: yAnchor, x2: cx, y2: ySymbol - SIMBOLO_R, layer: "BARRA" });
+
+  // Tramo de entrada a este dispositivo: cable con su marca de formación
+  // (A6) + un par de bornes numerado (A4) — mismo paso tanto para el primer
+  // dispositivo de la columna (baja de la barra, nivel 0) como para
+  // cualquier encadenado, porque los dos casos dibujan exactamente lo mismo.
+  const { calibreMm2, colores } = calcularCalibreCircuito(c.categoriaEquipo, c.tipoCircuito, c.ampNominal, configCalibre);
+  const formacion = formatearFormacionCable(calibreMm2, c.tipoCircuito);
+  const yBorneEntrada = yAnchor + CABLE_SEG + PRE_BORNE_GAP + BORNE_ALTO / 2;
+  marcaCable(commands, cx, yAnchor, yBorneEntrada, formacion, c.tipoCircuito);
+  dibujarBorneNumerado(commands, cx, yBorneEntrada, ctr);
+  const ySymbol = yBorneEntrada + BORNE_ALTO / 2 + POST_BORNE_GAP + SIMBOLO_R;
+  commands.push({ type: "line", x1: cx, y1: yBorneEntrada, x2: cx, y2: ySymbol - SIMBOLO_R, layer: "BARRA" });
   dibujarSimbolo(commands, c.categoriaEquipo, cx, ySymbol);
   const yDespues = ySymbol + SIMBOLO_R;
 
@@ -397,15 +480,21 @@ function dibujarNodo(
       const subCentros = subTramos.map((t) => (t.xLeft + t.xRight) / 2);
       commands.push({ type: "line", x1: subCentros[0], y1: yDespues, x2: subCentros[subCentros.length - 1], y2: yDespues, layer: "BARRA" });
     }
-    subTramos.forEach((t) => dibujarNodo(commands, t.hijo, t.xLeft, t.xRight, yDespues, nivel + 1, configCalibre, codigos));
+    subTramos.forEach((t) => dibujarNodo(commands, t.hijo, t.xLeft, t.xRight, yDespues, nivel + 1, configCalibre, codigos, ctr));
     return;
   }
 
-  const yEtiqueta = yDespues + DROP_A_ETIQUETA;
-  commands.push({ type: "line", x1: cx, y1: yDespues, x2: cx, y2: yEtiqueta, layer: "BARRA" });
+  // Hoja: tramo final hasta el destino — mismo criterio del tramo de
+  // entrada (cable con marca + borne numerado, A4/A6), con la misma
+  // formación (el cable que sale de este dispositivo hacia el destino está
+  // protegido por él, así que comparte calibre con el de entrada).
+  const yBorneDestino = yDespues + CABLE_SEG + PRE_BORNE_GAP + BORNE_ALTO / 2;
+  marcaCable(commands, cx, yDespues, yBorneDestino, formacion, c.tipoCircuito);
+  dibujarBorneNumerado(commands, cx, yBorneDestino, ctr);
+  const yEtiqueta = yBorneDestino + BORNE_ALTO / 2 + 3;
+  commands.push({ type: "line", x1: cx, y1: yBorneDestino, x2: cx, y2: yEtiqueta, layer: "BARRA" });
 
   const colLeft = xLeft + 3;
-  const { calibreMm2, colores } = calcularCalibreCircuito(c.categoriaEquipo, c.tipoCircuito, c.ampNominal, configCalibre);
   const amperaje = parseAmperaje(c.ampNominal);
   const sufijo = c.rolBypassUps ? ROL_BYPASS_SUFIJO[c.rolBypassUps] : c.alimentadoPorUps ? " (UPS)" : "";
   // Mismo criterio que arriba: el código va PRIMERO para que sobreviva al
@@ -414,7 +503,6 @@ function dibujarNodo(
   const linea2Partes = [c.tipoCircuito !== "na" ? TIPO_CIRCUITO_LABEL[c.tipoCircuito] : null, amperaje ? `${amperaje}A` : null].filter(
     (p): p is string => !!p,
   );
-  const formacion = formatearFormacionCable(calibreMm2, c.tipoCircuito);
   const linea3Partes = [formacion, colores].filter((p): p is string => !!p);
   const specs = [linea1, linea2Partes.join(" "), linea3Partes.join(" ")].filter((s) => s.length > 0);
   specs.slice(0, LINEAS_SPEC).forEach((s, li) => {
@@ -443,6 +531,10 @@ function renderGrupos(grupos: [string, RenglonUnifilar[], Map<number, string>][]
   for (const [cuerpo, renglones, codigos] of grupos) {
     const alturaBloque = ALTO_HEADER_CUERPO + renglones.reduce((acc, r) => acc + altoRenglon(r), 0);
     const yInicioBloque = y;
+    // Numeración de conductores ("A n") correlativa dentro de este cuerpo —
+    // reinicia por cuerpo, mismo criterio que `codigos` (ver comentario de
+    // `nuevoContadorConductor`).
+    const ctr = nuevoContadorConductor();
 
     commands.push({ type: "rect", x: MARGEN, y: yInicioBloque, width: ANCHO - MARGEN * 2, height: alturaBloque, layer: "MARCO" });
     commands.push({ type: "text", x: MARGEN + 6, y: yInicioBloque + 12, text: cuerpo || "Sin cuerpo asignado", size: 9, bold: true, layer: "TEXTO" });
@@ -470,7 +562,7 @@ function renderGrupos(grupos: [string, RenglonUnifilar[], Map<number, string>][]
         commands.push({ type: "line", x1: centros[0], y1: yBus + 1.2, x2: centros[centros.length - 1], y2: yBus + 1.2, layer: "BARRA" });
       }
 
-      tramos.forEach((t) => dibujarNodo(commands, t.arbol, t.xLeft, t.xRight, yBus, 0, configCalibre, codigos));
+      tramos.forEach((t) => dibujarNodo(commands, t.arbol, t.xLeft, t.xRight, yBus, 0, configCalibre, codigos, ctr));
 
       yRenglon += altoRenglon(renglon);
     }

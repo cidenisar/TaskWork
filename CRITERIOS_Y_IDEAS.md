@@ -1058,3 +1058,94 @@ y válido para un formato técnico externo (CAD, no solo una imagen), un
 pipeline determinístico (datos estructurados → reglas de dibujo en
 código) es la elección correcta aunque cueste más iteración inicial que
 pedirle a un modelo con visión que lo dibuje directo.
+
+## 18. Comparar el output de una herramienta generativa puntual contra el pipeline determinístico puede señalar una brecha de ESTÁNDAR, no solo de estilo
+
+Seguimiento real de la § 17: en otra sesión se armó un plano a mano
+(script Python + ezdxf, fuera de la app) para reconstruir el unifilar de
+un tablero real a partir de 4 fotos, siguiendo un documento de reglas de
+dibujo CAD bastante más completo que lo que ya hacía
+`lib/tableros/unifilar.ts` (grilla 1-16/A-H con flechas de centrado,
+sello "PARA REVISIÓN", rótulo IEC completo abajo a la derecha,
+numeración de conductores `A n` correlativa con par de bornes N/F en
+cada punto de conexión, marca diagonal de formación de cable en cada
+tramo, tabla de PUESTA A TIERRA). El usuario comparó ese resultado
+contra lo que ya existía y pidió llevar el mismo nivel de detalle al
+generador real de la app — un pedido válido y distinto de "arreglame
+este plano puntual": la pregunta correcta no es "¿cuál de los dos se ve
+mejor?" sino "¿el estándar que sigue el de afuera es el que el
+generador de producción debería seguir también?".
+
+**División en etapas, no todo junto.** Dado el tamaño (toca
+`lib/tableros/unifilar.ts`, `lib/dxf/writer.ts`, y potencialmente
+`lib/pdf/tablero.tsx` + el modelo de datos), se dividió en etapas
+confirmadas una por una con el usuario antes de tocar código: (1)
+símbolo de borne + marca de cable + numeración `A n` sobre el layout
+"escalera" ya existente (sin cambiar su forma); (2) rótulo IEC completo
++ grilla + sello (pendiente — necesita datos que hoy no existen, ver
+abajo); (3) hoja de cabecera + tabla de PUESTA A TIERRA (pendiente).
+Cada etapa se valida y pushea por separado.
+
+**Un dato que "suena" fijo (nombre de la contratista) puede no serlo —
+preguntar, no asumir, ni siquiera copiando un ejemplo ya usado en otro
+lado.** El script manual (de otra sesión) había puesto `"TerraLogic"`
+como contratista en el rótulo — un nombre que no aparece en ningún lado
+del código ni de los datos reales de esta app. Al proponer llevar ese
+mismo dato al generador de producción, el usuario lo marcó de inmediato
+como sospechoso ("Terralogic???????"): la contratista real es otra
+(`SONDA`). Mismo criterio que "no inventar" ya aplicado en todos los
+prompts de IA de este proyecto (ver § 5), pero acá aplicado a una
+decisión de otra sesión de Claude que se iba a propagar sin chequear.
+
+**"¿De dónde sale este dato del rótulo?" puede revelar que falta un
+campo entero, no solo un valor.** Al armar el rótulo real (cliente,
+contratista, obra), aparecieron dos huecos reales en el modelo de
+datos: "cliente" no existía en Tableros (sí en Informe Técnico, con
+`catalogo_clientes` + alta al vuelo — mismo patrón a reusar, pendiente
+para la etapa 2) y el nombre de la empresa contratista no existía como
+texto en ningún lado (`config_general` solo tenía el logo como imagen,
+`logo_empresa_url`, sin nombre). Se agregó `nombre_empresa` a
+`config_general` (default `"SONDA"`, la contratista real) junto al
+logo existente en Configuración → Datos de la Empresa, en vez de
+hardcodear el nombre en el código del plano — mismo criterio que el
+resto de esta app: un dato de la empresa es config, no una constante en
+el generador.
+
+**Simplificar a propósito la fidelidad visual de una convención a mano
+cuando hay un costo de performance real detrás — y dejarlo escrito
+como decisión, no como omisión.** El plano de referencia (a mano)
+dibuja el par de bornes N/F en LOS DOS extremos de cada tramo de cable
+(mismo número, pero el símbolo se repite físicamente en cada terminal).
+El generador de producción dibuja ese par una sola vez por dispositivo
+(en su entrada) — sigue siendo 100% correcto según la regla real ("el
+número cambia al atravesar una protección, no a lo largo de un cable"),
+pero genera la mitad de bornes dibujados. La razón no es estética: cada
+línea nueva de verdad cuesta en este archivo puntual, porque
+`@react-pdf/renderer` tiene un historial real de cuelgue por altura de
+bloque (§ 10/§ 14/§ 16) — duplicar los bornes habría duplicado también
+el crecimiento de altura por circuito. Elegir la versión más liviana
+y documentar por qué (en vez de copiar la convención a mano 1 a 1 sin
+pensarlo) es el mismo criterio de la § 17: "esquema simplificado, no a
+escala" es una decisión de diseño de esta app, no una limitación a
+esconder.
+
+**Revalidar el límite de altura segura CADA VEZ que cambia la densidad
+de comandos por punto de altura — no asumir que un número que fue
+seguro una vez lo sigue siendo.** `ALTO_MAX_BLOQUE_SEGURO = 480` se
+calibró en su momento (§ 10) para la densidad de comandos de ESE
+layout. Agregar bornes + marcas de cable casi duplicó el alto por
+dispositivo (`PASO_DISPOSITIVO` nuevo ≈ 23.5pt vs. los ~13-18pt
+anteriores) — el límite en sí no cambió, pero había que confirmar que
+seguía siendo seguro con la nueva densidad, no asumirlo. Se repitió el
+método exacto de la § 14 (parchear a mano
+`node_modules/@react-pdf/hyphenate/package.json` agregando `"require"`
+igual al `"import"` existente, correr un script `.ts` con `tsx` dentro
+de `informes-app/`, restaurar el parche al final) con un tablero
+sintético de 96 circuitos (igual orden de magnitud que el caso real de
+§ 16): la paginación automática (que ya calcula el alto real vía
+`alturaColumna`, no un número fijo de circuitos por bloque) produjo
+bloques de hasta 470pt — justo debajo del límite — y renderizó en
+888ms sin colgarse. Un segundo caso con 390 circuitos (11 bloques,
+máximo 470pt) renderizó en 3.7s, también sano. Conclusión: el límite
+de 480 seguía siendo válido, pero solo se supo probándolo de nuevo con
+el layout real, no reusando la confianza de la medición anterior.

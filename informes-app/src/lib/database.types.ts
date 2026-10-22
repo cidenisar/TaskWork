@@ -280,6 +280,8 @@ export type ConfigEmailEnvioRow = {
 export type ConfigGeneralRow = {
   id: number;
   logo_empresa_url: string | null;
+  /** Nombre de la empresa contratista (ej. "SONDA") — se usa, entre otros lugares, en el rótulo del esquema unifilar de Tableros. */
+  nombre_empresa: string;
   auto_enviar_email: boolean;
   umbral_aviso_historial: UmbralAviso;
   recordatorio_semanal_archivo: boolean;
