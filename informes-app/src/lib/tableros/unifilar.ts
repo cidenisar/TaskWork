@@ -362,6 +362,20 @@ function truncarA(s: string, anchoDisponible: number, size: number, bold = false
   return truncar(s, maxCharsEnAncho(anchoDisponible, size, bold));
 }
 
+/**
+ * Capa A_CONFIRMAR (regla de oro del estándar, ver
+ * docs/referencias-unifilar/REGLAS_UNIFILAR.md): un atributo que el plano
+ * pide pero que el modelo de datos de esta fase todavía no captura NUNCA se
+ * inventa — se deja marcado en naranja (ACI 30, ver COLOR_ACI_POR_CAPA en
+ * dxf/writer.ts) para que el técnico lo complete a mano antes de dar el
+ * plano por definitivo. Mismo criterio de truncado que el resto del
+ * archivo (`truncarA`), no un ancho fijo a ojo.
+ */
+const ANCHO_A_CONFIRMAR = 36;
+function dibujarAConfirmar(commands: DrawCommand[], x: number, y: number, texto: string): void {
+  commands.push({ type: "text", x, y, text: truncarA(texto, ANCHO_A_CONFIRMAR, 2.8), size: 2.8, layer: "A_CONFIRMAR" });
+}
+
 const CATEGORIAS_BREAKER: TableroCategoriaEquipo[] = ["termica", "disyuntor"];
 const CATEGORIAS_BORNERA: TableroCategoriaEquipo[] = ["bornera", "bornera_fusible"];
 
@@ -679,6 +693,21 @@ function dibujarNodo(
   commands.push({ type: "line", x1: cx, y1: yBorneEntrada, x2: cx, y2: ySymbol - SIMBOLO_R, layer: "POTENCIA" });
   dibujarSimbolo(commands, c.categoriaEquipo, c.tipoCircuito, cx, ySymbol);
   const yDespues = ySymbol + SIMBOLO_R;
+
+  // A_CONFIRMAR: POLOS no se infiere del tipo de circuito (ej. 380V puede
+  // ser tripolar o tetrapolar según si corta neutro) — el relevamiento de
+  // esta fase no lo carga, así que se marca en vez de asumirlo (A5
+  // TERMICA/DISYUNTOR). CLASE (Común/S.I.) e IDN (corriente diferencial)
+  // son atributos propios del disyuntor, no de la térmica. Van a la
+  // izquierda del símbolo — a la derecha ya está el eslabón/continuación
+  // de los nodos con hijos (ver más abajo).
+  if (CATEGORIAS_BREAKER.includes(c.categoriaEquipo)) {
+    const xAConf = cx - SIMBOLO_R - 4 - ANCHO_A_CONFIRMAR;
+    dibujarAConfirmar(commands, xAConf, ySymbol - 7, "POLOS: A CONFIRMAR");
+    if (c.categoriaEquipo === "disyuntor") {
+      dibujarAConfirmar(commands, xAConf, ySymbol - 3, "CLASE/IDN: A CONFIRMAR");
+    }
+  }
 
   if (nodo.hijos.length > 0) {
     // Eslabón intermedio (ej. la térmica/disyuntor general de la que cuelga lo siguiente): una sola línea compacta al costado del símbolo.
