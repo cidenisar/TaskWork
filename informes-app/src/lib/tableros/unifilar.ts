@@ -160,12 +160,6 @@ function anchoEnSlots(nodo: NodoArbol): number {
   return nodo.hijos.reduce((acc, h) => acc + anchoEnSlots(h), 0);
 }
 
-/** Profundidad (en dispositivos encadenados) de la rama más larga del árbol — determina la altura de la fila completa. */
-function profundidadMax(nodo: NodoArbol): number {
-  if (nodo.hijos.length === 0) return 1;
-  return 1 + Math.max(...nodo.hijos.map(profundidadMax));
-}
-
 const LABEL_GRUPO: Record<GrupoUnifilar, string> = {
   energia_ac: "ENERGÍA 380V/220V",
   energia_dc: "ENERGÍA 24V/12V",
@@ -201,7 +195,10 @@ export type DrawCommand =
   // públicos deciden el relleno con su propio prop, no leen este campo.
   | { type: "rect"; x: number; y: number; width: number; height: number; layer: CapaDxf; fill?: boolean }
   | { type: "circle"; x: number; y: number; r: number; layer: CapaDxf }
-  | { type: "text"; x: number; y: number; text: string; size: number; bold?: boolean; layer: CapaDxf };
+  | { type: "text"; x: number; y: number; text: string; size: number; bold?: boolean; layer: CapaDxf }
+  // Toroide del disyuntor (A5) — siempre con ejes alineados a los ejes X/Y
+  // (sin rotación), rx horizontal/ry vertical.
+  | { type: "ellipse"; x: number; y: number; rx: number; ry: number; layer: CapaDxf };
 
 export interface UnifilarDrawing {
   commands: DrawCommand[];
@@ -294,16 +291,50 @@ const ALTO_ID_BOX = 12;
 const CABLE_SEG = 5;
 const PRE_BORNE_GAP = 2;
 const BORNE_ALTO = 4.5;
+/** Alto del bloque de bornes cuando son 4 líneas apiladas (380V trifásico, R S T N) en vez de las 2 de siempre — ver `dibujarBorneNumerado`. */
+const BORNE_ALTO_TRIFASICO = 12;
 const POST_BORNE_GAP = 2;
+/** Alto real del bloque de bornes en este punto, según cuántos conductores tiene el tipo de circuito (`letrasConductor`) — nunca un valor fijo, para que el paso entre dispositivos alcance de sobra en 380V trifásico (4 líneas apiladas) sin desperdiciar espacio en el resto (2 líneas). */
+function borneAlto(tipoCircuito: TableroTipoCircuito): number {
+  return letrasConductor(tipoCircuito).length > 2 ? BORNE_ALTO_TRIFASICO : BORNE_ALTO;
+}
 /** Tramo completo "cable con marca de formación + par de bornes numerado" antes de cada dispositivo (ver `dibujarBorneNumerado`/`marcaCable` en `dibujarNodo`) — mismo paso para el primero de la columna (baja de la barra) y para cualquier encadenado, porque ambos casos dibujan exactamente lo mismo. */
-const PASO_DISPOSITIVO = CABLE_SEG + PRE_BORNE_GAP + BORNE_ALTO + POST_BORNE_GAP + SIMBOLO_R * 2;
+function pasoDispositivo(tipoCircuito: TableroTipoCircuito): number {
+  return CABLE_SEG + PRE_BORNE_GAP + borneAlto(tipoCircuito) + POST_BORNE_GAP + SIMBOLO_R * 2;
+}
 /** Mismo tramo pero más corto, para el cable final que entra al destino (no hay otro dispositivo después, así que no hace falta el aire extra post-símbolo). */
-const PASO_A_DESTINO = CABLE_SEG + PRE_BORNE_GAP + BORNE_ALTO;
+function pasoADestino(tipoCircuito: TableroTipoCircuito): number {
+  return CABLE_SEG + PRE_BORNE_GAP + borneAlto(tipoCircuito);
+}
 
-/** Altura (desde la barra del renglón hasta el pie de la cajita de ID) de una columna con `profundidad` dispositivos encadenados en la rama más larga — calculada simulando los mismos pasos que dibuja `dibujarNodo`, para que nunca quede corta. Una rama que se abre en varias sub-columnas (patrón "grupo") no agrega altura extra: el sub-bus se apoya exactamente donde terminaría el siguiente escalón de una cadena lineal, así que la altura depende solo de la profundidad máxima, nunca de cuántas ramas hay. */
-function alturaColumna(profundidad: number): number {
-  const yDespuesUltimoDispositivo = profundidad * PASO_DISPOSITIVO;
-  return yDespuesUltimoDispositivo + PASO_A_DESTINO + 3 + LINEAS_SPEC * ALTO_LINEA + 4 + ALTO_ID_BOX;
+/** Alto del símbolo de tierra (A5 TIERRA, 3 líneas decrecientes) + su "T n", agregado al pie de cada destino (A7: "cada destino lleva al lado su T n") — ver `dibujarTierra`. */
+const ALTO_TIERRA = 7;
+
+/**
+ * Altura acumulada (no solo "cantidad de dispositivos") de la rama más alta
+ * de este árbol, hasta el pie del tramo final hacia el destino — cada nivel
+ * usa el paso que le corresponde a SU PROPIO tipo de circuito
+ * (`pasoDispositivo`), nunca un paso fijo, porque un circuito 380V
+ * trifásico necesita más alto que uno mono/DC (4 bornes apilados en vez de
+ * 2 — ver `dibujarBorneNumerado`). El nodo hoja dibuja DOS tramos propios
+ * (ver `dibujarNodo`): el de entrada a su símbolo (`pasoDispositivo`, igual
+ * que cualquier nodo) y, por no tener hijos, el tramo final hasta el
+ * destino (`pasoADestino` + 3, más corto que `pasoDispositivo` porque no
+ * hay símbolo después) — ambos con SU propio tipo de circuito, nunca el de
+ * otro nodo de la cadena. Reemplaza al viejo `profundidadMax` (que solo
+ * contaba dispositivos, asumiendo que todos pesan lo mismo) — mismo
+ * espíritu de "simular paso a paso, nunca aproximar" que ya pedía el
+ * comentario original de `alturaColumna`.
+ */
+function alturaRamaMax(nodo: NodoArbol): number {
+  const tipo = nodo.circuito.tipoCircuito;
+  if (nodo.hijos.length === 0) return pasoDispositivo(tipo) + pasoADestino(tipo) + 3;
+  return pasoDispositivo(tipo) + Math.max(...nodo.hijos.map(alturaRamaMax));
+}
+
+/** Altura (desde la barra del renglón hasta el pie del símbolo de tierra) de una columna cuya rama más larga acumula `alturaRama` (ver `alturaRamaMax`, que ya incluye el tramo final hacia el destino) — calculada simulando los mismos pasos que dibuja `dibujarNodo`, para que nunca quede corta. Una rama que se abre en varias sub-columnas (patrón "grupo") no agrega altura extra: el sub-bus se apoya exactamente donde terminaría el siguiente escalón de una cadena lineal, así que la altura depende solo de la rama más alta, nunca de cuántas ramas hay. */
+function alturaColumna(alturaRama: number): number {
+  return alturaRama + LINEAS_SPEC * ALTO_LINEA + 4 + ALTO_ID_BOX + ALTO_TIERRA;
 }
 
 function truncar(s: string, max: number): string {
@@ -335,24 +366,63 @@ const CATEGORIAS_BREAKER: TableroCategoriaEquipo[] = ["termica", "disyuntor"];
 const CATEGORIAS_BORNERA: TableroCategoriaEquipo[] = ["bornera", "bornera_fusible"];
 
 /**
- * Símbolo por categoría en vez de un cuadrado vacío genérico: térmica/
- * disyuntor dibuja el símbolo clásico de llave seccionadora (dos bornes +
- * la cuchilla en diagonal), bornera dibuja el banco de bornes (dos círculos,
- * el punto de conexión de campo, como en los planos reales), y el resto de
- * las categorías usa una caja simple de equipo.
+ * Letras de los conductores según el tipo de circuito (A5 BORNERA / A4
+ * numeración) — trifásico lleva las 3 fases más neutro (R S T N, orden fijo
+ * de arriba hacia abajo, ver C2), el resto (mono/24V/12V/sin tipo cargado)
+ * es neutro+fase (N F). Misma fuente de verdad para el símbolo de bornera
+ * (letras grandes en el centro) y para `dibujarBorneNumerado` (un "A n" por
+ * letra) — nunca dos listas separadas que puedan desincronizarse.
  */
-function dibujarSimbolo(commands: DrawCommand[], categoria: TableroCategoriaEquipo, cx: number, cy: number): void {
+const LETRAS_CONDUCTOR_POR_TIPO: Partial<Record<TableroTipoCircuito, string[]>> = {
+  "380v_tri": ["R", "S", "T", "N"],
+  "220v_mono": ["N", "F"],
+  "24vdc": ["N", "F"],
+  "12vdc": ["N", "F"],
+};
+function letrasConductor(tipoCircuito: TableroTipoCircuito): string[] {
+  return LETRAS_CONDUCTOR_POR_TIPO[tipoCircuito] ?? ["N", "F"];
+}
+
+/**
+ * Símbolo por categoría en vez de un cuadrado vacío genérico:
+ * - térmica: símbolo clásico de llave seccionadora (dos bornes + cuchilla
+ *   en diagonal).
+ * - disyuntor: el mismo símbolo de térmica + óvalo de toroide (sensor
+ *   diferencial) + pulsador de prueba (A5: "Térmica + óvalo de toroide +
+ *   pulsador de prueba").
+ * - bornera/bornera con fusible: caja con las letras grandes de sus
+ *   conductores en el centro (A5 BORNERA: "N / F (o R S T N)"), reemplaza
+ *   los dos círculos genéricos de antes de la Fase 4.
+ * - el resto de las categorías usa una caja simple de equipo.
+ */
+function dibujarSimbolo(commands: DrawCommand[], categoria: TableroCategoriaEquipo, tipoCircuito: TableroTipoCircuito, cx: number, cy: number): void {
   if (CATEGORIAS_BREAKER.includes(categoria)) {
     const yTop = cy - SIMBOLO_R;
     const yBot = cy + SIMBOLO_R;
     commands.push({ type: "circle", x: cx, y: yTop, r: 1.2, layer: "SIMBOLOS" });
     commands.push({ type: "circle", x: cx, y: yBot, r: 1.2, layer: "SIMBOLOS" });
     commands.push({ type: "line", x1: cx, y1: yBot, x2: cx + SIMBOLO_R * 0.8, y2: yTop + SIMBOLO_R * 0.3, layer: "SIMBOLOS" });
+    if (categoria === "disyuntor") {
+      commands.push({ type: "ellipse", x: cx, y: cy, rx: 3, ry: 1.8, layer: "SIMBOLOS" });
+      // Pulsador de prueba: línea corta hacia afuera del toroide.
+      commands.push({ type: "line", x1: cx + 3, y1: cy, x2: cx + 5, y2: cy, layer: "SIMBOLOS" });
+    }
     return;
   }
   if (CATEGORIAS_BORNERA.includes(categoria)) {
-    commands.push({ type: "circle", x: cx, y: cy - SIMBOLO_R * 0.5, r: 1.6, layer: "SIMBOLOS" });
-    commands.push({ type: "circle", x: cx, y: cy + SIMBOLO_R * 0.5, r: 1.6, layer: "SIMBOLOS" });
+    const letras = letrasConductor(tipoCircuito);
+    const w = SIMBOLO_R * 2.2;
+    const h = SIMBOLO_R * 1.6;
+    commands.push({ type: "rect", x: cx - w / 2, y: cy - h / 2, width: w, height: h, layer: "SIMBOLOS" });
+    commands.push({
+      type: "text",
+      x: cx - w / 2 + 1,
+      y: cy + 1.2,
+      text: letras.join(" "),
+      size: letras.length > 2 ? 2.4 : 3.2,
+      bold: true,
+      layer: "SIMBOLOS",
+    });
     return;
   }
   commands.push({ type: "rect", x: cx - SIMBOLO_R, y: cy - SIMBOLO_R, width: SIMBOLO_R * 2, height: SIMBOLO_R * 2, layer: "SIMBOLOS" });
@@ -368,20 +438,26 @@ function nuevoContadorConductor(): ContadorConductor {
 }
 
 /**
- * A5 BORNE: círculo con diagonal (tornillo), con su par de números "A n"
- * (neutro arriba, fase abajo — A4 regla 3) a la derecha. Devuelve el par de
- * números usado, por si hace falta (no se usa hoy, pero documenta qué
- * números quedaron en este punto).
+ * A5 BORNE: círculo con diagonal (tornillo), con el "A n" de cada conductor
+ * apilado a la derecha — mismo criterio del plano a mano, pero con un solo
+ * ícono de borne (esquema simplificado, no a escala) en vez de uno por
+ * conductor. Para 380V trifásico son 4 líneas (R S T N, orden fijo de
+ * arriba hacia abajo — C2) en vez de las 2 de siempre (N F, A4 regla 3:
+ * primero el neutro). Devuelve los números usados, por si hace falta (no se
+ * usa hoy, pero documenta qué números quedaron en este punto).
  */
-function dibujarBorneNumerado(commands: DrawCommand[], cx: number, cy: number, ctr: ContadorConductor): [number, number] {
-  const nN = ctr.siguiente++;
-  const nF = ctr.siguiente++;
+function dibujarBorneNumerado(commands: DrawCommand[], cx: number, cy: number, ctr: ContadorConductor, tipoCircuito: TableroTipoCircuito): number[] {
+  const letras = letrasConductor(tipoCircuito);
   const r = 0.9;
   commands.push({ type: "circle", x: cx, y: cy, r, layer: "BORNES" });
   commands.push({ type: "line", x1: cx - r * 0.7, y1: cy - r * 0.7, x2: cx + r * 0.7, y2: cy + r * 0.7, layer: "BORNES" });
-  commands.push({ type: "text", x: cx + 2, y: cy - 3, text: `N  A${nN}`, size: 3.2, layer: "NUM_CONDUCTOR" });
-  commands.push({ type: "text", x: cx + 2, y: cy + 2.5, text: `F  A${nF}`, size: 3.2, layer: "NUM_CONDUCTOR" });
-  return [nN, nF];
+  const paso = 3.8;
+  const yPrimera = cy - ((letras.length - 1) / 2) * paso;
+  return letras.map((letra, i) => {
+    const n = ctr.siguiente++;
+    commands.push({ type: "text", x: cx + 2, y: yPrimera + i * paso, text: `${letra}  A${n}`, size: 3.2, layer: "NUM_CONDUCTOR" });
+    return n;
+  });
 }
 
 /**
@@ -546,8 +622,18 @@ function destinosDeRenglon(r: RenglonUnifilar): number {
 
 function altoRenglon(r: RenglonUnifilar): number {
   if (r.tipo === "header") return ALTO_HEADER_SECCION;
-  const profundidadMaxFila = Math.max(...r.arboles.map(profundidadMax));
-  return alturaColumna(profundidadMaxFila);
+  return alturaColumna(Math.max(...r.arboles.map(alturaRamaMax)));
+}
+
+/** A5 TIERRA: tres líneas horizontales decrecientes (símbolo clásico de puesta a tierra), con su "T n" a la derecha — ver A7 y `dibujarNodo` (rama hoja). */
+function dibujarTierra(commands: DrawCommand[], x: number, y: number, tn: number): void {
+  const anchos = [4, 2.6, 1.3];
+  let yl = y;
+  for (const w of anchos) {
+    commands.push({ type: "line", x1: x - w / 2, y1: yl, x2: x + w / 2, y2: yl, layer: "DESTINOS" });
+    yl += 1.4;
+  }
+  commands.push({ type: "text", x: x + 4, y: y + 3, text: `T${tn}`, size: 3.4, layer: "DESTINOS" });
 }
 
 /**
@@ -572,11 +658,13 @@ function dibujarNodo(
   nivel: number,
   configCalibre: ConfigCalibreCable[],
   codigos: Map<number, CodigoEquipo>,
+  tierra: Map<number, number>,
   ctr: ContadorConductor,
 ): void {
   const c = nodo.circuito;
   const codigo = codigos.get(c.numero)?.texto;
   const cx = (xLeft + xRight) / 2;
+  const alto = borneAlto(c.tipoCircuito);
 
   // Tramo de entrada a este dispositivo: cable con su marca de formación
   // (A6) + un par de bornes numerado (A4) — mismo paso tanto para el primer
@@ -584,12 +672,12 @@ function dibujarNodo(
   // cualquier encadenado, porque los dos casos dibujan exactamente lo mismo.
   const { calibreMm2, colores } = calcularCalibreCircuito(c.categoriaEquipo, c.tipoCircuito, c.ampNominal, configCalibre);
   const formacion = formatearFormacionCable(calibreMm2, c.tipoCircuito);
-  const yBorneEntrada = yAnchor + CABLE_SEG + PRE_BORNE_GAP + BORNE_ALTO / 2;
+  const yBorneEntrada = yAnchor + CABLE_SEG + PRE_BORNE_GAP + alto / 2;
   marcaCable(commands, cx, yAnchor, yBorneEntrada, formacion, c.tipoCircuito);
-  dibujarBorneNumerado(commands, cx, yBorneEntrada, ctr);
-  const ySymbol = yBorneEntrada + BORNE_ALTO / 2 + POST_BORNE_GAP + SIMBOLO_R;
+  dibujarBorneNumerado(commands, cx, yBorneEntrada, ctr, c.tipoCircuito);
+  const ySymbol = yBorneEntrada + alto / 2 + POST_BORNE_GAP + SIMBOLO_R;
   commands.push({ type: "line", x1: cx, y1: yBorneEntrada, x2: cx, y2: ySymbol - SIMBOLO_R, layer: "POTENCIA" });
-  dibujarSimbolo(commands, c.categoriaEquipo, cx, ySymbol);
+  dibujarSimbolo(commands, c.categoriaEquipo, c.tipoCircuito, cx, ySymbol);
   const yDespues = ySymbol + SIMBOLO_R;
 
   if (nodo.hijos.length > 0) {
@@ -629,7 +717,7 @@ function dibujarNodo(
       const xPrimero = subTramos[0].xLeft;
       commands.push({ type: "text", x: xPrimero + 3, y: yDespues - 2, text: `${SENTINEL_VIENE}${nodo.vieneDe}`, size: 5.5, bold: true, layer: "ETIQUETAS" });
     }
-    subTramos.forEach((t) => dibujarNodo(commands, t.hijo, t.xLeft, t.xRight, yDespues, nivel + 1, configCalibre, codigos, ctr));
+    subTramos.forEach((t) => dibujarNodo(commands, t.hijo, t.xLeft, t.xRight, yDespues, nivel + 1, configCalibre, codigos, tierra, ctr));
     return;
   }
 
@@ -637,10 +725,10 @@ function dibujarNodo(
   // entrada (cable con marca + borne numerado, A4/A6), con la misma
   // formación (el cable que sale de este dispositivo hacia el destino está
   // protegido por él, así que comparte calibre con el de entrada).
-  const yBorneDestino = yDespues + CABLE_SEG + PRE_BORNE_GAP + BORNE_ALTO / 2;
+  const yBorneDestino = yDespues + CABLE_SEG + PRE_BORNE_GAP + alto / 2;
   marcaCable(commands, cx, yDespues, yBorneDestino, formacion, c.tipoCircuito);
-  dibujarBorneNumerado(commands, cx, yBorneDestino, ctr);
-  const yEtiqueta = yBorneDestino + BORNE_ALTO / 2 + 3;
+  dibujarBorneNumerado(commands, cx, yBorneDestino, ctr, c.tipoCircuito);
+  const yEtiqueta = yBorneDestino + alto / 2 + 3;
   commands.push({ type: "line", x1: cx, y1: yBorneDestino, x2: cx, y2: yEtiqueta, layer: "POTENCIA" });
 
   const colLeft = xLeft + 3;
@@ -671,10 +759,20 @@ function dibujarNodo(
   commands.push({ type: "rect", x: colLeft - 1, y: yId, width: COLUMNA_ANCHO - 8, height: ALTO_ID_BOX, layer: "MARCO" });
   const etiquetaId = c.etiquetaCable ? `${c.numero} — ${c.texto} (${c.etiquetaCable})` : `${c.numero} — ${c.texto}`;
   commands.push({ type: "text", x: colLeft + 2, y: yId + 9, text: truncarA(etiquetaId, ANCHO_TEXTO_COLUMNA, 6.5, true), size: 6.5, bold: true, layer: "ETIQUETAS" });
+
+  // A7: "cada destino lleva al lado su T n" — además de su fila en la tabla
+  // de PUESTA A TIERRA al pie del tablero (ver `filasTierra`/
+  // `mapaNumerosTierra`, misma numeración, nunca dos fuentes de verdad).
+  const tn = tierra.get(c.numero);
+  if (tn != null) dibujarTierra(commands, colLeft + 4, yId + ALTO_ID_BOX + 5, tn);
 }
 
-/** Arma los draw commands de un cuerpo ya resuelto en renglones (columnas de circuitos + encabezados de sección) y su mapa de códigos de equipo. Compartido por `construirUnifilar` y `construirUnifilarPaginado` para que el dibujo de a pedazos (paginado) sea idéntico al dibujo completo. */
-function renderGrupos(grupos: [string, RenglonUnifilar[], Map<number, CodigoEquipo>][], configCalibre: ConfigCalibreCable[]): UnifilarDrawing {
+/** Arma los draw commands de un cuerpo ya resuelto en renglones (columnas de circuitos + encabezados de sección) y su mapa de códigos de equipo. Compartido por `construirUnifilar` y `construirUnifilarPaginado` para que el dibujo de a pedazos (paginado) sea idéntico al dibujo completo. `tierra` es el mapa numero→T n de TODO el tablero (ver `mapaNumerosTierra`), no por cuerpo — mismo criterio que `filasTierra`. */
+function renderGrupos(
+  grupos: [string, RenglonUnifilar[], Map<number, CodigoEquipo>][],
+  configCalibre: ConfigCalibreCable[],
+  tierra: Map<number, number>,
+): UnifilarDrawing {
   const commands: DrawCommand[] = [];
   let y = MARGEN;
 
@@ -712,7 +810,7 @@ function renderGrupos(grupos: [string, RenglonUnifilar[], Map<number, CodigoEqui
         commands.push({ type: "line", x1: centros[0], y1: yBus + 1.2, x2: centros[centros.length - 1], y2: yBus + 1.2, layer: "POTENCIA" });
       }
 
-      tramos.forEach((t) => dibujarNodo(commands, t.arbol, t.xLeft, t.xRight, yBus, 0, configCalibre, codigos, ctr));
+      tramos.forEach((t) => dibujarNodo(commands, t.arbol, t.xLeft, t.xRight, yBus, 0, configCalibre, codigos, tierra, ctr));
 
       yRenglon += altoRenglon(renglon);
     }
@@ -911,16 +1009,36 @@ interface FilaTierra {
 }
 
 /**
+ * Mapa numero de circuito → "T n" (A7) de TODO el tablero, no por cuerpo —
+ * recorre `grupos` en el mismo orden en que se dibuja. Única fuente de
+ * verdad para el Tn: la usa tanto `filasTierra` (la tabla PUESTA A TIERRA
+ * al pie) como `dibujarNodo` (el símbolo+Tn junto a cada destino), para que
+ * nunca puedan desincronizarse entre sí.
+ */
+function mapaNumerosTierra(grupos: [string, RenglonUnifilar[], Map<number, CodigoEquipo>][]): Map<number, number> {
+  const mapa = new Map<number, number>();
+  let tn = 1;
+  for (const [, renglones] of grupos) {
+    for (const renglon of renglones) {
+      if (renglon.tipo === "header") continue;
+      for (const arbol of renglon.arboles) {
+        for (const hoja of hojasDeArbol(arbol)) mapa.set(hoja.numero, tn++);
+      }
+    }
+  }
+  return mapa;
+}
+
+/**
  * Arma las filas T1..Tn de la tabla de PUESTA A TIERRA (A7 del estándar):
  * un Tn correlativo por cada destino real del tablero (hoja del árbol de
  * encadenado — un eslabón intermedio como una térmica general no es un
- * destino en sí), único para TODO el tablero, no por cuerpo — recorre
- * `grupos` en el mismo orden en que se dibuja, así Tn sigue el orden
- * visual de los circuitos.
+ * destino en sí) — recorre `grupos` en el mismo orden en que se dibuja, así
+ * el orden de filas sigue el orden visual de los circuitos; el número Tn en
+ * sí sale de `tierra` (ver `mapaNumerosTierra`), no de un contador propio.
  */
-function filasTierra(grupos: [string, RenglonUnifilar[], Map<number, CodigoEquipo>][]): FilaTierra[] {
+function filasTierra(grupos: [string, RenglonUnifilar[], Map<number, CodigoEquipo>][], tierra: Map<number, number>): FilaTierra[] {
   const filas: FilaTierra[] = [];
-  let tn = 1;
   for (const [, renglones, codigos] of grupos) {
     for (const renglon of renglones) {
       if (renglon.tipo === "header") continue;
@@ -929,7 +1047,7 @@ function filasTierra(grupos: [string, RenglonUnifilar[], Map<number, CodigoEquip
           const codigo = codigos.get(hoja.numero)?.texto;
           // Sin truncar acá: el ancho real de columna solo se conoce en `construirTablaTierra`, recién cuando se sabe en cuántas columnas entró la tabla completa.
           const etiqueta = codigo ? `${codigo} — ${hoja.texto}` : hoja.texto;
-          filas.push({ tn: tn++, etiqueta });
+          filas.push({ tn: tierra.get(hoja.numero)!, etiqueta });
         }
       }
     }
@@ -1016,14 +1134,18 @@ export function construirUnifilar(
     // porque acá no hay hojas.
     grupos.push([cuerpo, prepararRenglones(circuitos, false), calcularCodigosUnificados(circuitos)]);
   }
-  const drawing = renderGrupos(grupos, configCalibre);
+  // Mapa de Tn global, calculado ANTES de dibujar — lo necesitan tanto
+  // `renderGrupos` (el "T n" junto a cada destino) como `filasTierra` (la
+  // tabla al pie), y tienen que coincidir siempre.
+  const tierra = mapaNumerosTierra(grupos);
+  const drawing = renderGrupos(grupos, configCalibre, tierra);
   if (!rotulo) return drawing;
   const tension = tensionDeGrupos(grupos);
 
   // Tabla de PUESTA A TIERRA (A7) al pie del mismo dibujo — el DXF es
   // siempre una hoja única (sin límite de altura por bloque, a diferencia
   // del PDF), así que entra como más contenido de la misma hoja.
-  const filasT = filasTierra(grupos);
+  const filasT = filasTierra(grupos, tierra);
   if (filasT.length === 0) return agregarMarcoYRotulo(drawing, rotulo, 1, 1, tension);
   const tabla = construirBloquesTierra(filasT).reduce<UnifilarDrawing>(
     (acc, b) => ({ commands: [...acc.commands, ...trasladarComandos(b.commands, 0, acc.height)], width: Math.max(acc.width, b.width), height: acc.height + b.height }),
@@ -1177,13 +1299,20 @@ export function construirUnifilarPaginado(
     partes.forEach((p, i) => grupos.push([`${cuerpo || "Sin cuerpo asignado"} (parte ${i + 1}/${partes.length})`, p, codigos]));
   }
 
+  // Mapa de Tn global, calculado ANTES de armar los bloques — lo necesitan
+  // tanto `renderGrupos` (el "T n" junto a cada destino) como `filasTierra`
+  // (la tabla al pie), y tienen que coincidir siempre. Se calcula sobre
+  // `grupos` COMPLETO (ya con los cuerpos partidos en "parte N/M"), nunca
+  // por bloque — mismo criterio que ya aplican los códigos de equipo.
+  const tierra = mapaNumerosTierra(grupos);
+
   const bloques: UnifilarDrawing[] = [];
   const tensionesPorBloque: string[] = [];
   let actual: [string, RenglonUnifilar[], Map<number, CodigoEquipo>][] = [];
   let alturaActual = MARGEN;
   let destinosActual = 0;
   const cerrarBloqueActual = () => {
-    bloques.push(renderGrupos(actual, configCalibre));
+    bloques.push(renderGrupos(actual, configCalibre, tierra));
     tensionesPorBloque.push(tensionDeGrupos(actual));
     actual = [];
     alturaActual = MARGEN;
@@ -1206,7 +1335,7 @@ export function construirUnifilarPaginado(
   // TODOS los circuitos del tablero en orden, no solo los del último
   // bloque armado arriba. No tiene una tensión propia (mezcla todos los
   // circuitos del tablero), así que queda con el título genérico.
-  const bloquesTierra = construirBloquesTierra(filasTierra(grupos));
+  const bloquesTierra = construirBloquesTierra(filasTierra(grupos, tierra));
   bloques.push(...bloquesTierra);
   tensionesPorBloque.push(...bloquesTierra.map(() => ""));
 

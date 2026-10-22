@@ -123,6 +123,46 @@ function dxfCircle(x: number, y: number, r: number, layer: string): string {
   return ["0", "CIRCLE", "8", layer, "10", x.toFixed(3), "20", y.toFixed(3), "30", "0.0", "40", r.toFixed(3)].join("\n");
 }
 
+/**
+ * ELLIPSE (A5: toroide del disyuntor) — válida desde DXF R13, sin truco
+ * especial en AC1021. Grupos: 10/20 centro, 11/21 extremo del eje MAYOR
+ * (relativo al centro, no absoluto), 40 ratio eje menor/mayor, 41/42 ángulo
+ * inicial/final en radianes (0 a 2π = elipse completa). Nuestras elipses
+ * siempre tienen los ejes alineados a X/Y (sin rotación) — invertir Y (como
+ * cualquier otra entidad, ver `drawCommandsToDxf`) no rota una elipse así,
+ * solo la refleja sobre sí misma, con el mismo rx/ry.
+ */
+function dxfEllipse(x: number, y: number, rx: number, ry: number, layer: string): string {
+  const mayor = Math.max(rx, ry);
+  const menor = Math.min(rx, ry);
+  const ratio = mayor > 0 ? menor / mayor : 1;
+  const [ejeX, ejeY] = rx >= ry ? [rx, 0] : [0, ry];
+  return [
+    "0",
+    "ELLIPSE",
+    "8",
+    layer,
+    "10",
+    x.toFixed(3),
+    "20",
+    y.toFixed(3),
+    "30",
+    "0.0",
+    "11",
+    ejeX.toFixed(3),
+    "21",
+    ejeY.toFixed(3),
+    "31",
+    "0.0",
+    "40",
+    ratio.toFixed(4),
+    "41",
+    "0.0",
+    "42",
+    (2 * Math.PI).toFixed(6),
+  ].join("\n");
+}
+
 function dxfText(x: number, y: number, text: string, size: number, layer: string): string {
   // DXF no tolera saltos de línea ni ciertos caracteres de control dentro de un TEXT — se sanitiza por las dudas.
   const limpio = text.replace(/[\r\n]+/g, " ");
@@ -177,6 +217,8 @@ export function drawCommandsToDxf(commands: DrawCommand[], height: number): Buff
       }
     } else if (cmd.type === "circle") {
       entidades.push(dxfCircle(cmd.x, flipY(cmd.y), cmd.r, cmd.layer));
+    } else if (cmd.type === "ellipse") {
+      entidades.push(dxfEllipse(cmd.x, flipY(cmd.y), cmd.rx, cmd.ry, cmd.layer));
     } else {
       // TEXT en DXF se ancla abajo-a-la-izquierda del texto; nuestro modelo usa el mismo criterio que react-pdf (y = línea de base), así que alcanza con invertir Y.
       entidades.push(dxfText(cmd.x, flipY(cmd.y), cmd.text, cmd.size, cmd.layer));

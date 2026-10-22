@@ -208,11 +208,17 @@ export default async function PlanoTableroPublicoPage({ params }: { params: Prom
                   if (cmd.type === "circle") {
                     return <circle key={i} cx={cmd.x} cy={cmd.y} r={cmd.r} stroke="currentColor" strokeWidth={0.75} fill="none" />;
                   }
-                  return (
-                    <text key={i} x={cmd.x} y={cmd.y} fontSize={cmd.size} fontWeight={cmd.bold ? 700 : 400} fill="currentColor">
-                      {cmd.text}
-                    </text>
-                  );
+                  if (cmd.type === "text") {
+                    return (
+                      <text key={i} x={cmd.x} y={cmd.y} fontSize={cmd.size} fontWeight={cmd.bold ? 700 : 400} fill="currentColor">
+                        {cmd.text}
+                      </text>
+                    );
+                  }
+                  // "ellipse" (toroide del disyuntor, Fase 4 del motor de dibujo)
+                  // todavía no se dibuja acá — queda para la Fase 6, que sincroniza
+                  // este visor con el resto de los cambios visuales del PDF/DXF.
+                  return null;
                 })}
               </svg>
             </div>
