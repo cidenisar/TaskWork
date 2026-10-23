@@ -2,7 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { cargarEjemplos } from "./ejemplos.js";
+import { listarEjemplos } from "./ejemplos-store.js";
 import { CAPAS_DXF, type DrawCommand, type UnifilarCircuito, type RotuloUnifilar, type UnifilarDrawing } from "./types.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -26,9 +26,9 @@ arriba-a-la-izquierda, Y crece hacia ABAJO (igual que una página normal, no
 como un plano CAD — eso lo maneja el escritor DXF al final, no vos).
 `.trim();
 
-/** Ejemplos puntuales ya enseñados (ver reglas/ejemplos/) — casos reales resueltos que se suman a las reglas escritas. */
-function construirBloqueEjemplos(): string {
-  const ejemplos = cargarEjemplos();
+/** Ejemplos puntuales ya enseñados (ver src/ensenar.ts) — casos reales resueltos que se suman a las reglas escritas. */
+async function construirBloqueEjemplos(): Promise<string> {
+  const ejemplos = await listarEjemplos();
   if (ejemplos.length === 0) return "";
   const bloques = ejemplos.map(
     (e) => `--- Ejemplo "${e.tag}" ---\nCuándo aplica: ${e.cuandoAplica}\nComandos:\n${JSON.stringify(e.commands)}`,
@@ -43,7 +43,7 @@ function construirBloqueEjemplos(): string {
 }
 
 /** Prompt de sistema: el documento de reglas completo + los ejemplos enseñados + el esquema exacto que tiene que devolver. Nunca se resume el documento — la fidelidad a lo escrito ahí es el punto de todo este motor. */
-function construirSystemPrompt(): string {
+async function construirSystemPrompt(): Promise<string> {
   return (
     "Sos un dibujante técnico que arma planos unifilares de tableros eléctricos, siguiendo al pie de la letra el estándar " +
     "de dibujo que te paso completo a continuación. Te dan una lista de circuitos YA RELEVADOS (de un tablero real, ya " +
@@ -51,7 +51,7 @@ function construirSystemPrompt(): string {
     "criterio que usa un CAD: líneas, rectángulos, círculos, elipses y texto, cada uno en su capa.\n\n" +
     "=== REGLAS_UNIFILAR.md (estándar completo, aplicá TODO lo que corresponda) ===\n\n" +
     REGLAS_UNIFILAR +
-    construirBloqueEjemplos() +
+    (await construirBloqueEjemplos()) +
     "\n\n=== FORMATO DE SALIDA ===\n\n" +
     ESQUEMA_DRAW_COMMAND +
     "\n\nRegla de oro (ya la viste arriba, la repito porque es la más importante): si un dato no está en el relevamiento, " +
@@ -106,7 +106,7 @@ export async function generarUnifilar(apiKey: string, circuitos: UnifilarCircuit
   const response = await client.messages.create({
     model: "claude-opus-5-5",
     max_tokens: 16000,
-    system: construirSystemPrompt(),
+    system: await construirSystemPrompt(),
     messages: [{ role: "user", content: construirUserMessage(circuitos, rotulo) }],
   });
 

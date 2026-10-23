@@ -1,20 +1,31 @@
 /**
  * Servicio HTTP mínimo (sin framework, mismo criterio que backend-server/):
- * un único endpoint, POST /api/unifilar, que recibe los circuitos de un
- * tablero + el rótulo, le pide a Claude que arme el plano siguiendo
- * REGLAS_UNIFILAR.md, y devuelve el DXF (el PDF se suma en un paso
- * aparte). Nunca sube nada a storage — eso lo hace quien llama (ver
- * README.md).
+ *   POST /api/unifilar                  — genera el plano (DXF+PDF) de un tablero ya relevado.
+ *   GET  /                              — interfaz web para enseñar casos puntuales (public/ensenar.html).
+ *   GET  /api/ejemplos                  — lista los ejemplos ya enseñados.
+ *   POST /api/ejemplos/previsualizar    — imagen+explicación → Ejemplo propuesto + PDF de previsualización (sin guardar).
+ *   POST /api/ejemplos                  — guarda un ejemplo ya revisado.
+ *   DELETE /api/ejemplos/:tag           — borra un ejemplo.
+ * Nunca sube nada a storage — eso lo hace quien llama (ver README.md).
  */
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import Anthropic from "@anthropic-ai/sdk";
-import { generarUnifilar, RespuestaIaInvalida } from "./anthropic-client.js";
+import { generarUnifilar, RespuestaIaInvalida, validarDrawCommand } from "./anthropic-client.js";
+import { generarEjemploDesdeImagen, RespuestaEnsenarInvalida, type MediaTypeImagen } from "./ensenar.js";
+import { listarEjemplos, guardarEjemplo, eliminarEjemplo } from "./ejemplos-store.js";
 import { drawCommandsToDxf } from "./dxf-writer.js";
-import { drawCommandsToPdf } from "./pdf-renderer.js";
-import type { PedidoUnifilar, RespuestaUnifilar } from "./types.js";
+import { drawCommandsToPdf, drawCommandsToPdfFragment } from "./pdf-renderer.js";
+import { calcularDimensiones } from "./geometria.js";
+import type { DrawCommand, PedidoUnifilar, RespuestaUnifilar } from "./types.js";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const PAGINA_ENSENAR = readFileSync(join(__dirname, "..", "public", "ensenar.html"), "utf-8");
 
 const PORT = Number(process.env.PORT) || 8787;
-const MAX_BODY_BYTES = 5 * 1024 * 1024; // 5MB alcanza de sobra para un JSON de circuitos
+const MAX_BODY_BYTES = 20 * 1024 * 1024; // una foto en base64 pesa ~33% más que el archivo — 20MB da margen para fotos de celular normales
 
 function leerBody(req: IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -40,12 +51,18 @@ function responderJson(res: ServerResponse, status: number, body: unknown): void
   res.end(json);
 }
 
-async function manejarGenerarUnifilar(req: IncomingMessage, res: ServerResponse): Promise<void> {
+function apiKeyDelHeader(req: IncomingMessage, res: ServerResponse): string | null {
   const apiKey = req.headers["x-anthropic-api-key"];
   if (typeof apiKey !== "string" || !apiKey) {
     responderJson(res, 401, { error: "Falta el header X-Anthropic-Api-Key — este servicio usa la clave de quien llama, no tiene una propia." });
-    return;
+    return null;
   }
+  return apiKey;
+}
+
+async function manejarGenerarUnifilar(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  const apiKey = apiKeyDelHeader(req, res);
+  if (!apiKey) return;
 
   let bodyRaw: string;
   try {
@@ -87,16 +104,163 @@ async function manejarGenerarUnifilar(req: IncomingMessage, res: ServerResponse)
   }
 }
 
+async function manejarListarEjemplos(_req: IncomingMessage, res: ServerResponse): Promise<void> {
+  try {
+    const ejemplos = await listarEjemplos();
+    responderJson(res, 200, { ejemplos });
+  } catch (err) {
+    console.error("[motor-unifilares] error listando ejemplos:", err);
+    responderJson(res, 500, { error: err instanceof Error ? err.message : "Error inesperado listando ejemplos." });
+  }
+}
+
+const MEDIA_TYPES_VALIDOS = new Set<string>(["image/jpeg", "image/png", "image/webp"]);
+
+async function manejarPrevisualizarEjemplo(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  const apiKey = apiKeyDelHeader(req, res);
+  if (!apiKey) return;
+
+  let bodyRaw: string;
+  try {
+    bodyRaw = await leerBody(req);
+  } catch {
+    responderJson(res, 413, { error: "La imagen es demasiado grande." });
+    return;
+  }
+
+  let pedido: { imagenBase64?: unknown; mediaType?: unknown; explicacion?: unknown; tag?: unknown };
+  try {
+    pedido = JSON.parse(bodyRaw);
+  } catch {
+    responderJson(res, 400, { error: "El cuerpo no es JSON válido." });
+    return;
+  }
+  if (typeof pedido.imagenBase64 !== "string" || !pedido.imagenBase64) {
+    responderJson(res, 400, { error: 'Falta "imagenBase64".' });
+    return;
+  }
+  if (typeof pedido.mediaType !== "string" || !MEDIA_TYPES_VALIDOS.has(pedido.mediaType)) {
+    responderJson(res, 400, { error: 'Falta o es inválido "mediaType" (image/jpeg, image/png o image/webp).' });
+    return;
+  }
+  if (typeof pedido.explicacion !== "string" || !pedido.explicacion.trim()) {
+    responderJson(res, 400, { error: 'Falta "explicacion".' });
+    return;
+  }
+  const tagForzado = typeof pedido.tag === "string" && pedido.tag.trim() ? pedido.tag.trim() : undefined;
+
+  try {
+    const ejemplo = await generarEjemploDesdeImagen(apiKey, pedido.imagenBase64, pedido.mediaType as MediaTypeImagen, pedido.explicacion, tagForzado);
+    const { width, height } = calcularDimensiones(ejemplo.commands);
+    const pdfBuffer = await drawCommandsToPdfFragment(ejemplo.commands, width, height);
+    responderJson(res, 200, { ejemplo, pdfBase64: pdfBuffer.toString("base64") });
+  } catch (err) {
+    if (err instanceof RespuestaEnsenarInvalida) {
+      responderJson(res, 502, { error: `La IA no devolvió un ejemplo utilizable: ${err.message}` });
+      return;
+    }
+    if (err instanceof Anthropic.APIError) {
+      responderJson(res, 502, { error: `Error de la API de Anthropic: ${err.message}` });
+      return;
+    }
+    console.error("[motor-unifilares] error previsualizando ejemplo:", err);
+    responderJson(res, 500, { error: "Error inesperado generando la previsualización." });
+  }
+}
+
+function validarEjemploCompleto(o: Record<string, unknown>): boolean {
+  if (typeof o.tag !== "string" || !/^[a-z0-9_]+$/.test(o.tag)) return false;
+  if (typeof o.cuandoAplica !== "string" || !o.cuandoAplica.trim()) return false;
+  if (!Array.isArray(o.commands) || o.commands.length === 0) return false;
+  return o.commands.every((c) => validarDrawCommand(c));
+}
+
+async function manejarGuardarEjemplo(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  let bodyRaw: string;
+  try {
+    bodyRaw = await leerBody(req);
+  } catch {
+    responderJson(res, 413, { error: "El cuerpo es demasiado grande." });
+    return;
+  }
+
+  let pedido: Record<string, unknown>;
+  try {
+    pedido = JSON.parse(bodyRaw);
+  } catch {
+    responderJson(res, 400, { error: "El cuerpo no es JSON válido." });
+    return;
+  }
+  if (!validarEjemploCompleto(pedido)) {
+    responderJson(res, 400, { error: 'Forma inválida — se espera {"tag","cuandoAplica","commands"} con comandos válidos.' });
+    return;
+  }
+
+  try {
+    await guardarEjemplo({ tag: pedido.tag as string, cuandoAplica: pedido.cuandoAplica as string, commands: pedido.commands as DrawCommand[] });
+    responderJson(res, 200, { ok: true });
+  } catch (err) {
+    console.error("[motor-unifilares] error guardando ejemplo:", err);
+    responderJson(res, 500, { error: err instanceof Error ? err.message : "Error inesperado guardando el ejemplo." });
+  }
+}
+
+async function manejarEliminarEjemplo(tag: string, res: ServerResponse): Promise<void> {
+  try {
+    await eliminarEjemplo(tag);
+    responderJson(res, 200, { ok: true });
+  } catch (err) {
+    console.error("[motor-unifilares] error eliminando ejemplo:", err);
+    responderJson(res, 500, { error: err instanceof Error ? err.message : "Error inesperado eliminando el ejemplo." });
+  }
+}
+
 const server = createServer((req, res) => {
-  if (req.method === "POST" && req.url === "/api/unifilar") {
+  const url = req.url ?? "/";
+
+  if (req.method === "GET" && url === "/") {
+    res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+    res.end(PAGINA_ENSENAR);
+    return;
+  }
+  if (req.method === "GET" && url === "/health") {
+    responderJson(res, 200, { ok: true });
+    return;
+  }
+  if (req.method === "POST" && url === "/api/unifilar") {
     manejarGenerarUnifilar(req, res).catch((err) => {
       console.error("[motor-unifilares] error no manejado:", err);
       responderJson(res, 500, { error: "Error inesperado." });
     });
     return;
   }
-  if (req.method === "GET" && req.url === "/health") {
-    responderJson(res, 200, { ok: true });
+  if (req.method === "GET" && url === "/api/ejemplos") {
+    manejarListarEjemplos(req, res).catch((err) => {
+      console.error("[motor-unifilares] error no manejado:", err);
+      responderJson(res, 500, { error: "Error inesperado." });
+    });
+    return;
+  }
+  if (req.method === "POST" && url === "/api/ejemplos/previsualizar") {
+    manejarPrevisualizarEjemplo(req, res).catch((err) => {
+      console.error("[motor-unifilares] error no manejado:", err);
+      responderJson(res, 500, { error: "Error inesperado." });
+    });
+    return;
+  }
+  if (req.method === "POST" && url === "/api/ejemplos") {
+    manejarGuardarEjemplo(req, res).catch((err) => {
+      console.error("[motor-unifilares] error no manejado:", err);
+      responderJson(res, 500, { error: "Error inesperado." });
+    });
+    return;
+  }
+  if (req.method === "DELETE" && url.startsWith("/api/ejemplos/")) {
+    const tag = decodeURIComponent(url.slice("/api/ejemplos/".length));
+    manejarEliminarEjemplo(tag, res).catch((err) => {
+      console.error("[motor-unifilares] error no manejado:", err);
+      responderJson(res, 500, { error: "Error inesperado." });
+    });
     return;
   }
   responderJson(res, 404, { error: "Ruta no encontrada." });

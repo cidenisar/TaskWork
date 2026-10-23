@@ -1,0 +1,321 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>motor-unifilares — Enseñar</title>
+<style>
+  :root {
+    --bg: #f5f6f8;
+    --panel: #ffffff;
+    --border: #d9dde3;
+    --text: #1a1f28;
+    --text-muted: #5a6472;
+    --accent: #2a4d8f;
+    --accent-hover: #1f3a6e;
+    --danger: #b3261e;
+    --warn-bg: #fdf3e7;
+    --warn-border: #e8c88f;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 24px 16px 64px;
+  }
+  main { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  h2 { font-size: 15px; margin: 0 0 12px; }
+  p.lead { color: var(--text-muted); margin: 0; font-size: 13.5px; line-height: 1.5; }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px 20px;
+  }
+  label { display: block; font-size: 12.5px; font-weight: 600; color: var(--text-muted); margin-bottom: 4px; }
+  input[type="text"], input[type="password"], textarea, input[type="file"] {
+    width: 100%;
+    font: inherit;
+    font-size: 13.5px;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: #fff;
+    color: var(--text);
+  }
+  textarea { resize: vertical; min-height: 72px; }
+  .field { margin-bottom: 12px; }
+  button {
+    font: inherit;
+    font-size: 13.5px;
+    font-weight: 600;
+    padding: 8px 16px;
+    border-radius: 6px;
+    border: 1px solid transparent;
+    cursor: pointer;
+  }
+  button.primary { background: var(--accent); color: #fff; }
+  button.primary:hover { background: var(--accent-hover); }
+  button.secondary { background: #fff; border-color: var(--border); color: var(--text); }
+  button.secondary:hover { background: #f0f1f3; }
+  button.danger-text { background: none; border: none; color: var(--danger); font-weight: 500; padding: 2px 6px; }
+  button:disabled { opacity: 0.5; cursor: default; }
+  .fila-botones { display: flex; gap: 8px; margin-top: 4px; }
+  .lista-ejemplos { display: flex; flex-direction: column; gap: 8px; }
+  .ejemplo-row {
+    display: flex; align-items: flex-start; justify-content: space-between; gap: 10px;
+    border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px;
+  }
+  .ejemplo-row .tag { font-family: ui-monospace, monospace; font-size: 12.5px; font-weight: 600; }
+  .ejemplo-row .cuando { font-size: 12.5px; color: var(--text-muted); margin-top: 2px; }
+  .vacio { color: var(--text-muted); font-size: 13px; font-style: italic; }
+  .aviso {
+    background: var(--warn-bg); border: 1px solid var(--warn-border); border-radius: 8px;
+    padding: 10px 12px; font-size: 12.5px; color: #6b4b14;
+  }
+  .estado { font-size: 12.5px; color: var(--text-muted); margin-top: 8px; min-height: 16px; }
+  .estado.error { color: var(--danger); }
+  iframe.preview { width: 100%; height: 360px; border: 1px solid var(--border); border-radius: 6px; margin-top: 10px; background: #fff; }
+  .oculto { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <div>
+    <h1>motor-unifilares — Enseñar</h1>
+    <p class="lead">
+      Casos puntuales que las reglas escritas no cubren bien solo con texto: le mostrás una imagen real
+      (una captura de AutoCAD, una foto de un plano) y le explicás cómo se dibuja/conecta. Desde que lo guardás,
+      el generador lo usa automáticamente en cada tablero nuevo.
+    </p>
+  </div>
+
+  <div class="panel">
+    <label for="apiKey">Tu clave de Anthropic (se guarda solo en este navegador, nunca en el servidor)</label>
+    <input type="password" id="apiKey" placeholder="sk-ant-..." autocomplete="off" />
+  </div>
+
+  <div class="panel">
+    <h2>Ejemplos ya enseñados</h2>
+    <div id="listaEjemplos" class="lista-ejemplos">
+      <p class="vacio">Cargando…</p>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>Enseñar uno nuevo</h2>
+    <div class="field">
+      <label for="imagen">Imagen (AutoCAD, foto de un plano, etc.)</label>
+      <input type="file" id="imagen" accept="image/jpeg,image/png,image/webp" />
+    </div>
+    <div class="field">
+      <label for="explicacion">Explicación — cómo se dibuja/conecta, cuándo aplica</label>
+      <textarea id="explicacion" placeholder="Ej: esto es un protector de sobretensión nuevo, entra por..."></textarea>
+    </div>
+    <div class="field">
+      <label for="tagForzado">Tag (opcional — si lo dejás vacío, lo decide la IA)</label>
+      <input type="text" id="tagForzado" placeholder="protector_sobretension_v2" />
+    </div>
+    <div class="fila-botones">
+      <button class="primary" id="btnPrevisualizar">Generar previsualización</button>
+    </div>
+    <div id="estadoEnsenar" class="estado"></div>
+  </div>
+
+  <div class="panel oculto" id="panelPreview">
+    <h2>Revisar antes de guardar</h2>
+    <div class="field">
+      <label for="previewTag">Tag</label>
+      <input type="text" id="previewTag" />
+    </div>
+    <div class="field">
+      <label for="previewCuando">Cuándo aplica</label>
+      <textarea id="previewCuando"></textarea>
+    </div>
+    <iframe class="preview" id="previewFrame" title="Previsualización del ejemplo"></iframe>
+    <div class="fila-botones">
+      <button class="primary" id="btnGuardar">Guardar</button>
+      <button class="secondary" id="btnDescartar">Descartar</button>
+    </div>
+    <div id="estadoGuardar" class="estado"></div>
+  </div>
+</main>
+
+<script>
+  const APIKEY_STORAGE = "motor-unifilares:apiKey";
+  const apiKeyInput = document.getElementById("apiKey");
+  apiKeyInput.value = localStorage.getItem(APIKEY_STORAGE) || "";
+  apiKeyInput.addEventListener("input", () => {
+    localStorage.setItem(APIKEY_STORAGE, apiKeyInput.value);
+  });
+
+  function headersConApiKey() {
+    const key = apiKeyInput.value.trim();
+    return key ? { "X-Anthropic-Api-Key": key } : {};
+  }
+
+  async function cargarEjemplos() {
+    const cont = document.getElementById("listaEjemplos");
+    try {
+      const res = await fetch("/api/ejemplos");
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Error listando ejemplos.");
+      if (data.ejemplos.length === 0) {
+        cont.innerHTML = '<p class="vacio">Todavía no se enseñó ninguno.</p>';
+        return;
+      }
+      cont.innerHTML = "";
+      for (const ej of data.ejemplos) {
+        const row = document.createElement("div");
+        row.className = "ejemplo-row";
+        row.innerHTML = `
+          <div>
+            <div class="tag">${escapeHtml(ej.tag)}</div>
+            <div class="cuando">${escapeHtml(ej.cuandoAplica)}</div>
+          </div>
+          <button class="danger-text" data-tag="${escapeHtml(ej.tag)}">Eliminar</button>
+        `;
+        row.querySelector("button").addEventListener("click", () => eliminarEjemplo(ej.tag));
+        cont.appendChild(row);
+      }
+    } catch (err) {
+      cont.innerHTML = `<p class="vacio">No se pudo cargar la lista: ${escapeHtml(err.message)}</p>`;
+    }
+  }
+
+  async function eliminarEjemplo(tag) {
+    if (!confirm(`¿Eliminar el ejemplo "${tag}"?`)) return;
+    try {
+      const res = await fetch(`/api/ejemplos/${encodeURIComponent(tag)}`, { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "No se pudo eliminar.");
+      cargarEjemplos();
+    } catch (err) {
+      alert(err.message);
+    }
+  }
+
+  function escapeHtml(s) {
+    const d = document.createElement("div");
+    d.textContent = s;
+    return d.innerHTML;
+  }
+
+  function leerArchivoComoBase64(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const base64 = reader.result.split(",")[1];
+        resolve(base64);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  let comandosPrevisualizados = null;
+
+  document.getElementById("btnPrevisualizar").addEventListener("click", async () => {
+    const estado = document.getElementById("estadoEnsenar");
+    estado.className = "estado";
+    const fileInput = document.getElementById("imagen");
+    const explicacion = document.getElementById("explicacion").value.trim();
+    const tagForzado = document.getElementById("tagForzado").value.trim();
+
+    if (!apiKeyInput.value.trim()) {
+      estado.textContent = "Falta tu clave de Anthropic.";
+      estado.className = "estado error";
+      return;
+    }
+    if (!fileInput.files[0]) {
+      estado.textContent = "Elegí una imagen.";
+      estado.className = "estado error";
+      return;
+    }
+    if (!explicacion) {
+      estado.textContent = "Escribí la explicación.";
+      estado.className = "estado error";
+      return;
+    }
+
+    const btn = document.getElementById("btnPrevisualizar");
+    btn.disabled = true;
+    estado.textContent = "Consultando a Claude… puede tardar unos segundos.";
+
+    try {
+      const file = fileInput.files[0];
+      const imagenBase64 = await leerArchivoComoBase64(file);
+      const res = await fetch("/api/ejemplos/previsualizar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...headersConApiKey() },
+        body: JSON.stringify({ imagenBase64, mediaType: file.type, explicacion, tag: tagForzado || undefined }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Error generando la previsualización.");
+
+      comandosPrevisualizados = data.ejemplo.commands;
+      document.getElementById("previewTag").value = data.ejemplo.tag;
+      document.getElementById("previewCuando").value = data.ejemplo.cuandoAplica;
+      document.getElementById("previewFrame").src = `data:application/pdf;base64,${data.pdfBase64}`;
+      document.getElementById("panelPreview").classList.remove("oculto");
+      document.getElementById("estadoGuardar").textContent = "";
+      estado.textContent = "";
+      document.getElementById("panelPreview").scrollIntoView({ behavior: "smooth" });
+    } catch (err) {
+      estado.textContent = err.message;
+      estado.className = "estado error";
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  document.getElementById("btnDescartar").addEventListener("click", () => {
+    comandosPrevisualizados = null;
+    document.getElementById("panelPreview").classList.add("oculto");
+    document.getElementById("previewFrame").src = "";
+  });
+
+  document.getElementById("btnGuardar").addEventListener("click", async () => {
+    const estado = document.getElementById("estadoGuardar");
+    if (!comandosPrevisualizados) return;
+    const tag = document.getElementById("previewTag").value.trim();
+    const cuandoAplica = document.getElementById("previewCuando").value.trim();
+    if (!/^[a-z0-9_]+$/.test(tag)) {
+      estado.textContent = "El tag tiene que ser snake_case (minúsculas, números, _).";
+      estado.className = "estado error";
+      return;
+    }
+    const btn = document.getElementById("btnGuardar");
+    btn.disabled = true;
+    estado.textContent = "Guardando…";
+    estado.className = "estado";
+    try {
+      const res = await fetch("/api/ejemplos", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tag, cuandoAplica, commands: comandosPrevisualizados }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "No se pudo guardar.");
+      comandosPrevisualizados = null;
+      document.getElementById("panelPreview").classList.add("oculto");
+      document.getElementById("previewFrame").src = "";
+      document.getElementById("imagen").value = "";
+      document.getElementById("explicacion").value = "";
+      document.getElementById("tagForzado").value = "";
+      cargarEjemplos();
+    } catch (err) {
+      estado.textContent = err.message;
+      estado.className = "estado error";
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  cargarEjemplos();
+</script>
+</body>
+</html>

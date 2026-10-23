@@ -51,19 +51,27 @@ Storage, igual que ya hace con las fotos).
 Además de `REGLAS_UNIFILAR.md`, el motor acepta ejemplos puntuales ya
 resueltos — útil para algo que las reglas escritas no cubren bien solo con
 texto (un equipo nuevo, una conexión particular). Se enseña con una imagen
-real (ej. una captura de AutoCAD) + una explicación corta:
-
-```bash
-ANTHROPIC_API_KEY=... npm run ensenar -- foto.jpg "cómo se conecta esto..." [tag-opcional]
-```
-
-Esto le pide a Claude que convierta la imagen + la explicación en un
-fragmento de `DrawCommand[]` reusable, lo valida igual que el generador
-principal, y lo guarda en `reglas/ejemplos/<tag>.json` (ver el README de
-esa carpeta). El script también escribe un DXF de previsualización en
-`/tmp` para confirmar visualmente que quedó bien antes de commitear. Desde
-ese momento, cada ejemplo guardado se suma automáticamente al prompt de
+real (ej. una captura de AutoCAD) + una explicación corta, y queda
+guardado en una tabla propia de Supabase (`motor_unifilares_ejemplos`, en
+el mismo proyecto que usa `informes-app` — tabla aparte, sin acoplar
+código entre las dos apps, con RLS habilitado y sin políticas: solo este
+servicio puede leerla/escribirla, con la service role key). Desde que se
+guarda, cada ejemplo se suma automáticamente al prompt de
 `generarUnifilar()` junto con las reglas — no hace falta tocar código.
+
+Dos formas de enseñar:
+
+- **Interfaz web** (`GET /` — ver `public/ensenar.html`): subís la imagen,
+  escribís la explicación, pegás tu clave de Anthropic (se guarda solo en
+  el navegador, en `localStorage`, nunca llega al servidor salvo como
+  header de cada pedido), y el servicio genera una previsualización en PDF
+  para revisar antes de confirmar. Desde ahí podés editar el tag/la
+  descripción, guardar, o descartar. También lista y permite borrar los
+  ejemplos ya enseñados.
+- **CLI** (`npm run ensenar -- foto.jpg "cómo se conecta esto..." [tag]`):
+  misma lógica (`src/ensenar.ts`), pensada para probar rápido o
+  automatizar en lote. Escribe un PDF de previsualización en `/tmp` y pide
+  confirmación antes de guardar.
 
 ## Cómo correrlo
 
@@ -74,8 +82,18 @@ npm run dev       # tsx watch, recarga en caliente
 npm run build && npm start
 ```
 
-Variable de entorno: `PORT` (default 8787). No hace falta `ANTHROPIC_API_KEY`
-acá — viaja por request, no por entorno.
+Variables de entorno:
+
+- `PORT` (default 8787).
+- `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` — para guardar/leer los
+  ejemplos enseñados (`GET /`, `GET /api/ejemplos`, `POST /api/ejemplos*`).
+  Usar la **service role key** del proyecto de Supabase de `informes-app`
+  (Settings → API → Project API keys → `service_role`, **nunca** la
+  `anon`/pública) — sin estas dos variables, esos endpoints responden un
+  error claro en vez de romper el resto del servicio.
+- No hace falta `ANTHROPIC_API_KEY` acá — viaja por request (header
+  `X-Anthropic-Api-Key`), no por entorno, tanto en `/api/unifilar` como en
+  los endpoints de enseñar.
 
 ## Qué falta (en orden)
 
