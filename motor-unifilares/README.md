@@ -44,6 +44,25 @@ servicio **nunca sube nada a storage**: el que llama se queda con los
 bytes y decide qué hacer con ellos (en `informes-app` sería subirlos a
 Supabase Storage, igual que ya hace con las fotos).
 
+## Enseñarle casos puntuales
+
+Además de `REGLAS_UNIFILAR.md`, el motor acepta ejemplos puntuales ya
+resueltos — útil para algo que las reglas escritas no cubren bien solo con
+texto (un equipo nuevo, una conexión particular). Se enseña con una imagen
+real (ej. una captura de AutoCAD) + una explicación corta:
+
+```bash
+ANTHROPIC_API_KEY=... npm run ensenar -- foto.jpg "cómo se conecta esto..." [tag-opcional]
+```
+
+Esto le pide a Claude que convierta la imagen + la explicación en un
+fragmento de `DrawCommand[]` reusable, lo valida igual que el generador
+principal, y lo guarda en `reglas/ejemplos/<tag>.json` (ver el README de
+esa carpeta). El script también escribe un DXF de previsualización en
+`/tmp` para confirmar visualmente que quedó bien antes de commitear. Desde
+ese momento, cada ejemplo guardado se suma automáticamente al prompt de
+`generarUnifilar()` junto con las reglas — no hace falta tocar código.
+
 ## Cómo correrlo
 
 ```bash

@@ -2,13 +2,16 @@ import Anthropic from "@anthropic-ai/sdk";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { cargarEjemplos } from "./ejemplos.js";
 import { CAPAS_DXF, type DrawCommand, type UnifilarCircuito, type RotuloUnifilar, type UnifilarDrawing } from "./types.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REGLAS_PATH = join(__dirname, "..", "reglas", "REGLAS_UNIFILAR.md");
-const REGLAS_UNIFILAR = readFileSync(REGLAS_PATH, "utf-8");
 
-const ESQUEMA_DRAW_COMMAND = `
+/** El documento de reglas completo — lo reusa también scripts/ensenar.ts para darle el mismo contexto a los ejemplos nuevos. */
+export const REGLAS_UNIFILAR = readFileSync(REGLAS_PATH, "utf-8");
+
+export const ESQUEMA_DRAW_COMMAND = `
 Cada elemento de "commands" es UNO de estos 5 tipos (discriminados por "type"):
 - {"type":"line","x1":number,"y1":number,"x2":number,"y2":number,"layer":CAPA}
 - {"type":"rect","x":number,"y":number,"width":number,"height":number,"layer":CAPA,"fill"?:boolean}
@@ -23,7 +26,23 @@ arriba-a-la-izquierda, Y crece hacia ABAJO (igual que una página normal, no
 como un plano CAD — eso lo maneja el escritor DXF al final, no vos).
 `.trim();
 
-/** Prompt de sistema: el documento de reglas completo + el esquema exacto que tiene que devolver. Nunca se resume el documento — la fidelidad a lo escrito ahí es el punto de todo este motor. */
+/** Ejemplos puntuales ya enseñados (ver reglas/ejemplos/) — casos reales resueltos que se suman a las reglas escritas. */
+function construirBloqueEjemplos(): string {
+  const ejemplos = cargarEjemplos();
+  if (ejemplos.length === 0) return "";
+  const bloques = ejemplos.map(
+    (e) => `--- Ejemplo "${e.tag}" ---\nCuándo aplica: ${e.cuandoAplica}\nComandos:\n${JSON.stringify(e.commands)}`,
+  );
+  return (
+    "\n\n=== EJEMPLOS ENSEÑADOS (casos reales ya resueltos y validados por el usuario, además de las reglas de arriba) ===\n\n" +
+    bloques.join("\n\n") +
+    '\n\nSi el tablero actual tiene un circuito/equipo que coincide con alguno de estos ejemplos, dibujalo siguiendo ESE ' +
+    "patrón exacto de comandos (adaptando solo la posición y las coordenadas al lugar que le toca en el plano), en vez " +
+    "de inventar una variante propia.\n"
+  );
+}
+
+/** Prompt de sistema: el documento de reglas completo + los ejemplos enseñados + el esquema exacto que tiene que devolver. Nunca se resume el documento — la fidelidad a lo escrito ahí es el punto de todo este motor. */
 function construirSystemPrompt(): string {
   return (
     "Sos un dibujante técnico que arma planos unifilares de tableros eléctricos, siguiendo al pie de la letra el estándar " +
@@ -32,6 +51,7 @@ function construirSystemPrompt(): string {
     "criterio que usa un CAD: líneas, rectángulos, círculos, elipses y texto, cada uno en su capa.\n\n" +
     "=== REGLAS_UNIFILAR.md (estándar completo, aplicá TODO lo que corresponda) ===\n\n" +
     REGLAS_UNIFILAR +
+    construirBloqueEjemplos() +
     "\n\n=== FORMATO DE SALIDA ===\n\n" +
     ESQUEMA_DRAW_COMMAND +
     "\n\nRegla de oro (ya la viste arriba, la repito porque es la más importante): si un dato no está en el relevamiento, " +
@@ -54,7 +74,7 @@ function construirUserMessage(circuitos: UnifilarCircuito[], rotulo: RotuloUnifi
 
 const CAPAS_VALIDAS = new Set<string>(CAPAS_DXF);
 
-function validarDrawCommand(c: unknown): c is DrawCommand {
+export function validarDrawCommand(c: unknown): c is DrawCommand {
   if (!c || typeof c !== "object") return false;
   const o = c as Record<string, unknown>;
   if (typeof o.layer !== "string" || !CAPAS_VALIDAS.has(o.layer)) return false;

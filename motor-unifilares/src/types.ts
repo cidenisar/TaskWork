@@ -91,3 +91,18 @@ export interface RespuestaUnifilar {
   /** Null hasta que se sume el renderer de PDF (próximo paso). */
   pdfBase64: string | null;
 }
+
+/**
+ * Un caso puntual "enseñado" a mano (ver scripts/ensenar.ts): un fragmento
+ * de DrawCommand[] ya validado que muestra cómo dibujar algo específico
+ * (un equipo nuevo, una conexión particular) que las reglas escritas no
+ * cubren o no alcanzan a explicar bien con texto solo. Vive como JSON en
+ * reglas/ejemplos/ y se suma al prompt junto con REGLAS_UNIFILAR.md.
+ */
+export interface Ejemplo {
+  /** Identificador corto en snake_case — también el nombre del archivo. */
+  tag: string;
+  /** Cuándo el generador debe usar este ejemplo como referencia. */
+  cuandoAplica: string;
+  commands: DrawCommand[];
+}

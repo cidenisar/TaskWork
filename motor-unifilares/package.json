@@ -9,7 +9,8 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/server.js",
     "dev": "tsx watch src/server.ts",
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "ensenar": "tsx scripts/ensenar.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.123.0"
