@@ -7,8 +7,6 @@ import { renderTableroPdf } from "@/lib/pdf/render";
 import { buildTableroFilename } from "@/lib/pdf/filename";
 import { resolverUbicacionId, tagGpsSiFalta, type PayloadUbicacionNueva, type PayloadGps } from "@/lib/ubicaciones/resolver";
 import { calcularResumenEquipamiento, itemMideCorriente } from "@/components/tableros/types";
-import { construirUnifilar, construirUnifilarPaginado, agruparPorCuerpo, type RotuloUnifilar } from "@/lib/tableros/unifilar";
-import { drawCommandsToDxf } from "@/lib/dxf/writer";
 import type {
   EstadoChecklist,
   TableroCategoriaEquipo,
@@ -309,41 +307,6 @@ export async function crearMedicionTableroAction(formData: FormData): Promise<Cr
 
   const resumen = calcularResumenEquipamiento(payload.lecturas);
 
-  const { data: calibreRes } = await supabase.from("catalogo_calibre_cable").select("amperaje_max, calibre_mm2");
-  const configCalibre = (calibreRes ?? []).map((c) => ({ amperajeMax: Number(c.amperaje_max), calibreMm2: Number(c.calibre_mm2) }));
-  const circuitosPorCuerpo = agruparPorCuerpo(
-    payload.lecturas.map((l) => ({
-      numero: l.numero,
-      texto: l.texto,
-      categoriaEquipo: l.categoriaEquipo,
-      tipoCircuito: l.tipoCircuito,
-      ampNominal: l.ampNominal || null,
-      cuerpo: l.cuerpo.trim() || null,
-      alimentadoPorUps: l.alimentadoPorUps,
-      rolBypassUps: l.rolBypassUps,
-      padreNumero: l.padreNumero,
-      etiquetaCable: l.etiquetaCable.trim() || null,
-    })),
-  );
-  const { data: configEmpresa } = await supabase.from("config_general").select("nombre_empresa").eq("id", 1).single();
-  // Rótulo (cuadro de título al pie de cada hoja) con datos que ya existen
-  // en la medición — nunca un dato nuevo que haya que cargar aparte.
-  const rotulo: RotuloUnifilar = {
-    sitio: ubicacionTablero.sitio,
-    tablero: tableroRow.denominacion,
-    cliente: tableroRow.cliente,
-    contratista: configEmpresa?.nombre_empresa ?? "",
-    fecha: payload.fecha,
-    realizo: profile.nombreCompleto,
-    numeroGeneracion,
-  };
-  // El dibujo completo (sin partir) va al DXF, que no pasa por react-pdf y
-  // no tiene límite de altura por bloque. Para el PDF se usa la versión
-  // paginada: react-pdf queda colgado (sin excepción) si un bloque del
-  // esquema supera cierta altura — ver CRITERIOS_Y_IDEAS.md § 10.
-  const unifilar = construirUnifilar(circuitosPorCuerpo, configCalibre, rotulo);
-  const unifilarBloques = construirUnifilarPaginado(circuitosPorCuerpo, configCalibre, rotulo);
-
   const hallazgosConfirmados = (payload.hallazgos ?? []).filter((h) => h.estado);
   let hallazgosPdf: { texto: string; estado: EstadoChecklist; comentario: string | null }[] = [];
   if (hallazgosConfirmados.length > 0) {
@@ -374,7 +337,7 @@ export async function crearMedicionTableroAction(formData: FormData): Promise<Cr
     fecha: payload.fecha,
     resumen,
     fotosGeneralesBuffers,
-    unifilarBloques,
+    unifilarBloques: null,
     hallazgos: hallazgosPdf,
     lecturas: payload.lecturas.map((l) => {
       const mideCorriente = itemMideCorriente(l.categoriaEquipo, l.tipoCircuito, payload.tipoEvento);
@@ -414,21 +377,11 @@ export async function crearMedicionTableroAction(formData: FormData): Promise<Cr
     pdfUrl = signed?.signedUrl ?? null;
   }
 
-  // Esquema unifilar en DXF (mismos circuitos que el PDF, pero en un único
-  // dibujo sin partir en bloques — el DXF no pasa por react-pdf y no tiene
-  // el límite de altura por bloque que sí aplica al PDF, para abrir en
-  // AutoCAD) — una falla acá no debe tirar abajo la medición, que ya quedó
-  // guardada con su PDF.
-  if (unifilar.commands.length > 0) {
-    const dxfBuffer = drawCommandsToDxf(unifilar.commands, unifilar.height);
-    const dxfPath = `${profile.id}/tableros/${medicionId}/plano.dxf`;
-    const { error: dxfUpErr } = await supabase.storage
-      .from("informes-pdf")
-      .upload(dxfPath, dxfBuffer, { contentType: "application/dxf", upsert: true });
-    if (!dxfUpErr) {
-      await supabase.from("tablero_mediciones").update({ dxf_url: dxfPath }).eq("id", medicionId);
-    }
-  }
+  // El unifilar (PDF A3 + DXF) queda fuera de esta app por decisión del
+  // usuario — el motor geométrico no daba un resultado utilizable; el plan
+  // es un motor aparte (otra app/carpeta del repo) al que esta acción va a
+  // llamar más adelante. Hasta entonces, el PDF de relevamiento vuelve a
+  // mostrar solo la tabla de componentes, como antes de esa iniciativa.
 
   return { success: true, medicionId: medicionId!, numeroGeneracion, pdfUrl };
 }
