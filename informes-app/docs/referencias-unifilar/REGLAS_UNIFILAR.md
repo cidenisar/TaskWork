@@ -45,7 +45,7 @@ En los planos de 24 V (A4) el título va en una **banda gris oscura con texto bl
 | Equipo | Código | Ejemplo | Dónde se ve |
 | --- | --- | --- | --- |
 | Circuito (térmica + su diferencial + destino) | `Cnn` (2 dígitos) | C01 | Rótulo de la térmica, rótulo del diferencial y caja de destino |
-| Térmica general / protector / especiales | Nombre | GENERAL, SOBRETENSION, E.UPS, S.UPS, RODEO | Rótulo en negrita |
+| Térmica general / protector / especiales | Nombre | GENERAL, SOBRETENSION, E.UPS, S.UPS, RODEO, GRUPO ELECTROGENO | Rótulo en negrita |
 | Bornera de distribución | `BNR-nn` | BNR-01 | A la derecha de la caja |
 | Bloque de distribución | `PD-n` | PD-1 | Arriba a la izquierda del bloque |
 | Fusible | `Fn` + calibre | F1 2A | En el portafusible |
@@ -57,6 +57,7 @@ En los planos de 24 V (A4) el título va en una **banda gris oscura con texto bl
 | Relé | `RLY-nn` | RLY-01 | Etiqueta gris oscura |
 | Switch | `SWn` | SW1 | Etiqueta |
 | Inyector PoE | `POE-nn` | POE-15 | Debajo del equipo |
+| Powermeter (medidor de energía) | `PM-n` | PM-1 | Junto al símbolo, en el frente del tablero |
 | Borne de tierra | `Tn` | T3 | Bornera de tierra y junto a cada destino |
 
 (*) Ver Parte F: hoy conviven `C-1` y `FT-1` para la fuente.
@@ -96,6 +97,7 @@ Reglas:
 | TIERRA | Tres líneas decrecientes | — |
 | DESTINO | Rectángulo vertical, borde grueso, código `Cnn` arriba y texto rotado 90° | CODIGO, DESTINO, TIERRA |
 | EQUIPO_24V | Vista frontal del equipo (biblioteca de imágenes por modelo) + etiqueta gris | CODIGO, MARCA, MODELO |
+| POWERMETER | Igual tratamiento que LUZ_PILOTO (se instala en el frente del tablero, no en el riel) — círculo con `PM-n` adentro | CODIGO, ALIMENTACION (24V), MEDICION (a qué alimentador mide) |
 
 ## A6. Cables
 
@@ -103,6 +105,11 @@ Reglas:
 - Formato fijo: `<conductores>X<sección>mm`, sección con punto decimal, sin espacios.
 - Monofásico = 1 marca; trifásico + N = marca doble; cables en paralelo = dos marcas.
 - Un tramo de cable por cada tramo entre bornes; nunca dos formaciones en un mismo tramo.
+- **La sección NO se marca `A CONFIRMAR` solo por no verse en la foto**: si el
+  amperaje (`IN`) de la térmica que protege ese tramo se pudo leer, la
+  sección sale de la tabla calibre↔amperaje (la misma que ya usa la app,
+  `catalogo_calibre_cable`/`calcularCalibreCable`) — nunca se inventa a ojo.
+  Solo queda `A CONFIRMAR` cuando el `IN` tampoco se pudo leer.
 
 ## A7. Puesta a tierra
 
@@ -168,9 +175,12 @@ Reglas:
 
 ## B3. Trifásico (380 V)
 
-- Bornes en vertical, orden fijo **R, S, T, N** de arriba hacia abajo.
-- Monofásicos de un tablero trifásico: fase en rotación **R → S → T**, escrita en sus bornes.
-- Equipos intermedios (UPS) en su columna con `E.UPS`, `S.UPS` y bypass `RODEO`, más EPO y LUZ PILOTO SALIDA UPS.
+- Bornes en vertical, orden fijo **N, R, S, T** de arriba hacia abajo (corregido:
+  el neutro va primero, igual criterio que el monofásico — confirmado contra
+  los datos reales del DXF de referencia, donde el neutro aparece siempre
+  arriba de la fase en cada par de bornes).
+- Monofásicos de un tablero trifásico: fase en rotación **R → S → T**, escrita en sus bornes (siempre con el neutro arriba, como en 220V).
+- Equipos intermedios (UPS) en su columna con `E.UPS`, `S.UPS` y bypass `RODEO`, más EPO y LUZ PILOTO SALIDA UPS — trazado completo en H9.
 - Bloques de distribución `PD-n` (marca y modelo a la derecha) con su bornera PAT.
 
 ---
@@ -178,6 +188,19 @@ Reglas:
 # PARTE C – MÓDULO 24 Vcc
 
 Una hoja A4 vertical por cada conjunto batería / fuente / UPS.
+
+## C0. Cadena de alimentación (conexionado)
+
+El 24V siempre sigue esta cadena, en este orden, sin saltos:
+
+**Térmica (220V, unifilar de potencia) → FUENTE → UPS industrial (24V) →
+bornera doble piso con fusible (`Un-24V`) → cargas.**
+
+De esa bornera final se alimenta todo lo que use 24V: placas de control de
+acceso, relés, inyectores PoE, conversores, cerraduras eléctricas, luces
+piloto, etc. (ver G7 para el criterio de qué va a 24V y qué va directo a
+220V). La `CIRCUITO n / FUENTE` (A8) es la referencia hacia atrás, al
+circuito del unifilar de potencia que alimenta esta cadena completa.
 
 ## C1. Disposición fija
 
@@ -232,9 +255,15 @@ Cómo convertir lo que se ve en el tablero (foto o relevamiento) en circuitos an
 - Prioridad: 1) etiqueta en equipo o riel, 2) peine o puente visible, 3) reglas de posición.
 
 ## G2. Cabecera
-- Lo primero después de la bornera de entrada es la **Térmica GENERAL**.
+- El ingreso al tablero es **siempre por bornera inferior** (trifásico o
+  bipolar, no cambia el criterio) — de ahí sube a la **Térmica GENERAL**,
+  que se conecta por su **borne superior**.
 - Al lado va siempre el **protector de sobretensión** con su propia térmica **del mismo calibre que la general**, conectado **a la salida** de la general.
 - La salida de la general va a una bornera de conexionado (BNR); de ahí se alimentan el protector y la distribución.
+- De esa misma bornera de conexionado, lo habitual en zona común es **un
+  disyuntor cada 3 o 4 térmicas** (patrón "grupo", ver H3) — no es una regla
+  fija, es el reparto típico; si el relevamiento muestra otra cantidad, se
+  respeta lo relevado.
 - Disyuntor inmediatamente después de la general = **disyuntor general** → los circuitos **no** llevan disyuntor propio (edificios / oficinas). En tablero industrial se agrega observación (se recomienda uno por circuito).
 
 ## G3. Zona UPS y zona común
@@ -280,6 +309,167 @@ En el dibujo: térmica arriba y disyuntor abajo; en un grupo, el disyuntor prime
 - Disyuntor ≥ térmica que protege.
 - Tres térmicas de UPS del mismo calibre.
 - Térmica del protector del mismo calibre que la general.
+
+---
+
+# PARTE H – REGLAS DE CONEXIONADO (cómo se traza lo que G ya clasificó)
+
+G dice QUÉ es cada cosa (par, grupo, cascada, zona UPS). Esta parte dice CÓMO
+se traza: por dónde pasa cada línea, dónde se abre una rama, qué comparte
+barra y qué no. Sin esto, dos lecturas iguales del mismo tablero pueden
+terminar dibujadas de formas distintas — con esto, no.
+
+## H1. Principio general
+Un conductor es una línea continua entre dos bornes (o entre un borne y la
+barra). Nunca se cruza con otro conductor sin pasar por un borne, un símbolo
+o un punto de unión dibujado. Si dos circuitos necesitan cruzarse en el
+papel por el layout, se resuelve separando columnas — nunca con un cruce
+sin marcar.
+
+## H2. Patrón simple (`T D` — un circuito, de la Tabla G4)
+Ya descripto en B2: barra → cable → bornes → térmica → cable → bornes →
+disyuntor → cable → bornes → destino. Una sola columna, de arriba hacia
+abajo, sin ramas.
+
+## H3. Patrón "grupo" (`D T T T` de G4 — un disyuntor, varias térmicas)
+- El disyuntor va PRIMERO, inmediatamente bajo la barra principal, con su
+  propio código `PD-n` (no `Cnn` — es un bloque de distribución, no un
+  circuito).
+- De la salida del disyuntor baja una **sub-barra horizontal propia**, a la
+  misma altura para todas las térmicas del grupo (igual criterio que la
+  barra principal: doble línea, un punto de unión por rama).
+- Cada térmica cuelga de esa sub-barra exactamente como un circuito normal
+  cuelga de la barra principal (H2), con su propio `Cnn` independiente.
+- Ancho: cada térmica ocupa el mismo ancho de columna que un circuito
+  suelto; el grupo entero ocupa tantas columnas como térmicas tenga. El
+  disyuntor del grupo se centra sobre el ancho total del grupo.
+- Un grupo nunca se corta entre dos hojas sin referencia cruzada (ver H6) —
+  si no entra entero, se parte por térmica completa, nunca a mitad de una.
+
+## H4. Patrón "cascada" (`T` arriba / `D` abajo en dos rieles, misma posición)
+Es el mismo circuito que H2, repartido físicamente en dos rieles del
+gabinete real — el dibujo NO refleja esa separación física: se dibuja como
+un único circuito en una sola columna continua (térmica→disyuntor→destino),
+igual que H2. La cascada es solo un criterio de LECTURA (G4), no cambia el
+trazado.
+
+## H5. Zona UPS (`E.UPS` / `RODEO` / `S.UPS`)
+- Las tres térmicas van **al mismo nivel**, una al lado de la otra (no en
+  cascada ni colgando una de otra), cada una en su propia columna, sin
+  disyuntor propio — igual jerarquía que tres circuitos sueltos que
+  comparten la misma barra de entrada.
+- Todo lo que cuelga de la salida de `S.UPS` se dibuja como un bloque
+  `PD-n` propio (H3) que arranca inmediatamente debajo de `S.UPS`, con su
+  propia numeración de circuitos — nunca mezclado con los `Cnn` de la zona
+  común (G3).
+- `EPO` y `LUZ PILOTO SALIDA UPS` cuelgan de la salida de `S.UPS` al mismo
+  nivel que el bloque `PD-n`, a su izquierda.
+
+## H6. Referencias entre hojas (completa A8)
+- El corte entre hojas pasa siempre por un límite de columna completa —
+  nunca a mitad de un grupo (H3) ni a mitad de la numeración de un circuito
+  individual.
+- La columna donde corta termina con el texto `CONTINÚA EN HOJA n` (negrita,
+  A8) a la altura de la barra de esa hoja.
+- La hoja siguiente arranca esa misma rama con `VIENE DE HOJA n` a la misma
+  altura relativa (justo bajo su propia barra), antes de retomar el dibujo
+  normal del circuito (bornes, térmica, disyuntor, destino) como si nunca
+  se hubiera cortado.
+- El código `Cnn` (o `PD-n`) es el mismo a los dos lados del corte — nunca
+  se renumera por haber cambiado de hoja.
+
+## H7. Varias zonas de tensión en una misma hoja
+- Cada zona (`ENERGÍA 380V/220V`, `ENERGÍA 24V/12V`, etc.) tiene su **propia
+  barra horizontal** y su propio encabezado de sección en negrita
+  inmediatamente arriba de esa barra.
+- Las zonas se apilan verticalmente, de arriba hacia abajo, en el mismo
+  orden en que aparecen en el riel real (G1) — nunca comparten una barra ni
+  se entrelazan sus circuitos en el mismo nivel.
+
+## H8. Numeración de conductores y conexionado (refuerza A4)
+- Un número `A n` corresponde a UN tramo de cable entre dos puntos de
+  protección consecutivos (barra→térmica, térmica→disyuntor,
+  disyuntor→destino) — no al circuito completo.
+- Ese mismo número se escribe en **los dos extremos** de ese tramo (arriba,
+  junto al borne de salida del punto anterior; abajo, junto al borne de
+  entrada del punto siguiente) — es el mismo cable, por eso el mismo
+  número en ambas puntas (confirmado contra el DXF de referencia real: el
+  número nunca cambia entre dos bornes que comparten el mismo tramo).
+- Dentro de un tramo, los conductores son correlativos: monofásico = 2
+  números (N, luego fase); trifásico+N = 4 números (R, S, T, N — en ese
+  orden, de arriba hacia abajo, A4.3 y B3).
+- El contador avanza circuito por circuito, en el orden de lectura (G1):
+  se agotan los 3 tramos de C01 antes de empezar C02 — nunca se numeran
+  todos los tramos "de arriba" de todos los circuitos antes de pasar a los
+  "de abajo".
+
+## H9. Zona UPS — trazado completo (detalle real de conexionado)
+
+G3 dice cómo se IDENTIFICA una zona UPS (tres térmicas del mismo calibre,
+sin disyuntor). Esto es cómo se CONECTAN esas tres térmicas entre sí y con
+el resto del tablero — es más específico que H5 y lo reemplaza en lo que
+contradiga:
+
+1. **E.UPS** (entrada UPS): se alimenta de la MISMA bornera de salida de
+   la térmica GENERAL (la de G2/H2, la que también alimenta el protector de
+   sobretensión y la distribución común) — entra a su térmica por el borne
+   **superior**. La salida (borne **inferior**) va por bornera **hacia la
+   UPS física** (el equipo UPS está fuera del tablero — ese cable sale del
+   gabinete).
+2. **BYPASS** (`RODEO`): se alimenta de la MISMA bornera que E.UPS (salida
+   de la general), también por su borne **superior**. La salida (borne
+   **inferior**) va a una bornera propia, rotulada **"CONEXIÓN DE RODEO"**
+   o **"BYPASS"**.
+3. **S.UPS** (salida UPS): es la única de las tres que NO nace de la
+   bornera de la general — su entrada viene **desde la UPS física**, entra
+   al tablero por bornera **inferior** y sube a su térmica por el borne
+   **superior** (mismo criterio que la térmica GENERAL: lo que entra desde
+   afuera del tablero siempre conecta por abajo). La salida (borne
+   **inferior**) va a la MISMA bornera "CONEXIÓN DE RODEO / BYPASS" que la
+   salida de BYPASS (punto 2) — las dos convergen ahí.
+4. Desde esa bornera de RODEO/BYPASS (que recibe indistintamente la salida
+   de S.UPS o la de BYPASS) se alimenta el bloque `PD-n` con los circuitos
+   de zona UPS (H3/H5) — es el punto de unión entre "con UPS" y "bypaseado"
+   que ve cualquier carga aguas abajo, sin que le importe cuál de las dos
+   rutas está activa.
+
+En el dibujo: E.UPS y BYPASS quedan uno al lado del otro, los dos colgando
+de la misma bornera de salida de la general (mismo nivel que un circuito
+común); S.UPS queda en su propia columna con su entrada marcada como
+"desde UPS" en vez de desde la barra; la bornera RODEO/BYPASS es un
+elemento propio dibujado entre S.UPS/BYPASS y el bloque `PD-n` de cargas.
+
+## H10. Transferencia a grupo electrógeno
+
+- El cable viene **desde el grupo electrógeno** (equipo externo, fuera del
+  tablero) y entra al tablero por bornera **inferior** — mismo criterio que
+  cualquier fuente externa (H9.3): lo que entra de afuera siempre conecta
+  por abajo.
+- Sube a su propia térmica, con nombre especial **`GRUPO ELECTROGENO`**
+  (A3, no lleva `Cnn`), conectando por el borne **superior**.
+- La salida de esa térmica va a la **misma barra o bornera que la salida de
+  la térmica GENERAL** — las dos térmicas (GENERAL y GRUPO ELECTROGENO)
+  convergen en el mismo punto de distribución. Funcionalmente, si se corta
+  la red, el grupo arranca y alimenta esa misma barra; el dibujo no agrega
+  un símbolo de conmutador/transferencia propio salvo que el relevamiento
+  muestre uno físicamente — si no se ve, no se inventa (regla de oro).
+- En el dibujo: se ve como una segunda rama que entra al mismo nivel que la
+  salida de GENERAL, en vez de colgar de ella — las dos térmicas son
+  independientes entre sí, ninguna es padre de la otra.
+
+## H11. Powermeter
+
+- Se alimenta en **24V**, igual que cualquier carga de la bornera
+  `Un-24V` (C0/C3) — no tiene una fuente propia.
+- La **medición** la hace sobre el alimentador principal de la térmica
+  GENERAL (no sobre un circuito individual) — se dibuja una línea fina de
+  referencia desde el símbolo del powermeter hasta ese alimentador, con la
+  leyenda `MEDICIÓN`. Si el relevamiento no deja claro si la medición es
+  directa o por transformadores de corriente (TC), ese dato va
+  `A CONFIRMAR` — no se asume ninguna de las dos.
+- Se instala en el **frente del tablero**, no en el riel — mismo
+  tratamiento de dibujo que `LUZ_PILOTO` (A5): un símbolo aparte, no
+  colgado de la cadena térmica→disyuntor→destino de ningún circuito.
 
 ---
 

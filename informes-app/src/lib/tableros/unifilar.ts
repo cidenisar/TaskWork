@@ -237,10 +237,28 @@ export interface UnifilarDrawing {
  * renglón nuevo); la geometría de cada columna (`dibujarNodo`/
  * `renderGrupos`) no se toca.
  */
+/**
+ * Factor de escala del contenido (columnas, símbolos, bornes, texto) —
+ * corrección posterior a la Fase 5, comparando directo contra el DXF de
+ * referencia real del usuario (docs/referencias-unifilar/..., medido con
+ * ezdxf): nuestra hoja venía con fuentes/espaciados heredados de ANTES de
+ * pasar a A3 (Fase 3) y usaba apenas ~35% del ancho y ~40% del alto reales
+ * de la lámina, dejando el resto en blanco — mientras la referencia llena
+ * toda la hoja con símbolos y texto grandes. 1.4 no es arbitrario:
+ * round(1140 / 8) = 140 es el `COLUMNA_ANCHO` más grande que todavía
+ * entra exactamente 8 columnas (B2) en el ancho real de la hoja, y
+ * 140/100 = 1.4 — se aplica el mismo factor a todo lo demás (bornes,
+ * símbolos, texto) para que las proporciones internas de cada columna no
+ * cambien, solo la escala absoluta (por eso el truncado de texto por
+ * ancho sigue dando los mismos resultados: numerador y denominador
+ * escalan juntos, ver `maxCharsEnAncho`).
+ */
+const ESCALA_CONTENIDO = 1.4;
+
 const ANCHO_HOJA = 1140;
 const MARGEN = 10;
-const ALTO_HEADER_CUERPO = 18;
-const COLUMNA_ANCHO = 100;
+const ALTO_HEADER_CUERPO = 18 * ESCALA_CONTENIDO;
+const COLUMNA_ANCHO = 100 * ESCALA_CONTENIDO;
 const COLUMNAS_POR_FILA = Math.max(1, Math.floor((ANCHO_HOJA - MARGEN * 2) / COLUMNA_ANCHO));
 /**
  * Máximo de circuitos (destinos reales) por hoja — B2 del estándar
@@ -267,13 +285,13 @@ const COLUMNAS_POR_FILA = Math.max(1, Math.floor((ANCHO_HOJA - MARGEN * 2) / COL
  * usuario si hace falta.
  */
 const CIRCUITOS_MAX_POR_HOJA = 8;
-const ALTO_HEADER_SECCION = 12;
-const GAP_CUERPO = 10;
+const ALTO_HEADER_SECCION = 12 * ESCALA_CONTENIDO;
+const GAP_CUERPO = 10 * ESCALA_CONTENIDO;
 
-const SIMBOLO_R = 5;
-const ALTO_LINEA = 7;
+const SIMBOLO_R = 5 * ESCALA_CONTENIDO;
+const ALTO_LINEA = 7 * ESCALA_CONTENIDO;
 const LINEAS_SPEC = 3;
-const ALTO_ID_BOX = 12;
+const ALTO_ID_BOX = 12 * ESCALA_CONTENIDO;
 
 /**
  * Numeración de conductores (A4 del estándar de dibujo): cada punto donde un
@@ -288,12 +306,12 @@ const ALTO_ID_BOX = 12;
  * CRITERIOS_Y_IDEAS.md — @react-pdf/renderer se cuelga arriba de cierta
  * altura de bloque, así que cada línea nueva de verdad cuesta).
  */
-const CABLE_SEG = 5;
-const PRE_BORNE_GAP = 2;
-const BORNE_ALTO = 4.5;
+const CABLE_SEG = 5 * ESCALA_CONTENIDO;
+const PRE_BORNE_GAP = 2 * ESCALA_CONTENIDO;
+const BORNE_ALTO = 4.5 * ESCALA_CONTENIDO;
 /** Alto del bloque de bornes cuando son 4 líneas apiladas (380V trifásico, R S T N) en vez de las 2 de siempre — ver `dibujarBorneNumerado`. */
-const BORNE_ALTO_TRIFASICO = 12;
-const POST_BORNE_GAP = 2;
+const BORNE_ALTO_TRIFASICO = 12 * ESCALA_CONTENIDO;
+const POST_BORNE_GAP = 2 * ESCALA_CONTENIDO;
 /** Alto real del bloque de bornes en este punto, según cuántos conductores tiene el tipo de circuito (`letrasConductor`) — nunca un valor fijo, para que el paso entre dispositivos alcance de sobra en 380V trifásico (4 líneas apiladas) sin desperdiciar espacio en el resto (2 líneas). */
 function borneAlto(tipoCircuito: TableroTipoCircuito): number {
   return letrasConductor(tipoCircuito).length > 2 ? BORNE_ALTO_TRIFASICO : BORNE_ALTO;
@@ -308,7 +326,7 @@ function pasoADestino(tipoCircuito: TableroTipoCircuito): number {
 }
 
 /** Alto del símbolo de tierra (A5 TIERRA, 3 líneas decrecientes) + su "T n", agregado al pie de cada destino (A7: "cada destino lleva al lado su T n") — ver `dibujarTierra`. */
-const ALTO_TIERRA = 7;
+const ALTO_TIERRA = 7 * ESCALA_CONTENIDO;
 
 /**
  * Altura acumulada (no solo "cantidad de dispositivos") de la rama más alta
@@ -371,9 +389,10 @@ function truncarA(s: string, anchoDisponible: number, size: number, bold = false
  * plano por definitivo. Mismo criterio de truncado que el resto del
  * archivo (`truncarA`), no un ancho fijo a ojo.
  */
-const ANCHO_A_CONFIRMAR = 36;
+const ANCHO_A_CONFIRMAR = 36 * ESCALA_CONTENIDO;
+const TAMANO_A_CONFIRMAR = 2.8 * ESCALA_CONTENIDO;
 function dibujarAConfirmar(commands: DrawCommand[], x: number, y: number, texto: string): void {
-  commands.push({ type: "text", x, y, text: truncarA(texto, ANCHO_A_CONFIRMAR, 2.8), size: 2.8, layer: "A_CONFIRMAR" });
+  commands.push({ type: "text", x, y, text: truncarA(texto, ANCHO_A_CONFIRMAR, TAMANO_A_CONFIRMAR), size: TAMANO_A_CONFIRMAR, layer: "A_CONFIRMAR" });
 }
 
 const CATEGORIAS_BREAKER: TableroCategoriaEquipo[] = ["termica", "disyuntor"];
@@ -413,13 +432,13 @@ function dibujarSimbolo(commands: DrawCommand[], categoria: TableroCategoriaEqui
   if (CATEGORIAS_BREAKER.includes(categoria)) {
     const yTop = cy - SIMBOLO_R;
     const yBot = cy + SIMBOLO_R;
-    commands.push({ type: "circle", x: cx, y: yTop, r: 1.2, layer: "SIMBOLOS" });
-    commands.push({ type: "circle", x: cx, y: yBot, r: 1.2, layer: "SIMBOLOS" });
+    commands.push({ type: "circle", x: cx, y: yTop, r: 1.2 * ESCALA_CONTENIDO, layer: "SIMBOLOS" });
+    commands.push({ type: "circle", x: cx, y: yBot, r: 1.2 * ESCALA_CONTENIDO, layer: "SIMBOLOS" });
     commands.push({ type: "line", x1: cx, y1: yBot, x2: cx + SIMBOLO_R * 0.8, y2: yTop + SIMBOLO_R * 0.3, layer: "SIMBOLOS" });
     if (categoria === "disyuntor") {
-      commands.push({ type: "ellipse", x: cx, y: cy, rx: 3, ry: 1.8, layer: "SIMBOLOS" });
+      commands.push({ type: "ellipse", x: cx, y: cy, rx: 3 * ESCALA_CONTENIDO, ry: 1.8 * ESCALA_CONTENIDO, layer: "SIMBOLOS" });
       // Pulsador de prueba: línea corta hacia afuera del toroide.
-      commands.push({ type: "line", x1: cx + 3, y1: cy, x2: cx + 5, y2: cy, layer: "SIMBOLOS" });
+      commands.push({ type: "line", x1: cx + 3 * ESCALA_CONTENIDO, y1: cy, x2: cx + 5 * ESCALA_CONTENIDO, y2: cy, layer: "SIMBOLOS" });
     }
     return;
   }
@@ -430,10 +449,10 @@ function dibujarSimbolo(commands: DrawCommand[], categoria: TableroCategoriaEqui
     commands.push({ type: "rect", x: cx - w / 2, y: cy - h / 2, width: w, height: h, layer: "SIMBOLOS" });
     commands.push({
       type: "text",
-      x: cx - w / 2 + 1,
-      y: cy + 1.2,
+      x: cx - w / 2 + 1 * ESCALA_CONTENIDO,
+      y: cy + 1.2 * ESCALA_CONTENIDO,
       text: letras.join(" "),
-      size: letras.length > 2 ? 2.4 : 3.2,
+      size: (letras.length > 2 ? 2.4 : 3.2) * ESCALA_CONTENIDO,
       bold: true,
       layer: "SIMBOLOS",
     });
@@ -462,14 +481,14 @@ function nuevoContadorConductor(): ContadorConductor {
  */
 function dibujarBorneNumerado(commands: DrawCommand[], cx: number, cy: number, ctr: ContadorConductor, tipoCircuito: TableroTipoCircuito): number[] {
   const letras = letrasConductor(tipoCircuito);
-  const r = 0.9;
+  const r = 0.9 * ESCALA_CONTENIDO;
   commands.push({ type: "circle", x: cx, y: cy, r, layer: "BORNES" });
   commands.push({ type: "line", x1: cx - r * 0.7, y1: cy - r * 0.7, x2: cx + r * 0.7, y2: cy + r * 0.7, layer: "BORNES" });
-  const paso = 3.8;
+  const paso = 3.8 * ESCALA_CONTENIDO;
   const yPrimera = cy - ((letras.length - 1) / 2) * paso;
   return letras.map((letra, i) => {
     const n = ctr.siguiente++;
-    commands.push({ type: "text", x: cx + 2, y: yPrimera + i * paso, text: `${letra}  A${n}`, size: 3.2, layer: "NUM_CONDUCTOR" });
+    commands.push({ type: "text", x: cx + 2 * ESCALA_CONTENIDO, y: yPrimera + i * paso, text: `${letra}  A${n}`, size: 3.2 * ESCALA_CONTENIDO, layer: "NUM_CONDUCTOR" });
     return n;
   });
 }
@@ -484,8 +503,8 @@ function marcaCable(commands: DrawCommand[], cx: number, yTop: number, yBot: num
   commands.push({ type: "line", x1: cx, y1: yTop, x2: cx, y2: yBot, layer: "POTENCIA" });
   const ym = (yTop + yBot) / 2;
   const doble = (CONDUCTORES_POR_TIPO[tipoCircuito] ?? 2) >= 3;
-  const largo = 2.2;
-  for (const off of doble ? [-0.8, 0.8] : [0]) {
+  const largo = 2.2 * ESCALA_CONTENIDO;
+  for (const off of doble ? [-0.8 * ESCALA_CONTENIDO, 0.8 * ESCALA_CONTENIDO] : [0]) {
     commands.push({
       type: "line",
       x1: cx - largo / 2 + off,
@@ -496,7 +515,7 @@ function marcaCable(commands: DrawCommand[], cx: number, yTop: number, yBot: num
     });
   }
   if (formacion) {
-    commands.push({ type: "text", x: cx - 20, y: ym + 1, text: formacion, size: 3.4, layer: "CABLES" });
+    commands.push({ type: "text", x: cx - 20 * ESCALA_CONTENIDO, y: ym + 1 * ESCALA_CONTENIDO, text: formacion, size: 3.4 * ESCALA_CONTENIDO, layer: "CABLES" });
   }
 }
 
@@ -507,7 +526,7 @@ function marcaCable(commands: DrawCommand[], cx: number, yTop: number, yBot: num
  * agresivamente en cada rama, pero acá se trunca al máximo real que entra,
  * no a un número de caracteres fijo (ver `truncarA`/`maxCharsEnAncho`).
  */
-const ANCHO_TEXTO_COLUMNA = COLUMNA_ANCHO - 14;
+const ANCHO_TEXTO_COLUMNA = COLUMNA_ANCHO - 14 * ESCALA_CONTENIDO;
 
 type RenglonUnifilar = { tipo: "header"; texto: string } | { tipo: "columnas"; arboles: NodoArbol[] };
 
@@ -641,13 +660,13 @@ function altoRenglon(r: RenglonUnifilar): number {
 
 /** A5 TIERRA: tres líneas horizontales decrecientes (símbolo clásico de puesta a tierra), con su "T n" a la derecha — ver A7 y `dibujarNodo` (rama hoja). */
 function dibujarTierra(commands: DrawCommand[], x: number, y: number, tn: number): void {
-  const anchos = [4, 2.6, 1.3];
+  const anchos = [4 * ESCALA_CONTENIDO, 2.6 * ESCALA_CONTENIDO, 1.3 * ESCALA_CONTENIDO];
   let yl = y;
   for (const w of anchos) {
     commands.push({ type: "line", x1: x - w / 2, y1: yl, x2: x + w / 2, y2: yl, layer: "DESTINOS" });
-    yl += 1.4;
+    yl += 1.4 * ESCALA_CONTENIDO;
   }
-  commands.push({ type: "text", x: x + 4, y: y + 3, text: `T${tn}`, size: 3.4, layer: "DESTINOS" });
+  commands.push({ type: "text", x: x + 4 * ESCALA_CONTENIDO, y: y + 3 * ESCALA_CONTENIDO, text: `T${tn}`, size: 3.4 * ESCALA_CONTENIDO, layer: "DESTINOS" });
 }
 
 /**
@@ -674,6 +693,7 @@ function dibujarNodo(
   codigos: Map<number, CodigoEquipo>,
   tierra: Map<number, number>,
   ctr: ContadorConductor,
+  yBottomRenglon: number,
 ): void {
   const c = nodo.circuito;
   const codigo = codigos.get(c.numero)?.texto;
@@ -702,10 +722,10 @@ function dibujarNodo(
   // izquierda del símbolo — a la derecha ya está el eslabón/continuación
   // de los nodos con hijos (ver más abajo).
   if (CATEGORIAS_BREAKER.includes(c.categoriaEquipo)) {
-    const xAConf = cx - SIMBOLO_R - 4 - ANCHO_A_CONFIRMAR;
-    dibujarAConfirmar(commands, xAConf, ySymbol - 7, "POLOS: A CONFIRMAR");
+    const xAConf = cx - SIMBOLO_R - 4 * ESCALA_CONTENIDO - ANCHO_A_CONFIRMAR;
+    dibujarAConfirmar(commands, xAConf, ySymbol - 7 * ESCALA_CONTENIDO, "POLOS: A CONFIRMAR");
     if (c.categoriaEquipo === "disyuntor") {
-      dibujarAConfirmar(commands, xAConf, ySymbol - 3, "CLASE/IDN: A CONFIRMAR");
+      dibujarAConfirmar(commands, xAConf, ySymbol - 3 * ESCALA_CONTENIDO, "CLASE/IDN: A CONFIRMAR");
     }
   }
 
@@ -718,8 +738,15 @@ function dibujarNodo(
     // el código fuera al final, nunca llegaría a verse.
     const partes = [codigo, CATEGORIA_EQUIPO_LABEL[c.categoriaEquipo], amperaje ? `${amperaje}A` : null].filter((p): p is string => !!p);
     // Ancho real disponible: desde el texto (al costado del símbolo, centrado en la sub-columna) hasta el borde derecho de esa sub-columna — no un número fijo, porque una sub-columna de un "grupo" puede ser más angosta que una columna entera.
-    const anchoEslabon = xRight - (cx + SIMBOLO_R + 2) - 2;
-    commands.push({ type: "text", x: cx + SIMBOLO_R + 2, y: ySymbol + 2, text: truncarA(partes.join(" "), anchoEslabon, 5.5), size: 5.5, layer: "ETIQUETAS" });
+    const anchoEslabon = xRight - (cx + SIMBOLO_R + 2 * ESCALA_CONTENIDO) - 2 * ESCALA_CONTENIDO;
+    commands.push({
+      type: "text",
+      x: cx + SIMBOLO_R + 2 * ESCALA_CONTENIDO,
+      y: ySymbol + 2 * ESCALA_CONTENIDO,
+      text: truncarA(partes.join(" "), anchoEslabon, 5.5 * ESCALA_CONTENIDO),
+      size: 5.5 * ESCALA_CONTENIDO,
+      layer: "ETIQUETAS",
+    });
 
     let offset = 0;
     const subTramos = nodo.hijos.map((hijo) => {
@@ -740,13 +767,29 @@ function dibujarNodo(
     // parte; acá solo se deja el sentinel en la posición correcta.
     if (nodo.continuaEn) {
       const xUltimo = subTramos[subTramos.length - 1].xRight;
-      commands.push({ type: "text", x: xUltimo - COLUMNA_ANCHO + 3, y: yDespues - 2, text: `${SENTINEL_CONT}${nodo.continuaEn}`, size: 5.5, bold: true, layer: "ETIQUETAS" });
+      commands.push({
+        type: "text",
+        x: xUltimo - COLUMNA_ANCHO + 3 * ESCALA_CONTENIDO,
+        y: yDespues - 2 * ESCALA_CONTENIDO,
+        text: `${SENTINEL_CONT}${nodo.continuaEn}`,
+        size: 5.5 * ESCALA_CONTENIDO,
+        bold: true,
+        layer: "ETIQUETAS",
+      });
     }
     if (nodo.vieneDe) {
       const xPrimero = subTramos[0].xLeft;
-      commands.push({ type: "text", x: xPrimero + 3, y: yDespues - 2, text: `${SENTINEL_VIENE}${nodo.vieneDe}`, size: 5.5, bold: true, layer: "ETIQUETAS" });
+      commands.push({
+        type: "text",
+        x: xPrimero + 3 * ESCALA_CONTENIDO,
+        y: yDespues - 2 * ESCALA_CONTENIDO,
+        text: `${SENTINEL_VIENE}${nodo.vieneDe}`,
+        size: 5.5 * ESCALA_CONTENIDO,
+        bold: true,
+        layer: "ETIQUETAS",
+      });
     }
-    subTramos.forEach((t) => dibujarNodo(commands, t.hijo, t.xLeft, t.xRight, yDespues, nivel + 1, configCalibre, codigos, tierra, ctr));
+    subTramos.forEach((t) => dibujarNodo(commands, t.hijo, t.xLeft, t.xRight, yDespues, nivel + 1, configCalibre, codigos, tierra, ctr, yBottomRenglon));
     return;
   }
 
@@ -757,10 +800,10 @@ function dibujarNodo(
   const yBorneDestino = yDespues + CABLE_SEG + PRE_BORNE_GAP + alto / 2;
   marcaCable(commands, cx, yDespues, yBorneDestino, formacion, c.tipoCircuito);
   dibujarBorneNumerado(commands, cx, yBorneDestino, ctr, c.tipoCircuito);
-  const yEtiqueta = yBorneDestino + alto / 2 + 3;
+  const yEtiqueta = yBorneDestino + alto / 2 + 3 * ESCALA_CONTENIDO;
   commands.push({ type: "line", x1: cx, y1: yBorneDestino, x2: cx, y2: yEtiqueta, layer: "POTENCIA" });
 
-  const colLeft = xLeft + 3;
+  const colLeft = xLeft + 3 * ESCALA_CONTENIDO;
   const amperaje = parseAmperaje(c.ampNominal);
   const sufijo = c.rolBypassUps ? ROL_BYPASS_SUFIJO[c.rolBypassUps] : c.alimentadoPorUps ? " (UPS)" : "";
   // Mismo criterio que arriba: el código va PRIMERO para que sobreviva al
@@ -777,36 +820,95 @@ function dibujarNodo(
       type: "text",
       x: colLeft,
       y: yEtiqueta + ALTO_LINEA * (li + 1),
-      text: truncarA(s, ANCHO_TEXTO_COLUMNA, 6, bold),
-      size: 6,
+      text: truncarA(s, ANCHO_TEXTO_COLUMNA, 6 * ESCALA_CONTENIDO, bold),
+      size: 6 * ESCALA_CONTENIDO,
       bold,
       layer: "ETIQUETAS",
     });
   });
 
-  const yId = yEtiqueta + LINEAS_SPEC * ALTO_LINEA + 4;
-  commands.push({ type: "rect", x: colLeft - 1, y: yId, width: COLUMNA_ANCHO - 8, height: ALTO_ID_BOX, layer: "MARCO" });
+  // La caja de identificación del destino se ESTIRA hasta una base común
+  // (`yBottomRenglon`, el mismo para todas las columnas del renglón —
+  // calculado en `renderGrupos` a partir de la rama MÁS profunda de la
+  // fila) en vez de usar una altura fija: así es como se ve el DXF de
+  // referencia (docs/referencias-unifilar/..., HOJA 2 a HOJA 5) — una
+  // columna de ramas cortas no termina con un hueco en blanco, la caja
+  // simplemente baja más. La rama más profunda del renglón ya consume
+  // justo el presupuesto de `ALTO_ID_BOX` (así se calculó en
+  // `alturaRamaMax`/`alturaColumna`), por eso el piso real nunca da menos
+  // que `ALTO_ID_BOX` — el `Math.max` es solo defensivo (redondeo).
+  const yId = yEtiqueta + LINEAS_SPEC * ALTO_LINEA + 4 * ESCALA_CONTENIDO;
+  const yCajaFin = yBottomRenglon - ALTO_TIERRA - 5 * ESCALA_CONTENIDO;
+  const altoCaja = Math.max(ALTO_ID_BOX, yCajaFin - yId);
+  commands.push({ type: "rect", x: colLeft - 1 * ESCALA_CONTENIDO, y: yId, width: COLUMNA_ANCHO - 8 * ESCALA_CONTENIDO, height: altoCaja, layer: "MARCO" });
   const etiquetaId = c.etiquetaCable ? `${c.numero} — ${c.texto} (${c.etiquetaCable})` : `${c.numero} — ${c.texto}`;
-  commands.push({ type: "text", x: colLeft + 2, y: yId + 9, text: truncarA(etiquetaId, ANCHO_TEXTO_COLUMNA, 6.5, true), size: 6.5, bold: true, layer: "ETIQUETAS" });
+  commands.push({
+    type: "text",
+    x: colLeft + 2 * ESCALA_CONTENIDO,
+    y: yId + altoCaja - 4 * ESCALA_CONTENIDO,
+    text: truncarA(etiquetaId, ANCHO_TEXTO_COLUMNA, 6.5 * ESCALA_CONTENIDO, true),
+    size: 6.5 * ESCALA_CONTENIDO,
+    bold: true,
+    layer: "ETIQUETAS",
+  });
 
   // A7: "cada destino lleva al lado su T n" — además de su fila en la tabla
   // de PUESTA A TIERRA al pie del tablero (ver `filasTierra`/
   // `mapaNumerosTierra`, misma numeración, nunca dos fuentes de verdad).
   const tn = tierra.get(c.numero);
-  if (tn != null) dibujarTierra(commands, colLeft + 4, yId + ALTO_ID_BOX + 5, tn);
+  if (tn != null) dibujarTierra(commands, colLeft + 4 * ESCALA_CONTENIDO, yId + altoCaja + 5 * ESCALA_CONTENIDO, tn);
 }
 
-/** Arma los draw commands de un cuerpo ya resuelto en renglones (columnas de circuitos + encabezados de sección) y su mapa de códigos de equipo. Compartido por `construirUnifilar` y `construirUnifilarPaginado` para que el dibujo de a pedazos (paginado) sea idéntico al dibujo completo. `tierra` es el mapa numero→T n de TODO el tablero (ver `mapaNumerosTierra`), no por cuerpo — mismo criterio que `filasTierra`. */
+/** Altura total que ocuparía este `grupos` si se dibujara sin ningún estiramiento — misma suma que ya hace `renderGrupos` al avanzar `y`, pero calculada de antemano para saber cuánto falta hasta `alturaObjetivoHoja` (ver `renderGrupos`). */
+function alturaNaturalGrupos(grupos: [string, RenglonUnifilar[], Map<number, CodigoEquipo>][]): number {
+  return grupos.reduce((acc, [, renglones]) => acc + ALTO_HEADER_CUERPO + renglones.reduce((a, r) => a + altoRenglon(r), 0) + GAP_CUERPO, MARGEN);
+}
+
+/** Índice (dentro de `renglones`) de la última fila con circuitos reales (no un encabezado de sección) — o -1 si no hay ninguna. */
+function ultimoRenglonConCircuitos(renglones: RenglonUnifilar[]): number {
+  for (let i = renglones.length - 1; i >= 0; i--) {
+    if (renglones[i].tipo !== "header") return i;
+  }
+  return -1;
+}
+
+/**
+ * Arma los draw commands de un cuerpo ya resuelto en renglones (columnas de
+ * circuitos + encabezados de sección) y su mapa de códigos de equipo.
+ * Compartido por `construirUnifilar` y `construirUnifilarPaginado` para que
+ * el dibujo de a pedazos (paginado) sea idéntico al dibujo completo. `tierra`
+ * es el mapa numero→T n de TODO el tablero (ver `mapaNumerosTierra`), no por
+ * cuerpo — mismo criterio que `filasTierra`.
+ *
+ * `alturaObjetivoHoja`, cuando se pasa (solo desde `construirUnifilarPaginado`,
+ * una hoja A3 a la vez — `construirUnifilar`, que dibuja todo el tablero
+ * de un tirón sin concepto de "hoja", nunca la pasa), es la altura total que
+ * debería ocupar la hoja — no una altura mínima más, sino la altura real del
+ * DXF de referencia del estándar (ver docs/referencias-unifilar/
+ * REGLAS_UNIFILAR.md): ahí la caja de identificación de cada destino se
+ * estira hasta el pie de la hoja aunque el circuito sea simple, en vez de
+ * parar apenas entra el texto. Solo se estira la ÚLTIMA fila con circuitos
+ * del ÚLTIMO cuerpo de este bloque (nunca una fila intermedia, que tiene
+ * abajo otra fila pegada) y nunca por debajo de lo que el contenido ya
+ * necesita (`Math.max(0, …)`) — una hoja que ya llena `alturaObjetivoHoja`
+ * por sí sola queda exactamente igual que antes.
+ */
 function renderGrupos(
   grupos: [string, RenglonUnifilar[], Map<number, CodigoEquipo>][],
   configCalibre: ConfigCalibreCable[],
   tierra: Map<number, number>,
+  alturaObjetivoHoja?: number,
 ): UnifilarDrawing {
   const commands: DrawCommand[] = [];
   let y = MARGEN;
+  const estiramiento = alturaObjetivoHoja != null ? Math.max(0, alturaObjetivoHoja - alturaNaturalGrupos(grupos)) : 0;
 
-  for (const [cuerpo, renglones, codigos] of grupos) {
-    const alturaBloque = ALTO_HEADER_CUERPO + renglones.reduce((acc, r) => acc + altoRenglon(r), 0);
+  for (let cuerpoIdx = 0; cuerpoIdx < grupos.length; cuerpoIdx++) {
+    const [cuerpo, renglones, codigos] = grupos[cuerpoIdx];
+    const esUltimoCuerpo = cuerpoIdx === grupos.length - 1;
+    const extraCuerpo = esUltimoCuerpo ? estiramiento : 0;
+    const ultimoRenglonIdx = esUltimoCuerpo ? ultimoRenglonConCircuitos(renglones) : -1;
+    const alturaBloque = ALTO_HEADER_CUERPO + renglones.reduce((acc, r) => acc + altoRenglon(r), 0) + extraCuerpo;
     const yInicioBloque = y;
     // Numeración de conductores ("A n") correlativa dentro de este cuerpo —
     // reinicia por cuerpo, mismo criterio que `codigos` (ver comentario de
@@ -814,17 +916,34 @@ function renderGrupos(
     const ctr = nuevoContadorConductor();
 
     commands.push({ type: "rect", x: MARGEN, y: yInicioBloque, width: ANCHO_HOJA - MARGEN * 2, height: alturaBloque, layer: "MARCO" });
-    commands.push({ type: "text", x: MARGEN + 6, y: yInicioBloque + 12, text: cuerpo || "Sin cuerpo asignado", size: 9, bold: true, layer: "ETIQUETAS" });
+    commands.push({
+      type: "text",
+      x: MARGEN + 6 * ESCALA_CONTENIDO,
+      y: yInicioBloque + 12 * ESCALA_CONTENIDO,
+      text: cuerpo || "Sin cuerpo asignado",
+      size: 9 * ESCALA_CONTENIDO,
+      bold: true,
+      layer: "ETIQUETAS",
+    });
 
     let yRenglon = yInicioBloque + ALTO_HEADER_CUERPO;
-    for (const renglon of renglones) {
+    for (let renglonIdx = 0; renglonIdx < renglones.length; renglonIdx++) {
+      const renglon = renglones[renglonIdx];
       if (renglon.tipo === "header") {
-        commands.push({ type: "text", x: MARGEN + 6, y: yRenglon + 9, text: renglon.texto, size: 7.5, bold: true, layer: "ETIQUETAS" });
+        commands.push({
+          type: "text",
+          x: MARGEN + 6 * ESCALA_CONTENIDO,
+          y: yRenglon + 9 * ESCALA_CONTENIDO,
+          text: renglon.texto,
+          size: 7.5 * ESCALA_CONTENIDO,
+          bold: true,
+          layer: "ETIQUETAS",
+        });
         yRenglon += ALTO_HEADER_SECCION;
         continue;
       }
 
-      const yBus = yRenglon + 3;
+      const yBus = yRenglon + 3 * ESCALA_CONTENIDO;
       let offsetSlots = 0;
       const tramos = renglon.arboles.map((arbol) => {
         const slots = anchoEnSlots(arbol);
@@ -836,12 +955,14 @@ function renderGrupos(
       // Barra horizontal del renglón (doble línea) de la primera a la última columna usada.
       if (centros.length > 1) {
         commands.push({ type: "line", x1: centros[0], y1: yBus, x2: centros[centros.length - 1], y2: yBus, layer: "POTENCIA" });
-        commands.push({ type: "line", x1: centros[0], y1: yBus + 1.2, x2: centros[centros.length - 1], y2: yBus + 1.2, layer: "POTENCIA" });
+        commands.push({ type: "line", x1: centros[0], y1: yBus + 1.2 * ESCALA_CONTENIDO, x2: centros[centros.length - 1], y2: yBus + 1.2 * ESCALA_CONTENIDO, layer: "POTENCIA" });
       }
 
-      tramos.forEach((t) => dibujarNodo(commands, t.arbol, t.xLeft, t.xRight, yBus, 0, configCalibre, codigos, tierra, ctr));
+      const extraRenglon = renglonIdx === ultimoRenglonIdx ? estiramiento : 0;
+      const yBottomRenglon = yRenglon + altoRenglon(renglon) + extraRenglon;
+      tramos.forEach((t) => dibujarNodo(commands, t.arbol, t.xLeft, t.xRight, yBus, 0, configCalibre, codigos, tierra, ctr, yBottomRenglon));
 
-      yRenglon += altoRenglon(renglon);
+      yRenglon += altoRenglon(renglon) + extraRenglon;
     }
 
     y = yInicioBloque + alturaBloque + GAP_CUERPO;
@@ -1084,7 +1205,7 @@ function filasTierra(grupos: [string, RenglonUnifilar[], Map<number, CodigoEquip
   return filas;
 }
 
-const ALTO_FILA_TIERRA = 6;
+const ALTO_FILA_TIERRA = 6 * ESCALA_CONTENIDO;
 /**
  * El contenido de esta tabla, igual que cualquier otro bloque, se envuelve
  * después con `agregarMarcoYRotulo` (que agrega `ALTURA_MARCO_HOJA`) — así
@@ -1093,9 +1214,13 @@ const ALTO_FILA_TIERRA = 6;
  * bug real: con 60 filas/columna el contenido entraba bien pero, sumado el
  * marco, superaba el límite seguro de react-pdf — ver CRITERIOS_Y_IDEAS.md
  * § 19). 55 filas × 6pt = 330pt de filas + ~42pt de título/márgenes ≈ 372pt
- * de contenido, con margen de sobra debajo del presupuesto real (390pt).
+ * de contenido, con margen de sobra debajo del presupuesto real (390pt) —
+ * ese presupuesto (`ALTO_MAX_BLOQUE_SEGURO`) es un techo de react-pdf, NO
+ * un contenido que escale con `ESCALA_CONTENIDO`, así que el máximo de
+ * filas se divide por la escala (en vez de multiplicarse) para seguir
+ * entrando en el mismo techo fijo con filas más altas.
  */
-const MAX_FILAS_POR_COLUMNA_TIERRA = 55;
+const MAX_FILAS_POR_COLUMNA_TIERRA = Math.floor(55 / ESCALA_CONTENIDO);
 const MAX_COLUMNAS_TIERRA = 6;
 const FILAS_POR_BLOQUE_TIERRA = MAX_FILAS_POR_COLUMNA_TIERRA * MAX_COLUMNAS_TIERRA;
 
@@ -1104,21 +1229,24 @@ function construirTablaTierra(filas: FilaTierra[]): UnifilarDrawing {
   const columnas = Math.min(MAX_COLUMNAS_TIERRA, Math.max(1, Math.ceil(filas.length / MAX_FILAS_POR_COLUMNA_TIERRA)));
   const filasPorColumna = Math.ceil(filas.length / columnas);
   const colW = (ANCHO_HOJA - MARGEN * 2) / columnas;
-  const yTitulo = MARGEN + 12;
-  const yInicioFilas = yTitulo + 10;
+  const yTitulo = MARGEN + 12 * ESCALA_CONTENIDO;
+  const yInicioFilas = yTitulo + 10 * ESCALA_CONTENIDO;
 
   // Ancho real de ESTA columna (depende de en cuántas columnas entró la tabla completa, por eso se trunca acá y no en `filasTierra`).
-  const anchoTextoTierra = colW - 8;
-  const commands: DrawCommand[] = [{ type: "text", x: MARGEN + 6, y: yTitulo, text: "PUESTA A TIERRA", size: 9, bold: true, layer: "DESTINOS" }];
+  const anchoTextoTierra = colW - 8 * ESCALA_CONTENIDO;
+  const tamanoFilaTierra = 5 * ESCALA_CONTENIDO;
+  const commands: DrawCommand[] = [
+    { type: "text", x: MARGEN + 6 * ESCALA_CONTENIDO, y: yTitulo, text: "PUESTA A TIERRA", size: 9 * ESCALA_CONTENIDO, bold: true, layer: "DESTINOS" },
+  ];
   filas.forEach((f, i) => {
     const col = Math.floor(i / filasPorColumna);
     const row = i % filasPorColumna;
     commands.push({
       type: "text",
-      x: MARGEN + 4 + col * colW,
-      y: yInicioFilas + row * ALTO_FILA_TIERRA + 4,
-      text: truncarA(`T${f.tn}  ${f.etiqueta}`, anchoTextoTierra, 5),
-      size: 5,
+      x: MARGEN + 4 * ESCALA_CONTENIDO + col * colW,
+      y: yInicioFilas + row * ALTO_FILA_TIERRA + 4 * ESCALA_CONTENIDO,
+      text: truncarA(`T${f.tn}  ${f.etiqueta}`, anchoTextoTierra, tamanoFilaTierra),
+      size: tamanoFilaTierra,
       layer: "DESTINOS",
     });
   });
@@ -1194,11 +1322,17 @@ export function construirUnifilar(
  * apilados dentro de un mismo View) por encima de cierta altura — confirmado
  * reproduciendo el cuelgue localmente: con 39 circuitos en un solo cuerpo
  * (altura ~662pt) renderiza bien, con 40 (~678pt) el proceso no vuelve más
- * (ver CRITERIOS_Y_IDEAS.md § 10). Esta altura máxima por bloque, bien por
- * debajo de ese punto, es el límite real que no hay que cruzar nunca en el
- * PDF — ver UNIFILAR_ALTO_MAX_BLOQUE_PDF en tablero.tsx para el valor usado.
+ * (ver CRITERIOS_Y_IDEAS.md § 10). Ese cuelgue se correlaciona con la
+ * CANTIDAD de comandos de dibujo (muchos <Text>/<Line> apilados), no con la
+ * altura en sí — desde que `CIRCUITOS_MAX_POR_HOJA = 8` (Fase 3) cada bloque
+ * nunca pasa de ~500 comandos (8 circuitos), muy por debajo del bloque de 39
+ * circuitos que seguía andando bien a 662pt. Subido de 480 a 640 en esta
+ * sesión (ver `alturaObjetivoHoja` en `renderGrupos`, necesario para que la
+ * caja de destino llegue a estirarse como en el DXF de referencia) y
+ * revalidado con el harness (`probar-tablero-pdf.ts`, fixture de 60
+ * circuitos con cadena trifásica+bypass UPS) sin cuelgue — nunca asumido.
  */
-const ALTO_MAX_BLOQUE_SEGURO = 480;
+const ALTO_MAX_BLOQUE_SEGURO = 640;
 
 /**
  * Reemplaza los sentinels de continuación (ver `partirArbolSiHaceFalta`/
@@ -1341,7 +1475,7 @@ export function construirUnifilarPaginado(
   let alturaActual = MARGEN;
   let destinosActual = 0;
   const cerrarBloqueActual = () => {
-    bloques.push(renderGrupos(actual, configCalibre, tierra));
+    bloques.push(renderGrupos(actual, configCalibre, tierra, limiteBloque));
     tensionesPorBloque.push(tensionDeGrupos(actual));
     actual = [];
     alturaActual = MARGEN;
