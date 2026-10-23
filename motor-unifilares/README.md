@@ -95,13 +95,15 @@ Variables de entorno:
   `X-Anthropic-Api-Key`), no por entorno, tanto en `/api/unifilar` como en
   los endpoints de enseñar.
 
-## Qué falta (en orden)
+## Qué falta
 
 1. **Paginar en varias hojas A3** (B2: máximo 8 circuitos por hoja) — la
    IA todavía arma un solo dibujo continuo, sin cortar en hojas, igual que
    hacía `construirUnifilar` (no paginado) del lado de `informes-app`. El
    renderer de PDF ya soporta una sola hoja; paginar significa que la IA
    (o una pasada propia) devuelva varios `UnifilarDrawing`, uno por hoja.
-2. **Enganchar el botón real en `informes-app`** — hoy el PDF de
-   relevamiento no genera ningún unifilar (ver el commit que lo sacó); el
-   plan es un botón nuevo que llame a este servicio y suba lo que devuelva.
+
+El botón real ya está enganchado: `informes-app` llama a este servicio
+desde "Generar unifilar" en Historial de Tableros (ver
+`src/app/(app)/tableros/historial/unifilar-actions.ts` de ese repo) y
+sube el DXF/PDF que devuelve a Supabase Storage.
