@@ -3,7 +3,7 @@
  * captura de AutoCAD) + una explicación de un técnico, y le pide a Claude
  * que lo convierta en un `Ejemplo` reusable (ver types.ts). Lo usan tanto
  * scripts/ensenar.ts (CLI) como POST /api/ejemplos/previsualizar
- * (interfaz web, ver public/ensenar.html) — un solo lugar para esta
+ * (interfaz web, ver public/index.html) — un solo lugar para esta
  * lógica, dos formas de dispararla.
  */
 import Anthropic from "@anthropic-ai/sdk";

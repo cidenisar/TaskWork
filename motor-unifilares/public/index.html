@@ -204,15 +204,41 @@
     return d.innerHTML;
   }
 
-  function leerArchivoComoBase64(file) {
+  // El servicio corre en funciones serverless de Vercel, que rechazan
+  // cualquier pedido de más de 4.5MB — una foto de celular sin tocar
+  // puede superarlo fácil. La recomprimimos acá (máx. 1600px de lado,
+  // JPEG calidad 0.85) antes de mandarla; para una captura de AutoCAD o
+  // un plano, ese tamaño sigue siendo perfectamente legible para la IA.
+  const LADO_MAX_PX = 1600;
+  const CALIDAD_JPEG = 0.85;
+
+  function recomprimirImagen(file) {
     return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const base64 = reader.result.split(",")[1];
-        resolve(base64);
+      const img = new Image();
+      img.onload = () => {
+        const escala = Math.min(1, LADO_MAX_PX / Math.max(img.width, img.height));
+        const w = Math.round(img.width * escala);
+        const h = Math.round(img.height * escala);
+        const canvas = document.createElement("canvas");
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, w, h);
+        URL.revokeObjectURL(img.src);
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) return reject(new Error("No se pudo procesar la imagen."));
+            const reader = new FileReader();
+            reader.onload = () => resolve({ base64: reader.result.split(",")[1], mediaType: "image/jpeg" });
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+          },
+          "image/jpeg",
+          CALIDAD_JPEG,
+        );
       };
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
+      img.onerror = () => reject(new Error("No se pudo leer la imagen."));
+      img.src = URL.createObjectURL(file);
     });
   }
 
@@ -243,15 +269,16 @@
 
     const btn = document.getElementById("btnPrevisualizar");
     btn.disabled = true;
-    estado.textContent = "Consultando a Claude… puede tardar unos segundos.";
+    estado.textContent = "Procesando la imagen...";
 
     try {
       const file = fileInput.files[0];
-      const imagenBase64 = await leerArchivoComoBase64(file);
+      const { base64: imagenBase64, mediaType } = await recomprimirImagen(file);
+      estado.textContent = "Consultando a Claude… puede tardar unos segundos.";
       const res = await fetch("/api/ejemplos/previsualizar", {
         method: "POST",
         headers: { "Content-Type": "application/json", ...headersConApiKey() },
-        body: JSON.stringify({ imagenBase64, mediaType: file.type, explicacion, tag: tagForzado || undefined }),
+        body: JSON.stringify({ imagenBase64, mediaType, explicacion, tag: tagForzado || undefined }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Error generando la previsualización.");

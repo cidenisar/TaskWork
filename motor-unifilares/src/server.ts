@@ -1,7 +1,14 @@
 /**
  * Servicio HTTP mínimo (sin framework, mismo criterio que backend-server/):
  *   POST /api/unifilar                  — genera el plano (DXF+PDF) de un tablero ya relevado.
- *   GET  /                              — interfaz web para enseñar casos puntuales (public/ensenar.html).
+ *   GET  /                              — interfaz web para enseñar casos puntuales (public/index.html).
+ *
+ * Este server.ts es SOLO para desarrollo local (npm run dev/start) — el
+ * despliegue real corre en Vercel como funciones sueltas bajo api/ (ver
+ * esa carpeta), que llaman exactamente a los mismos módulos de src/. Si
+ * cambiás una validación o un contrato acá, replicalo en el api/*.ts
+ * correspondiente (y viceversa) — son dos adaptadores HTTP finitos sobre
+ * el mismo núcleo, no una sola fuente de verdad.
  *   GET  /api/ejemplos                  — lista los ejemplos ya enseñados.
  *   POST /api/ejemplos/previsualizar    — imagen+explicación → Ejemplo propuesto + PDF de previsualización (sin guardar).
  *   POST /api/ejemplos                  — guarda un ejemplo ya revisado.
@@ -22,7 +29,7 @@ import { calcularDimensiones } from "./geometria.js";
 import type { DrawCommand, PedidoUnifilar, RespuestaUnifilar } from "./types.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const PAGINA_ENSENAR = readFileSync(join(__dirname, "..", "public", "ensenar.html"), "utf-8");
+const PAGINA_ENSENAR = readFileSync(join(__dirname, "..", "public", "index.html"), "utf-8");
 
 const PORT = Number(process.env.PORT) || 8787;
 const MAX_BODY_BYTES = 20 * 1024 * 1024; // una foto en base64 pesa ~33% más que el archivo — 20MB da margen para fotos de celular normales

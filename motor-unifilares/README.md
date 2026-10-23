@@ -61,19 +61,26 @@ guarda, cada ejemplo se suma automáticamente al prompt de
 
 Dos formas de enseñar:
 
-- **Interfaz web** (`GET /` — ver `public/ensenar.html`): subís la imagen,
+- **Interfaz web** (`GET /` — ver `public/index.html`): subís la imagen,
   escribís la explicación, pegás tu clave de Anthropic (se guarda solo en
   el navegador, en `localStorage`, nunca llega al servidor salvo como
   header de cada pedido), y el servicio genera una previsualización en PDF
   para revisar antes de confirmar. Desde ahí podés editar el tag/la
   descripción, guardar, o descartar. También lista y permite borrar los
-  ejemplos ya enseñados.
+  ejemplos ya enseñados. La imagen se recomprime en el navegador antes de
+  mandarla (máx. 1600px, JPEG) — necesario porque el deploy real corre en
+  funciones serverless de Vercel, que rechazan cualquier pedido de más de
+  4.5MB.
 - **CLI** (`npm run ensenar -- foto.jpg "cómo se conecta esto..." [tag]`):
   misma lógica (`src/ensenar.ts`), pensada para probar rápido o
   automatizar en lote. Escribe un PDF de previsualización en `/tmp` y pide
   confirmación antes de guardar.
 
 ## Cómo correrlo
+
+**Local (desarrollo):** un server Node plano (`src/server.ts`), sin
+framework — solo para probar en esta máquina, no es lo que corre en
+producción.
 
 ```bash
 npm install
@@ -82,9 +89,21 @@ npm run dev       # tsx watch, recarga en caliente
 npm run build && npm start
 ```
 
-Variables de entorno:
+**Deploy real: Vercel.** No corre como proceso persistente — cada ruta es
+una función serverless bajo `api/` (zero-config, Vercel las detecta
+solas, sin necesitar un framework) y `public/index.html` se sirve como
+estático. Es un proyecto de Vercel APARTE del de `informes-app`, con
+root directory `motor-unifilares` dentro del mismo repo/monorepo (mismo
+patrón que ya usa `informes-app` como su propio proyecto). `vercel.json`
+ya fija `maxDuration: 60` (el máximo del plan gratis — una generación de
+un tablero grande puede acercarse a ese límite; si algún día un tablero
+real lo supera, ahí se evalúa pasar a Vercel Pro, que sube el tope a 300s,
+antes que mover el servicio a otra plataforma) y fuerza a incluir
+`reglas/` en el bundle de cada función.
 
-- `PORT` (default 8787).
+Variables de entorno (en el proyecto de Vercel, Settings → Environment
+Variables):
+
 - `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` — para guardar/leer los
   ejemplos enseñados (`GET /`, `GET /api/ejemplos`, `POST /api/ejemplos*`).
   Usar la **service role key** del proyecto de Supabase de `informes-app`
@@ -94,6 +113,10 @@ Variables de entorno:
 - No hace falta `ANTHROPIC_API_KEY` acá — viaja por request (header
   `X-Anthropic-Api-Key`), no por entorno, tanto en `/api/unifilar` como en
   los endpoints de enseñar.
+- `PORT` solo aplica al server local (`src/server.ts`), Vercel no lo usa.
+
+Una vez desplegado, la URL que te da Vercel para este proyecto es la que
+va en `MOTOR_UNIFILARES_URL` del lado de `informes-app`.
 
 ## Qué falta
 

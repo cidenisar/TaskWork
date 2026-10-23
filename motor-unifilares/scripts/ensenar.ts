@@ -2,7 +2,7 @@
  * Herramienta de desarrollo para "enseñarle" un caso puntual al motor
  * desde la terminal — la misma lógica que expone la interfaz web
  * (POST /api/ejemplos/previsualizar + POST /api/ejemplos, ver
- * public/ensenar.html), pero disparada a mano, sin pasar por el navegador.
+ * public/index.html), pero disparada a mano, sin pasar por el navegador.
  * Útil para probar rápido o para automatizar en lote.
  *
  * Uso:
