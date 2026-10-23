@@ -5,10 +5,13 @@ import {
   obtenerUrlFotoMantenimientoAction,
   obtenerUrlPdfMedicionAction,
   obtenerUrlDxfMedicionAction,
+  obtenerUrlUnifilarPdfMedicionAction,
   eliminarMedicionAction,
   eliminarMantenimientoAction,
 } from "@/app/(app)/tableros/historial/actions";
+import { generarUnifilarAction } from "@/app/(app)/tableros/historial/unifilar-actions";
 import { Icon } from "@/components/icon";
+import { Spinner } from "@/components/spinner";
 import { TABLERO_EVENTO_LABEL, labelSubsistemas, type MantenimientoRow } from "./types";
 import type { TableroEventoTipo, TableroTipo } from "@/lib/database.types";
 
@@ -22,6 +25,7 @@ export interface HistorialMedicionRow {
   ubicacionLabel: string;
   pdfDisponible: boolean;
   dxfDisponible: boolean;
+  unifilarPdfDisponible: boolean;
 }
 
 function fmtFecha(fecha: string) {
@@ -85,6 +89,31 @@ export function HistorialTableros({
       return;
     }
     window.open(res.url, "_blank", "noopener,noreferrer");
+  }
+
+  async function verUnifilarPdf(id: string) {
+    setBusyId(id);
+    setNotice(null);
+    const res = await obtenerUrlUnifilarPdfMedicionAction(id);
+    setBusyId(null);
+    if (!res.url) {
+      setNotice(res.error || "No se pudo abrir el plano unifilar.");
+      return;
+    }
+    window.open(res.url, "_blank", "noopener,noreferrer");
+  }
+
+  async function generarUnifilar(id: string) {
+    setBusyId(id);
+    setNotice(null);
+    const res = await generarUnifilarAction(id);
+    setBusyId(null);
+    if (!res.success) {
+      setNotice(res.error || "No se pudo generar el unifilar.");
+      return;
+    }
+    setMediciones((prev) => prev.map((m) => (m.id === id ? { ...m, dxfDisponible: true, unifilarPdfDisponible: true } : m)));
+    setNotice("Unifilar generado.");
   }
 
   async function verFoto(id: string) {
@@ -202,6 +231,24 @@ export function HistorialTableros({
                       onClick={() => descargarDxf(m.id)}
                     >
                       {busyId === m.id ? "…" : <Icon name="download" size={15} />}
+                    </button>
+                    <button
+                      type="button"
+                      className="icon-btn"
+                      title={m.unifilarPdfDisponible ? "Ver plano unifilar (PDF)" : "Sin plano unifilar generado todavía"}
+                      disabled={!m.unifilarPdfDisponible || busyId === m.id}
+                      onClick={() => verUnifilarPdf(m.id)}
+                    >
+                      {busyId === m.id ? "…" : <Icon name="document" size={15} />}
+                    </button>
+                    <button
+                      type="button"
+                      className="icon-btn"
+                      title={m.unifilarPdfDisponible ? "Regenerar el unifilar con la IA" : "Generar el unifilar con la IA"}
+                      disabled={busyId === m.id}
+                      onClick={() => generarUnifilar(m.id)}
+                    >
+                      {busyId === m.id ? <Spinner size={15} /> : <Icon name="ai" size={15} />}
                     </button>
                     {esAdmin && (
                       <button

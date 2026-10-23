@@ -352,6 +352,8 @@ export type TableroMedicionRow = {
   foto_general_url: string | null;
   fotos_generales_urls: string[] | null;
   dxf_url: string | null;
+  /** PDF A3 del unifilar generado por motor-unifilares — aparte de dxf_url (mismo generador) y pdf_url (informe de relevamiento normal). */
+  unifilar_pdf_url: string | null;
   created_at: string;
 }
 

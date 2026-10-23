@@ -14,7 +14,7 @@ export default async function HistorialTablerosPage() {
   const [medicionesRes, mantenimientosRes] = await Promise.all([
     supabase
       .from("tablero_mediciones")
-      .select("id, numero_generacion, tipo_evento, fecha, pdf_url, dxf_url, tablero_id")
+      .select("id, numero_generacion, tipo_evento, fecha, pdf_url, dxf_url, unifilar_pdf_url, tablero_id")
       .order("fecha", { ascending: false }),
     supabase
       .from("tablero_mantenimientos")
@@ -53,6 +53,7 @@ export default async function HistorialTablerosPage() {
         ubicacionLabel: labelUbicacion(ubicacion),
         pdfDisponible: !!m.pdf_url,
         dxfDisponible: !!m.dxf_url,
+        unifilarPdfDisponible: !!m.unifilar_pdf_url,
       };
     })
     .filter((r): r is HistorialMedicionRow => r !== null);
