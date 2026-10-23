@@ -13,10 +13,13 @@
     "ensenar": "tsx scripts/ensenar.ts"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.123.0"
+    "@anthropic-ai/sdk": "^0.123.0",
+    "@react-pdf/renderer": "^4.9.0",
+    "react": "19.2.8"
   },
   "devDependencies": {
     "@types/node": "^22.7.0",
+    "@types/react": "^19",
     "tsx": "^4.19.0",
     "typescript": "^5.6.0"
   },

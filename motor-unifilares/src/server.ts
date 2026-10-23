@@ -10,6 +10,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import Anthropic from "@anthropic-ai/sdk";
 import { generarUnifilar, RespuestaIaInvalida } from "./anthropic-client.js";
 import { drawCommandsToDxf } from "./dxf-writer.js";
+import { drawCommandsToPdf } from "./pdf-renderer.js";
 import type { PedidoUnifilar, RespuestaUnifilar } from "./types.js";
 
 const PORT = Number(process.env.PORT) || 8787;
@@ -69,7 +70,8 @@ async function manejarGenerarUnifilar(req: IncomingMessage, res: ServerResponse)
   try {
     const dibujo = await generarUnifilar(apiKey, pedido.circuitos, pedido.rotulo);
     const dxfBuffer = drawCommandsToDxf(dibujo.commands, dibujo.height);
-    const respuesta: RespuestaUnifilar = { dxfBase64: dxfBuffer.toString("base64"), pdfBase64: null };
+    const pdfBuffer = await drawCommandsToPdf(dibujo.commands, dibujo.width, dibujo.height);
+    const respuesta: RespuestaUnifilar = { dxfBase64: dxfBuffer.toString("base64"), pdfBase64: pdfBuffer.toString("base64") };
     responderJson(res, 200, respuesta);
   } catch (err) {
     if (err instanceof RespuestaIaInvalida) {

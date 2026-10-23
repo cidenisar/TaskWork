@@ -35,14 +35,16 @@ de acceso elegido por ahora.
 Responde:
 
 ```json
-{ "dxfBase64": "...", "pdfBase64": null }
+{ "dxfBase64": "...", "pdfBase64": "..." }
 ```
 
-`pdfBase64` queda `null` hasta que se sume el renderer de PDF (paso
-siguiente, ver abajo) — por ahora el servicio solo genera DXF. Este
-servicio **nunca sube nada a storage**: el que llama se queda con los
-bytes y decide qué hacer con ellos (en `informes-app` sería subirlos a
-Supabase Storage, igual que ya hace con las fotos).
+El PDF es una sola hoja A3 apaisada (sin paginar todavía — ver "Qué falta"
+abajo), con el mismo `DrawCommand[]` que el DXF, renderizado con
+`@react-pdf/renderer` (mismo mapeo a `<Svg>`/`<Text>` que ya usa
+`informes-app`, así los dos formatos se ven iguales). Este servicio
+**nunca sube nada a storage**: el que llama se queda con los bytes y
+decide qué hacer con ellos (en `informes-app` sería subirlos a Supabase
+Storage, igual que ya hace con las fotos).
 
 ## Enseñarle casos puntuales
 
@@ -77,14 +79,11 @@ acá — viaja por request, no por entorno.
 
 ## Qué falta (en orden)
 
-1. **Renderer de PDF** (A3 apaisado, react-pdf) — hoy solo arma el DXF.
-   El DXF es el camino más corto para validar que el circuito completo
-   (reglas → IA → `DrawCommand[]` → archivo real) funciona de punta a
-   punta; el PDF reusa el mismo `DrawCommand[]`, solo cambia el renderer.
-2. **Paginar en varias hojas A3** (B2: máximo 8 circuitos por hoja) — la
-   primera versión le pide a la IA un solo dibujo continuo, sin cortar en
-   hojas, igual que hacía `construirUnifilar` (no paginado) del lado de
-   `informes-app`.
-3. **Enganchar el botón real en `informes-app`** — hoy el PDF de
+1. **Paginar en varias hojas A3** (B2: máximo 8 circuitos por hoja) — la
+   IA todavía arma un solo dibujo continuo, sin cortar en hojas, igual que
+   hacía `construirUnifilar` (no paginado) del lado de `informes-app`. El
+   renderer de PDF ya soporta una sola hoja; paginar significa que la IA
+   (o una pasada propia) devuelva varios `UnifilarDrawing`, uno por hoja.
+2. **Enganchar el botón real en `informes-app`** — hoy el PDF de
    relevamiento no genera ningún unifilar (ver el commit que lo sacó); el
    plan es un botón nuevo que llame a este servicio y suba lo que devuelva.

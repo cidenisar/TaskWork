@@ -88,8 +88,7 @@ export interface PedidoUnifilar {
 /** Respuesta: los archivos en base64 — este servicio nunca sube nada a storage, eso lo hace quien lo llama. */
 export interface RespuestaUnifilar {
   dxfBase64: string;
-  /** Null hasta que se sume el renderer de PDF (próximo paso). */
-  pdfBase64: string | null;
+  pdfBase64: string;
 }
 
 /**
