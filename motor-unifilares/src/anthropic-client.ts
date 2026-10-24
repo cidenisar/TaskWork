@@ -68,26 +68,32 @@ async function construirSystemPrompt(): Promise<Anthropic.TextBlockParam[]> {
     'no se inventa — se dibuja el texto "A CONFIRMAR" en la capa A_CONFIRMAR.\n\n' +
     "=== GENERACIÓN POR TRAMOS (importante) ===\n\n" +
     "Por el tiempo máximo que tiene la función que te llama, el tablero completo NO se te pide en un solo pedido — se " +
-    "divide en varios llamados separados, cada uno por un pedazo del mismo dibujo final, que después se unen en código " +
-    "(trasladando cada pedazo a su posición Y real). En cada pedido te digo exactamente qué tenés que dibujar ahora; " +
-    "dibujá SOLO eso, nunca de más ni de menos — no repitas elementos de otro tramo ni te adelantes a dibujar algo que " +
-    "todavía no te pidieron. Hay dos tipos de pedido:\n\n" +
+    "divide en varios llamados separados que se hacen EN PARALELO (al mismo tiempo, sin que uno vea la respuesta de " +
+    "otro) y después se unen en código. En cada pedido te digo exactamente qué tenés que dibujar ahora; dibujá SOLO " +
+    "eso, nunca de más ni de menos — no repitas elementos de otro tramo ni te adelantes a dibujar algo que todavía no " +
+    "te pidieron. Hay dos tipos de pedido:\n\n" +
     '1. "circuitos": dibujás un tramo del cuerpo del tablero (cabecera B1 y/o una tanda de circuitos B2/B3), empezando ' +
-    "SIEMPRE en Y=0 arriba de tu propio tramo (el lugar real en la hoja lo calcula el código después) — NUNCA dibujes " +
-    "el marco, el título, el rótulo ni el sello, eso es un pedido aparte. Cada circuito que te paso ya trae su propio " +
-    'campo "codigo" (Cnn, PD-n, BNR-nn, GENERAL, etc., ya calculado) — usalo tal cual en el rótulo del símbolo, nunca ' +
-    "inventes ni renumeres un código de circuito vos. La numeración de conductores (A4: series A/P/T) sí es tuya: " +
-    "te paso en qué número arranca cada serie para este tramo (porque el tablero sigue una sola numeración de punta a " +
-    "punta, no por tramo) y vos devolvés en qué número quedaste al terminar, para que el próximo tramo continúe de ahí " +
-    '— respondé con {"commands":[...],"height":<alto real que ocupó este tramo>,"numeroAFinal":<próximo A libre>,' +
-    '"numeroPFinal":<próximo P libre>,"numeroTFinal":<próximo T libre>} (si no usaste una serie en este tramo, el ' +
-    "Final de esa serie es igual al inicial que te pasaron).\n" +
-    '2. "marco_rotulo": es el último llamado de la generación — acá SÍ dibujás únicamente el marco (A2: grilla 1-16/' +
-    "A-H con flechas de centrado, bloque de revisiones), el título de 2 líneas, el rótulo abajo a la derecha y el " +
-    "sello PARA REVISION, usando el alto total de contenido que te paso (el marco tiene que envolver TODO ese " +
-    'contenido, que ya está dibujado por los llamados anteriores). Respondé con {"commands":[...],"height":<alto final ' +
-    "de la hoja completa, incluyendo el espacio del rótulo/sello si hace falta más que el alto de contenido que te " +
-    'pasé>} — sin numeroAFinal/P/T, ese pedido no dibuja circuitos.\n\n' +
+    "SIEMPRE en Y=0 arriba de tu propio tramo (el lugar real en la hoja lo calcula el código después, y la numeración " +
+    "de conductores A4 también la reordena el código después, ver abajo) — NUNCA dibujes el marco, el título, el " +
+    'rótulo, el sello, ni el recuadro "PUESTA A TIERRA" con la lista completa de destinos, eso es un pedido aparte. ' +
+    'Cada circuito que te paso ya trae su propio campo "codigo" (Cnn, PD-n, BNR-nn, GENERAL, etc., ya calculado) — ' +
+    "usalo tal cual en el rótulo del símbolo, nunca inventes ni renumeres un código de circuito vos. La numeración de " +
+    "conductores (A4: series A/P/T) SÍ es tuya dentro de este tramo — arrancá cada serie en 1 (A 1, P 1, T 1) como si " +
+    "este tramo fuera todo el tablero: como los llamados son en paralelo, no hay forma de continuar la numeración de " +
+    "otro tramo acá, así que el código la reordena globalmente después usando el orden real de los tramos — vos solo " +
+    "tenés que ser consistente DENTRO de este tramo (mismo número en los dos extremos del mismo cable, H8). Además, " +
+    "por cada `T n` que uses (tierra, A7: uno por destino o equipo), agregalo a la lista `tierra` de la respuesta con " +
+    "su destino, para que el código arme el recuadro PUESTA A TIERRA completo en el último llamado (vos NO dibujás ese " +
+    'recuadro, solo reportás los pares). Respondé con {"commands":[...],"height":<alto real que ocupó este tramo>,' +
+    '"tierra":[{"numero":"T 1","destino":"texto corto del destino o equipo"}]} (array vacío si no usaste tierra).\n' +
+    '2. "marco_rotulo": es el último llamado de la generación — acá SÍ dibujás el marco (A2: grilla 1-16/A-H con ' +
+    "flechas de centrado, bloque de revisiones), el título de 2 líneas, el rótulo abajo a la derecha, el sello PARA " +
+    'REVISION, y el recuadro "PUESTA A TIERRA" (A7) con la lista `Tn – destino` que te paso YA ARMADA Y YA NUMERADA — ' +
+    "usala tal cual, en ese orden, nunca renumeres ni reordenes esos `Tn`. Usá el alto de contenido que te paso: el " +
+    'marco tiene que envolver TODO ese contenido, ya dibujado por los llamados anteriores. Respondé con ' +
+    '{"commands":[...],"height":<alto final de la hoja completa, incluyendo el espacio del rótulo/sello si hace falta ' +
+    'más que el alto de contenido que te pasé>} — sin "tierra", ese pedido no reporta nada nuevo, solo dibuja lo que ' +
+    "ya le pasaron.\n\n" +
     "Respondé SIEMPRE ÚNICAMENTE con el JSON pedido para el tipo de llamado que te toque, sin texto antes ni después, " +
     "sin bloque de código markdown.";
 
@@ -168,33 +174,33 @@ interface CircuitoConCodigo extends UnifilarCircuito {
   codigo: string;
 }
 
-function construirMensajeCircuitos(
-  circuitos: CircuitoConCodigo[],
-  incluirCabecera: boolean,
-  rotulo: RotuloUnifilar,
-  numeroAInicial: number,
-  numeroPInicial: number,
-  numeroTInicial: number,
-): string {
+function construirMensajeCircuitos(circuitos: CircuitoConCodigo[], incluirCabecera: boolean, rotulo: RotuloUnifilar): string {
   return (
     `Pedido de tipo "circuitos".` +
     (incluirCabecera
-      ? " Este es el PRIMER tramo del tablero: dibujá primero la cabecera (B1 — ORIGEN, térmica GENERAL, borneras BNR, " +
-        "protector de sobretensión, recuadro PUESTA A TIERRA) y después, debajo, estos circuitos."
-      : " Este es un tramo intermedio: NO dibujes cabecera, arrancá directo con la barra de estos circuitos (B2).") +
+      ? " Este es el tramo de la cabecera del tablero: dibujá primero la cabecera (B1 — ORIGEN, térmica GENERAL, " +
+        "borneras BNR, protector de sobretensión; NO el recuadro PUESTA A TIERRA, eso va aparte) y después, debajo, " +
+        "estos circuitos."
+      : " Este es un tramo de circuitos: NO dibujes cabecera, arrancá directo con la barra de estos circuitos (B2).") +
     `\n\nDatos del rótulo (cuadro de título, solo para contexto — no lo dibujes acá):\n${JSON.stringify(rotulo, null, 2)}` +
-    `\n\nNumeración de conductores: arrancá en A ${numeroAInicial}, P ${numeroPInicial}, T ${numeroTInicial}.` +
     `\n\nCircuitos de este tramo (orden de lectura real, con su encadenado por padreNumero y su "codigo" ya asignado):\n` +
     JSON.stringify(circuitos, null, 2)
   );
 }
 
-function construirMensajeMarcoRotulo(rotulo: RotuloUnifilar, alturaContenido: number, tensionesPresentes: string[]): string {
+function construirMensajeMarcoRotulo(
+  rotulo: RotuloUnifilar,
+  alturaContenido: number,
+  tensionesPresentes: string[],
+  tierra: { numero: string; destino: string }[],
+): string {
   return (
     `Pedido de tipo "marco_rotulo". Alto real del contenido ya dibujado por los tramos anteriores: ${alturaContenido}mm ` +
     `(el marco tiene que cubrir desde Y=0 hasta al menos esa altura).\n\n` +
     `Tensiones presentes en este tablero (para la segunda línea del título, "UNIFILAR <tensión> HOJA 1"): ` +
     `${tensionesPresentes.join("/") || "A CONFIRMAR"}.\n\n` +
+    `Lista completa de tierra para el recuadro PUESTA A TIERRA (A7), ya numerada en el orden correcto — usala tal ` +
+    `cual, no renumeres ni reordenes:\n${JSON.stringify(tierra, null, 2)}\n\n` +
     `Datos del rótulo (cuadro de título):\n${JSON.stringify(rotulo, null, 2)}`
   );
 }
@@ -219,61 +225,126 @@ function tensionesPresentesEn(circuitos: UnifilarCircuito[]): string[] {
   return orden;
 }
 
+interface TierraPar {
+  numero: string;
+  destino: string;
+}
+
+interface ResultadoLote {
+  commands: DrawCommand[];
+  height: number;
+  tierra: TierraPar[];
+}
+
+function validarResultadoLote(parsed: Record<string, unknown>): ResultadoLote {
+  if (typeof parsed.height !== "number" || !Array.isArray(parsed.tierra)) {
+    throw new RespuestaIaInvalida('La respuesta de un tramo "circuitos" no tiene la forma esperada ({"commands","height","tierra"}).');
+  }
+  const tierra = parsed.tierra.filter(
+    (t): t is TierraPar => !!t && typeof t === "object" && typeof (t as TierraPar).numero === "string" && typeof (t as TierraPar).destino === "string",
+  );
+  return { commands: validarComandos(parsed.commands), height: parsed.height, tierra };
+}
+
+const PATRON_CONDUCTOR = /^([APT]) \d+$/;
+
+/**
+ * Cada lote numeró sus conductores (A4: series A/P/T) arrancando en 1 de
+ * forma independiente (ver `construirSystemPrompt` — los lotes corren en
+ * paralelo, ninguno puede continuar la numeración de otro). Acá se
+ * renumera globalmente, en el orden real de los lotes: cada texto "A n"/
+ * "P n"/"T n" se reemplaza por el próximo número de su serie la primera
+ * vez que aparece DENTRO de un lote (y las repeticiones del mismo texto
+ * en ese mismo lote — el mismo cable en sus dos extremos, H8 — comparten
+ * el nuevo número). También arma, en el mismo orden, la lista completa
+ * `Tn – destino` para el recuadro PUESTA A TIERRA que dibuja el último
+ * llamado (marco_rotulo).
+ */
+function renumerarConductoresGlobal(resultados: ResultadoLote[]): { comandosPorLote: DrawCommand[][]; tierra: TierraPar[] } {
+  const contador: Record<"A" | "P" | "T", number> = { A: 1, P: 1, T: 1 };
+  const comandosPorLote: DrawCommand[][] = [];
+  const tierra: TierraPar[] = [];
+
+  for (const resultado of resultados) {
+    const mapaLocal = new Map<string, string>();
+    const siguienteTexto = (textoViejo: string): string => {
+      const existente = mapaLocal.get(textoViejo);
+      if (existente) return existente;
+      const serie = textoViejo[0] as "A" | "P" | "T";
+      const nuevoTexto = `${serie} ${contador[serie]++}`;
+      mapaLocal.set(textoViejo, nuevoTexto);
+      return nuevoTexto;
+    };
+
+    comandosPorLote.push(
+      resultado.commands.map((cmd) => (cmd.type === "text" && PATRON_CONDUCTOR.test(cmd.text) ? { ...cmd, text: siguienteTexto(cmd.text) } : cmd)),
+    );
+    for (const par of resultado.tierra) {
+      if (!PATRON_CONDUCTOR.test(par.numero)) continue; // dato mal formado de la IA, se descarta en vez de romper el recuadro
+      tierra.push({ numero: siguienteTexto(par.numero), destino: par.destino });
+    }
+  }
+  return { comandosPorLote, tierra };
+}
+
 /**
  * Le pasa los circuitos + el rótulo a Claude y devuelve el `UnifilarDrawing`
  * ya validado. `apiKey` es la de quien llama (ver README) — este servicio
  * no tiene una propia.
  *
- * La generación se parte en varios llamados (ver `armarLotes`) porque un
- * tablero con muchos circuitos, pedido entero de una, puede superar el
- * límite de tiempo de la función serverless (ver README, "Vercel Runtime
- * Timeout") — cada lote dibuja su propio tramo (empezando en Y=0) y acá se
- * trasladan y concatenan en la posición real, más un último llamado que
- * dibuja el marco/título/rótulo alrededor de todo el contenido ya armado.
- * Los códigos de equipo (Cnn/PD-n/etc.) se calculan una sola vez en código
- * (codigos-equipo.ts) para que sean consistentes entre lotes — ver el
- * comentario de ese archivo sobre por qué no se le pide eso a la IA.
+ * La generación se parte en varios llamados EN PARALELO (ver `armarLotes`)
+ * porque un tablero con muchos circuitos, pedido entero de una (o incluso
+ * en varios llamados pero uno atrás del otro), puede superar el límite de
+ * tiempo de la función serverless (ver README, "Vercel Runtime Timeout") —
+ * en paralelo, el tiempo total es el del lote más lento, no la suma de
+ * todos. Como los lotes no se ven entre sí, cada uno numera sus
+ * conductores (A4) arrancando de 1 y el código los renumera globalmente
+ * después (`renumerarConductoresGlobal`) — y arma el recuadro PUESTA A
+ * TIERRA completo recién en el último llamado (`marco_rotulo`), que sí
+ * corre después de tener todos los lotes resueltos. Los códigos de equipo
+ * (Cnn/PD-n/etc.) se calculan una sola vez en código (codigos-equipo.ts)
+ * para que sean consistentes entre lotes — ver el comentario de ese
+ * archivo sobre por qué no se le pide eso a la IA.
  */
 export async function generarUnifilar(apiKey: string, circuitos: UnifilarCircuito[], rotulo: RotuloUnifilar): Promise<UnifilarDrawing> {
   const system = await construirSystemPrompt();
   const codigos = calcularCodigosUnificados(circuitos);
   const lotes = armarLotes(circuitos);
 
-  const commands: DrawCommand[] = [];
+  const resultadosLotes = await Promise.all(
+    lotes.map(async (lote, i): Promise<ResultadoLote> => {
+      const circuitosConCodigo: CircuitoConCodigo[] = circuitosDelLote(lote).map((c) => ({
+        ...c,
+        codigo: codigos.get(c.numero)?.texto ?? "A CONFIRMAR",
+      }));
+      const userMessage = construirMensajeCircuitos(circuitosConCodigo, i === 0, rotulo);
+      const maxTokens = Math.min(8000, 3000 + circuitosConCodigo.length * 600);
+      const parsed = await llamarIa(apiKey, system, userMessage, maxTokens);
+      return validarResultadoLote(parsed);
+    }),
+  );
+
+  // Renumerar conductores y trasladar coordenadas son dos pasadas
+  // independientes (una toca `text`, la otra `x`/`y`) — el orden entre
+  // ellas no importa, ambas preservan el orden real de los lotes.
+  const { comandosPorLote, tierra } = renumerarConductoresGlobal(resultadosLotes);
   let alturaAcumulada = 0;
-  let numeroA = 1;
-  let numeroP = 1;
-  let numeroT = 1;
-
-  for (const [i, lote] of lotes.entries()) {
-    const circuitosConCodigo: CircuitoConCodigo[] = circuitosDelLote(lote).map((c) => ({
-      ...c,
-      codigo: codigos.get(c.numero)?.texto ?? "A CONFIRMAR",
-    }));
-    const userMessage = construirMensajeCircuitos(circuitosConCodigo, i === 0, rotulo, numeroA, numeroP, numeroT);
-    const maxTokens = Math.min(8000, 3000 + circuitosConCodigo.length * 600);
-    const parsed = await llamarIa(apiKey, system, userMessage, maxTokens);
-
-    if (typeof parsed.height !== "number" || typeof parsed.numeroAFinal !== "number" || typeof parsed.numeroPFinal !== "number" || typeof parsed.numeroTFinal !== "number") {
-      throw new RespuestaIaInvalida(
-        'La respuesta de un tramo "circuitos" no tiene la forma esperada ({"commands","height","numeroAFinal","numeroPFinal","numeroTFinal"}).',
-      );
-    }
-    const loteComandos = validarComandos(parsed.commands);
-    commands.push(...trasladarComandos(loteComandos, alturaAcumulada));
-    alturaAcumulada += parsed.height;
-    numeroA = parsed.numeroAFinal;
-    numeroP = parsed.numeroPFinal;
-    numeroT = parsed.numeroTFinal;
+  const comandosRenumerados: DrawCommand[] = [];
+  for (const [i, comandos] of comandosPorLote.entries()) {
+    comandosRenumerados.push(...trasladarComandos(comandos, alturaAcumulada));
+    alturaAcumulada += resultadosLotes[i].height;
   }
 
-  const userMessageMarco = construirMensajeMarcoRotulo(rotulo, alturaAcumulada, tensionesPresentesEn(circuitos));
-  const parsedMarco = await llamarIa(apiKey, system, userMessageMarco, 3000);
+  const userMessageMarco = construirMensajeMarcoRotulo(rotulo, alturaAcumulada, tensionesPresentesEn(circuitos), tierra);
+  const parsedMarco = await llamarIa(apiKey, system, userMessageMarco, Math.min(6000, 3000 + tierra.length * 150));
   if (typeof parsedMarco.height !== "number") {
     throw new RespuestaIaInvalida('La respuesta del tramo "marco_rotulo" no tiene la forma esperada ({"commands","height"}).');
   }
   const comandosMarco = validarComandos(parsedMarco.commands);
-  commands.push(...comandosMarco);
 
-  return { commands, width: 420, height: Math.max(alturaAcumulada, parsedMarco.height) };
+  return {
+    commands: [...comandosRenumerados, ...comandosMarco],
+    width: 420,
+    height: Math.max(alturaAcumulada, parsedMarco.height),
+  };
 }
