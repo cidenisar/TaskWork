@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import type { EstadoRendicion } from "@/lib/database.types";
 import { filtrarRendicionesPorConsulta, type HistorialRendicionBuscable } from "@/lib/rendicion-gastos/nl-search";
-import { obtenerUrlPdfRendicionAction } from "@/app/(app)/rendicion-gastos/historial/actions";
+import { obtenerUrlPdfRendicionAction, eliminarRendicionAction } from "@/app/(app)/rendicion-gastos/historial/actions";
 import { Icon } from "@/components/icon";
 
 export interface HistorialRendicionRow extends HistorialRendicionBuscable {
@@ -24,14 +24,15 @@ function fmtMonto(monto: number, moneda: string) {
   return `${moneda} ${monto.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
-export function HistorialRendiciones({ rendiciones }: { rendiciones: HistorialRendicionRow[] }) {
+export function HistorialRendiciones({ rendiciones: rendicionesIniciales, esAdmin }: { rendiciones: HistorialRendicionRow[]; esAdmin: boolean }) {
+  const [rendiciones, setRendiciones] = useState(rendicionesIniciales);
   const [query, setQuery] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
   const filtered = useMemo(() => filtrarRendicionesPorConsulta(rendiciones, query), [rendiciones, query]);
 
-  async function verPdf(id: string, numeroGeneracion: string) {
+  async function verPdf(id: string) {
     setBusyId(id);
     setNotice(null);
     const res = await obtenerUrlPdfRendicionAction(id);
@@ -40,15 +41,20 @@ export function HistorialRendiciones({ rendiciones }: { rendiciones: HistorialRe
       setNotice(res.error || "No se pudo abrir el PDF.");
       return;
     }
-    const blob = await fetch(res.url).then((r) => r.blob());
-    const blobUrl = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = blobUrl;
-    a.download = res.filename || `${numeroGeneracion}.pdf`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(blobUrl);
+    window.open(res.url, "_blank", "noopener,noreferrer");
+  }
+
+  async function eliminar(id: string, motivo: string) {
+    if (!window.confirm(`¿Borrar definitivamente la rendición "${motivo}"? Esto no se puede deshacer.`)) return;
+    setBusyId(id);
+    setNotice(null);
+    const res = await eliminarRendicionAction(id);
+    setBusyId(null);
+    if (!res.success) {
+      setNotice(res.error || "No se pudo borrar la rendición.");
+      return;
+    }
+    setRendiciones((prev) => prev.filter((r) => r.id !== id));
   }
 
   return (
@@ -83,7 +89,7 @@ export function HistorialRendiciones({ rendiciones }: { rendiciones: HistorialRe
         {filtered.length === 0 ? (
           <div className="empty-note">No se encontraron rendiciones con esa búsqueda.</div>
         ) : (
-          <div>
+          <div className="list-grid">
             {filtered.map((r) => {
               const saldo = r.viaticoRecibido - r.totalGastado;
               const abierta = r.estado === "abierta";
@@ -117,7 +123,7 @@ export function HistorialRendiciones({ rendiciones }: { rendiciones: HistorialRe
                         className="icon-btn"
                         title={r.pdfDisponible ? "Ver PDF" : "Sin PDF disponible"}
                         disabled={!r.pdfDisponible || busyId === r.id}
-                        onClick={() => verPdf(r.id, r.numeroGeneracion)}
+                        onClick={() => verPdf(r.id)}
                       >
                         {busyId === r.id ? "…" : <Icon name="document" size={15} />}
                       </button>
@@ -131,6 +137,17 @@ export function HistorialRendiciones({ rendiciones }: { rendiciones: HistorialRe
                     >
                       <Icon name="chart" size={15} />
                     </a>
+                    {esAdmin && (
+                      <button
+                        type="button"
+                        className="icon-btn icon-btn-danger"
+                        title="Borrar rendición"
+                        disabled={busyId === r.id}
+                        onClick={() => eliminar(r.id, r.motivo)}
+                      >
+                        <Icon name="trash" size={15} />
+                      </button>
+                    )}
                   </div>
                 </div>
               );

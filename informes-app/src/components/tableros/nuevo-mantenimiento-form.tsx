@@ -7,8 +7,16 @@ import { ErrorNote, SuccessNote } from "@/components/notes";
 import { Icon } from "@/components/icon";
 import { labelSubsistemas, type TableroConCircuitos } from "./types";
 
-export function NuevoMantenimientoForm({ tableros }: { tableros: TableroConCircuitos[] }) {
-  const [tableroId, setTableroId] = useState("");
+export function NuevoMantenimientoForm({
+  tableros,
+  tableroIdInicial,
+}: {
+  tableros: TableroConCircuitos[];
+  tableroIdInicial?: string | null;
+}) {
+  // Deep-link desde el QR del tablero (ver /planos/tablero/[id]): llega con
+  // ?tableroId= y ya se arranca con ese tablero elegido.
+  const [tableroId, setTableroId] = useState(() => (tableroIdInicial && tableros.some((t) => t.id === tableroIdInicial) ? tableroIdInicial : ""));
   const [circuitoId, setCircuitoId] = useState("");
   const [fecha, setFecha] = useState(() => new Date().toISOString().slice(0, 10));
   const [descripcion, setDescripcion] = useState("");

@@ -39,6 +39,20 @@ export async function subirLogoAction(formData: FormData): Promise<ConfigActionR
   return { success: true };
 }
 
+export async function guardarNombreEmpresaAction(nombre: string): Promise<ConfigActionResult> {
+  const profile = await requireAdmin();
+  const limpio = nombre.trim();
+  if (!limpio) return { success: false, error: "El nombre no puede quedar vacío." };
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("config_general").update({ nombre_empresa: limpio }).eq("id", 1);
+  if (error) return { success: false, error: error.message };
+
+  await logAudit(supabase, profile, `Actualizó el nombre de la empresa a "${limpio}"`);
+  revalidatePath("/", "layout");
+  return { success: true };
+}
+
 export async function quitarLogoAction(): Promise<ConfigActionResult> {
   const profile = await requireAdmin();
   const supabase = await createClient();

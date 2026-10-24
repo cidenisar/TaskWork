@@ -7,7 +7,7 @@ export default async function NuevoInformePage() {
   await requireProfile();
   const supabase = await createClient();
 
-  const [tiposRes, clientesRes, provinciasRes, ubicaciones, tecnicosRes, torresRes, vehiculosRes, configRes, emailsRes] =
+  const [tiposRes, clientesRes, provinciasRes, ubicaciones, tecnicosRes, torresRes, vehiculosRes, configRes, emailsRes, hallazgosRes] =
     await Promise.all([
       supabase.from("catalogo_tipos_informe").select("nombre").order("nombre"),
       supabase.from("catalogo_clientes").select("nombre").order("nombre"),
@@ -20,6 +20,7 @@ export default async function NuevoInformePage() {
       supabase.from("catalogo_vehiculos").select("patente, marca_modelo").order("patente"),
       supabase.from("config_general").select("logo_empresa_url").eq("id", 1).single(),
       supabase.from("config_emails_envio").select("email, activo").eq("activo", true).order("email"),
+      supabase.from("catalogo_inspeccion_ia").select("id, texto").eq("modulo", "informe_tecnico").order("orden"),
     ]);
 
   return (
@@ -34,6 +35,7 @@ export default async function NuevoInformePage() {
           torres: (torresRes.data ?? []).map((t) => t.nombre),
           vehiculos: (vehiculosRes.data ?? []).map((v) => ({ patente: v.patente, marcaModelo: v.marca_modelo })),
         }}
+        catalogoHallazgos={hallazgosRes.data ?? []}
         logoUrl={configRes.data?.logo_empresa_url ?? null}
         emails={emailsRes.data ?? []}
       />

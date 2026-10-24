@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   crearUsuarioAction,
   cambiarRolAction,
@@ -9,6 +9,7 @@ import {
   blanquearPasswordAction,
   desactivarUsuarioAction,
   reactivarUsuarioAction,
+  subirFotoPerfilUsuarioAction,
 } from "@/app/(app)/configuracion/actions/usuarios";
 import { ROL_LABEL, type Rol } from "@/lib/types";
 import { Icon } from "@/components/icon";
@@ -21,6 +22,7 @@ export interface UsuarioRow {
   rol: Rol;
   torre: string | null;
   activo: boolean;
+  fotoPerfilUrl?: string | null;
 }
 
 const ROLES: Rol[] = ["tecnico", "supervisor", "admin"];
@@ -59,6 +61,8 @@ export function UsuariosCard({
   const [blanqueado, setBlanqueado] = useState<Record<string, string>>({});
   const [blanqueandoId, setBlanqueandoId] = useState<string | null>(null);
   const [passwordBlanqueo, setPasswordBlanqueo] = useState("");
+  const [subiendoFotoId, setSubiendoFotoId] = useState<string | null>(null);
+  const fotoInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   async function crear() {
     if (!email.trim() || !nombre.trim()) {
@@ -178,6 +182,20 @@ export function UsuariosCard({
     setPasswordBlanqueo("");
   }
 
+  async function subirFoto(u: UsuarioRow, file: File) {
+    setSubiendoFotoId(u.id);
+    setRowError((prev) => ({ ...prev, [u.id]: "" }));
+    const fd = new FormData();
+    fd.set("foto", file);
+    const res = await subirFotoPerfilUsuarioAction(u.id, u.nombreCompleto, fd);
+    setSubiendoFotoId(null);
+    if (!res.success || !res.fotoPerfilUrl) {
+      setRowError((prev) => ({ ...prev, [u.id]: res.error || "No se pudo subir la foto." }));
+      return;
+    }
+    setUsuarios((prev) => prev.map((x) => (x.id === u.id ? { ...x, fotoPerfilUrl: res.fotoPerfilUrl } : x)));
+  }
+
   async function toggleActivo(u: UsuarioRow) {
     setRowBusyId(u.id);
     setRowError((prev) => ({ ...prev, [u.id]: "" }));
@@ -272,13 +290,45 @@ export function UsuariosCard({
             >
               <div style={{ display: "flex", justifyContent: "space-between", width: "100%", flexWrap: "wrap", gap: 8 }}>
                 <div className="info">
-                  <div className="avatar">{(u.nombreCompleto[0] || "?").toUpperCase()}</div>
+                  {u.fotoPerfilUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element -- avatar chico, no vale la pena el optimizador de next/image acá
+                    <img
+                      src={u.fotoPerfilUrl}
+                      alt=""
+                      className="avatar"
+                      style={{ objectFit: "cover" }}
+                    />
+                  ) : (
+                    <div className="avatar">{(u.nombreCompleto[0] || "?").toUpperCase()}</div>
+                  )}
                   <div>
                     <div className="item-name">
                       {u.nombreCompleto}
                       {!u.activo && <span className="badge">INACTIVO</span>}
                     </div>
                     <div className="item-sub">{u.email}</div>
+                    <input
+                      ref={(el) => {
+                        fotoInputRefs.current[u.id] = el;
+                      }}
+                      type="file"
+                      accept="image/*"
+                      style={{ display: "none" }}
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        e.target.value = "";
+                        if (file) void subirFoto(u, file);
+                      }}
+                    />
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      style={{ marginTop: 4 }}
+                      onClick={() => fotoInputRefs.current[u.id]?.click()}
+                      disabled={subiendoFotoId === u.id}
+                    >
+                      {subiendoFotoId === u.id ? "Subiendo..." : u.fotoPerfilUrl ? "Cambiar foto" : "Subir foto"}
+                    </button>
                   </div>
                 </div>
                 <div style={{ display: "flex", gap: 6 }}>

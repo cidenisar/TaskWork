@@ -1,6 +1,6 @@
 {
-  "name": "Informes",
-  "short_name": "Informes",
+  "name": "TaskWork",
+  "short_name": "TaskWork",
   "description": "Informe Técnico y Rendición de Gastos",
   "start_url": "/",
   "display": "standalone",
