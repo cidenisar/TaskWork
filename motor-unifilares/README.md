@@ -190,6 +190,15 @@ pedidos internos en paralelo; paginar de verdad (una hoja física por
 tanda, cada una con su propio marco/rótulo) es trabajo a futuro que podría
 reusar esta misma partición en lotes.
 
+Los llamados a la IA usan `messages.stream(...).finalMessage()` en vez de
+`messages.create(...)` — con el `max_tokens` grande que usan los lotes, el
+SDK de Anthropic rechaza un pedido bloqueante normal (calcula que, en el
+peor caso, podría tardar más de 10 minutos y exige streaming). Si en algún
+runtime log aparece `Messages.create` en el stack trace del error (en vez
+de algo relacionado a `stream`), significa que ese deploy quedó atrás de
+este commit — hacer "Redeploy" de un deployment viejo en Vercel reconstruye
+ESE commit puntual, no la punta real de la rama.
+
 **Riesgo no probado:** varios lotes pegándole a la API de Anthropic al
 mismo tiempo, con la misma clave, podría eventualmente chocar con un
 límite de concurrencia/tasa de la cuenta en un tablero muy grande (muchos
