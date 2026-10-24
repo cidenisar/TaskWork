@@ -104,7 +104,7 @@ export class RespuestaIaInvalida extends Error {}
 export async function generarUnifilar(apiKey: string, circuitos: UnifilarCircuito[], rotulo: RotuloUnifilar): Promise<UnifilarDrawing> {
   const client = new Anthropic({ apiKey });
   const response = await client.messages.create({
-    model: "claude-opus-5-5",
+    model: "claude-sonnet-5-5",
     max_tokens: 16000,
     system: await construirSystemPrompt(),
     messages: [{ role: "user", content: construirUserMessage(circuitos, rotulo) }],

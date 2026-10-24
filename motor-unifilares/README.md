@@ -95,10 +95,15 @@ solas, sin necesitar un framework) y `public/index.html` se sirve como
 estático. Es un proyecto de Vercel APARTE del de `informes-app`, con
 root directory `motor-unifilares` dentro del mismo repo/monorepo (mismo
 patrón que ya usa `informes-app` como su propio proyecto). `vercel.json`
-ya fija `maxDuration: 60` (el máximo del plan gratis — una generación de
-un tablero grande puede acercarse a ese límite; si algún día un tablero
-real lo supera, ahí se evalúa pasar a Vercel Pro, que sube el tope a 300s,
-antes que mover el servicio a otra plataforma) y fuerza a incluir en el
+ya fija `maxDuration: 60` (el máximo del plan gratis). `generarUnifilar()`
+usa `claude-sonnet-5-5` (no Opus) puntualmente por esto: con Opus, un
+tablero con varios circuitos + el prompt completo (reglas + ejemplos
+enseñados) podía superar los 60s y la función moría con
+`Vercel Runtime Timeout Error` — Sonnet genera el mismo JSON estructurado
+sensiblemente más rápido (y más barato) sin pérdida de calidad relevante
+para esta tarea. Si algún día un tablero muy grande vuelve a acercarse al
+límite, ahí se evalúa pasar a Vercel Pro (sube el tope a 300s) antes que
+mover el servicio a otra plataforma. `vercel.json` también fuerza a incluir en el
 bundle de cada función `reglas/` y las fuentes estándar de `pdfkit`
 (`node_modules/pdfkit/js/data/**` y `node_modules/pdfkit/js/standard-fonts/**`
 — `pdfkit`, que usa `@react-pdf/renderer` por debajo, las carga en runtime
