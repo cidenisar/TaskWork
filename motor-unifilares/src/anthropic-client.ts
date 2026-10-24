@@ -149,14 +149,24 @@ function trasladarComandos(commands: DrawCommand[], dy: number): DrawCommand[] {
   });
 }
 
+/**
+ * Con el `max_tokens` grande que usan los lotes (ver `generarUnifilar`), el
+ * SDK de Anthropic rechaza un pedido bloqueante normal (`messages.create`)
+ * — calcula que, en el peor caso, podría tardar más de 10 minutos y exige
+ * streaming (`AnthropicError: Streaming is required...`). `messages.stream`
+ * + `finalMessage()` da el mismo `Message` final que `create`, solo que
+ * por streaming — no cambia nada de la lógica de acá para abajo.
+ */
 async function llamarIa(apiKey: string, system: Anthropic.TextBlockParam[], userMessage: string, maxTokens: number): Promise<Record<string, unknown>> {
   const client = new Anthropic({ apiKey });
-  const response = await client.messages.create({
-    model: "claude-sonnet-5-5",
-    max_tokens: maxTokens,
-    system,
-    messages: [{ role: "user", content: userMessage }],
-  });
+  const response = await client.messages
+    .stream({
+      model: "claude-sonnet-5-5",
+      max_tokens: maxTokens,
+      system,
+      messages: [{ role: "user", content: userMessage }],
+    })
+    .finalMessage();
 
   const textBlock = response.content.find((b) => b.type === "text");
   if (!textBlock || textBlock.type !== "text") {
