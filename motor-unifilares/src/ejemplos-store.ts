@@ -6,17 +6,8 @@
  * la tabla tiene RLS habilitado sin políticas, así que el anon/authenticated
  * key de informes-app no puede leerla ni escribirla — solo este servicio.
  */
-import { createClient } from "@supabase/supabase-js";
+import { clienteSupabase } from "./supabase-client.js";
 import type { DrawCommand, Ejemplo } from "./types.js";
-
-function clienteSupabase() {
-  const url = process.env.SUPABASE_URL;
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !serviceRoleKey) {
-    throw new Error("Faltan SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY en el entorno (ver README.md).");
-  }
-  return createClient(url, serviceRoleKey, { auth: { persistSession: false } });
-}
 
 interface FilaEjemplo {
   tag: string;

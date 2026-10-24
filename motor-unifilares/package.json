@@ -11,6 +11,7 @@
     "dev": "tsx watch src/server.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "ensenar": "tsx scripts/ensenar.ts",
+    "procesar-cola": "tsx scripts/procesar-cola.ts",
     "postinstall": "patch-package"
   },
   "dependencies": {

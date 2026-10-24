@@ -1,6 +1,6 @@
 /**
  * Servicio HTTP mínimo (sin framework, mismo criterio que backend-server/):
- *   POST /api/unifilar                  — genera el plano (DXF+PDF) de un tablero ya relevado.
+ *   POST /api/unifilar                  — encola el pedido de un plano (ver README.md "Generación asincrónica"); no genera nada acá.
  *   GET  /                              — interfaz web para enseñar casos puntuales (public/index.html).
  *
  * Este server.ts es SOLO para desarrollo local (npm run dev/start) — el
@@ -13,20 +13,21 @@
  *   POST /api/ejemplos/previsualizar    — imagen+explicación → Ejemplo propuesto + PDF de previsualización (sin guardar).
  *   POST /api/ejemplos                  — guarda un ejemplo ya revisado.
  *   DELETE /api/ejemplos/:tag           — borra un ejemplo.
- * Nunca sube nada a storage — eso lo hace quien llama (ver README.md).
+ * Nunca sube nada a storage — eso lo hace scripts/procesar-cola.ts (el
+ * worker que de verdad genera y sube el unifilar, ver README.md).
  */
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import Anthropic from "@anthropic-ai/sdk";
-import { generarUnifilar, RespuestaIaInvalida, validarDrawCommand } from "./anthropic-client.js";
+import { validarDrawCommand } from "./anthropic-client.js";
 import { generarEjemploDesdeImagen, RespuestaEnsenarInvalida, type MediaTypeImagen } from "./ensenar.js";
 import { listarEjemplos, guardarEjemplo, eliminarEjemplo } from "./ejemplos-store.js";
-import { drawCommandsToDxf } from "./dxf-writer.js";
-import { drawCommandsToPdf, drawCommandsToPdfFragment } from "./pdf-renderer.js";
+import { encolarJob } from "./jobs-store.js";
+import { drawCommandsToPdfFragment } from "./pdf-renderer.js";
 import { calcularDimensiones } from "./geometria.js";
-import type { DrawCommand, PedidoUnifilar, RespuestaUnifilar } from "./types.js";
+import type { DrawCommand, PedidoUnifilar } from "./types.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PAGINA_ENSENAR = readFileSync(join(__dirname, "..", "public", "index.html"), "utf-8");
@@ -68,9 +69,6 @@ function apiKeyDelHeader(req: IncomingMessage, res: ServerResponse): string | nu
 }
 
 async function manejarGenerarUnifilar(req: IncomingMessage, res: ServerResponse): Promise<void> {
-  const apiKey = apiKeyDelHeader(req, res);
-  if (!apiKey) return;
-
   let bodyRaw: string;
   try {
     bodyRaw = await leerBody(req);
@@ -86,28 +84,17 @@ async function manejarGenerarUnifilar(req: IncomingMessage, res: ServerResponse)
     responderJson(res, 400, { error: "El cuerpo no es JSON válido." });
     return;
   }
-  if (!Array.isArray(pedido?.circuitos) || pedido.circuitos.length === 0 || !pedido.rotulo) {
-    responderJson(res, 400, { error: 'El pedido necesita "circuitos" (array no vacío) y "rotulo".' });
+  if (!pedido?.medicionId || !Array.isArray(pedido.circuitos) || pedido.circuitos.length === 0 || !pedido.rotulo) {
+    responderJson(res, 400, { error: 'El pedido necesita "medicionId", "circuitos" (array no vacío) y "rotulo".' });
     return;
   }
 
   try {
-    const dibujo = await generarUnifilar(apiKey, pedido.circuitos, pedido.rotulo);
-    const dxfBuffer = drawCommandsToDxf(dibujo.commands, dibujo.height);
-    const pdfBuffer = await drawCommandsToPdf(dibujo.commands, dibujo.width, dibujo.height);
-    const respuesta: RespuestaUnifilar = { dxfBase64: dxfBuffer.toString("base64"), pdfBase64: pdfBuffer.toString("base64") };
-    responderJson(res, 200, respuesta);
+    const jobId = await encolarJob(pedido);
+    responderJson(res, 202, { jobId });
   } catch (err) {
-    if (err instanceof RespuestaIaInvalida) {
-      responderJson(res, 502, { error: `La IA no devolvió un plano utilizable: ${err.message}` });
-      return;
-    }
-    if (err instanceof Anthropic.APIError) {
-      responderJson(res, 502, { error: `Error de la API de Anthropic: ${err.message}` });
-      return;
-    }
-    console.error("[motor-unifilares] error inesperado:", err);
-    responderJson(res, 500, { error: "Error inesperado generando el unifilar." });
+    console.error("[motor-unifilares] error encolando el pedido:", err);
+    responderJson(res, 500, { error: "No se pudo encolar el pedido." });
   }
 }
 

@@ -354,6 +354,9 @@ export type TableroMedicionRow = {
   dxf_url: string | null;
   /** PDF A3 del unifilar generado por motor-unifilares — aparte de dxf_url (mismo generador) y pdf_url (informe de relevamiento normal). */
   unifilar_pdf_url: string | null;
+  /** Estado de la generación asincrónica del unifilar (null = nunca se pidió) — ver unifilar-actions.ts y motor-unifilares/README.md. */
+  unifilar_estado: "pendiente" | "generando" | "listo" | "error" | null;
+  unifilar_error: string | null;
   created_at: string;
 }
 

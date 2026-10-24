@@ -690,6 +690,31 @@ código que decide cuándo llamar al envío?".
   lo que rompió y cómo se arregló**, en el orden en que apareció — no una
   guía genérica del proveedor, sino la lista específica de esta vez, para
   no volver a perder el tiempo con los mismos problemas la próxima.
+- **"Redeploy" sobre una fila VIEJA de la lista de Deployments de Vercel
+  reconstruye ESE commit puntual, no la punta real de la rama** — si en el
+  medio se pushearon commits nuevos, ese Redeploy los ignora
+  silenciosamente. Si un error "ya arreglado" sigue reapareciendo
+  idéntico después de pushear el fix y hacer Redeploy, lo primero a
+  revisar es CUÁL fila de la lista se redesplegó — comparar el hash de
+  commit que muestra esa fila contra `git log` de la rama. La señal más
+  confiable para confirmar esto sin acceso directo al dashboard: los
+  números de línea del stack trace de un error en runtime logs — si no
+  coinciden con el archivo actual pero sí con una versión unos commits
+  atrás (`git show <commit>:<archivo> | grep -n ...`), el deploy que
+  corrió en producción es ese commit viejo, no el HEAD.
+- **La build cache de Vercel puede dejar una función sirviendo código
+  viejo aunque el deployment diga "Source: <el commit correcto>"** — pasó
+  en esta sesión: el commit del deployment era el HEAD real (con un fix
+  ya aplicado), pero el stack trace en runtime seguía siendo el de 3
+  commits atrás. La build había tardado sospechosamente poco (~24s) para
+  una recompilación completa de TypeScript, consistente con haber
+  reusado un bundle cacheado de una build anterior en vez de recompilar
+  ese archivo. La solución: desde el menú "..." del deployment más
+  reciente, "Redeploy" y DESTILDAR la casilla "Use existing Build Cache"
+  antes de confirmar — fuerza una build 100% desde cero. Vale la pena
+  probar esto temprano cuando un fix "no aparece" en producción pese a
+  que el Source del deployment ya es el commit correcto — antes de seguir
+  sospechando del código.
 
 ## 10. Generación de PDF con @react-pdf/renderer
 
@@ -1310,3 +1335,59 @@ para un presupuesto de altura en este archivo, buscar primero si ya
 existe una constante que lo describe (`ALTURA_MARCO_HOJA`,
 `ALTO_MAX_BLOQUE_SEGURO`) y calcular contra esas, nunca contra un
 número redondo elegido por intuición.
+
+## 21. Un botón que dispara un paso largo con IA no debe colgarse de la respuesta HTTP — encolar + worker aparte, no seguir achicando lotes
+
+**Contexto:** el botón "Generar unifilar" de `informes-app` le pedía a
+`motor-unifilares` (servicio aparte en Vercel) que generara el plano
+completo (varios llamados a Claude + render de PDF/DXF) y esperaba la
+respuesta en el mismo `POST /api/unifilar`. Se intentó, en orden,
+reducir el modelo (Opus→Sonnet), partir la generación en lotes
+secuenciales, pasar los lotes a paralelo (`Promise.all`), subir y bajar
+el tamaño de lote, y subir el `max_tokens` por lote — cada iteración
+arregló el síntoma inmediato (`stop_reason=max_tokens`, el guard de
+streaming del SDK) pero el timeout de 60s de la función serverless
+volvía a aparecer.
+
+**El error de fondo:** correr los lotes en paralelo solo evita que sus
+tiempos se SUMEN — el tiempo total de la función sigue siendo
+`tiempo del lote más lento` + `tiempo del llamado final que depende de
+todos los anteriores (si lo hay)` + `tiempo de cualquier render/upload
+después`. Si un único lote bien detallado ya puede tardar 40-60s en que
+la IA lo resuelva, ningún tamaño de lote lo arregla — achicar el lote
+no baja el PISO de tiempo que tarda un llamado, solo reduce cuánto se
+pierde si uno se cuelga. **Un único request HTTP que espera de punta a
+punta una generación con IA no entra de forma confiable en el timeout
+de ninguna función serverless**, sin importar cuánto se siga
+retocando el batching puertas adentro.
+
+**La solución real, una vez reconocido esto, fue arquitectónica, no otro
+ajuste de parámetros:** desacoplar "pedir" de "generar".
+1. El endpoint que atiende el click del botón solo valida y ENCOLA el
+   pedido en una tabla (`estado: "pendiente"`) — responde en
+   milisegundos, sin llamar a la IA.
+2. Un worker aparte, que corre como **proceso de Node, nunca como
+   función serverless**, es el que de verdad procesa la cola — sin
+   ningún `maxDuration`, puede tardar los minutos que haga falta.
+3. El worker escribe el resultado directo donde la UI ya lo espera
+   (mismas columnas/tablas que antes llenaba la respuesta síncrona), así
+   que la UI que consume el resultado no necesita cambios — solo
+   necesita, además, mostrar un estado intermedio ("pendiente" /
+   "generando" / "error") mientras tanto.
+4. Mientras la calidad del generador todavía se está ajustando, está
+   bien que ese worker se dispare A MANO (un script) en vez de
+   automático — automatizar el disparo de algo que todavía no da
+   resultados confiables solo genera más output para revisar sin que
+   nadie lo pidió. Cablear un disparo automático (cron, "fire and
+   forget" después de responder) es una mejora para después, no un
+   prerrequisito de la arquitectura asincrónica.
+
+**La señal para reconocer este caso a tiempo (antes de perder varias
+iteraciones):** si una tarea con IA detrás de un botón sigue dando
+timeout después de paralelizar Y de subir los topes de tokens Y de
+reducir el tamaño de lote, el problema ya no es de tuning — es que la
+tarea, por su naturaleza, no cabe en el contrato "un click = una
+respuesta HTTP inmediata". Encolar + worker aparte no es la última
+opción a probar cuando todo lo demás falló: es la primera pregunta a
+hacerse apenas se sospecha que un paso con IA puede acercarse al límite
+de tiempo de la plataforma.

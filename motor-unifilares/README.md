@@ -18,33 +18,31 @@ alternativa, ya separada del código de `informes-app`.
 
 ## Cómo se usa
 
-`informes-app` (o cualquier otro cliente) manda un `POST /api/unifilar`:
+`POST /api/unifilar` **solo encola el pedido** — no genera nada en el
+momento (ver "Generación asincrónica" más abajo sobre por qué):
 
 ```json
 {
+  "medicionId": "uuid de tablero_mediciones (informes-app)",
   "circuitos": [ /* UnifilarCircuito[], ver src/types.ts */ ],
   "rotulo": { "sitio": "...", "tablero": "...", "cliente": "...", "contratista": "...", "fecha": "...", "realizo": "...", "numeroGeneracion": "..." }
 }
 ```
 
-con el header `X-Anthropic-Api-Key: <clave>` — **este servicio no tiene su
-propia clave de Anthropic**, usa la de quien llama. De paso, eso filtra
-quién puede usarlo (solo quien tenga una clave válida), que es el criterio
-de acceso elegido por ahora.
-
-Responde:
+Responde al toque (sin header de API key — este endpoint no llama a la IA):
 
 ```json
-{ "dxfBase64": "...", "pdfBase64": "..." }
+{ "jobId": "uuid del pedido en motor_unifilares_jobs" }
 ```
 
-El PDF es una sola hoja A3 apaisada (sin paginar todavía — ver "Qué falta"
-abajo), con el mismo `DrawCommand[]` que el DXF, renderizado con
-`@react-pdf/renderer` (mismo mapeo a `<Svg>`/`<Text>` que ya usa
-`informes-app`, así los dos formatos se ven iguales). Este servicio
-**nunca sube nada a storage**: el que llama se queda con los bytes y
-decide qué hacer con ellos (en `informes-app` sería subirlos a Supabase
-Storage, igual que ya hace con las fotos).
+El PDF/DXF final no vuelve por esta respuesta — un worker aparte
+(`scripts/procesar-cola.ts`) los genera después y los escribe directo en
+`tablero_mediciones` (`dxf_url`/`unifilar_pdf_url`) del lado de
+`informes-app`, con su service role key. El PDF es una sola hoja A3
+apaisada (sin paginar todavía — ver "Qué falta" abajo), con el mismo
+`DrawCommand[]` que el DXF, renderizado con `@react-pdf/renderer` (mismo
+mapeo a `<Svg>`/`<Text>` que ya usa `informes-app`, así los dos formatos se
+ven iguales).
 
 ## Enseñarle casos puntuales
 
@@ -120,15 +118,102 @@ Variables):
   (Settings → API → Project API keys → `service_role`, **nunca** la
   `anon`/pública) — sin estas dos variables, esos endpoints responden un
   error claro en vez de romper el resto del servicio.
-- No hace falta `ANTHROPIC_API_KEY` acá — viaja por request (header
-  `X-Anthropic-Api-Key`), no por entorno, tanto en `/api/unifilar` como en
-  los endpoints de enseñar.
+- `/api/unifilar` ya no necesita `ANTHROPIC_API_KEY` en ningún lado —
+  desde que pasó a ser asincrónico (ver "Generación asincrónica" más
+  abajo), ese endpoint solo encola, nunca llama a la IA. Los endpoints de
+  enseñar (`/api/ejemplos/previsualizar`, interfaz web) siguen tomando la
+  clave por request (header `X-Anthropic-Api-Key`), igual que siempre.
 - `PORT` solo aplica al server local (`src/server.ts`), Vercel no lo usa.
 
 Una vez desplegado, la URL que te da Vercel para este proyecto es la que
 va en `MOTOR_UNIFILARES_URL` del lado de `informes-app`.
 
+## Generación asincrónica (la cola + el worker)
+
+**Por qué:** incluso con todo lo de "Generación por tramos EN PARALELO"
+(más abajo) — lotes chicos, en paralelo, streaming — un tablero con el
+nivel de detalle que pide `REGLAS_UNIFILAR.md` por circuito puede dejar
+`generarUnifilar()` entero (el lote más lento + el llamado final de
+marco/rótulo, que es siempre secuencial después de los lotes + el render
+de PDF/DXF) por encima de los 60s de una función serverless de Vercel, sin
+importar cuánto se siga achicando el lote — achicar el lote no baja el
+piso de tiempo que tarda un solo llamado bien detallado, solo reduce
+cuánto se pierde si alguno se cuelga. Un solo `POST /api/unifilar` que
+espera la generación completa de punta a punta **no entra en 60 segundos**
+de forma confiable.
+
+**La solución: desacoplar "pedir" de "generar".**
+
+1. El botón "Generar unifilar" de Historial de Tableros (`informes-app`)
+   hace `POST /api/unifilar` con `medicionId` + circuitos + rótulo.
+2. Este servicio solo valida y guarda una fila en `motor_unifilares_jobs`
+   (`estado: "pendiente"`, ver migración
+   `informes-app/supabase/migrations/20261024200000_motor_unifilares_generacion_asincronica.sql`)
+   y responde `202 { jobId }` — típicamente en milisegundos, cero llamados
+   a la IA en este paso. `informes-app` marca
+   `tablero_mediciones.unifilar_estado = "pendiente"` y listo, no espera
+   nada más.
+3. `scripts/procesar-cola.ts` (worker) es quien de verdad genera: lee los
+   pedidos `"pendiente"`, corre `generarUnifilar()` + el render de PDF/DXF
+   para cada uno, sube los archivos al bucket `informes-pdf` (mismo bucket
+   y misma ruta — `${createdBy}/tableros/${medicionId}/unifilar.{dxf,pdf}`
+   — que usaba antes `informes-app`), y escribe el resultado directo en
+   `tablero_mediciones` (`unifilar_estado: "listo"`, `dxf_url`,
+   `unifilar_pdf_url`) con la **service role key** — nunca vuelve a pasar
+   por HTTP ni por `informes-app`.
+4. Como `scripts/procesar-cola.ts` corre como **proceso de Node**, nunca
+   como función serverless de Vercel, no tiene ningún `maxDuration` — un
+   tablero grande puede tardar los minutos que haga falta sin que nada se
+   corte. Por eso procesa los jobs **uno por vez** (no en paralelo entre
+   sí): no hay ningún límite de tiempo que justifique el riesgo de
+   concurrencia extra contra la API de Anthropic.
+5. Los botones "Ver plano unifilar" / "Descargar DXF" y el visor público
+   (`/planos/tablero/[id]`, el QR) no necesitaron ningún cambio — ya
+   estaban escritos para mostrarse/habilitarse solo cuando
+   `dxf_url`/`unifilar_pdf_url` existen, así que se habilitan solos apenas
+   el worker termina esa medición en particular.
+
+**Correrlo:** por ahora es un paso manual, a propósito — mientras se
+valida/mejora la calidad real del plano que genera la IA (prompt, reglas,
+ejemplos enseñados), tiene más sentido correr el worker a mano que dejarlo
+desatendido generando cosas que todavía no se revisaron:
+
+```bash
+ANTHROPIC_API_KEY=... SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... \
+  npm run procesar-cola
+```
+
+Procesa todo lo que esté `"pendiente"` en ese momento y termina (no queda
+corriendo) — volver a correrlo toma lo nuevo que se haya encolado desde la
+última vez. Nota importante sobre `ANTHROPIC_API_KEY`: antes viajaba por
+request (header `X-Anthropic-Api-Key`, la de quien llamaba); ahora, como
+la generación pasa a ser asincrónica, no hay ningún request del que
+colgarla en el momento en que de verdad hace falta — el worker la toma de
+**su propio entorno** al correr, igual que ya hace `scripts/ensenar.ts`.
+El deploy de Vercel de este servicio **ya no necesita `ANTHROPIC_API_KEY`
+en ningún lado** (ni por header, ni por variable de entorno): `/api/unifilar`
+no llama a la IA, solo encola.
+
+**Qué falta para que esto sea automático de verdad:** hoy no hay nada que
+dispare `procesar-cola` solo. Dos caminos, ninguno implementado todavía:
+un Cron Job de Vercel (en el plan Hobby corre como máximo una vez por
+día — muy poco para iterar; Pro permite cada minuto), o que el propio
+`/api/unifilar` dispare un llamado a sí mismo / a otra función después de
+responder (patrón "fire and forget" — hay que tener cuidado con que Vercel
+puede congelar la función apenas termina de responder, no es tan directo
+como un `fetch` sin `await`). Se deja para cuando el motor ya esté dando
+resultados confiables — automatizar el disparo de algo que todavía no se
+terminó de ajustar solo generaría más planos para revisar a mano.
+
 ## Generación por tramos EN PARALELO (por qué `generarUnifilar` hace varios llamados)
+
+(Esto describe el `generarUnifilar()` que corre **adentro de
+`scripts/procesar-cola.ts`** — ver la sección de arriba. Nació como
+mitigación del límite de 60s de Vercel, y ese límite ya no aplica una vez
+que la generación corre en el worker; se mantiene igual porque sigue
+siendo una buena idea: lotes más chicos son más fáciles de que la IA
+resuelva bien, y correrlos en paralelo sigue acortando el tiempo real de
+espera del worker.)
 
 Un tablero con bastantes circuitos (ej. 53) pedido entero en un solo
 llamado a la IA podía superar el `maxDuration: 60` de la función
@@ -230,5 +315,6 @@ cada `npm install`, incluido el de Vercel en cada deploy. No tocar
 
 El botón real ya está enganchado: `informes-app` llama a este servicio
 desde "Generar unifilar" en Historial de Tableros (ver
-`src/app/(app)/tableros/historial/unifilar-actions.ts` de ese repo) y
-sube el DXF/PDF que devuelve a Supabase Storage.
+`src/app/(app)/tableros/historial/unifilar-actions.ts` de ese repo), que
+solo encola el pedido — ver "Generación asincrónica" más arriba sobre
+quién genera y sube el resultado de verdad.

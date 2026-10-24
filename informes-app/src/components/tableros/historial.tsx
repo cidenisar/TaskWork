@@ -26,7 +26,14 @@ export interface HistorialMedicionRow {
   pdfDisponible: boolean;
   dxfDisponible: boolean;
   unifilarPdfDisponible: boolean;
+  unifilarEstado: "pendiente" | "generando" | "listo" | "error" | null;
+  unifilarError: string | null;
 }
+
+const UNIFILAR_ESTADO_LABEL: Record<"pendiente" | "generando", string> = {
+  pendiente: "Unifilar: en cola",
+  generando: "Unifilar: generando",
+};
 
 function fmtFecha(fecha: string) {
   const [y, m, d] = fecha.split("-");
@@ -112,8 +119,8 @@ export function HistorialTableros({
       setNotice(res.error || "No se pudo generar el unifilar.");
       return;
     }
-    setMediciones((prev) => prev.map((m) => (m.id === id ? { ...m, dxfDisponible: true, unifilarPdfDisponible: true } : m)));
-    setNotice("Unifilar generado.");
+    setMediciones((prev) => prev.map((m) => (m.id === id ? { ...m, unifilarEstado: "pendiente", unifilarError: null } : m)));
+    setNotice("Pedido en cola — la IA puede tardar bastante en generarlo. Actualizá la página más tarde para ver el resultado.");
   }
 
   async function verFoto(id: string) {
@@ -211,6 +218,16 @@ export function HistorialTableros({
                         {m.numeroGeneracion} · {TABLERO_EVENTO_LABEL[m.tipoEvento]} · {labelSubsistemas(m.subsistemas)} · {m.ubicacionLabel} ·{" "}
                         {fmtFecha(m.fecha)}
                       </div>
+                      {(m.unifilarEstado === "pendiente" || m.unifilarEstado === "generando") && (
+                        <div className="hist-meta" style={{ color: "var(--warn)" }}>
+                          {UNIFILAR_ESTADO_LABEL[m.unifilarEstado]}…
+                        </div>
+                      )}
+                      {m.unifilarEstado === "error" && (
+                        <div className="hist-meta" style={{ color: "var(--danger, #d9534f)" }}>
+                          Unifilar: error — {m.unifilarError || "no se pudo generar."}
+                        </div>
+                      )}
                     </div>
                   </div>
                   <div className="hist-actions">
@@ -244,8 +261,14 @@ export function HistorialTableros({
                     <button
                       type="button"
                       className="icon-btn"
-                      title={m.unifilarPdfDisponible ? "Regenerar el unifilar con la IA" : "Generar el unifilar con la IA"}
-                      disabled={busyId === m.id}
+                      title={
+                        m.unifilarEstado === "pendiente" || m.unifilarEstado === "generando"
+                          ? "Ya hay un pedido en curso para este unifilar"
+                          : m.unifilarPdfDisponible
+                            ? "Regenerar el unifilar con la IA"
+                            : "Generar el unifilar con la IA"
+                      }
+                      disabled={busyId === m.id || m.unifilarEstado === "pendiente" || m.unifilarEstado === "generando"}
                       onClick={() => generarUnifilar(m.id)}
                     >
                       {busyId === m.id ? <Spinner size={15} /> : <Icon name="ai" size={15} />}

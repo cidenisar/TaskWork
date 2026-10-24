@@ -79,16 +79,32 @@ export interface UnifilarDrawing {
   height: number;
 }
 
-/** Petición que recibe POST /api/unifilar. */
+/**
+ * Petición que recibe POST /api/unifilar — ver README.md "Generación
+ * asincrónica": este endpoint solo ENCOLA el pedido (tabla
+ * motor_unifilares_jobs) y devuelve enseguida, no genera nada. `medicionId`
+ * es el id de la fila de tablero_mediciones donde el worker (ver
+ * scripts/procesar-cola.ts) va a escribir el resultado.
+ */
 export interface PedidoUnifilar {
+  medicionId: string;
   circuitos: UnifilarCircuito[];
   rotulo: RotuloUnifilar;
 }
 
-/** Respuesta: los archivos en base64 — este servicio nunca sube nada a storage, eso lo hace quien lo llama. */
-export interface RespuestaUnifilar {
-  dxfBase64: string;
-  pdfBase64: string;
+/** Respuesta de POST /api/unifilar: el pedido quedó encolado, nada más. */
+export interface RespuestaUnifilarEncolado {
+  jobId: string;
+}
+
+export type EstadoJobUnifilar = "pendiente" | "generando" | "listo" | "error";
+
+/** Un pedido encolado tal como lo procesa scripts/procesar-cola.ts. */
+export interface JobUnifilar {
+  id: string;
+  medicionId: string;
+  circuitos: UnifilarCircuito[];
+  rotulo: RotuloUnifilar;
 }
 
 /**

@@ -10,11 +10,6 @@ function fmtFecha(fecha: string) {
   return d && m && y ? `${d}/${m}/${y}` : fecha;
 }
 
-interface RespuestaMotorUnifilares {
-  dxfBase64: string;
-  pdfBase64: string;
-}
-
 export interface GenerarUnifilarResult {
   success: boolean;
   error?: string;
@@ -22,23 +17,18 @@ export interface GenerarUnifilarResult {
 
 /**
  * Le pide a `motor-unifilares` (servicio aparte, ver /motor-unifilares del
- * repo — llamada HTTP, no un import: así iterar el motor nunca arriesga
- * el deploy de esta app) que arme el plano unifilar a partir de los
- * circuitos ACTUALES del tablero de esta medición, y sube lo que devuelva
- * (DXF + PDF A3) a Supabase Storage. El servicio nunca sube nada — eso es
- * responsabilidad de quien llama, acá mismo.
- *
- * Usa `process.env.ANTHROPIC_API_KEY` de ESTA app, reenviada como header —
- * motor-unifilares no tiene clave propia (ver su README), así se evita
- * sincronizar un secreto nuevo entre dos apps con deploys separados.
+ * repo) que ENCOLE la generación del unifilar de esta medición — no espera
+ * a que termine (ver motor-unifilares/README.md, "Generación asincrónica").
+ * Un worker aparte (scripts/procesar-cola.ts), sin el límite de tiempo de
+ * una función serverless de Vercel, es el que de verdad corre la IA, arma
+ * el PDF/DXF, los sube y actualiza esta misma medición (con su service
+ * role) cuando termina — nunca vuelve a pasar por acá. Esta función solo
+ * deja el pedido en estado "pendiente" y vuelve.
  */
 export async function generarUnifilarAction(medicionId: string): Promise<GenerarUnifilarResult> {
-  const profile = await requireProfile();
+  await requireProfile();
   const supabase = await createClient();
 
-  if (!process.env.ANTHROPIC_API_KEY) {
-    return { success: false, error: "Falta configurar ANTHROPIC_API_KEY en este entorno." };
-  }
   const motorUrl = process.env.MOTOR_UNIFILARES_URL;
   if (!motorUrl) {
     return { success: false, error: "Falta configurar MOTOR_UNIFILARES_URL en este entorno." };
@@ -108,37 +98,21 @@ export async function generarUnifilarAction(medicionId: string): Promise<Generar
     numeroGeneracion: medicion.numero_generacion,
   };
 
-  let respuesta: RespuestaMotorUnifilares;
   try {
     const res = await fetch(`${motorUrl.replace(/\/$/, "")}/api/unifilar`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "X-Anthropic-Api-Key": process.env.ANTHROPIC_API_KEY },
-      body: JSON.stringify({ circuitos, rotulo }),
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ medicionId, circuitos, rotulo }),
     });
     if (!res.ok) {
       const cuerpo = (await res.json().catch(() => null)) as { error?: string } | null;
       return { success: false, error: cuerpo?.error || `El motor de unifilares respondió un error (${res.status}).` };
     }
-    respuesta = (await res.json()) as RespuestaMotorUnifilares;
   } catch {
     return { success: false, error: "No se pudo contactar al motor de unifilares — ¿está arriba MOTOR_UNIFILARES_URL?" };
   }
 
-  const dxfPath = `${profile.id}/tableros/${medicionId}/unifilar.dxf`;
-  const pdfPath = `${profile.id}/tableros/${medicionId}/unifilar.pdf`;
-  const [dxfUp, pdfUp] = await Promise.all([
-    supabase.storage
-      .from("informes-pdf")
-      .upload(dxfPath, Buffer.from(respuesta.dxfBase64, "base64"), { contentType: "application/dxf", upsert: true }),
-    supabase.storage
-      .from("informes-pdf")
-      .upload(pdfPath, Buffer.from(respuesta.pdfBase64, "base64"), { contentType: "application/pdf", upsert: true }),
-  ]);
-  if (dxfUp.error || pdfUp.error) {
-    return { success: false, error: "El plano se generó pero no se pudo guardar en el storage." };
-  }
-
-  await supabase.from("tablero_mediciones").update({ dxf_url: dxfPath, unifilar_pdf_url: pdfPath }).eq("id", medicionId);
+  await supabase.from("tablero_mediciones").update({ unifilar_estado: "pendiente", unifilar_error: null }).eq("id", medicionId);
 
   revalidatePath("/tableros/historial");
   return { success: true };
