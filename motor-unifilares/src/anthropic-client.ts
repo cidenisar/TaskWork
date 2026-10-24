@@ -320,10 +320,13 @@ export async function generarUnifilar(apiKey: string, circuitos: UnifilarCircuit
       }));
       const userMessage = construirMensajeCircuitos(circuitosConCodigo, i === 0, rotulo);
       // Cada circuito trae varios comandos de dibujo detallados (bornes,
-      // térmica/disyuntor, cables con marca y formación, textos) — 600
-      // tokens por circuito resultó insuficiente en la práctica (stop_reason
-      // "max_tokens", la IA se quedaba sin espacio antes de cerrar el JSON).
-      const maxTokens = Math.min(16000, 5000 + circuitosConCodigo.length * 1200);
+      // térmica/disyuntor, cables con marca y formación, textos) — 600 y
+      // después 1200 tokens/circuito resultaron insuficientes en la
+      // práctica (stop_reason "max_tokens", la IA se quedaba sin espacio
+      // antes de cerrar el JSON). claude-sonnet-5-5 soporta hasta 128K de
+      // salida, y como los lotes corren en paralelo (ver más arriba), un
+      // techo generoso no suma tiempo total — solo evita el corte.
+      const maxTokens = Math.min(32000, 8000 + circuitosConCodigo.length * 2500);
       const parsed = await llamarIa(apiKey, system, userMessage, maxTokens);
       return validarResultadoLote(parsed);
     }),
@@ -341,7 +344,7 @@ export async function generarUnifilar(apiKey: string, circuitos: UnifilarCircuit
   }
 
   const userMessageMarco = construirMensajeMarcoRotulo(rotulo, alturaAcumulada, tensionesPresentesEn(circuitos), tierra);
-  const parsedMarco = await llamarIa(apiKey, system, userMessageMarco, Math.min(12000, 4000 + tierra.length * 250));
+  const parsedMarco = await llamarIa(apiKey, system, userMessageMarco, Math.min(20000, 6000 + tierra.length * 400));
   if (typeof parsedMarco.height !== "number") {
     throw new RespuestaIaInvalida('La respuesta del tramo "marco_rotulo" no tiene la forma esperada ({"commands","height"}).');
   }
