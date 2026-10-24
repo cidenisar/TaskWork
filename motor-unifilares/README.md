@@ -98,8 +98,13 @@ patrón que ya usa `informes-app` como su propio proyecto). `vercel.json`
 ya fija `maxDuration: 60` (el máximo del plan gratis — una generación de
 un tablero grande puede acercarse a ese límite; si algún día un tablero
 real lo supera, ahí se evalúa pasar a Vercel Pro, que sube el tope a 300s,
-antes que mover el servicio a otra plataforma) y fuerza a incluir
-`reglas/` en el bundle de cada función.
+antes que mover el servicio a otra plataforma) y fuerza a incluir en el
+bundle de cada función `reglas/` y las fuentes estándar de `pdfkit`
+(`node_modules/pdfkit/js/data/**` y `node_modules/pdfkit/js/standard-fonts/**`
+— `pdfkit`, que usa `@react-pdf/renderer` por debajo, las carga en runtime
+de forma dinámica y el rastreador de dependencias de Vercel no las detecta
+solo; sin esto, cualquier PDF falla con `ERR_MODULE_NOT_FOUND` apuntando a
+un archivo de fuente como `Helvetica.cjs`).
 
 Variables de entorno (en el proyecto de Vercel, Settings → Environment
 Variables):
