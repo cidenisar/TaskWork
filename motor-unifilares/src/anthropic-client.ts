@@ -166,7 +166,8 @@ async function llamarIa(apiKey: string, system: Anthropic.TextBlockParam[], user
     const match = textBlock.text.match(/\{[\s\S]*\}/);
     return JSON.parse(match ? match[0] : textBlock.text) as Record<string, unknown>;
   } catch {
-    throw new RespuestaIaInvalida("La respuesta de la IA no fue JSON parseable.");
+    const pista = response.stop_reason === "max_tokens" ? " (el JSON quedó cortado a la mitad, se agotó max_tokens)" : "";
+    throw new RespuestaIaInvalida(`La respuesta de la IA no fue JSON parseable${pista}.`);
   }
 }
 
@@ -318,7 +319,11 @@ export async function generarUnifilar(apiKey: string, circuitos: UnifilarCircuit
         codigo: codigos.get(c.numero)?.texto ?? "A CONFIRMAR",
       }));
       const userMessage = construirMensajeCircuitos(circuitosConCodigo, i === 0, rotulo);
-      const maxTokens = Math.min(8000, 3000 + circuitosConCodigo.length * 600);
+      // Cada circuito trae varios comandos de dibujo detallados (bornes,
+      // térmica/disyuntor, cables con marca y formación, textos) — 600
+      // tokens por circuito resultó insuficiente en la práctica (stop_reason
+      // "max_tokens", la IA se quedaba sin espacio antes de cerrar el JSON).
+      const maxTokens = Math.min(16000, 5000 + circuitosConCodigo.length * 1200);
       const parsed = await llamarIa(apiKey, system, userMessage, maxTokens);
       return validarResultadoLote(parsed);
     }),
@@ -336,7 +341,7 @@ export async function generarUnifilar(apiKey: string, circuitos: UnifilarCircuit
   }
 
   const userMessageMarco = construirMensajeMarcoRotulo(rotulo, alturaAcumulada, tensionesPresentesEn(circuitos), tierra);
-  const parsedMarco = await llamarIa(apiKey, system, userMessageMarco, Math.min(6000, 3000 + tierra.length * 150));
+  const parsedMarco = await llamarIa(apiKey, system, userMessageMarco, Math.min(12000, 4000 + tierra.length * 250));
   if (typeof parsedMarco.height !== "number") {
     throw new RespuestaIaInvalida('La respuesta del tramo "marco_rotulo" no tiene la forma esperada ({"commands","height"}).');
   }
