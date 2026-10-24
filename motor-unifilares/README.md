@@ -118,6 +118,21 @@ Variables):
 Una vez desplegado, la URL que te da Vercel para este proyecto es la que
 va en `MOTOR_UNIFILARES_URL` del lado de `informes-app`.
 
+## `patch-package` — por qué está
+
+`@react-pdf/hyphenate` (dependencia transitiva de `@react-pdf/renderer`)
+tiene un `exports` roto en su `package.json`: solo declara condición
+`"import"`, nunca `"require"`. En el runtime de funciones serverless de
+Node.js de Vercel (que sí aplica la resolución estricta de `exports` de
+Node, a diferencia de Next.js/webpack) esto hace que el bundler descarte en
+silencio el archivo que importa `@react-pdf/renderer` — sin error en el
+log de build — y en runtime tire `ERR_MODULE_NOT_FOUND: Cannot find module
+'.../pdf-renderer.js'`. Ver `CRITERIOS_Y_IDEAS.md` §14 para el detalle
+completo. El fix vive en `patches/@react-pdf+hyphenate+0.1.0.patch` +
+`"postinstall": "patch-package"` en `package.json` — se reaplica solo en
+cada `npm install`, incluido el de Vercel en cada deploy. No tocar
+`node_modules` a mano.
+
 ## Qué falta
 
 1. **Paginar en varias hojas A3** (B2: máximo 8 circuitos por hoja) — la

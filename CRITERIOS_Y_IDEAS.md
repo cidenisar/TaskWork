@@ -884,6 +884,38 @@ probar contra él, no quedarse en inspección visual del texto generado.
 
 ## 14. Probar react-pdf fuera de Next.js con `tsx`: el error no es del código
 
+**⚠️ Corrección (ver `motor-unifilares`, deploy en Vercel): la afirmación de
+abajo de que "en producción esto no afecta en absoluto" es FALSA en
+general — solo es cierta para Next.js/webpack. Cualquier runtime que SÍ
+aplique la resolución estricta de `exports` de Node (entre ellos, las
+funciones serverless de Node.js de Vercel, que no pasan por webpack) pisa
+este mismo bug en producción, no solo al correr sueltos con `tsx`. El
+síntoma en ese caso no es el mismo `ERR_PACKAGE_PATH_NOT_EXPORTED` de abajo
+— ahí el bundler de la función, al no poder resolver la dependencia
+transitiva rota, directamente deja afuera del bundle el módulo que la
+importa (sin aviso en el log de build) y en runtime tira
+`ERR_MODULE_NOT_FOUND: Cannot find module '.../pdf-renderer.js'` (o el
+nombre que tenga el archivo que importa `@react-pdf/renderer` en esa app),
+apuntando a un archivo propio que a simple vista no tiene nada que ver con
+`@react-pdf/hyphenate`. Si aparece ese error en un deploy serverless con
+react-pdf, es este bug — no asumir que es un problema de extensión de
+archivo (`.tsx`/`.ts`) ni de que el bundler no sabe "rastrear" la
+dependencia pesada; es puntualmente la falta de condición `"require"` en
+`exports` de `@react-pdf/hyphenate`.**
+
+**Fix permanente (no un parche manual a mano cada vez): `patch-package`.**
+Agregar `patch-package` como devDependency, parchear
+`node_modules/@react-pdf/hyphenate/package.json` agregando `"require"`
+igual al `"import"` existente en cada entrada de `exports` (`"."` y
+`"./*"`), congelar el parche con `npx patch-package @react-pdf/hyphenate`
+(guarda un `.patch` en `patches/`, que sí se commitea) y agregar
+`"postinstall": "patch-package"` a los `scripts` del `package.json` — así
+el parche se reaplica solo en cada `npm install`, incluido el que corre
+Vercel (o cualquier otro CI) en cada deploy, sin depender de que alguien
+lo repita a mano. Mismo criterio sirve para `informes-app` si alguna vez
+necesita correr react-pdf fuera de Next.js/webpack (ej. un script de
+prueba con `tsx`, o si algún día deja de usar webpack).
+
 **Al intentar reproducir localmente el cuelgue de react-pdf (§10) con `npx
 tsx algo.ts` importando `@react-pdf/renderer` directo (sin pasar por
 Next.js), el import falla con
@@ -894,9 +926,11 @@ código ni en react-pdf, es que `@react-pdf/hyphenate` solo declara condición
 de módulos de `tsx` intenta resolver ese subpath también por el lado
 `require` (CJS) y lo rechaza. Next.js/webpack nunca pisan este problema
 porque resuelven distinto (no aplican la validación estricta de `exports`
-de Node), así que en producción esto no afecta en absoluto — es
-exclusivamente un problema de correr el paquete suelto con `tsx`.**
-Workaround para poder probar: copiar
+de Node), así que en producción (vía Next.js/webpack) esto no afecta — pero
+sí afecta en cualquier otro runtime con resolución estricta, ver la
+corrección arriba.**
+Workaround histórico para poder probar sin el fix permanente de arriba:
+copiar
 `node_modules/@react-pdf/hyphenate/package.json`, agregarle a mano un
 campo `"require"` igual al `"import"` existente en cada entrada de
 `exports` (`"."` y `"./*"`), correr la prueba, y restaurar el archivo
