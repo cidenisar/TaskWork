@@ -128,6 +128,52 @@ Variables):
 Una vez desplegado, la URL que te da Vercel para este proyecto es la que
 va en `MOTOR_UNIFILARES_URL` del lado de `informes-app`.
 
+## Generación por tramos (por qué `generarUnifilar` hace varios llamados)
+
+Un tablero con bastantes circuitos (ej. 53) pedido entero en un solo
+llamado a la IA podía superar el `maxDuration: 60` de la función
+serverless y morir con `Vercel Runtime Timeout Error` — ni siquiera
+cambiar a un modelo más rápido (Sonnet en vez de Opus, ver más abajo)
+alcanzaba para tableros grandes reales. En vez de pasar a Vercel Pro (sube
+el límite a 300s pero sigue siendo un tope, y no resuelve el problema de
+fondo para un tablero todavía más grande), `generarUnifilar` (ver
+`src/anthropic-client.ts`) parte la generación en varios llamados más
+chicos:
+
+1. **Códigos de equipo calculados en código, no por la IA**
+   (`src/codigos-equipo.ts`, mismo algoritmo ya validado en
+   `informes-app/src/lib/tableros/codigos-equipo.ts`, REGLAS_UNIFILAR.md
+   A3) — es mecánico, no de criterio visual, y tiene que ser consistente
+   entre llamados separados, así que se calcula una sola vez antes de
+   llamar a la IA, no se le pide a la IA que lo haga ella.
+2. **Partido en lotes sin cortar un grupo a la mitad**
+   (`src/lotes.ts`, `src/tree.ts`) — cada lote es uno o más árboles de
+   encadenado completos (nunca medio grupo `PD-n`), con un tope de 8
+   circuitos por lote (el mismo "máximo 8 circuitos por hoja" de B2 — no
+   es casualidad, el propio estándar ya considera esa cantidad razonable
+   para una sola tanda de contenido).
+3. Cada lote es un llamado a la IA aparte, que dibuja SOLO su tramo
+   (empezando en Y=0, nunca el marco/título/rótulo) y devuelve en qué
+   número de conductor (series A/P/T, A4) quedó, para que el próximo lote
+   continúe la numeración — el primero además dibuja la cabecera (B1).
+   Un último llamado, chico y de tamaño constante (no escala con la
+   cantidad de circuitos), dibuja el marco/título/rótulo/sello alrededor
+   de todo el contenido ya armado.
+4. El código traslada cada tramo a su posición Y real y concatena todo en
+   un único `UnifilarDrawing` — el contrato externo (`POST /api/unifilar`,
+   `RespuestaUnifilar`) no cambió, esto es un detalle interno.
+
+El prompt de sistema (reglas + ejemplos enseñados, que es grande) se arma
+una sola vez por generación y se marca con `cache_control` para que la API
+de Anthropic no lo vuelva a procesar en cada uno de los varios llamados de
+una misma generación.
+
+Esto es distinto de la paginación en varias hojas A3 (ver "Qué falta" más
+abajo) — acá se sigue armando un único dibujo continuo, solo que en varios
+pedidos internos; paginar de verdad (una hoja física por tanda, cada una
+con su propio marco/rótulo) es trabajo a futuro que podría reusar esta
+misma partición en lotes.
+
 ## `patch-package` — por qué está
 
 `@react-pdf/hyphenate` (dependencia transitiva de `@react-pdf/renderer`)
