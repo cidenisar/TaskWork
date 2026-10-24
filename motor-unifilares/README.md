@@ -151,8 +151,14 @@ lento, no la suma de todos. `generarUnifilar` (ver
    antes de llamar a la IA.
 2. **Partido en lotes sin cortar un grupo a la mitad**
    (`src/lotes.ts`, `src/tree.ts`) — cada lote es uno o más árboles de
-   encadenado completos (nunca medio grupo `PD-n`), con un tope de 8
-   circuitos por lote (el mismo "máximo 8 circuitos por hoja" de B2).
+   encadenado completos (nunca medio grupo `PD-n`), con un tope de 3
+   circuitos por lote (`CIRCUITOS_POR_LOTE`) — no es el "máximo 8
+   circuitos por hoja" de B2 (eso es sobre una hoja impresa final, no
+   sobre cuánto puede tardar en generarse): cada circuito necesita más
+   tokens de salida de lo esperado, y como correr en paralelo solo evita
+   que el tiempo de los lotes se SUME (no acorta cada lote individual),
+   el tope tiene que mantener a cada lote, por sí solo, bien por debajo
+   de los 60s.
 3. **Todos los lotes se piden a la IA al mismo tiempo** (`Promise.all`),
    cada uno dibuja SOLO su tramo (empezando en Y=0, nunca el marco/
    título/rótulo/recuadro de tierra) — el primero además dibuja la

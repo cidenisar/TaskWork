@@ -8,8 +8,20 @@
 import { construirArboles, contarNodos, type NodoArbol } from "./tree.js";
 import type { UnifilarCircuito } from "./types.js";
 
-/** Tope "blando": un lote no lo supera salvo que un solo árbol ya lo supere por sí solo (ahí va solo, no se parte). Mismo valor que B2 ("máximo 8 circuitos por hoja") — no es casualidad, es la cantidad que el propio estándar ya considera razonable para una sola hoja. */
-export const CIRCUITOS_POR_LOTE = 8;
+/**
+ * Tope "blando": un lote no lo supera salvo que un solo árbol ya lo
+ * supere por sí solo (ahí va solo, no se parte, H3/H6). En la práctica
+ * cada circuito necesita bastante más detalle del que parecía a priori
+ * (bornes, térmica/disyuntor, cables con marca y formación, textos —
+ * cada uno pidió bastante más de 1200 tokens de salida, ver
+ * anthropic-client.ts), y aunque los lotes corren en paralelo, un lote
+ * de 8 circuitos puede tardar, él solo, más que el límite de 60s de la
+ * función serverless — correr en paralelo no ayuda si CADA lote es
+ * lento, solo evita que se SUMEN. Por eso el tope es bastante más chico
+ * que el "8 circuitos por hoja" de B2 (que es sobre una hoja impresa
+ * final, no sobre cuánto puede tardar en generarse).
+ */
+export const CIRCUITOS_POR_LOTE = 3;
 
 export function armarLotes(circuitos: UnifilarCircuito[]): NodoArbol[][] {
   const raices = construirArboles(circuitos);
