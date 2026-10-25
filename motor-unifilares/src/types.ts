@@ -69,9 +69,13 @@ export type CapaDxf = (typeof CAPAS_DXF)[number];
 /**
  * Símbolos de la librería (ver src/simbolos/) — nombre corto que la IA usa
  * en vez de dibujar la geometría de cero cada vez (ver DrawCommand,
- * variant "simbolo", y expandirSimbolos en src/simbolos/index.ts).
+ * variant "simbolo", y expandirSimbolos en src/simbolos/index.ts). La
+ * lista de nombres válidos es dinámica (tabla motor_unifilares_simbolos,
+ * crece sin necesitar un deploy — ver src/simbolos-store.ts), por eso no
+ * es una unión literal fija: se valida en tiempo de generación contra lo
+ * que haya en la base en ese momento, no en tiempo de compilación.
  */
-export type NombreSimbolo = "termica" | "disyuntor";
+export type NombreSimbolo = string;
 
 export type DrawCommand =
   | { type: "line"; x1: number; y1: number; x2: number; y2: number; layer: CapaDxf }
@@ -113,6 +117,22 @@ export interface JobUnifilar {
   medicionId: string;
   circuitos: UnifilarCircuito[];
   rotulo: RotuloUnifilar;
+}
+
+/**
+ * Un símbolo de la librería (ver src/simbolos-store.ts y
+ * src/dxf-import.ts) — geometría exacta, anclada con el centro horizontal
+ * y el borde superior en (0,0) (mismo sistema que `dibujarTermica`/
+ * `dibujarDisyuntor` tenían antes de migrarse a esta tabla). `ancho`/`alto`
+ * son el tamaño real del símbolo en mm, para que el generador pueda
+ * razonar el espacio antes de ubicarlo.
+ */
+export interface Simbolo {
+  nombre: string;
+  descripcion: string;
+  commands: DrawCommand[];
+  ancho: number;
+  alto: number;
 }
 
 /**

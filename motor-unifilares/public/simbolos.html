@@ -1,0 +1,340 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>motor-unifilares — Librería de símbolos</title>
+<style>
+  :root {
+    --bg: #f5f6f8;
+    --panel: #ffffff;
+    --border: #d9dde3;
+    --text: #1a1f28;
+    --text-muted: #5a6472;
+    --accent: #2a4d8f;
+    --accent-hover: #1f3a6e;
+    --danger: #b3261e;
+    --warn-bg: #fdf3e7;
+    --warn-border: #e8c88f;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 24px 16px 64px;
+  }
+  main { max-width: 900px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  h2 { font-size: 15px; margin: 0 0 12px; }
+  p.lead { color: var(--text-muted); margin: 0; font-size: 13.5px; line-height: 1.5; }
+  a.nav { font-size: 12.5px; color: var(--accent); }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px 20px;
+  }
+  label { display: block; font-size: 12.5px; font-weight: 600; color: var(--text-muted); margin-bottom: 4px; }
+  input[type="text"], input[type="file"], textarea {
+    width: 100%;
+    font: inherit;
+    font-size: 13.5px;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: #fff;
+    color: var(--text);
+  }
+  textarea { resize: vertical; min-height: 44px; }
+  .field { margin-bottom: 12px; }
+  button {
+    font: inherit;
+    font-size: 13.5px;
+    font-weight: 600;
+    padding: 8px 16px;
+    border-radius: 6px;
+    border: 1px solid transparent;
+    cursor: pointer;
+  }
+  button.primary { background: var(--accent); color: #fff; }
+  button.primary:hover { background: var(--accent-hover); }
+  button.secondary { background: #fff; border-color: var(--border); color: var(--text); }
+  button.secondary:hover { background: #f0f1f3; }
+  button.danger-text { background: none; border: none; color: var(--danger); font-weight: 500; padding: 2px 6px; }
+  button:disabled { opacity: 0.5; cursor: default; }
+  .fila-botones { display: flex; gap: 8px; margin-top: 4px; }
+  .lista-simbolos { display: flex; flex-direction: column; gap: 8px; }
+  .simbolo-row {
+    display: flex; align-items: flex-start; justify-content: space-between; gap: 10px;
+    border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px;
+  }
+  .simbolo-row .nombre { font-family: ui-monospace, monospace; font-size: 12.5px; font-weight: 600; }
+  .simbolo-row .detalle { font-size: 12.5px; color: var(--text-muted); margin-top: 2px; }
+  .vacio { color: var(--text-muted); font-size: 13px; font-style: italic; }
+  .aviso {
+    background: var(--warn-bg); border: 1px solid var(--warn-border); border-radius: 8px;
+    padding: 8px 10px; font-size: 12px; color: #6b4b14; margin-top: 8px;
+  }
+  .error-bloque {
+    background: #fdecea; border: 1px solid #f3b7b0; border-radius: 8px;
+    padding: 8px 10px; font-size: 12.5px; color: var(--danger);
+  }
+  .estado { font-size: 12.5px; color: var(--text-muted); margin-top: 8px; min-height: 16px; }
+  .estado.error { color: var(--danger); }
+  iframe.preview { width: 100%; height: 220px; border: 1px solid var(--border); border-radius: 6px; margin-top: 8px; background: #fff; }
+  .bloque-card {
+    border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; margin-bottom: 12px;
+  }
+  .bloque-header { display: flex; align-items: center; gap: 8px; }
+  .bloque-header input[type="checkbox"] { width: 16px; height: 16px; }
+  .bloque-header .tag { font-family: ui-monospace, monospace; font-size: 13px; font-weight: 600; }
+  .bloque-header .tamano { font-size: 12px; color: var(--text-muted); }
+  .oculto { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <div>
+    <h1>motor-unifilares — Librería de símbolos</h1>
+    <p class="lead">
+      Geometría EXACTA de tus componentes (térmica, disyuntor, bornera, fuente, etc.), extraída directo de un DXF real
+      con bloques nombrados — sin que la IA la interprete. Subís tu archivo, revisás cada símbolo detectado con su
+      previsualización, y confirmás. Desde que se guarda, el generador lo usa automáticamente en cada tablero nuevo
+      en vez de dibujarlo de cero. Para enseñar patrones de conexión (no geometría fija), usá <a class="nav" href="/">la
+      pantalla de Enseñar</a>.
+    </p>
+  </div>
+
+  <div class="panel">
+    <h2>Símbolos ya guardados</h2>
+    <div id="listaSimbolos" class="lista-simbolos">
+      <p class="vacio">Cargando…</p>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>Importar un DXF</h2>
+    <div class="field">
+      <label for="archivoDxf">Archivo DXF — cada BLOCK nombrado se analiza por separado</label>
+      <input type="file" id="archivoDxf" accept=".dxf" />
+    </div>
+    <div class="fila-botones">
+      <button class="primary" id="btnAnalizar">Analizar</button>
+    </div>
+    <div id="estadoAnalizar" class="estado"></div>
+  </div>
+
+  <div class="panel oculto" id="panelResultados">
+    <h2>Bloques detectados — revisá cada uno antes de guardar</h2>
+    <div id="listaBloques"></div>
+    <div class="fila-botones">
+      <button class="primary" id="btnGuardarSeleccionados">Guardar seleccionados</button>
+      <button class="secondary" id="btnDescartarTodo">Descartar todo</button>
+    </div>
+    <div id="estadoGuardar" class="estado"></div>
+  </div>
+</main>
+
+<script>
+  function escapeHtml(s) {
+    const d = document.createElement("div");
+    d.textContent = s;
+    return d.innerHTML;
+  }
+
+  async function cargarSimbolos() {
+    const cont = document.getElementById("listaSimbolos");
+    try {
+      const res = await fetch("/api/simbolos");
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Error listando símbolos.");
+      if (data.simbolos.length === 0) {
+        cont.innerHTML = '<p class="vacio">Todavía no se cargó ningún símbolo.</p>';
+        return;
+      }
+      cont.innerHTML = "";
+      for (const s of data.simbolos) {
+        const row = document.createElement("div");
+        row.className = "simbolo-row";
+        row.innerHTML = `
+          <div>
+            <div class="nombre">${escapeHtml(s.nombre)} <span style="color:var(--text-muted);font-weight:400;">(${s.ancho}x${s.alto}mm)</span></div>
+            <div class="detalle">${escapeHtml(s.descripcion)}</div>
+          </div>
+          <button class="danger-text" data-nombre="${escapeHtml(s.nombre)}">Eliminar</button>
+        `;
+        row.querySelector("button").addEventListener("click", () => eliminarSimbolo(s.nombre));
+        cont.appendChild(row);
+      }
+    } catch (err) {
+      cont.innerHTML = `<p class="vacio">No se pudo cargar la lista: ${escapeHtml(err.message)}</p>`;
+    }
+  }
+
+  async function eliminarSimbolo(nombre) {
+    if (!confirm(`¿Eliminar el símbolo "${nombre}"?`)) return;
+    try {
+      const res = await fetch(`/api/simbolos/${encodeURIComponent(nombre)}`, { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "No se pudo eliminar.");
+      cargarSimbolos();
+    } catch (err) {
+      alert(err.message);
+    }
+  }
+
+  function leerArchivoComoBase64(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result.split(",")[1]);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  let bloquesDetectados = [];
+
+  document.getElementById("btnAnalizar").addEventListener("click", async () => {
+    const estado = document.getElementById("estadoAnalizar");
+    estado.className = "estado";
+    const fileInput = document.getElementById("archivoDxf");
+    if (!fileInput.files[0]) {
+      estado.textContent = "Elegí un archivo DXF.";
+      estado.className = "estado error";
+      return;
+    }
+
+    const btn = document.getElementById("btnAnalizar");
+    btn.disabled = true;
+    estado.textContent = "Leyendo el archivo…";
+
+    try {
+      const dxfBase64 = await leerArchivoComoBase64(fileInput.files[0]);
+      estado.textContent = "Analizando bloques…";
+      const res = await fetch("/api/simbolos/previsualizar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dxfBase64 }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Error analizando el DXF.");
+
+      bloquesDetectados = data.bloques;
+      mostrarResultados(data.bloques, data.fallidos);
+      estado.textContent = "";
+    } catch (err) {
+      estado.textContent = err.message;
+      estado.className = "estado error";
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  function mostrarResultados(bloques, fallidos) {
+    const cont = document.getElementById("listaBloques");
+    cont.innerHTML = "";
+
+    if (bloques.length === 0 && fallidos.length === 0) {
+      cont.innerHTML = '<p class="vacio">No se encontró ningún BLOCK en el archivo.</p>';
+    }
+
+    bloques.forEach((b, i) => {
+      const card = document.createElement("div");
+      card.className = "bloque-card";
+      const avisos = [];
+      if (b.capasNoReconocidas.length > 0) avisos.push(`Capas no reconocidas (se usó SIMBOLOS): ${b.capasNoReconocidas.join(", ")}`);
+      if (b.entidadesNoSoportadas.length > 0) avisos.push(`Entidades no soportadas, se ignoraron: ${b.entidadesNoSoportadas.join(", ")}`);
+      card.innerHTML = `
+        <div class="bloque-header">
+          <input type="checkbox" id="check-${i}" checked />
+          <span class="tag">${escapeHtml(b.nombre)}</span>
+          <span class="tamano">${b.ancho.toFixed(1)}x${b.alto.toFixed(1)}mm</span>
+        </div>
+        <div class="field" style="margin-top:8px;">
+          <label for="nombre-${i}">Nombre (snake_case — así lo va a pedir la IA)</label>
+          <input type="text" id="nombre-${i}" value="${escapeHtml(b.nombre.toLowerCase().replace(/[^a-z0-9_]/g, "_"))}" />
+        </div>
+        <div class="field">
+          <label for="desc-${i}">Descripción (cuándo usar este símbolo)</label>
+          <textarea id="desc-${i}">${escapeHtml(b.descripcionSugerida)}</textarea>
+        </div>
+        ${avisos.map((a) => `<div class="aviso">${escapeHtml(a)}</div>`).join("")}
+        <iframe class="preview" src="data:application/pdf;base64,${b.pdfBase64}" title="Previsualización de ${escapeHtml(b.nombre)}"></iframe>
+      `;
+      cont.appendChild(card);
+    });
+
+    fallidos.forEach((f) => {
+      const div = document.createElement("div");
+      div.className = "error-bloque";
+      div.style.marginBottom = "12px";
+      div.textContent = `"${f.nombre}": ${f.error}`;
+      cont.appendChild(div);
+    });
+
+    document.getElementById("panelResultados").classList.remove("oculto");
+    document.getElementById("panelResultados").scrollIntoView({ behavior: "smooth" });
+  }
+
+  document.getElementById("btnDescartarTodo").addEventListener("click", () => {
+    bloquesDetectados = [];
+    document.getElementById("panelResultados").classList.add("oculto");
+    document.getElementById("listaBloques").innerHTML = "";
+    document.getElementById("archivoDxf").value = "";
+  });
+
+  document.getElementById("btnGuardarSeleccionados").addEventListener("click", async () => {
+    const estado = document.getElementById("estadoGuardar");
+    estado.className = "estado";
+
+    const seleccionados = [];
+    for (let i = 0; i < bloquesDetectados.length; i++) {
+      const check = document.getElementById(`check-${i}`);
+      if (!check || !check.checked) continue;
+      const nombre = document.getElementById(`nombre-${i}`).value.trim();
+      const descripcion = document.getElementById(`desc-${i}`).value.trim();
+      if (!/^[a-z0-9_]+$/.test(nombre)) {
+        estado.textContent = `El nombre "${nombre}" tiene que ser snake_case (minúsculas, números, _).`;
+        estado.className = "estado error";
+        return;
+      }
+      seleccionados.push({ nombre, descripcion, commands: bloquesDetectados[i].commands, ancho: bloquesDetectados[i].ancho, alto: bloquesDetectados[i].alto });
+    }
+    if (seleccionados.length === 0) {
+      estado.textContent = "No marcaste ningún bloque para guardar.";
+      estado.className = "estado error";
+      return;
+    }
+
+    const btn = document.getElementById("btnGuardarSeleccionados");
+    btn.disabled = true;
+    estado.textContent = `Guardando ${seleccionados.length}…`;
+
+    try {
+      const res = await fetch("/api/simbolos", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ simbolos: seleccionados }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "No se pudo guardar.");
+      bloquesDetectados = [];
+      document.getElementById("panelResultados").classList.add("oculto");
+      document.getElementById("listaBloques").innerHTML = "";
+      document.getElementById("archivoDxf").value = "";
+      estado.textContent = "";
+      cargarSimbolos();
+    } catch (err) {
+      estado.textContent = err.message;
+      estado.className = "estado error";
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  cargarSimbolos();
+</script>
+</body>
+</html>

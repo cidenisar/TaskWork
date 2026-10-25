@@ -1454,3 +1454,39 @@ que sí conviene mostrarle a la IA como ejemplo. Es el mismo espíritu que
 motivó originalmente "enseñar" — ir alimentando al motor con una
 librería para que generar sea cada vez más fácil — pero resuelto en
 código puro para la parte que no necesita juicio de la IA en absoluto.
+
+**Addendum: cuando el usuario ya tiene su propia librería de símbolos en
+AutoCAD, extraerla DIRECTO del DXF es más exacto que "enseñar" con una
+foto — y conviene que crezca sin deploy.** Los dos símbolos de arriba
+salieron de medir a mano un plano ya generado; el paso siguiente, cuando
+el usuario tiene una librería de bloques AutoCAD propia (la geometría
+"oficial" de la empresa, ya usada en planos reales), fue dejar de medir a
+mano y leer esa geometría directo del archivo: `motor-unifilares/src/
+dxf-import.ts` usa `dxf-parser` (Node puro, sin Python/`ezdxf` — el deploy
+real corre en funciones serverless de Vercel, sin Python disponible) para
+leer cada `BLOCK` nombrado del DXF y convertir sus entidades reales
+(líneas, arcos, polilíneas con bulge/esquinas redondeadas, `SOLID`,
+`INSERT` anidados con rotación/escala) a `DrawCommand[]`, sin que ningún
+modelo interprete nada. Dos decisiones de diseño que valen la pena anotar:
+
+1. **Todo el trabajo geométrico (rotar, escalar, muestrear arcos) se hace
+   en el sistema de coordenadas nativo del DXF (Y hacia arriba, como
+   cualquier CAD) — el único cambio de convención (a Y hacia abajo, como
+   el resto del motor) se aplica una sola vez, al final, sobre puntos ya
+   resueltos.** Mezclar el flip de eje con las rotaciones intermedias
+   invierte el sentido de giro si no se lleva la cuenta de signos con
+   mucho cuidado — separar "resolver la geometría" de "cambiar de
+   convención" en dos pasadas distintas evita esa clase entera de bugs.
+2. **Una vez que la librería del usuario puede tener decenas de
+   componentes y seguir creciendo, que viva hardcodeada en archivos de
+   código (como los dos símbolos originales) deja de alcanzar** — cada
+   símbolo nuevo necesitaría un commit. Se migró a una tabla de Supabase
+   (`motor_unifilares_simbolos`, mismo criterio que `motor_unifilares_
+   ejemplos`) con una pantalla propia (`public/simbolos.html`) que sube el
+   DXF, previsualiza cada bloque detectado y guarda los que se confirman
+   — correr el mismo flujo de nuevo cuando la librería real cambia
+   actualiza la base sola, sin tocar código. El criterio general: un
+   patrón que "no necesita juicio de la IA" (este caso) o "se enseña una
+   vez y se reusa" (`motor_unifilares_ejemplos`) pertenece a una tabla con
+   una pantalla de carga, no a un archivo fuente — el código es para la
+   lógica que transforma esos datos, no para los datos en sí.

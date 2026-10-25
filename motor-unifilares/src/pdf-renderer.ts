@@ -14,7 +14,6 @@
 import { createElement } from "react";
 import { Document, Page, View, Svg, Line, Rect, Circle, Ellipse, Text, StyleSheet, renderToBuffer } from "@react-pdf/renderer";
 import { COLOR_POR_CAPA } from "./colores-capa.js";
-import { expandirSimbolos } from "./simbolos/index.js";
 import type { DrawCommand } from "./types.js";
 
 const styles = StyleSheet.create({
@@ -22,11 +21,7 @@ const styles = StyleSheet.create({
   pageSinMargen: { padding: 0, fontFamily: "Helvetica", color: "#1a1a1a" },
 });
 
-function dibujoSvgTexto(commandsSinExpandir: DrawCommand[], width: number, height: number) {
-  // Por si llega acá un ejemplo "enseñado" que usa `{"type":"simbolo",...}`
-  // sin pasar antes por `generarUnifilar` (que ya expande siempre) — ver
-  // src/simbolos/index.ts.
-  const commands = expandirSimbolos(commandsSinExpandir);
+function dibujoSvgTexto(commands: DrawCommand[], width: number, height: number) {
   const trazos = commands.map((cmd, i) => {
     const color = COLOR_POR_CAPA[cmd.layer] ?? "#1a1a1a";
     if (cmd.type === "line") {

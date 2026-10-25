@@ -74,6 +74,39 @@ Dos formas de enseñar:
   automatizar en lote. Escribe un PDF de previsualización en `/tmp` y pide
   confirmación antes de guardar.
 
+## Librería de símbolos (geometría exacta, sin IA)
+
+Distinto de "enseñar": para un componente cuya geometría es siempre la
+misma (térmica, disyuntor, bornera, fuente, etc. — nada que varíe según el
+tablero), la IA no la dibuja de cero en cada circuito ni la interpreta de
+una imagen — la geometría sale directo de un bloque DXF real (del AutoCAD
+del usuario), con un script (`src/dxf-import.ts`, usa `dxf-parser`, sin
+Python/`ezdxf`), sin pasar por ningún modelo. Cada `BLOCK` nombrado del
+archivo se convierte a `DrawCommand[]`, anclado con el centro horizontal y
+el borde superior en `(0,0)` (mismo criterio que ya usaban a mano
+`dibujarTermica`/`dibujarDisyuntor` antes de esta librería). Resuelve
+`INSERT` anidados (con rotación/escala), arcos, bulges de polilínea
+(esquinas redondeadas) y detecta automáticamente cuándo un `SOLID`/
+polígono cerrado de 4 puntos es un rectángulo relleno.
+
+Vive en su propia tabla de Supabase (`motor_unifilares_simbolos`, mismo
+criterio que `motor_unifilares_ejemplos`: RLS sin políticas, solo este
+servicio con la service role key) — **crece sin necesitar un deploy**:
+cuando el usuario agrega un componente nuevo a su DXF, lo vuelve a subir y
+la base se actualiza sola. Al generar, `generarUnifilar()` carga la
+librería vigente, la suma al prompt (así la IA sabe qué nombres existen) y
+expande cada `{"type":"simbolo","nombre":...,"x":...,"y":...}` que la IA
+pida a la geometría real, recién al final, antes de que el dibujo llegue a
+los renderers DXF/PDF (ver `src/simbolos/index.ts`).
+
+- **Interfaz web** (`GET /simbolos` — ver `public/simbolos.html`): subís
+  el DXF, el servicio analiza cada bloque (sin IA, sin clave de Anthropic)
+  y te muestra una previsualización en PDF de cada uno — revisás/editás
+  nombre y descripción, marcás cuáles guardar, confirmás. También lista y
+  permite borrar los símbolos ya guardados.
+- No hay versión CLI todavía (a diferencia de "enseñar") — la pantalla web
+  es la única forma de cargarlos.
+
 ## Cómo correrlo
 
 **Local (desarrollo):** un server Node plano (`src/server.ts`), sin
@@ -113,11 +146,14 @@ Variables de entorno (en el proyecto de Vercel, Settings → Environment
 Variables):
 
 - `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` — para guardar/leer los
-  ejemplos enseñados (`GET /`, `GET /api/ejemplos`, `POST /api/ejemplos*`).
-  Usar la **service role key** del proyecto de Supabase de `informes-app`
-  (Settings → API → Project API keys → `service_role`, **nunca** la
-  `anon`/pública) — sin estas dos variables, esos endpoints responden un
-  error claro en vez de romper el resto del servicio.
+  ejemplos enseñados (`GET /`, `GET /api/ejemplos`, `POST /api/ejemplos*`)
+  y la librería de símbolos (`GET /simbolos`, `GET /api/simbolos`,
+  `POST /api/simbolos`). Usar la **service role key** del proyecto de
+  Supabase de `informes-app` (Settings → API → Project API keys →
+  `service_role`, **nunca** la `anon`/pública) — sin estas dos variables,
+  esos endpoints responden un error claro en vez de romper el resto del
+  servicio. `POST /api/simbolos/previsualizar` NO necesita estas
+  variables (no toca la base, solo lee el DXF).
 - `/api/unifilar` ya no necesita `ANTHROPIC_API_KEY` en ningún lado —
   desde que pasó a ser asincrónico (ver "Generación asincrónica" más
   abajo), ese endpoint solo encola, nunca llama a la IA. Los endpoints de

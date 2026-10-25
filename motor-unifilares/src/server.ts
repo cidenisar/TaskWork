@@ -13,6 +13,11 @@
  *   POST /api/ejemplos/previsualizar    — imagen+explicación → Ejemplo propuesto + PDF de previsualización (sin guardar).
  *   POST /api/ejemplos                  — guarda un ejemplo ya revisado.
  *   DELETE /api/ejemplos/:tag           — borra un ejemplo.
+ *   GET  /simbolos                      — interfaz web para importar la librería de símbolos desde un DXF (public/simbolos.html).
+ *   GET  /api/simbolos                  — lista los símbolos ya guardados.
+ *   POST /api/simbolos/previsualizar    — DXF → bloques detectados + PDF de previsualización de cada uno (sin guardar, sin IA).
+ *   POST /api/simbolos                  — guarda uno o más símbolos ya revisados.
+ *   DELETE /api/simbolos/:nombre        — borra un símbolo.
  * Nunca sube nada a storage — eso lo hace scripts/procesar-cola.ts (el
  * worker que de verdad genera y sube el unifilar, ver README.md).
  */
@@ -24,13 +29,16 @@ import Anthropic from "@anthropic-ai/sdk";
 import { validarDrawCommand } from "./anthropic-client.js";
 import { generarEjemploDesdeImagen, RespuestaEnsenarInvalida, type MediaTypeImagen } from "./ensenar.js";
 import { listarEjemplos, guardarEjemplo, eliminarEjemplo } from "./ejemplos-store.js";
+import { listarSimbolos, guardarSimbolos, eliminarSimbolo } from "./simbolos-store.js";
+import { extraerBloquesDesdeDxf } from "./dxf-import.js";
 import { encolarJob } from "./jobs-store.js";
 import { drawCommandsToPdfFragment } from "./pdf-renderer.js";
 import { calcularDimensiones } from "./geometria.js";
-import type { DrawCommand, PedidoUnifilar } from "./types.js";
+import type { DrawCommand, PedidoUnifilar, Simbolo } from "./types.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PAGINA_ENSENAR = readFileSync(join(__dirname, "..", "public", "index.html"), "utf-8");
+const PAGINA_SIMBOLOS = readFileSync(join(__dirname, "..", "public", "simbolos.html"), "utf-8");
 
 const PORT = Number(process.env.PORT) || 8787;
 const MAX_BODY_BYTES = 20 * 1024 * 1024; // una foto en base64 pesa ~33% más que el archivo — 20MB da margen para fotos de celular normales
@@ -209,6 +217,114 @@ async function manejarEliminarEjemplo(tag: string, res: ServerResponse): Promise
   }
 }
 
+async function manejarListarSimbolos(_req: IncomingMessage, res: ServerResponse): Promise<void> {
+  try {
+    const simbolos = await listarSimbolos();
+    responderJson(res, 200, { simbolos });
+  } catch (err) {
+    console.error("[motor-unifilares] error listando símbolos:", err);
+    responderJson(res, 500, { error: err instanceof Error ? err.message : "Error inesperado listando símbolos." });
+  }
+}
+
+/** A diferencia de "enseñar", esto NUNCA llama a la IA — es lectura directa del DXF, por eso no pide X-Anthropic-Api-Key. */
+async function manejarPrevisualizarSimbolos(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  let bodyRaw: string;
+  try {
+    bodyRaw = await leerBody(req);
+  } catch {
+    responderJson(res, 413, { error: "El archivo es demasiado grande." });
+    return;
+  }
+
+  let pedido: { dxfBase64?: unknown };
+  try {
+    pedido = JSON.parse(bodyRaw);
+  } catch {
+    responderJson(res, 400, { error: "El cuerpo no es JSON válido." });
+    return;
+  }
+  if (typeof pedido.dxfBase64 !== "string" || !pedido.dxfBase64) {
+    responderJson(res, 400, { error: 'Falta "dxfBase64".' });
+    return;
+  }
+
+  let dxfTexto: string;
+  try {
+    dxfTexto = Buffer.from(pedido.dxfBase64, "base64").toString("utf-8");
+  } catch {
+    responderJson(res, 400, { error: "No se pudo decodificar el archivo." });
+    return;
+  }
+
+  try {
+    const { bloques, fallidos } = extraerBloquesDesdeDxf(dxfTexto);
+    const bloquesConPreview = await Promise.all(
+      bloques.map(async (b) => {
+        const pdfBuffer = await drawCommandsToPdfFragment(b.commands, b.ancho + 20, b.alto + 20);
+        return { ...b, pdfBase64: pdfBuffer.toString("base64") };
+      }),
+    );
+    responderJson(res, 200, { bloques: bloquesConPreview, fallidos });
+  } catch (err) {
+    console.error("[motor-unifilares] error leyendo el DXF:", err);
+    responderJson(res, 400, { error: err instanceof Error ? `No se pudo leer el DXF: ${err.message}` : "No se pudo leer el DXF." });
+  }
+}
+
+function validarSimboloCompleto(o: Record<string, unknown>): boolean {
+  if (typeof o.nombre !== "string" || !/^[a-z0-9_]+$/.test(o.nombre)) return false;
+  if (typeof o.descripcion !== "string") return false;
+  if (typeof o.ancho !== "number" || typeof o.alto !== "number") return false;
+  if (!Array.isArray(o.commands) || o.commands.length === 0) return false;
+  return o.commands.every((c) => validarDrawCommand(c));
+}
+
+async function manejarGuardarSimbolos(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  let bodyRaw: string;
+  try {
+    bodyRaw = await leerBody(req);
+  } catch {
+    responderJson(res, 413, { error: "El cuerpo es demasiado grande." });
+    return;
+  }
+
+  let pedido: { simbolos?: unknown };
+  try {
+    pedido = JSON.parse(bodyRaw);
+  } catch {
+    responderJson(res, 400, { error: "El cuerpo no es JSON válido." });
+    return;
+  }
+  if (!Array.isArray(pedido.simbolos) || pedido.simbolos.length === 0) {
+    responderJson(res, 400, { error: 'Falta "simbolos" (array no vacío).' });
+    return;
+  }
+  const invalidos = pedido.simbolos.filter((s) => !validarSimboloCompleto(s));
+  if (invalidos.length > 0) {
+    responderJson(res, 400, { error: `${invalidos.length} de ${pedido.simbolos.length} símbolos no tienen una forma válida.` });
+    return;
+  }
+
+  try {
+    await guardarSimbolos(pedido.simbolos as Simbolo[]);
+    responderJson(res, 200, { ok: true });
+  } catch (err) {
+    console.error("[motor-unifilares] error guardando símbolos:", err);
+    responderJson(res, 500, { error: err instanceof Error ? err.message : "Error inesperado guardando la librería de símbolos." });
+  }
+}
+
+async function manejarEliminarSimbolo(nombre: string, res: ServerResponse): Promise<void> {
+  try {
+    await eliminarSimbolo(nombre);
+    responderJson(res, 200, { ok: true });
+  } catch (err) {
+    console.error("[motor-unifilares] error eliminando símbolo:", err);
+    responderJson(res, 500, { error: err instanceof Error ? err.message : "Error inesperado eliminando el símbolo." });
+  }
+}
+
 const server = createServer((req, res) => {
   const url = req.url ?? "/";
 
@@ -252,6 +368,40 @@ const server = createServer((req, res) => {
   if (req.method === "DELETE" && url.startsWith("/api/ejemplos/")) {
     const tag = decodeURIComponent(url.slice("/api/ejemplos/".length));
     manejarEliminarEjemplo(tag, res).catch((err) => {
+      console.error("[motor-unifilares] error no manejado:", err);
+      responderJson(res, 500, { error: "Error inesperado." });
+    });
+    return;
+  }
+  if (req.method === "GET" && url === "/simbolos") {
+    res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+    res.end(PAGINA_SIMBOLOS);
+    return;
+  }
+  if (req.method === "GET" && url === "/api/simbolos") {
+    manejarListarSimbolos(req, res).catch((err) => {
+      console.error("[motor-unifilares] error no manejado:", err);
+      responderJson(res, 500, { error: "Error inesperado." });
+    });
+    return;
+  }
+  if (req.method === "POST" && url === "/api/simbolos/previsualizar") {
+    manejarPrevisualizarSimbolos(req, res).catch((err) => {
+      console.error("[motor-unifilares] error no manejado:", err);
+      responderJson(res, 500, { error: "Error inesperado." });
+    });
+    return;
+  }
+  if (req.method === "POST" && url === "/api/simbolos") {
+    manejarGuardarSimbolos(req, res).catch((err) => {
+      console.error("[motor-unifilares] error no manejado:", err);
+      responderJson(res, 500, { error: "Error inesperado." });
+    });
+    return;
+  }
+  if (req.method === "DELETE" && url.startsWith("/api/simbolos/")) {
+    const nombre = decodeURIComponent(url.slice("/api/simbolos/".length));
+    manejarEliminarSimbolo(nombre, res).catch((err) => {
       console.error("[motor-unifilares] error no manejado:", err);
       responderJson(res, 500, { error: "Error inesperado." });
     });

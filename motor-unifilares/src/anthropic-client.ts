@@ -3,11 +3,12 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { listarEjemplos } from "./ejemplos-store.js";
+import { listarSimbolos } from "./simbolos-store.js";
 import { calcularCodigosUnificados } from "./codigos-equipo.js";
 import { armarLotes, circuitosDelLote } from "./lotes.js";
 import { construirArboles, contarHojas } from "./tree.js";
 import { expandirSimbolos } from "./simbolos/index.js";
-import { CAPAS_DXF, type DrawCommand, type UnifilarCircuito, type RotuloUnifilar, type UnifilarDrawing } from "./types.js";
+import { CAPAS_DXF, type DrawCommand, type Simbolo, type UnifilarCircuito, type RotuloUnifilar, type UnifilarDrawing } from "./types.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REGLAS_PATH = join(__dirname, "..", "reglas", "REGLAS_UNIFILAR.md");
@@ -22,14 +23,15 @@ Cada elemento de "commands" es UNO de estos 6 tipos (discriminados por "type"):
 - {"type":"circle","x":number,"y":number,"r":number,"layer":CAPA}
 - {"type":"ellipse","x":number,"y":number,"rx":number,"ry":number,"layer":CAPA}
 - {"type":"text","x":number,"y":number,"text":string,"size":number,"layer":CAPA,"bold"?:boolean}
-- {"type":"simbolo","nombre":"termica"|"disyuntor","x":number,"y":number,"layer":"SIMBOLOS"}
+- {"type":"simbolo","nombre":string,"x":number,"y":number,"layer":"SIMBOLOS"}
 
-El tipo "simbolo" es un símbolo de la librería ya resuelto (ver A5 del
-documento de reglas) — para una térmica o un disyuntor, usá SIEMPRE este
-comando en vez de dibujar manualmente el rectángulo/diagonal/óvalo: "x" es
-el centro horizontal del símbolo, "y" es su borde superior. Para cualquier
-otro equipo (bornera, fuente, UPS, batería, etc.) seguís dibujando la
-geometría a mano como siempre.
+El tipo "simbolo" es un símbolo de la librería ya resuelto (geometría real,
+extraída de un DXF — ver sección "LIBRERÍA DE SÍMBOLOS" más abajo con los
+nombres disponibles) — si el equipo que estás dibujando tiene un símbolo
+en esa lista, usá SIEMPRE este comando en vez de dibujar su geometría a
+mano: "x" es el centro horizontal del símbolo, "y" es su borde superior.
+Para cualquier equipo que NO esté en esa lista, seguís dibujando la
+geometría a mano como siempre (líneas/rects/círculos/elipses).
 
 CAPA es EXACTAMENTE una de: ${CAPAS_DXF.join(", ")} (A9 del documento de reglas).
 
@@ -54,16 +56,28 @@ async function construirBloqueEjemplos(): Promise<string> {
   );
 }
 
+/** Nombres y tamaños de la librería de símbolos vigente (ver src/simbolos-store.ts) — crece sin deploy, por eso se arma en cada generación en vez de ser texto fijo como ESQUEMA_DRAW_COMMAND. */
+function construirBloqueSimbolos(simbolos: Simbolo[]): string {
+  if (simbolos.length === 0) return "";
+  const filas = simbolos.map((s) => `- "${s.nombre}" (${s.ancho}x${s.alto}mm): ${s.descripcion}`);
+  return (
+    "\n\n=== LIBRERÍA DE SÍMBOLOS (usar con {\"type\":\"simbolo\",\"nombre\":...} — ver FORMATO DE SALIDA) ===\n\n" +
+    filas.join("\n") +
+    '\n\nSi el equipo que estás dibujando coincide con alguno de estos nombres, usá el comando "simbolo" — NUNCA ' +
+    "inventes un nombre que no esté en esta lista.\n"
+  );
+}
+
 /**
  * Prompt de sistema: el documento de reglas completo + los ejemplos
- * enseñados + el esquema exacto que tiene que devolver, UNA SOLA VEZ por
- * generación (no por lote — ver `generarUnifilar`), con `cache_control`
- * para que la API de Anthropic no vuelva a procesar este bloque grande en
- * cada uno de los varios llamados de una misma generación. Nunca se
- * resume el documento — la fidelidad a lo escrito ahí es el punto de todo
- * este motor.
+ * enseñados + la librería de símbolos vigente + el esquema exacto que
+ * tiene que devolver, UNA SOLA VEZ por generación (no por lote — ver
+ * `generarUnifilar`), con `cache_control` para que la API de Anthropic no
+ * vuelva a procesar este bloque grande en cada uno de los varios llamados
+ * de una misma generación. Nunca se resume el documento — la fidelidad a
+ * lo escrito ahí es el punto de todo este motor.
  */
-async function construirSystemPrompt(): Promise<Anthropic.TextBlockParam[]> {
+async function construirSystemPrompt(simbolos: Simbolo[]): Promise<Anthropic.TextBlockParam[]> {
   const texto =
     "Sos un dibujante técnico que arma planos unifilares de tableros eléctricos, siguiendo al pie de la letra el estándar " +
     "de dibujo que te paso completo a continuación. Te dan una lista de circuitos YA RELEVADOS (de un tablero real, ya " +
@@ -74,6 +88,7 @@ async function construirSystemPrompt(): Promise<Anthropic.TextBlockParam[]> {
     (await construirBloqueEjemplos()) +
     "\n\n=== FORMATO DE SALIDA ===\n\n" +
     ESQUEMA_DRAW_COMMAND +
+    construirBloqueSimbolos(simbolos) +
     "\n\nRegla de oro (ya la viste arriba, la repito porque es la más importante): si un dato no está en el relevamiento, " +
     'no se inventa — se dibuja el texto "A CONFIRMAR" en la capa A_CONFIRMAR PARA ESE DATO PUNTUAL (ej. el polaje de un ' +
     'disyuntor). "A CONFIRMAR" nunca es excusa para saltear un circuito, un equipo o un tramo entero — si te pasan 26 ' +
@@ -133,7 +148,8 @@ export function validarDrawCommand(c: unknown): c is DrawCommand {
     case "text":
       return typeof o.x === "number" && typeof o.y === "number" && typeof o.text === "string" && typeof o.size === "number";
     case "simbolo":
-      return typeof o.x === "number" && typeof o.y === "number" && (o.nombre === "termica" || o.nombre === "disyuntor");
+      // El nombre se valida contra la librería VIGENTE recién en expandirSimbolos (ver src/simbolos/index.ts) — acá solo se chequea la forma.
+      return typeof o.x === "number" && typeof o.y === "number" && typeof o.nombre === "string" && o.nombre.length > 0;
     default:
       return false;
   }
@@ -466,7 +482,9 @@ export async function generarUnifilar(
   circuitos: UnifilarCircuito[],
   rotulo: RotuloUnifilar,
 ): Promise<{ drawing: UnifilarDrawing; uso: UsoTokens }> {
-  const system = await construirSystemPrompt();
+  const simbolos = await listarSimbolos();
+  const biblioteca = new Map(simbolos.map((s) => [s.nombre, s]));
+  const system = await construirSystemPrompt(simbolos);
   const codigos = calcularCodigosUnificados(circuitos);
   const lotes = armarLotes(circuitos);
   const alturaReservadaEncabezado = calcularAlturaReservadaEncabezado(circuitos);
@@ -521,7 +539,7 @@ export async function generarUnifilar(
 
   return {
     drawing: {
-      commands: expandirSimbolos([...comandosRenumerados, ...comandosMarco]),
+      commands: expandirSimbolos([...comandosRenumerados, ...comandosMarco], biblioteca),
       width: 420,
       height: Math.max(alturaAcumulada, parsedMarco.height),
     },

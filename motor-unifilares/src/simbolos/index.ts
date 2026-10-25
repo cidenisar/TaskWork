@@ -1,27 +1,49 @@
-import type { DrawCommand, NombreSimbolo } from "../types.js";
-import { dibujarTermica } from "./termica.js";
-import { dibujarDisyuntor } from "./disyuntor.js";
+import type { DrawCommand, Simbolo } from "../types.js";
 
 /**
- * Librería de símbolos (ver CRITERIOS_Y_IDEAS.md sobre la idea de ir
- * "enseñándole" una librería al motor en vez de que redibuje cada pieza de
- * cero) — cada entrada es una función pura que arma la geometría real
- * (líneas/rects/ellipses) a partir de un punto de anclaje. La IA no dibuja
- * esta geometría: solo pide `{"type":"simbolo","nombre":"termica",...}` (ver
- * ESQUEMA_DRAW_COMMAND en anthropic-client.ts) — más corto de generar, y
- * sale siempre igual de prolijo, consistente entre circuitos.
+ * Desplaza TODAS las coordenadas de un fragmento de comandos por (dx,dy) —
+ * a diferencia de `trasladarComandos` de anthropic-client.ts (que solo
+ * mueve Y, porque los lotes de circuitos ya vienen alineados en X), esto
+ * mueve X e Y: lo usa `dxf-import.ts` para normalizar un bloque recién
+ * leído (centro horizontal + borde superior en (0,0)), y `expandirSimbolos`
+ * para ubicar cada instancia donde la IA la pidió.
  */
-const SIMBOLOS: Record<NombreSimbolo, (cx: number, yTop: number) => DrawCommand[]> = {
-  termica: dibujarTermica,
-  disyuntor: dibujarDisyuntor,
-};
+export function trasladarXY(commands: DrawCommand[], dx: number, dy: number): DrawCommand[] {
+  if (dx === 0 && dy === 0) return commands;
+  return commands.map((c) => {
+    switch (c.type) {
+      case "line":
+        return { ...c, x1: c.x1 + dx, y1: c.y1 + dy, x2: c.x2 + dx, y2: c.y2 + dy };
+      case "rect":
+      case "circle":
+      case "ellipse":
+      case "text":
+      case "simbolo":
+        return { ...c, x: c.x + dx, y: c.y + dy };
+    }
+  });
+}
+
+export class SimboloDesconocido extends Error {}
 
 /**
- * Reemplaza cada comando `{"type":"simbolo",...}` por la geometría real —
- * se llama una sola vez, al final de `generarUnifilar`, antes de que el
- * dibujo llegue a los renderers (DXF/PDF): esos dos nunca necesitan saber
- * que "simbolo" existe, solo ven líneas/rects/ellipses/texto de siempre.
+ * Reemplaza cada comando `{"type":"simbolo","nombre":...}` por la
+ * geometría real de la librería (ver `listarSimbolos` en
+ * src/simbolos-store.ts) — se llama una sola vez, al final de
+ * `generarUnifilar`, antes de que el dibujo llegue a los renderers
+ * (DXF/PDF): esos dos nunca necesitan saber que "simbolo" existe, solo ven
+ * líneas/rects/ellipses/texto de siempre. `biblioteca` son los símbolos
+ * VIGENTES en el momento de generar (tabla motor_unifilares_simbolos) —
+ * si la IA pidió un nombre que ya no existe (o nunca existió), es un error
+ * real y se avisa fuerte en vez de dibujar cualquier cosa o nada.
  */
-export function expandirSimbolos(commands: DrawCommand[]): DrawCommand[] {
-  return commands.flatMap((c) => (c.type === "simbolo" ? SIMBOLOS[c.nombre](c.x, c.y) : [c]));
+export function expandirSimbolos(commands: DrawCommand[], biblioteca: Map<string, Simbolo>): DrawCommand[] {
+  return commands.flatMap((c) => {
+    if (c.type !== "simbolo") return [c];
+    const simbolo = biblioteca.get(c.nombre);
+    if (!simbolo) {
+      throw new SimboloDesconocido(`La IA pidió el símbolo "${c.nombre}", que no existe en la librería (ver public/simbolos.html).`);
+    }
+    return trasladarXY(simbolo.commands, c.x, c.y);
+  });
 }
