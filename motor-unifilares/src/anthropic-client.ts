@@ -65,7 +65,12 @@ async function construirSystemPrompt(): Promise<Anthropic.TextBlockParam[]> {
     "\n\n=== FORMATO DE SALIDA ===\n\n" +
     ESQUEMA_DRAW_COMMAND +
     "\n\nRegla de oro (ya la viste arriba, la repito porque es la más importante): si un dato no está en el relevamiento, " +
-    'no se inventa — se dibuja el texto "A CONFIRMAR" en la capa A_CONFIRMAR.\n\n' +
+    'no se inventa — se dibuja el texto "A CONFIRMAR" en la capa A_CONFIRMAR PARA ESE DATO PUNTUAL (ej. el polaje de un ' +
+    'disyuntor). "A CONFIRMAR" nunca es excusa para saltear un circuito, un equipo o un tramo entero — si te pasan 26 ' +
+    "circuitos en este pedido, dibujás los 26, por más repetitivo o largo que sea: cada uno que falte es un circuito " +
+    "real del tablero que no va a quedar documentado en el plano final. Si tenés dudas de cómo dibujar un circuito " +
+    'puntual, dibujalo con tu mejor criterio siguiendo el patrón más parecido de las reglas/ejemplos y marcá "A ' +
+    'CONFIRMAR" solo en el dato específico que no tenías — nunca omitas el circuito completo.\n\n' +
     "=== GENERACIÓN POR TRAMOS (importante) ===\n\n" +
     "Por el tiempo máximo que tiene la función que te llama, el tablero completo NO se te pide en un solo pedido — se " +
     "divide en varios llamados separados que se hacen EN PARALELO (al mismo tiempo, sin que uno vea la respuesta de " +
@@ -170,11 +175,15 @@ async function llamarIa(apiKey: string, system: Anthropic.TextBlockParam[], user
       // ANTES del texto. Con el effort por default ("high") un lote podía
       // gastar todo el presupuesto pensando y terminar con stop_reason=
       // max_tokens sin haber emitido ni un bloque de texto (visto en
-      // producción con un tablero de 53 circuitos). Esta tarea es sobre
-      // todo mecánica — seguir REGLAS_UNIFILAR.md + los ejemplos ya
-      // enseñados, no razonar un problema nuevo — así que "low" alcanza y
-      // deja todo el margen de max_tokens para el JSON de salida.
-      output_config: { effort: "low" },
+      // producción con un tablero de 53 circuitos). "low" se probó primero
+      // y resultó PEOR, no mejor: con menos presupuesto para pensar, el
+      // modelo directamente salteó de dibujar 26 circuitos de un lote
+      // grande (un único árbol de encadenado, H3/H6, no se puede partir)
+      // alegando "falta de datos" — un atajo perezoso, no un problema real
+      // de datos. "medium" es el punto medio: bastante menos thinking que
+      // "high" para no comerse todo el max_tokens, sin inducir el atajo de
+      // saltear contenido que se vio con "low".
+      output_config: { effort: "medium" },
     })
     .finalMessage();
 
@@ -184,7 +193,18 @@ async function llamarIa(apiKey: string, system: Anthropic.TextBlockParam[], user
   }
   try {
     const match = textBlock.text.match(/\{[\s\S]*\}/);
-    return JSON.parse(match ? match[0] : textBlock.text) as Record<string, unknown>;
+    const crudo = match ? match[0] : textBlock.text;
+    // A veces la IA escribe el nombre de la capa como si fuera un
+    // identificador suelto en vez de un string JSON (ej. "layer":MARCO en
+    // vez de "layer":"MARCO", visto en producción) — probablemente porque
+    // ESQUEMA_DRAW_COMMAND lista las capas sin comillas ("CAPA es
+    // EXACTAMENTE una de: MARCO, POTENCIA, ..."). Se repara acá en vez de
+    // solo reforzar el prompt, porque un solo carácter perdido tira toda
+    // la respuesta — y si el nombre reparado no es una capa válida,
+    // validarDrawCommand lo rechaza igual más abajo con un error más claro
+    // que "no fue JSON parseable".
+    const reparado = crudo.replace(/"layer":([A-Z_][A-Z0-9_]*)([,}])/g, '"layer":"$1"$2');
+    return JSON.parse(reparado) as Record<string, unknown>;
   } catch {
     const pista = response.stop_reason === "max_tokens" ? " (el JSON quedó cortado a la mitad, se agotó max_tokens)" : "";
     throw new RespuestaIaInvalida(`La respuesta de la IA no fue JSON parseable${pista}.`);
@@ -344,9 +364,17 @@ export async function generarUnifilar(apiKey: string, circuitos: UnifilarCircuit
       // después 1200 tokens/circuito resultaron insuficientes en la
       // práctica (stop_reason "max_tokens", la IA se quedaba sin espacio
       // antes de cerrar el JSON). claude-sonnet-5-5 soporta hasta 128K de
-      // salida, y como los lotes corren en paralelo (ver más arriba), un
-      // techo generoso no suma tiempo total — solo evita el corte.
-      const maxTokens = Math.min(32000, 8000 + circuitosConCodigo.length * 2500);
+      // salida. El techo de 32000 (de cuando esto corría en una función
+      // serverless) resultó ser el verdadero problema de un lote grande de
+      // verdad: un único árbol de encadenado de 26 circuitos (H3/H6, no se
+      // puede partir entre lotes) pedía, según esta misma fórmula, 73000
+      // tokens — el recorte a 32000 le dejaba a la IA la mitad del espacio
+      // que la propia fórmula calculaba como necesario, y el resultado fue
+      // que directamente salteó de dibujar la mayoría de los circuitos.
+      // Ahora que esto corre en un worker sin límite de tiempo (ver
+      // README.md, "Generación asincrónica"), no hay motivo para seguir
+      // recortando por debajo de lo que la fórmula misma pide.
+      const maxTokens = Math.min(120000, 8000 + circuitosConCodigo.length * 2500);
       const parsed = await llamarIa(apiKey, system, userMessage, maxTokens);
       return validarResultadoLote(parsed);
     }),
