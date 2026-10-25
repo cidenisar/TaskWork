@@ -165,6 +165,16 @@ async function llamarIa(apiKey: string, system: Anthropic.TextBlockParam[], user
       max_tokens: maxTokens,
       system,
       messages: [{ role: "user", content: userMessage }],
+      // claude-sonnet-5-5 piensa de forma adaptativa por default, aunque no
+      // se pida "thinking" — y ese razonamiento sale del mismo max_tokens,
+      // ANTES del texto. Con el effort por default ("high") un lote podía
+      // gastar todo el presupuesto pensando y terminar con stop_reason=
+      // max_tokens sin haber emitido ni un bloque de texto (visto en
+      // producción con un tablero de 53 circuitos). Esta tarea es sobre
+      // todo mecánica — seguir REGLAS_UNIFILAR.md + los ejemplos ya
+      // enseñados, no razonar un problema nuevo — así que "low" alcanza y
+      // deja todo el margen de max_tokens para el JSON de salida.
+      output_config: { effort: "low" },
     })
     .finalMessage();
 
