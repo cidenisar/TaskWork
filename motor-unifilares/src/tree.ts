@@ -46,3 +46,15 @@ export function construirArboles(circuitos: UnifilarCircuito[]): NodoArbol[] {
 export function contarNodos(nodo: NodoArbol): number {
   return 1 + nodo.hijos.reduce((acc, h) => acc + contarNodos(h), 0);
 }
+
+/**
+ * Cantidad de hojas (destinos reales, sin hijos) de un árbol — un circuito
+ * que no alimenta a ningún otro. Usado en anthropic-client.ts para estimar
+ * cuántos `Tn` de tierra va a necesitar el tablero (A7: uno por destino o
+ * equipo) ANTES de llamar a la IA, para reservarle el espacio a la tabla
+ * PUESTA A TIERRA — ver el comentario de `alturaReservadaEncabezado` ahí.
+ */
+export function contarHojas(nodo: NodoArbol): number {
+  if (nodo.hijos.length === 0) return 1;
+  return nodo.hijos.reduce((acc, h) => acc + contarHojas(h), 0);
+}

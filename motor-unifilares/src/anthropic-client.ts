@@ -5,6 +5,7 @@ import { dirname, join } from "node:path";
 import { listarEjemplos } from "./ejemplos-store.js";
 import { calcularCodigosUnificados } from "./codigos-equipo.js";
 import { armarLotes, circuitosDelLote } from "./lotes.js";
+import { construirArboles, contarHojas } from "./tree.js";
 import { CAPAS_DXF, type DrawCommand, type UnifilarCircuito, type RotuloUnifilar, type UnifilarDrawing } from "./types.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -215,13 +216,22 @@ interface CircuitoConCodigo extends UnifilarCircuito {
   codigo: string;
 }
 
-function construirMensajeCircuitos(circuitos: CircuitoConCodigo[], incluirCabecera: boolean, rotulo: RotuloUnifilar): string {
+function construirMensajeCircuitos(
+  circuitos: CircuitoConCodigo[],
+  incluirCabecera: boolean,
+  rotulo: RotuloUnifilar,
+  alturaReservadaEncabezado: number,
+): string {
   return (
     `Pedido de tipo "circuitos".` +
     (incluirCabecera
       ? " Este es el tramo de la cabecera del tablero: dibujá primero la cabecera (B1 — ORIGEN, térmica GENERAL, " +
         "borneras BNR, protector de sobretensión; NO el recuadro PUESTA A TIERRA, eso va aparte) y después, debajo, " +
-        "estos circuitos."
+        `estos circuitos. IMPORTANTE: dejá en blanco los primeros ${alturaReservadaEncabezado}mm de este tramo (no ` +
+        "dibujes nada con y menor a ese número) — ese espacio lo ocupa, en la MISMA franja de Y pero en el margen " +
+        "derecho de la hoja, el marco/título/rótulo y el recuadro PUESTA A TIERRA completo que dibuja el ÚLTIMO " +
+        "llamado (con TODOS los destinos del tablero, no solo los tuyos) — si tu cabecera o tu primera fila de " +
+        "circuitos empiezan antes de esa Y, van a quedar tapados por ese recuadro."
       : " Este es un tramo de circuitos: NO dibujes cabecera, arrancá directo con la barra de estos circuitos (B2).") +
     `\n\nDatos del rótulo (cuadro de título, solo para contexto — no lo dibujes acá):\n${JSON.stringify(rotulo, null, 2)}` +
     `\n\nCircuitos de este tramo (orden de lectura real, con su encadenado por padreNumero y su "codigo" ya asignado):\n` +
@@ -232,18 +242,43 @@ function construirMensajeCircuitos(circuitos: CircuitoConCodigo[], incluirCabece
 function construirMensajeMarcoRotulo(
   rotulo: RotuloUnifilar,
   alturaContenido: number,
+  alturaReservadaEncabezado: number,
   tensionesPresentes: string[],
   tierra: { numero: string; destino: string }[],
 ): string {
   return (
     `Pedido de tipo "marco_rotulo". Alto real del contenido ya dibujado por los tramos anteriores: ${alturaContenido}mm ` +
     `(el marco tiene que cubrir desde Y=0 hasta al menos esa altura).\n\n` +
+    `El primer tramo (cabecera) dejó en blanco, a propósito, los primeros ${alturaReservadaEncabezado}mm de la hoja ` +
+    "para vos — ahí (desde Y=0) van el marco superior con la grilla, el título de 2 líneas, el bloque de " +
+    `revisiones/rótulo, y el recuadro PUESTA A TIERRA completo con sus ${tierra.length} destino(s). Usá todo ese alto ` +
+    "si lo necesitás (el recuadro PUESTA A TIERRA en particular tiene que entrar completo ahí, una línea por cada " +
+    "destino de la lista de abajo) — pero NUNCA dibujes nada con y mayor a ese número en la mitad izquierda de la " +
+    "hoja (ahí ya hay circuitos dibujados por los tramos anteriores, se superpondría).\n\n" +
     `Tensiones presentes en este tablero (para la segunda línea del título, "UNIFILAR <tensión> HOJA 1"): ` +
     `${tensionesPresentes.join("/") || "A CONFIRMAR"}.\n\n` +
     `Lista completa de tierra para el recuadro PUESTA A TIERRA (A7), ya numerada en el orden correcto — usala tal ` +
     `cual, no renumeres ni reordenes:\n${JSON.stringify(tierra, null, 2)}\n\n` +
     `Datos del rótulo (cuadro de título):\n${JSON.stringify(rotulo, null, 2)}`
   );
+}
+
+/**
+ * Alto (mm) a reservar en blanco arriba de la hoja para que entren, sin
+ * superponerse con los circuitos: el marco superior + título + bloque de
+ * revisiones (fijo, ~90mm ya armados en la Etapa 2 del rediseño) y el
+ * recuadro PUESTA A TIERRA completo (A7, una línea por destino — el `Tn`
+ * real no se conoce hasta que corren los lotes, pero la CANTIDAD de
+ * destinos sí: es la cantidad de hojas del árbol de encadenado, que no
+ * cambia según cómo se partan los lotes). Sin esto, el lote de cabecera no
+ * tiene forma de saber cuánto lugar dejar libre para un recuadro que
+ * recién arma el ÚLTIMO llamado — ver CRITERIOS_Y_IDEAS.md § 21 y el bug
+ * real que motivó este cálculo: con 27 destinos el recuadro se desbordaba
+ * y quedaba tapado por la fila de circuitos de abajo.
+ */
+function calcularAlturaReservadaEncabezado(circuitos: UnifilarCircuito[]): number {
+  const cantidadDestinos = construirArboles(circuitos).reduce((acc, raiz) => acc + contarHojas(raiz), 0);
+  return Math.max(90, 25 + cantidadDestinos * 4);
 }
 
 const TENSION_POR_TIPO_CIRCUITO: Partial<Record<UnifilarCircuito["tipoCircuito"], string>> = {
@@ -351,6 +386,7 @@ export async function generarUnifilar(apiKey: string, circuitos: UnifilarCircuit
   const system = await construirSystemPrompt();
   const codigos = calcularCodigosUnificados(circuitos);
   const lotes = armarLotes(circuitos);
+  const alturaReservadaEncabezado = calcularAlturaReservadaEncabezado(circuitos);
 
   const resultadosLotes = await Promise.all(
     lotes.map(async (lote, i): Promise<ResultadoLote> => {
@@ -358,7 +394,7 @@ export async function generarUnifilar(apiKey: string, circuitos: UnifilarCircuit
         ...c,
         codigo: codigos.get(c.numero)?.texto ?? "A CONFIRMAR",
       }));
-      const userMessage = construirMensajeCircuitos(circuitosConCodigo, i === 0, rotulo);
+      const userMessage = construirMensajeCircuitos(circuitosConCodigo, i === 0, rotulo, alturaReservadaEncabezado);
       // Cada circuito trae varios comandos de dibujo detallados (bornes,
       // térmica/disyuntor, cables con marca y formación, textos) — 600 y
       // después 1200 tokens/circuito resultaron insuficientes en la
@@ -391,7 +427,7 @@ export async function generarUnifilar(apiKey: string, circuitos: UnifilarCircuit
     alturaAcumulada += resultadosLotes[i].height;
   }
 
-  const userMessageMarco = construirMensajeMarcoRotulo(rotulo, alturaAcumulada, tensionesPresentesEn(circuitos), tierra);
+  const userMessageMarco = construirMensajeMarcoRotulo(rotulo, alturaAcumulada, alturaReservadaEncabezado, tensionesPresentesEn(circuitos), tierra);
   const parsedMarco = await llamarIa(apiKey, system, userMessageMarco, Math.min(20000, 6000 + tierra.length * 400));
   if (typeof parsedMarco.height !== "number") {
     throw new RespuestaIaInvalida('La respuesta del tramo "marco_rotulo" no tiene la forma esperada ({"commands","height"}).');
