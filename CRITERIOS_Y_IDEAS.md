@@ -1412,3 +1412,45 @@ frecuentemente no lo es.** No se sabe el ahorro real sin medir: loguear
 "thinking" invisible se cobra como output) de cada llamado y calcular el
 costo real con los precios publicados, en vez de adivinar cuánto se está
 gastando por el tamaño de la factura al final del mes.
+
+## 22. Librería de símbolos: cuando un elemento se repite igual en cada generación, no se le pide a la IA que lo dibuje de nuevo cada vez
+
+**Contexto:** en `motor-unifilares`, cada circuito con térmica o
+disyuntor le pedía a la IA que dibujara la geometría completa del
+símbolo (rectángulo + diagonal, o rectángulo + óvalo de toroide) como
+parte del JSON de comandos de ese circuito — lo mismo que ya dibujó bien
+en el circuito anterior, vuelto a generar desde cero, circuito tras
+circuito, tablero tras tablero.
+
+**El problema con dejar que la IA redibuje lo que ya es idéntico siempre:**
+cuesta tokens de salida en cada llamado (no es gratis, ver § 21), y cada
+repetición es una nueva oportunidad de que la proporción salga un poco
+distinta — nada garantiza que el disyuntor del circuito 14 tenga
+exactamente el mismo tamaño de óvalo que el del circuito 3, aunque las
+reglas escritas sean las mismas.
+
+**La solución, mismo criterio que un BLOCK/INSERT de AutoCAD:** si un
+elemento se repite con la misma forma siempre (solo cambia DÓNDE va, no
+CÓMO es), no se le pide a la IA que dibuje su geometría — se le pide que
+mande una instancia corta (`{"type":"simbolo","nombre":"termica","x":...,
+"y":...}`) y una función en código, no en el prompt, la expande a la
+geometría real (líneas/rects/ellipses) justo antes de que el dibujo
+llegue a los renderers (DXF/PDF) — ver `motor-unifilares/src/simbolos/`.
+La geometría de cada símbolo se extrajo 1:1 de un plano real ya generado
+y validado visualmente por el usuario (no se inventó una proporción
+nueva): es la única fuente de verdad de "cómo se ve ese símbolo", y vive
+en un solo lugar en vez de estar implícita en un prompt de texto.
+
+**Cuándo aplica este patrón y cuándo no:** solo para elementos cuya
+geometría NO depende del contexto del circuito (tamaño/forma fijos,
+nada que varíe según el tablero) — térmica y disyuntor encajan, una
+bornera con grupos de letras variables (N/F vs. R/S/T/N) no, porque ahí
+el contenido sí cambia según el `tipoCircuito`. No reemplaza al
+mecanismo de "enseñar" (`scripts/ensenar.ts`, ejemplos puntuales
+resueltos que se agregan al prompt): la librería de símbolos resuelve
+piezas chicas y 100% repetibles sin tocar el prompt en absoluto; "enseñar"
+sigue siendo el mecanismo para patrones más grandes o con variación real
+que sí conviene mostrarle a la IA como ejemplo. Es el mismo espíritu que
+motivó originalmente "enseñar" — ir alimentando al motor con una
+librería para que generar sea cada vez más fácil — pero resuelto en
+código puro para la parte que no necesita juicio de la IA en absoluto.
