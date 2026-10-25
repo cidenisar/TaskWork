@@ -163,7 +163,51 @@ function trasladarComandos(commands: DrawCommand[], dy: number): DrawCommand[] {
  * + `finalMessage()` da el mismo `Message` final que `create`, solo que
  * por streaming — no cambia nada de la lógica de acá para abajo.
  */
-async function llamarIa(apiKey: string, system: Anthropic.TextBlockParam[], userMessage: string, maxTokens: number): Promise<Record<string, unknown>> {
+/** Tokens reales consumidos (ver `response.usage` del SDK) — se usa para que el worker pueda mostrar un costo estimado real en vez de que el usuario tenga que adivinarlo. */
+export interface UsoTokens {
+  inputTokens: number;
+  outputTokens: number;
+  cacheCreationInputTokens: number;
+  cacheReadInputTokens: number;
+}
+
+function sumarUso(a: UsoTokens, b: UsoTokens): UsoTokens {
+  return {
+    inputTokens: a.inputTokens + b.inputTokens,
+    outputTokens: a.outputTokens + b.outputTokens,
+    cacheCreationInputTokens: a.cacheCreationInputTokens + b.cacheCreationInputTokens,
+    cacheReadInputTokens: a.cacheReadInputTokens + b.cacheReadInputTokens,
+  };
+}
+
+const USO_CERO: UsoTokens = { inputTokens: 0, outputTokens: 0, cacheCreationInputTokens: 0, cacheReadInputTokens: 0 };
+
+/**
+ * Precios de claude-sonnet-5-5 (USD por millón de tokens, ver
+ * https://docs.claude.com/en/docs/about-claude/pricing — revisar si cambian):
+ * input $2, output $10 (el "thinking" invisible se cobra como output, mismo
+ * precio), cache write (5 min, el único TTL que usa este servicio) $2.50,
+ * cache read $0.20. Solo para mostrarle al usuario un estimado real después
+ * de cada corrida del worker — no se usa para facturar nada.
+ */
+const PRECIO_POR_MTOK = { input: 2, output: 10, cacheWrite: 2.5, cacheRead: 0.2 };
+
+export function estimarCostoUsd(uso: UsoTokens): number {
+  return (
+    (uso.inputTokens * PRECIO_POR_MTOK.input +
+      uso.outputTokens * PRECIO_POR_MTOK.output +
+      uso.cacheCreationInputTokens * PRECIO_POR_MTOK.cacheWrite +
+      uso.cacheReadInputTokens * PRECIO_POR_MTOK.cacheRead) /
+    1_000_000
+  );
+}
+
+async function llamarIa(
+  apiKey: string,
+  system: Anthropic.TextBlockParam[],
+  userMessage: string,
+  maxTokens: number,
+): Promise<{ parsed: Record<string, unknown>; uso: UsoTokens }> {
   const client = new Anthropic({ apiKey });
   const response = await client.messages
     .stream({
@@ -205,7 +249,14 @@ async function llamarIa(apiKey: string, system: Anthropic.TextBlockParam[], user
     // validarDrawCommand lo rechaza igual más abajo con un error más claro
     // que "no fue JSON parseable".
     const reparado = crudo.replace(/"layer":([A-Z_][A-Z0-9_]*)([,}])/g, '"layer":"$1"$2');
-    return JSON.parse(reparado) as Record<string, unknown>;
+    const parsed = JSON.parse(reparado) as Record<string, unknown>;
+    const uso: UsoTokens = {
+      inputTokens: response.usage.input_tokens,
+      outputTokens: response.usage.output_tokens,
+      cacheCreationInputTokens: response.usage.cache_creation_input_tokens ?? 0,
+      cacheReadInputTokens: response.usage.cache_read_input_tokens ?? 0,
+    };
+    return { parsed, uso };
   } catch {
     const pista = response.stop_reason === "max_tokens" ? " (el JSON quedó cortado a la mitad, se agotó max_tokens)" : "";
     throw new RespuestaIaInvalida(`La respuesta de la IA no fue JSON parseable${pista}.`);
@@ -365,56 +416,77 @@ function renumerarConductoresGlobal(resultados: ResultadoLote[]): { comandosPorL
 
 /**
  * Le pasa los circuitos + el rótulo a Claude y devuelve el `UnifilarDrawing`
- * ya validado. `apiKey` es la de quien llama (ver README) — este servicio
- * no tiene una propia.
+ * ya validado, junto con el uso real de tokens de toda la generación.
+ * `apiKey` es la de quien llama (ver README) — este servicio no tiene una
+ * propia.
  *
- * La generación se parte en varios llamados EN PARALELO (ver `armarLotes`)
- * porque un tablero con muchos circuitos, pedido entero de una (o incluso
- * en varios llamados pero uno atrás del otro), puede superar el límite de
- * tiempo de la función serverless (ver README, "Vercel Runtime Timeout") —
- * en paralelo, el tiempo total es el del lote más lento, no la suma de
- * todos. Como los lotes no se ven entre sí, cada uno numera sus
- * conductores (A4) arrancando de 1 y el código los renumera globalmente
- * después (`renumerarConductoresGlobal`) — y arma el recuadro PUESTA A
- * TIERRA completo recién en el último llamado (`marco_rotulo`), que sí
- * corre después de tener todos los lotes resueltos. Los códigos de equipo
- * (Cnn/PD-n/etc.) se calculan una sola vez en código (codigos-equipo.ts)
- * para que sean consistentes entre lotes — ver el comentario de ese
- * archivo sobre por qué no se le pide eso a la IA.
+ * La generación se parte en varios llamados (ver `armarLotes`) para que
+ * cada uno entre cómodo en un solo pedido — un tablero completo de una
+ * sola vez sería un prompt gigante y frágil. Los llamados corren EN
+ * SERIE, no en paralelo: originalmente corrían en paralelo para entrar en
+ * el límite de 60s de una función serverless (el tiempo total pasaba a
+ * ser el del lote más lento, no la suma), pero ahora que esto corre en un
+ * worker sin límite de tiempo (ver README.md, "Generación asincrónica")
+ * esa ventaja ya no pesa tanto como su costo real: en paralelo, NINGÚN
+ * llamado puede aprovechar el cache del prompt de reglas que dejó el
+ * anterior (`cache_control` solo sirve si el llamado siguiente arranca
+ * DESPUÉS de que el anterior ya escribió ese cache) — con ~9-10 llamados
+ * por tablero y un prompt de reglas de varios miles de tokens repetido
+ * en cada uno, eso es la diferencia entre pagar precio de cache-write una
+ * sola vez y pagarlo De Nuevo en cada llamado. En serie, el primer
+ * llamado paga el prompt completo y los siguientes lo leen de cache a una
+ * fracción del precio (ver `PRECIO_POR_MTOK`/`estimarCostoUsd`).
+ *
+ * Como los lotes ahora sí corren en orden, cada uno PODRÍA en teoría
+ * continuar la numeración de conductores del anterior — pero se mantiene
+ * el mismo esquema de numerar cada lote desde 1 y renumerar todo en
+ * código después (`renumerarConductoresGlobal`): simplifica el prompt
+ * (no hay que pasarle "en qué número vas") y deja la puerta abierta a
+ * volver a paralelo en el futuro sin tocar esta parte. El recuadro PUESTA
+ * A TIERRA completo se arma recién en el último llamado (`marco_rotulo`),
+ * que corre después de tener todos los lotes resueltos. Los códigos de
+ * equipo (Cnn/PD-n/etc.) se calculan una sola vez en código
+ * (codigos-equipo.ts) para que sean consistentes entre lotes — ver el
+ * comentario de ese archivo sobre por qué no se le pide eso a la IA.
  */
-export async function generarUnifilar(apiKey: string, circuitos: UnifilarCircuito[], rotulo: RotuloUnifilar): Promise<UnifilarDrawing> {
+export async function generarUnifilar(
+  apiKey: string,
+  circuitos: UnifilarCircuito[],
+  rotulo: RotuloUnifilar,
+): Promise<{ drawing: UnifilarDrawing; uso: UsoTokens }> {
   const system = await construirSystemPrompt();
   const codigos = calcularCodigosUnificados(circuitos);
   const lotes = armarLotes(circuitos);
   const alturaReservadaEncabezado = calcularAlturaReservadaEncabezado(circuitos);
 
-  const resultadosLotes = await Promise.all(
-    lotes.map(async (lote, i): Promise<ResultadoLote> => {
-      const circuitosConCodigo: CircuitoConCodigo[] = circuitosDelLote(lote).map((c) => ({
-        ...c,
-        codigo: codigos.get(c.numero)?.texto ?? "A CONFIRMAR",
-      }));
-      const userMessage = construirMensajeCircuitos(circuitosConCodigo, i === 0, rotulo, alturaReservadaEncabezado);
-      // Cada circuito trae varios comandos de dibujo detallados (bornes,
-      // térmica/disyuntor, cables con marca y formación, textos) — 600 y
-      // después 1200 tokens/circuito resultaron insuficientes en la
-      // práctica (stop_reason "max_tokens", la IA se quedaba sin espacio
-      // antes de cerrar el JSON). claude-sonnet-5-5 soporta hasta 128K de
-      // salida. El techo de 32000 (de cuando esto corría en una función
-      // serverless) resultó ser el verdadero problema de un lote grande de
-      // verdad: un único árbol de encadenado de 26 circuitos (H3/H6, no se
-      // puede partir entre lotes) pedía, según esta misma fórmula, 73000
-      // tokens — el recorte a 32000 le dejaba a la IA la mitad del espacio
-      // que la propia fórmula calculaba como necesario, y el resultado fue
-      // que directamente salteó de dibujar la mayoría de los circuitos.
-      // Ahora que esto corre en un worker sin límite de tiempo (ver
-      // README.md, "Generación asincrónica"), no hay motivo para seguir
-      // recortando por debajo de lo que la fórmula misma pide.
-      const maxTokens = Math.min(120000, 8000 + circuitosConCodigo.length * 2500);
-      const parsed = await llamarIa(apiKey, system, userMessage, maxTokens);
-      return validarResultadoLote(parsed);
-    }),
-  );
+  let uso = USO_CERO;
+  const resultadosLotes: ResultadoLote[] = [];
+  for (const [i, lote] of lotes.entries()) {
+    const circuitosConCodigo: CircuitoConCodigo[] = circuitosDelLote(lote).map((c) => ({
+      ...c,
+      codigo: codigos.get(c.numero)?.texto ?? "A CONFIRMAR",
+    }));
+    const userMessage = construirMensajeCircuitos(circuitosConCodigo, i === 0, rotulo, alturaReservadaEncabezado);
+    // Cada circuito trae varios comandos de dibujo detallados (bornes,
+    // térmica/disyuntor, cables con marca y formación, textos) — 600 y
+    // después 1200 tokens/circuito resultaron insuficientes en la
+    // práctica (stop_reason "max_tokens", la IA se quedaba sin espacio
+    // antes de cerrar el JSON). claude-sonnet-5-5 soporta hasta 128K de
+    // salida. El techo de 32000 (de cuando esto corría en una función
+    // serverless) resultó ser el verdadero problema de un lote grande de
+    // verdad: un único árbol de encadenado de 26 circuitos (H3/H6, no se
+    // puede partir entre lotes) pedía, según esta misma fórmula, 73000
+    // tokens — el recorte a 32000 le dejaba a la IA la mitad del espacio
+    // que la propia fórmula calculaba como necesario, y el resultado fue
+    // que directamente salteó de dibujar la mayoría de los circuitos.
+    // Ahora que esto corre en un worker sin límite de tiempo (ver
+    // README.md, "Generación asincrónica"), no hay motivo para seguir
+    // recortando por debajo de lo que la fórmula misma pide.
+    const maxTokens = Math.min(120000, 8000 + circuitosConCodigo.length * 2500);
+    const { parsed, uso: usoLlamado } = await llamarIa(apiKey, system, userMessage, maxTokens);
+    uso = sumarUso(uso, usoLlamado);
+    resultadosLotes.push(validarResultadoLote(parsed));
+  }
 
   // Renumerar conductores y trasladar coordenadas son dos pasadas
   // independientes (una toca `text`, la otra `x`/`y`) — el orden entre
@@ -428,15 +500,19 @@ export async function generarUnifilar(apiKey: string, circuitos: UnifilarCircuit
   }
 
   const userMessageMarco = construirMensajeMarcoRotulo(rotulo, alturaAcumulada, alturaReservadaEncabezado, tensionesPresentesEn(circuitos), tierra);
-  const parsedMarco = await llamarIa(apiKey, system, userMessageMarco, Math.min(20000, 6000 + tierra.length * 400));
+  const { parsed: parsedMarco, uso: usoMarco } = await llamarIa(apiKey, system, userMessageMarco, Math.min(20000, 6000 + tierra.length * 400));
+  uso = sumarUso(uso, usoMarco);
   if (typeof parsedMarco.height !== "number") {
     throw new RespuestaIaInvalida('La respuesta del tramo "marco_rotulo" no tiene la forma esperada ({"commands","height"}).');
   }
   const comandosMarco = validarComandos(parsedMarco.commands);
 
   return {
-    commands: [...comandosRenumerados, ...comandosMarco],
-    width: 420,
-    height: Math.max(alturaAcumulada, parsedMarco.height),
+    drawing: {
+      commands: [...comandosRenumerados, ...comandosMarco],
+      width: 420,
+      height: Math.max(alturaAcumulada, parsedMarco.height),
+    },
+    uso,
   };
 }

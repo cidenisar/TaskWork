@@ -8,17 +8,18 @@
  * informes-app.
  *
  * Corre como script de Node, NUNCA como función serverless de Vercel — por
- * eso no tiene el límite de 60s que forzó todo el esquema de lotes en
- * paralelo de anthropic-client.ts (ese esquema queda igual, generarUnifilar
- * no cambió acá). Mientras se valida/mejora la calidad del generador, este
- * script se corre A MANO (no hay cron todavía) — procesa lo que esté
- * pendiente y termina.
+ * eso no tiene el límite de 60s que originalmente forzó el esquema de
+ * lotes en paralelo de anthropic-client.ts (ver el comentario de
+ * `generarUnifilar` ahí: ahora corren en serie, más barato por el cache
+ * del prompt de reglas). Mientras se valida/mejora la calidad del
+ * generador, este script se corre A MANO (no hay cron todavía) — procesa
+ * lo que esté pendiente y termina.
  *
  * Uso:
  *   ANTHROPIC_API_KEY=... SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... \
  *     npm run procesar-cola
  */
-import { generarUnifilar, RespuestaIaInvalida } from "../src/anthropic-client.js";
+import { generarUnifilar, estimarCostoUsd, RespuestaIaInvalida } from "../src/anthropic-client.js";
 import { drawCommandsToDxf } from "../src/dxf-writer.js";
 import { drawCommandsToPdf } from "../src/pdf-renderer.js";
 import { listarJobsPendientes, marcarGenerando, marcarListo, marcarError } from "../src/jobs-store.js";
@@ -31,9 +32,14 @@ async function procesarJob(job: JobUnifilar, apiKey: string): Promise<void> {
   await Promise.all([marcarGenerando(job.id), marcarUnifilarGenerando(job.medicionId)]);
 
   try {
-    const dibujo = await generarUnifilar(apiKey, job.circuitos, job.rotulo);
-    const dxfBuffer = drawCommandsToDxf(dibujo.commands, dibujo.height);
-    const pdfBuffer = await drawCommandsToPdf(dibujo.commands, dibujo.width, dibujo.height);
+    const { drawing, uso } = await generarUnifilar(apiKey, job.circuitos, job.rotulo);
+    console.log(
+      `[${job.id}] uso real: ${uso.inputTokens} input + ${uso.cacheCreationInputTokens} cache-write + ` +
+        `${uso.cacheReadInputTokens} cache-read + ${uso.outputTokens} output (incluye "thinking") ≈ ` +
+        `$${estimarCostoUsd(uso).toFixed(3)} USD (estimado, ver PRECIO_POR_MTOK en anthropic-client.ts).`,
+    );
+    const dxfBuffer = drawCommandsToDxf(drawing.commands, drawing.height);
+    const pdfBuffer = await drawCommandsToPdf(drawing.commands, drawing.width, drawing.height);
 
     const createdBy = await obtenerCreatedBy(job.medicionId);
     const dxfPath = `${createdBy}/tableros/${job.medicionId}/unifilar.dxf`;
