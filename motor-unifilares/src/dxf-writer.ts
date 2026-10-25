@@ -171,8 +171,10 @@ export function drawCommandsToDxf(commands: DrawCommand[], height: number): Buff
       entidades.push(dxfCircle(cmd.x, flipY(cmd.y), cmd.r, cmd.layer));
     } else if (cmd.type === "ellipse") {
       entidades.push(dxfEllipse(cmd.x, flipY(cmd.y), cmd.rx, cmd.ry, cmd.layer));
-    } else {
+    } else if (cmd.type === "text") {
       entidades.push(dxfText(cmd.x, flipY(cmd.y), cmd.text, cmd.size, cmd.layer));
+    } else {
+      throw new Error('Comando "simbolo" sin expandir llegó al escritor DXF — expandirSimbolos() debe correr antes.');
     }
   }
 

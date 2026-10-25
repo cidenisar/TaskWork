@@ -6,6 +6,7 @@ import { listarEjemplos } from "./ejemplos-store.js";
 import { calcularCodigosUnificados } from "./codigos-equipo.js";
 import { armarLotes, circuitosDelLote } from "./lotes.js";
 import { construirArboles, contarHojas } from "./tree.js";
+import { expandirSimbolos } from "./simbolos/index.js";
 import { CAPAS_DXF, type DrawCommand, type UnifilarCircuito, type RotuloUnifilar, type UnifilarDrawing } from "./types.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -15,12 +16,20 @@ const REGLAS_PATH = join(__dirname, "..", "reglas", "REGLAS_UNIFILAR.md");
 export const REGLAS_UNIFILAR = readFileSync(REGLAS_PATH, "utf-8");
 
 export const ESQUEMA_DRAW_COMMAND = `
-Cada elemento de "commands" es UNO de estos 5 tipos (discriminados por "type"):
+Cada elemento de "commands" es UNO de estos 6 tipos (discriminados por "type"):
 - {"type":"line","x1":number,"y1":number,"x2":number,"y2":number,"layer":CAPA}
 - {"type":"rect","x":number,"y":number,"width":number,"height":number,"layer":CAPA,"fill"?:boolean}
 - {"type":"circle","x":number,"y":number,"r":number,"layer":CAPA}
 - {"type":"ellipse","x":number,"y":number,"rx":number,"ry":number,"layer":CAPA}
 - {"type":"text","x":number,"y":number,"text":string,"size":number,"layer":CAPA,"bold"?:boolean}
+- {"type":"simbolo","nombre":"termica"|"disyuntor","x":number,"y":number,"layer":"SIMBOLOS"}
+
+El tipo "simbolo" es un símbolo de la librería ya resuelto (ver A5 del
+documento de reglas) — para una térmica o un disyuntor, usá SIEMPRE este
+comando en vez de dibujar manualmente el rectángulo/diagonal/óvalo: "x" es
+el centro horizontal del símbolo, "y" es su borde superior. Para cualquier
+otro equipo (bornera, fuente, UPS, batería, etc.) seguís dibujando la
+geometría a mano como siempre.
 
 CAPA es EXACTAMENTE una de: ${CAPAS_DXF.join(", ")} (A9 del documento de reglas).
 
@@ -123,6 +132,8 @@ export function validarDrawCommand(c: unknown): c is DrawCommand {
       return [o.x, o.y, o.rx, o.ry].every((n) => typeof n === "number");
     case "text":
       return typeof o.x === "number" && typeof o.y === "number" && typeof o.text === "string" && typeof o.size === "number";
+    case "simbolo":
+      return typeof o.x === "number" && typeof o.y === "number" && (o.nombre === "termica" || o.nombre === "disyuntor");
     default:
       return false;
   }
@@ -150,6 +161,7 @@ function trasladarComandos(commands: DrawCommand[], dy: number): DrawCommand[] {
       case "circle":
       case "ellipse":
       case "text":
+      case "simbolo":
         return { ...c, y: c.y + dy };
     }
   });
@@ -509,7 +521,7 @@ export async function generarUnifilar(
 
   return {
     drawing: {
-      commands: [...comandosRenumerados, ...comandosMarco],
+      commands: expandirSimbolos([...comandosRenumerados, ...comandosMarco]),
       width: 420,
       height: Math.max(alturaAcumulada, parsedMarco.height),
     },

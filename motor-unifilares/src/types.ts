@@ -66,12 +66,20 @@ export const CAPAS_DXF = [
 
 export type CapaDxf = (typeof CAPAS_DXF)[number];
 
+/**
+ * Símbolos de la librería (ver src/simbolos/) — nombre corto que la IA usa
+ * en vez de dibujar la geometría de cero cada vez (ver DrawCommand,
+ * variant "simbolo", y expandirSimbolos en src/simbolos/index.ts).
+ */
+export type NombreSimbolo = "termica" | "disyuntor";
+
 export type DrawCommand =
   | { type: "line"; x1: number; y1: number; x2: number; y2: number; layer: CapaDxf }
   | { type: "rect"; x: number; y: number; width: number; height: number; layer: CapaDxf; fill?: boolean }
   | { type: "circle"; x: number; y: number; r: number; layer: CapaDxf }
   | { type: "text"; x: number; y: number; text: string; size: number; bold?: boolean; layer: CapaDxf }
-  | { type: "ellipse"; x: number; y: number; rx: number; ry: number; layer: CapaDxf };
+  | { type: "ellipse"; x: number; y: number; rx: number; ry: number; layer: CapaDxf }
+  | { type: "simbolo"; nombre: NombreSimbolo; x: number; y: number; layer: CapaDxf };
 
 export interface UnifilarDrawing {
   commands: DrawCommand[];

@@ -17,9 +17,13 @@ export function calcularDimensiones(commands: DrawCommand[], margen = 20): { wid
     } else if (c.type === "ellipse") {
       maxX = Math.max(maxX, c.x + c.rx);
       maxY = Math.max(maxY, c.y + c.ry);
-    } else {
+    } else if (c.type === "text") {
       maxX = Math.max(maxX, c.x + c.text.length * c.size * 0.6);
       maxY = Math.max(maxY, c.y);
+    } else {
+      // "simbolo": bounding box aproximado (ver src/simbolos/*.ts, 8x18mm) — alcanza para la previsualización de un ejemplo enseñado, no hace falta expandirlo acá.
+      maxX = Math.max(maxX, c.x + 4);
+      maxY = Math.max(maxY, c.y + 18);
     }
   }
   return { width: maxX + margen, height: maxY + margen };
