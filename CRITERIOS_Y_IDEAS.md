@@ -1391,3 +1391,24 @@ respuesta HTTP inmediata". Encolar + worker aparte no es la última
 opción a probar cuando todo lo demás falló: es la primera pregunta a
 hacerse apenas se sospecha que un paso con IA puede acercarse al límite
 de tiempo de la plataforma.
+
+**Addendum, una vez resuelto el timeout: paralelizar llamados a la IA
+tiene un costo en $ que no es obvio hasta que se mide.** Con el motor ya
+corriendo en el worker (sin límite de tiempo), seguía disparando los ~9-10
+llamados de un tablero EN PARALELO — ya no hacía falta para el tiempo,
+pero nadie lo había reconsiderado. El prompt de reglas (grande, varios
+miles de tokens) se manda completo en cada llamado; con `cache_control`
+(Anthropic), el SEGUNDO llamado en adelante lo puede leer del caché a
+~1/10 del precio — pero SOLO si arranca DESPUÉS de que el anterior ya
+terminó de escribirlo. En paralelo, todos arrancan casi al mismo tiempo,
+así que NINGUNO ve el caché tibio: pagan precio completo del prompt
+grande, todos. Pasar esos mismos llamados a SERIE (un simple `for` en vez
+de `Promise.all`) no cambió nada funcional — bajó el costo real de la
+corrida completa. **La lección general: una vez que paralelizar llamados
+a un LLM deja de ser necesario para cumplir un tiempo límite, hay que
+revisar si sigue siendo gratis — con prompt caching de por medio,
+frecuentemente no lo es.** No se sabe el ahorro real sin medir: loguear
+`response.usage` (input/cache-write/cache-read/output tokens, el
+"thinking" invisible se cobra como output) de cada llamado y calcular el
+costo real con los precios publicados, en vez de adivinar cuánto se está
+gastando por el tamaño de la factura al final del mes.
