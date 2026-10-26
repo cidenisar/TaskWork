@@ -16,8 +16,11 @@ import { Document, Page, View, Svg, Line, Rect, Circle, Ellipse, Text, StyleShee
 import { COLOR_POR_CAPA } from "./colores-capa.js";
 import type { DrawCommand } from "./types.js";
 
+/** Margen (mismas unidades que las coordenadas de los comandos) alrededor del dibujo en la hoja final — ver `drawCommandsToPdf`. */
+const MARGEN_HOJA = 20;
+
 const styles = StyleSheet.create({
-  page: { padding: "20 20 20", fontFamily: "Helvetica", color: "#1a1a1a" },
+  pageEncuadrada: { padding: MARGEN_HOJA, fontFamily: "Helvetica", color: "#1a1a1a" },
   pageSinMargen: { padding: 0, fontFamily: "Helvetica", color: "#1a1a1a" },
 });
 
@@ -76,13 +79,30 @@ function dibujoSvgTexto(commands: DrawCommand[], width: number, height: number) 
   );
 }
 
-/** Hoja completa A3 apaisada — lo que devuelve POST /api/unifilar. */
+/**
+ * Hoja sin tope de tamaño: antes esto forzaba una página "A3" fija
+ * (1190.55x841.89pt en react-pdf — ver node_modules/@react-pdf/layout,
+ * nada que ver con el "420x297mm" que describe el prompt de la IA, son
+ * unidades propias del motor, nunca una escala real de papel — ver el
+ * comentario de dxf-writer.ts). Con tableros grandes, el alto real del
+ * dibujo (`height`, sin tope — ver `generarUnifilar`) terminaba superando
+ * el alto fijo de la página: react-pdf no puede partir un <Svg> entre
+ * páginas, así que el contenido se repartía mal entre dos hojas (dibujo
+ * en una, texto en otra — reporte real del usuario). La hoja ahora mide
+ * exactamente lo que el dibujo necesita, encuadrado con `MARGEN_HOJA` —
+ * mismo criterio que ya usaba `drawCommandsToPdfFragment` para las
+ * previsualizaciones de ejemplos enseñados, acá aplicado a la hoja final.
+ */
 export function drawCommandsToPdf(commands: DrawCommand[], width: number, height: number): Promise<Buffer> {
   return renderToBuffer(
     createElement(
       Document,
       null,
-      createElement(Page, { size: "A3", orientation: "landscape", style: styles.page }, dibujoSvgTexto(commands, width, height)),
+      createElement(
+        Page,
+        { size: [width + MARGEN_HOJA * 2, height + MARGEN_HOJA * 2], style: styles.pageEncuadrada },
+        dibujoSvgTexto(commands, width, height),
+      ),
     ),
   );
 }
