@@ -260,6 +260,14 @@ function AgregarGastoForm({
     setComprobante(file);
     setComprobantePreview(URL.createObjectURL(file));
   }
+  // Al elegir/tipear un técnico que existe en el catálogo (profiles.torre),
+  // completa el sector solo — la persona puede corregirlo después a mano
+  // (ej. técnico sin torre asignada en el catálogo, o un cambio puntual).
+  function handleTecNombreChange(value: string) {
+    setTecNombre(value);
+    const match = catalogos.tecnicos.find((t) => t.nombre.toLowerCase() === value.trim().toLowerCase());
+    if (match?.torre) setTecTorre(match.torre);
+  }
   function addChip() {
     if (!tecNombre.trim()) return;
     setChips([...chips, { nombre: tecNombre.trim(), torre: tecTorre.trim() }]);
@@ -395,7 +403,8 @@ function AgregarGastoForm({
         <div className="tech-form-grid" style={{ marginBottom: 10 }}>
           <AutocompleteInput
             value={tecNombre}
-            onChange={setTecNombre}
+            onChange={handleTecNombreChange}
+            onCommit={handleTecNombreChange}
             suggestions={catalogos.tecnicos.map((t) => t.nombre)}
             placeholder="Nombre completo"
             disabled={busy}
