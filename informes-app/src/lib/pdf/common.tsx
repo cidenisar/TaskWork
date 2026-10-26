@@ -49,11 +49,15 @@ export const commonStyles = StyleSheet.create({
 
   photoGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 4, marginBottom: 6 },
   photoCell: { width: "47%" },
-  // objectFit "contain" (no "cover"): las fotos de celular suelen ser
-  // verticales y una caja más ancha que alta las recortaba arriba/abajo con
-  // "cover" — con "contain" se ve la foto completa, con una franja de fondo
-  // a los costados si hace falta, en vez de perder contenido.
-  photo: { width: "100%", height: 190, objectFit: "contain", backgroundColor: "#EEF0F3", border: `1pt solid ${BORDER}` },
+  // Sin "height" fija a propósito: con una altura fija + objectFit "contain",
+  // cada foto quedaba encogida dentro de una caja del mismo alto sin importar
+  // su proporción real (una vertical o una muy panorámica terminaban
+  // chiquitas, con franjas de fondo grandes arriba/abajo — el reporte original
+  // de "las fotos salen estiradas/se ven mal"). Con solo "width" fijo, react-pdf
+  // escala la imagen a SU propia proporción — ocupa toda la celda, sin
+  // deformarla. "maxHeight" + objectFit "contain" quedan como tope de
+  // seguridad nada más, para la rara foto extremadamente vertical.
+  photo: { width: "100%", maxHeight: 260, objectFit: "contain", backgroundColor: "#EEF0F3", border: `1pt solid ${BORDER}` },
   photoCaption: { fontSize: 7.5, color: "#666", marginTop: 2 },
 
   footer: { position: "absolute", bottom: 24, left: 32, right: 32 },

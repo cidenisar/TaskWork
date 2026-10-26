@@ -11,6 +11,7 @@ import { reportarErrorCliente } from "@/lib/client-error-report";
 import { AutocompleteInput } from "@/components/ui/autocomplete-input";
 import { Icon } from "@/components/icon";
 import { VerPdfLink } from "@/components/ver-pdf-link";
+import { resizeImageToJpeg } from "@/lib/image-resize";
 
 function fmtFecha(fecha: string) {
   const [y, m, d] = fecha.split("-");
@@ -284,7 +285,21 @@ function AgregarGastoForm({
     fd.set("monto", monto);
     fd.set("descripcion", descripcion);
     fd.set("tecnicos", JSON.stringify(chips));
-    if (comprobante) fd.set("comprobante", comprobante);
+    // Achica/recomprime en el navegador antes de subir — mismo criterio que
+    // el resto de los módulos de fotos de la app (ver src/lib/image-resize.ts):
+    // sin esto, la foto de cámara se subía tal cual (varios MB cada una),
+    // inflando el storage y el PDF final (una rendición con 10-11 comprobantes
+    // terminaba pesando 15MB).
+    if (comprobante) {
+      try {
+        const jpeg = await resizeImageToJpeg(comprobante);
+        fd.set("comprobante", jpeg, "comprobante.jpg");
+      } catch (err) {
+        setBusy(false);
+        setError(err instanceof Error ? err.message : "No se pudo procesar el comprobante.");
+        return;
+      }
+    }
 
     const res = await agregarGastoAction(rendicionId, fd);
     setBusy(false);
