@@ -1,6 +1,6 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { requireProfile } from "@/lib/auth";
 import { renderInformeTecnicoPdf } from "@/lib/pdf/render";
 import { buildInformeTecnicoFilename } from "@/lib/pdf/filename";
@@ -61,7 +61,13 @@ export async function actualizarInformeTecnicoAction(
   formData: FormData,
 ): Promise<ActualizarInformeResult> {
   const profile = await requireProfile();
-  const supabase = await createClient();
+  // Un Administrador puede editar el informe de cualquiera, no solo el
+  // propio — mismo criterio que el borrado (ver eliminarMedicionAction/
+  // eliminar-registro.ts): a partir de acá se bypassea RLS con la service
+  // role key, recién después de confirmar el rol server-side. Para
+  // cualquier otro usuario se mantiene el cliente normal, que sigue
+  // forzando "informes_tecnicos_update_own" — solo puede editar lo suyo.
+  const supabase = profile.rol === "admin" ? createServiceRoleClient() : await createClient();
 
   const raw = formData.get("payload");
   if (typeof raw !== "string") return { success: false, error: "Datos inválidos." };
@@ -75,8 +81,9 @@ export async function actualizarInformeTecnicoAction(
     return { success: false, error: "Faltan campos obligatorios (título, fecha, cliente, proyecto)." };
   }
 
-  // RLS (informes_tecnicos_select_own) ya filtra esto a informes propios —
-  // si no es el dueño, esto devuelve null y cortamos acá.
+  // Para un usuario normal, RLS (informes_tecnicos_select_own) filtra esto a
+  // informes propios — si no es el dueño, esto devuelve null y cortamos acá.
+  // Para un Administrador, `supabase` ya es la service role client de arriba.
   const { data: informeActual, error: fetchErr } = await supabase
     .from("informes_tecnicos")
     .select("numero_generacion, provincia, ubicacion, remito_fotos_urls, remito_numero, entrega_deposito_numero_generacion")
