@@ -355,7 +355,7 @@ function construirMensajeMarcoRotulo(
  * real que motivó este cálculo: con 27 destinos el recuadro se desbordaba
  * y quedaba tapado por la fila de circuitos de abajo.
  */
-function calcularAlturaReservadaEncabezado(circuitos: UnifilarCircuito[]): number {
+export function calcularAlturaReservadaEncabezado(circuitos: UnifilarCircuito[]): number {
   const cantidadDestinos = construirArboles(circuitos).reduce((acc, raiz) => acc + contarHojas(raiz), 0);
   return Math.max(90, 25 + cantidadDestinos * 4);
 }
@@ -367,7 +367,7 @@ const TENSION_POR_TIPO_CIRCUITO: Partial<Record<UnifilarCircuito["tipoCircuito"]
   "12vdc": "12V",
 };
 
-function tensionesPresentesEn(circuitos: UnifilarCircuito[]): string[] {
+export function tensionesPresentesEn(circuitos: UnifilarCircuito[]): string[] {
   const vistas = new Set<string>();
   const orden: string[] = [];
   for (const c of circuitos) {

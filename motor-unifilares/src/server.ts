@@ -18,6 +18,10 @@
  *   POST /api/simbolos/previsualizar    — DXF → bloques detectados + PDF de previsualización de cada uno (sin guardar, sin IA).
  *   POST /api/simbolos                  — guarda uno o más símbolos ya revisados.
  *   DELETE /api/simbolos/:nombre        — borra un símbolo.
+ *   GET  /probar                        — interfaz web para probar generaciones chicas/baratas (public/probar.html).
+ *   GET  /api/probar/fixtures           — lista los tableros de prueba predefinidos (sin IA).
+ *   POST /api/probar/estructura         — circuitos → lotes/códigos/alturas, SIN llamar a la IA (gratis).
+ *   POST /api/probar/generar            — circuitos chicos → PDF de previsualización + costo real (llama a la IA, sin guardar nada).
  * Nunca sube nada a storage — eso lo hace scripts/procesar-cola.ts (el
  * worker que de verdad genera y sube el unifilar, ver README.md).
  */
@@ -26,19 +30,33 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import Anthropic from "@anthropic-ai/sdk";
-import { validarDrawCommand } from "./anthropic-client.js";
+import { validarDrawCommand, generarUnifilar, estimarCostoUsd, RespuestaIaInvalida } from "./anthropic-client.js";
 import { generarEjemploDesdeImagen, RespuestaEnsenarInvalida, type MediaTypeImagen } from "./ensenar.js";
 import { listarEjemplos, guardarEjemplo, eliminarEjemplo } from "./ejemplos-store.js";
 import { listarSimbolos, guardarSimbolos, eliminarSimbolo } from "./simbolos-store.js";
 import { extraerBloquesDesdeDxf } from "./dxf-import.js";
 import { encolarJob } from "./jobs-store.js";
-import { drawCommandsToPdfFragment } from "./pdf-renderer.js";
+import { drawCommandsToPdfFragment, drawCommandsToPdf } from "./pdf-renderer.js";
 import { calcularDimensiones } from "./geometria.js";
-import type { DrawCommand, PedidoUnifilar, Simbolo } from "./types.js";
+import { calcularEstructuraPrevia, validarCircuitosPrueba } from "./estructura-prueba.js";
+import { FIXTURES_PRUEBA, ROTULO_PRUEBA } from "./fixtures-prueba.js";
+import type { DrawCommand, PedidoUnifilar, RotuloUnifilar, Simbolo, UnifilarCircuito } from "./types.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PAGINA_ENSENAR = readFileSync(join(__dirname, "..", "public", "index.html"), "utf-8");
 const PAGINA_SIMBOLOS = readFileSync(join(__dirname, "..", "public", "simbolos.html"), "utf-8");
+const PAGINA_PROBAR = readFileSync(join(__dirname, "..", "public", "probar.html"), "utf-8");
+
+/**
+ * Tope de circuitos para /api/probar/generar: corre SINCRÓNICO (a
+ * diferencia de /api/unifilar, que solo encola — ver README.md
+ * "Generación asincrónica"), así que en Vercel sigue atado al
+ * `maxDuration: 60` de la función. Pensado para fixtures chicos (ver
+ * fixtures-prueba.ts, 3-7 circuitos) — un tablero real completo tiene que
+ * seguir yendo por la cola real (botón "Generar unifilar" de
+ * informes-app), nunca por acá.
+ */
+const LIMITE_CIRCUITOS_SINCRONICO = 15;
 
 const PORT = Number(process.env.PORT) || 8787;
 const MAX_BODY_BYTES = 20 * 1024 * 1024; // una foto en base64 pesa ~33% más que el archivo — 20MB da margen para fotos de celular normales
@@ -325,6 +343,87 @@ async function manejarEliminarSimbolo(nombre: string, res: ServerResponse): Prom
   }
 }
 
+async function manejarFixturesPrueba(_req: IncomingMessage, res: ServerResponse): Promise<void> {
+  responderJson(res, 200, { fixtures: FIXTURES_PRUEBA, rotulo: ROTULO_PRUEBA });
+}
+
+function leerPedidoPrueba(bodyRaw: string, res: ServerResponse): { circuitos: UnifilarCircuito[]; rotulo: RotuloUnifilar } | null {
+  let pedido: { circuitos?: unknown; rotulo?: unknown };
+  try {
+    pedido = JSON.parse(bodyRaw);
+  } catch {
+    responderJson(res, 400, { error: "El cuerpo no es JSON válido." });
+    return null;
+  }
+  const errorForma = validarCircuitosPrueba(pedido.circuitos);
+  if (errorForma) {
+    responderJson(res, 400, { error: errorForma });
+    return null;
+  }
+  const rotulo = (pedido.rotulo && typeof pedido.rotulo === "object" ? pedido.rotulo : ROTULO_PRUEBA) as RotuloUnifilar;
+  return { circuitos: pedido.circuitos as UnifilarCircuito[], rotulo };
+}
+
+/** Nunca llama a la IA — mismo cálculo mecánico que generarUnifilar hace antes de llamar a Claude, ver estructura-prueba.ts. */
+async function manejarEstructuraPrueba(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  let bodyRaw: string;
+  try {
+    bodyRaw = await leerBody(req);
+  } catch {
+    responderJson(res, 413, { error: "El cuerpo del pedido es demasiado grande." });
+    return;
+  }
+  const leido = leerPedidoPrueba(bodyRaw, res);
+  if (!leido) return;
+  responderJson(res, 200, { estructura: calcularEstructuraPrevia(leido.circuitos) });
+}
+
+/**
+ * A diferencia de /api/unifilar (que solo encola), esto genera DE VERDAD y
+ * en el momento — por eso el tope de LIMITE_CIRCUITOS_SINCRONICO y por eso
+ * nunca guarda nada (ni Supabase ni storage): es una previsualización para
+ * iterar rápido con fixtures chicos, no un pedido real de un tablero.
+ */
+async function manejarGenerarPrueba(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  const apiKey = apiKeyDelHeader(req, res);
+  if (!apiKey) return;
+
+  let bodyRaw: string;
+  try {
+    bodyRaw = await leerBody(req);
+  } catch {
+    responderJson(res, 413, { error: "El cuerpo del pedido es demasiado grande." });
+    return;
+  }
+  const leido = leerPedidoPrueba(bodyRaw, res);
+  if (!leido) return;
+  if (leido.circuitos.length > LIMITE_CIRCUITOS_SINCRONICO) {
+    responderJson(res, 400, {
+      error:
+        `Esta previsualización es solo para tableros chicos (máx. ${LIMITE_CIRCUITOS_SINCRONICO} circuitos) — ` +
+        `tiene ${leido.circuitos.length}. Para un tablero real completo, usá el botón "Generar unifilar" de informes-app (cola + worker).`,
+    });
+    return;
+  }
+
+  try {
+    const { drawing, uso } = await generarUnifilar(apiKey, leido.circuitos, leido.rotulo);
+    const pdfBuffer = await drawCommandsToPdf(drawing.commands, drawing.width, drawing.height);
+    responderJson(res, 200, { pdfBase64: pdfBuffer.toString("base64"), uso, costoUsd: estimarCostoUsd(uso) });
+  } catch (err) {
+    if (err instanceof RespuestaIaInvalida) {
+      responderJson(res, 502, { error: `La IA no devolvió un plano utilizable: ${err.message}` });
+      return;
+    }
+    if (err instanceof Anthropic.APIError) {
+      responderJson(res, 502, { error: `Error de la API de Anthropic: ${err.message}` });
+      return;
+    }
+    console.error("[motor-unifilares] error generando previsualización de prueba:", err);
+    responderJson(res, 500, { error: "Error inesperado generando la previsualización." });
+  }
+}
+
 const server = createServer((req, res) => {
   const url = req.url ?? "/";
 
@@ -402,6 +501,32 @@ const server = createServer((req, res) => {
   if (req.method === "DELETE" && url.startsWith("/api/simbolos/")) {
     const nombre = decodeURIComponent(url.slice("/api/simbolos/".length));
     manejarEliminarSimbolo(nombre, res).catch((err) => {
+      console.error("[motor-unifilares] error no manejado:", err);
+      responderJson(res, 500, { error: "Error inesperado." });
+    });
+    return;
+  }
+  if (req.method === "GET" && url === "/probar") {
+    res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+    res.end(PAGINA_PROBAR);
+    return;
+  }
+  if (req.method === "GET" && url === "/api/probar/fixtures") {
+    manejarFixturesPrueba(req, res).catch((err) => {
+      console.error("[motor-unifilares] error no manejado:", err);
+      responderJson(res, 500, { error: "Error inesperado." });
+    });
+    return;
+  }
+  if (req.method === "POST" && url === "/api/probar/estructura") {
+    manejarEstructuraPrueba(req, res).catch((err) => {
+      console.error("[motor-unifilares] error no manejado:", err);
+      responderJson(res, 500, { error: "Error inesperado." });
+    });
+    return;
+  }
+  if (req.method === "POST" && url === "/api/probar/generar") {
+    manejarGenerarPrueba(req, res).catch((err) => {
       console.error("[motor-unifilares] error no manejado:", err);
       responderJson(res, 500, { error: "Error inesperado." });
     });

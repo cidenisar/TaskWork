@@ -6,6 +6,7 @@
     }
   },
   "rewrites": [
-    { "source": "/simbolos", "destination": "/simbolos.html" }
+    { "source": "/simbolos", "destination": "/simbolos.html" },
+    { "source": "/probar", "destination": "/probar.html" }
   ]
 }

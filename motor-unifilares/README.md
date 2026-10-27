@@ -107,6 +107,39 @@ los renderers DXF/PDF (ver `src/simbolos/index.ts`).
 - No hay versión CLI todavía (a diferencia de "enseñar") — la pantalla web
   es la única forma de cargarlos.
 
+## Probar barato (`GET /probar`)
+
+Cada prueba real de generación (no de código — ver "Generación por tramos
+EN PARALELO" más abajo sobre por qué cada llamado cuesta lo que cuesta)
+gasta tokens reales de Claude, aunque la app todavía no esté en
+producción. Esta pantalla (`public/probar.html`) centraliza la iteración
+en dos capas, para no gastar de más mientras se ajustan reglas/prompt:
+
+1. **Estructura — gratis, sin IA** (`POST /api/probar/estructura`, ver
+   `src/estructura-prueba.ts`): reusa el mismo cálculo mecánico que
+   `generarUnifilar()` hace antes de llamar a Claude — códigos de equipo
+   (`calcularCodigosUnificados`), cómo se parte en lotes (`armarLotes`,
+   uno por llamado real a la IA), altura reservada para el marco/PUESTA A
+   TIERRA, tensiones presentes. Sirve para detectar un tablero mal armado
+   (un `padreNumero` que no existe, más lotes de los esperados) antes de
+   pagar por generarlo.
+2. **Generar con IA — cuesta tokens reales** (`POST /api/probar/generar`):
+   llama a `generarUnifilar()` + `drawCommandsToPdf()` de verdad, EN EL
+   MOMENTO (no encola, no guarda nada en Supabase ni en storage — es una
+   previsualización, igual que `/api/ejemplos/previsualizar`), y devuelve
+   el PDF más el uso real de tokens y el costo estimado. A diferencia de
+   `/api/unifilar` (que solo encola, sin límite de tamaño), este endpoint
+   es SINCRÓNICO — en Vercel sigue atado al `maxDuration: 60` de la
+   función — por eso tiene un tope duro de 15 circuitos
+   (`LIMITE_CIRCUITOS_SINCRONICO`): para un tablero real completo seguís
+   usando el botón "Generar unifilar" de informes-app.
+
+Para no tener que escribir circuitos a mano cada vez, `src/fixtures-prueba.ts`
+trae 3 tableros chicos predefinidos (cadena simple, patrón "grupo" con una
+térmica alimentando varias ramas, trifásico con bypass de UPS) — elegibles
+desde un dropdown en la pantalla, o reemplazables por un JSON propio
+(`UnifilarCircuito[]`, ver `src/types.ts`) pegado a mano.
+
 ## Cómo correrlo
 
 **Local (desarrollo):** un server Node plano (`src/server.ts`), sin

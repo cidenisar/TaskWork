@@ -1,0 +1,360 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>motor-unifilares — Probar</title>
+<style>
+  :root {
+    --bg: #f5f6f8;
+    --panel: #ffffff;
+    --border: #d9dde3;
+    --text: #1a1f28;
+    --text-muted: #5a6472;
+    --accent: #2a4d8f;
+    --accent-hover: #1f3a6e;
+    --danger: #b3261e;
+    --warn-bg: #fdf3e7;
+    --warn-border: #e8c88f;
+    --free-bg: #eafaf1;
+    --free-border: #9bdfb8;
+    --free-text: #15754a;
+    --cost-bg: #fdf0e3;
+    --cost-border: #f0c48a;
+    --cost-text: #9a5b0a;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 24px 16px 64px;
+  }
+  main { max-width: 860px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  h2 { font-size: 15px; margin: 0; display: flex; align-items: center; gap: 8px; }
+  p.lead { color: var(--text-muted); margin: 0; font-size: 13.5px; line-height: 1.6; }
+  a { color: var(--accent); }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px 20px;
+  }
+  .panel-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; gap: 10px; flex-wrap: wrap; }
+  .badge {
+    font-size: 11px; font-weight: 700; letter-spacing: 0.02em; text-transform: uppercase;
+    padding: 3px 9px; border-radius: 999px; white-space: nowrap;
+  }
+  .badge-free { background: var(--free-bg); border: 1px solid var(--free-border); color: var(--free-text); }
+  .badge-cost { background: var(--cost-bg); border: 1px solid var(--cost-border); color: var(--cost-text); }
+  label { display: block; font-size: 12.5px; font-weight: 600; color: var(--text-muted); margin-bottom: 4px; }
+  select, input[type="text"], input[type="password"], textarea {
+    width: 100%;
+    font: inherit;
+    font-size: 13.5px;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: #fff;
+    color: var(--text);
+  }
+  textarea { resize: vertical; min-height: 140px; font-family: var(--mono); font-size: 12.5px; }
+  .field { margin-bottom: 12px; }
+  .field:last-child { margin-bottom: 0; }
+  .tabs { display: flex; gap: 6px; margin-bottom: 12px; }
+  .tab-btn {
+    flex: 1; font: inherit; font-size: 12.5px; font-weight: 600; padding: 7px 10px;
+    border-radius: 6px; border: 1px solid var(--border); background: #fff; color: var(--text-muted); cursor: pointer;
+  }
+  .tab-btn.activo { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button {
+    font: inherit;
+    font-size: 13.5px;
+    font-weight: 600;
+    padding: 9px 18px;
+    border-radius: 6px;
+    border: 1px solid transparent;
+    cursor: pointer;
+  }
+  button.primary { background: var(--accent); color: #fff; }
+  button.primary:hover { background: var(--accent-hover); }
+  button.free { background: var(--free-text); color: #fff; }
+  button.free:hover { background: #0f5c39; }
+  button:disabled { opacity: 0.5; cursor: default; }
+  .estado { font-size: 12.5px; color: var(--text-muted); margin-top: 10px; min-height: 16px; }
+  .estado.error { color: var(--danger); }
+  .oculto { display: none !important; }
+
+  .resumen-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin-top: 14px; }
+  .resumen-tile { border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; background: #fafbfc; }
+  .resumen-tile .num { font-size: 20px; font-weight: 700; font-family: var(--mono); line-height: 1.1; }
+  .resumen-tile .lbl { font-size: 11px; color: var(--text-muted); margin-top: 3px; }
+
+  .lote-card { border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; margin-top: 10px; }
+  .lote-card .lote-titulo { font-size: 12px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.03em; margin-bottom: 6px; }
+  .circuito-row { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding: 3px 0; font-size: 13px; }
+  .circuito-row .codigo { font-family: var(--mono); font-weight: 700; color: var(--accent); white-space: nowrap; }
+  .circuito-row .texto { color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  .costo-box {
+    display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap;
+    background: var(--cost-bg); border: 1px solid var(--cost-border); border-radius: 8px; padding: 12px 14px; margin-top: 14px;
+  }
+  .costo-box .monto { font-size: 24px; font-weight: 800; color: var(--cost-text); font-family: var(--mono); }
+  .costo-detalle { font-size: 11.5px; color: var(--cost-text); display: flex; gap: 12px; flex-wrap: wrap; }
+  .costo-detalle span b { font-family: var(--mono); }
+
+  iframe.preview { width: 100%; height: 480px; border: 1px solid var(--border); border-radius: 6px; margin-top: 12px; background: #fff; }
+  .aviso { background: var(--warn-bg); border: 1px solid var(--warn-border); border-radius: 8px; padding: 10px 12px; font-size: 12.5px; color: #6b4b14; }
+</style>
+</head>
+<body>
+<main>
+  <div>
+    <h1>motor-unifilares — Probar</h1>
+    <p class="lead">
+      Pantalla para iterar sin pasar por la cola real de <code>informes-app</code>. Dos capas: primero mirá la
+      <strong>estructura</strong> del tablero (lotes, códigos, altura) sin gastar nada; después, si querés ver el
+      dibujo de verdad, <strong>generalo</strong> con la IA — eso sí cuesta tokens reales, por eso esta pantalla
+      solo admite tableros chicos (fixtures o JSON propio de hasta 15 circuitos). Para un tablero real completo
+      seguí usando el botón "Generar unifilar" de informes-app. Para enseñar casos puntuales o cargar símbolos
+      exactos, ver <a href="/">Enseñar</a> / <a href="/simbolos">Librería de símbolos</a>.
+    </p>
+  </div>
+
+  <div class="panel">
+    <label for="apiKey">Tu clave de Anthropic (solo hace falta para la Capa 2 — se guarda en este navegador, nunca en el servidor)</label>
+    <input type="password" id="apiKey" placeholder="sk-ant-..." autocomplete="off" />
+  </div>
+
+  <div class="panel">
+    <h2>1. Elegí un tablero de prueba</h2>
+    <div class="tabs" style="margin-top: 12px;">
+      <button class="tab-btn activo" id="tabFixture">Tablero de prueba</button>
+      <button class="tab-btn" id="tabCustom">Pegar JSON propio</button>
+    </div>
+    <div class="field" id="campoFixture">
+      <label for="selectFixture">Tablero</label>
+      <select id="selectFixture"><option>Cargando…</option></select>
+      <p class="lead" id="descripcionFixture" style="margin-top: 6px;"></p>
+    </div>
+    <div class="field oculto" id="campoCustom">
+      <label for="jsonCustom">Array de circuitos (UnifilarCircuito[], ver src/types.ts) — máx. 15</label>
+      <textarea id="jsonCustom" placeholder='[{"numero":1,"texto":"...","categoriaEquipo":"termica","tipoCircuito":"na","ampNominal":null,"cuerpo":null,"alimentadoPorUps":false,"rolBypassUps":null,"padreNumero":null,"etiquetaCable":null}]'></textarea>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head">
+      <h2>2. Estructura <span class="badge badge-free">Gratis — sin IA</span></h2>
+      <button class="free" id="btnEstructura">Calcular estructura</button>
+    </div>
+    <p class="lead">Lotes que se van a llamar, código de cada circuito, altura reservada y tensiones presentes — todo calculado en código, antes de gastar nada.</p>
+    <div id="estadoEstructura" class="estado"></div>
+    <div id="resultadoEstructura" class="oculto">
+      <div class="resumen-grid" id="resumenEstructura"></div>
+      <div id="lotesEstructura"></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head">
+      <h2>3. Generar con IA <span class="badge badge-cost">Cuesta tokens reales</span></h2>
+      <button class="primary" id="btnGenerar">Generar previsualización</button>
+    </div>
+    <p class="lead">Llama a Claude de verdad y dibuja el plano completo (sin guardar nada en la base ni en storage) — usalo después de revisar la estructura arriba.</p>
+    <div id="estadoGenerar" class="estado"></div>
+    <div id="resultadoGenerar" class="oculto">
+      <div class="costo-box">
+        <div>
+          <div class="lbl" style="font-size: 11px; color: var(--cost-text); text-transform: uppercase; font-weight: 700;">Costo real de esta corrida</div>
+          <div class="monto" id="costoMonto">$0.000</div>
+        </div>
+        <div class="costo-detalle" id="costoDetalle"></div>
+      </div>
+      <iframe class="preview" id="previewFrame" title="Previsualización del plano"></iframe>
+    </div>
+  </div>
+</main>
+
+<script>
+  const APIKEY_STORAGE = "motor-unifilares:apiKey";
+  const apiKeyInput = document.getElementById("apiKey");
+  apiKeyInput.value = localStorage.getItem(APIKEY_STORAGE) || "";
+  apiKeyInput.addEventListener("input", () => localStorage.setItem(APIKEY_STORAGE, apiKeyInput.value));
+
+  function escapeHtml(s) {
+    const d = document.createElement("div");
+    d.textContent = s;
+    return d.innerHTML;
+  }
+
+  // --- Elegir tablero: fixture vs JSON propio ---
+  let fixtures = [];
+  let rotuloPorDefecto = null;
+
+  const tabFixture = document.getElementById("tabFixture");
+  const tabCustom = document.getElementById("tabCustom");
+  const campoFixture = document.getElementById("campoFixture");
+  const campoCustom = document.getElementById("campoCustom");
+  let modo = "fixture";
+
+  tabFixture.addEventListener("click", () => {
+    modo = "fixture";
+    tabFixture.classList.add("activo");
+    tabCustom.classList.remove("activo");
+    campoFixture.classList.remove("oculto");
+    campoCustom.classList.add("oculto");
+  });
+  tabCustom.addEventListener("click", () => {
+    modo = "custom";
+    tabCustom.classList.add("activo");
+    tabFixture.classList.remove("activo");
+    campoCustom.classList.remove("oculto");
+    campoFixture.classList.add("oculto");
+  });
+
+  const selectFixture = document.getElementById("selectFixture");
+  selectFixture.addEventListener("change", () => {
+    const f = fixtures.find((x) => x.id === selectFixture.value);
+    document.getElementById("descripcionFixture").textContent = f ? f.descripcion : "";
+  });
+
+  async function cargarFixtures() {
+    try {
+      const res = await fetch("/api/probar/fixtures");
+      const data = await res.json();
+      fixtures = data.fixtures;
+      rotuloPorDefecto = data.rotulo;
+      selectFixture.innerHTML = fixtures.map((f) => `<option value="${escapeHtml(f.id)}">${escapeHtml(f.nombre)}</option>`).join("");
+      if (fixtures[0]) document.getElementById("descripcionFixture").textContent = fixtures[0].descripcion;
+    } catch (err) {
+      selectFixture.innerHTML = "<option>Error cargando fixtures</option>";
+    }
+  }
+
+  function obtenerCircuitosYRotulo() {
+    if (modo === "fixture") {
+      const f = fixtures.find((x) => x.id === selectFixture.value);
+      if (!f) throw new Error("Elegí un tablero de prueba.");
+      return { circuitos: f.circuitos, rotulo: rotuloPorDefecto };
+    }
+    const texto = document.getElementById("jsonCustom").value.trim();
+    if (!texto) throw new Error("Pegá un array de circuitos.");
+    let circuitos;
+    try {
+      circuitos = JSON.parse(texto);
+    } catch {
+      throw new Error("El JSON no es válido.");
+    }
+    return { circuitos, rotulo: rotuloPorDefecto };
+  }
+
+  // --- Capa 1: estructura (gratis) ---
+  document.getElementById("btnEstructura").addEventListener("click", async () => {
+    const estado = document.getElementById("estadoEstructura");
+    const resultado = document.getElementById("resultadoEstructura");
+    estado.className = "estado";
+    estado.textContent = "Calculando…";
+    resultado.classList.add("oculto");
+
+    try {
+      const { circuitos } = obtenerCircuitosYRotulo();
+      const res = await fetch("/api/probar/estructura", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ circuitos }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Error calculando la estructura.");
+
+      const e = data.estructura;
+      document.getElementById("resumenEstructura").innerHTML = `
+        <div class="resumen-tile"><div class="num">${e.totalCircuitos}</div><div class="lbl">Circuitos</div></div>
+        <div class="resumen-tile"><div class="num">${e.llamadosEstimados}</div><div class="lbl">Llamados a la IA</div></div>
+        <div class="resumen-tile"><div class="num">${e.destinosReales}</div><div class="lbl">Destinos (tierra)</div></div>
+        <div class="resumen-tile"><div class="num">${e.alturaReservadaEncabezado}</div><div class="lbl">mm reservados p/ marco</div></div>
+        <div class="resumen-tile"><div class="num" style="font-size: 14px;">${e.tensionesPresentes.join(" / ") || "—"}</div><div class="lbl">Tensiones</div></div>
+      `;
+      document.getElementById("lotesEstructura").innerHTML = e.lotes
+        .map(
+          (l) => `
+        <div class="lote-card">
+          <div class="lote-titulo">Lote ${l.indice + 1} de ${e.lotes.length} (1 llamado a la IA) — ${l.circuitos.length} circuito(s)</div>
+          ${l.circuitos
+            .map((c) => `<div class="circuito-row"><span class="codigo">${escapeHtml(c.codigo)}</span><span class="texto">${escapeHtml(c.texto)}</span></div>`)
+            .join("")}
+        </div>
+      `,
+        )
+        .join("") + `<div class="lote-card"><div class="lote-titulo">+ 1 llamado final — marco, rótulo y recuadro PUESTA A TIERRA</div></div>`;
+
+      resultado.classList.remove("oculto");
+      estado.textContent = "";
+    } catch (err) {
+      estado.textContent = err.message;
+      estado.className = "estado error";
+    }
+  });
+
+  // --- Capa 2: generar con IA (cuesta) ---
+  document.getElementById("btnGenerar").addEventListener("click", async () => {
+    const estado = document.getElementById("estadoGenerar");
+    const resultado = document.getElementById("resultadoGenerar");
+    const btn = document.getElementById("btnGenerar");
+    estado.className = "estado";
+    resultado.classList.add("oculto");
+
+    if (!apiKeyInput.value.trim()) {
+      estado.textContent = "Falta tu clave de Anthropic.";
+      estado.className = "estado error";
+      return;
+    }
+
+    let circuitos, rotulo;
+    try {
+      ({ circuitos, rotulo } = obtenerCircuitosYRotulo());
+    } catch (err) {
+      estado.textContent = err.message;
+      estado.className = "estado error";
+      return;
+    }
+
+    btn.disabled = true;
+    estado.textContent = "Generando con Claude… puede tardar bastante según cuántos lotes tenga (ver Capa 1).";
+
+    try {
+      const res = await fetch("/api/probar/generar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Anthropic-Api-Key": apiKeyInput.value.trim() },
+        body: JSON.stringify({ circuitos, rotulo }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Error generando la previsualización.");
+
+      document.getElementById("costoMonto").textContent = `$${data.costoUsd.toFixed(3)} USD`;
+      document.getElementById("costoDetalle").innerHTML = `
+        <span>input: <b>${data.uso.inputTokens}</b></span>
+        <span>cache-write: <b>${data.uso.cacheCreationInputTokens}</b></span>
+        <span>cache-read: <b>${data.uso.cacheReadInputTokens}</b></span>
+        <span>output: <b>${data.uso.outputTokens}</b></span>
+      `;
+      document.getElementById("previewFrame").src = `data:application/pdf;base64,${data.pdfBase64}`;
+      resultado.classList.remove("oculto");
+      estado.textContent = "";
+      resultado.scrollIntoView({ behavior: "smooth" });
+    } catch (err) {
+      estado.textContent = err.message;
+      estado.className = "estado error";
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  cargarFixtures();
+</script>
+</body>
+</html>
