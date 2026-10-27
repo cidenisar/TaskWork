@@ -128,6 +128,11 @@ export function HistorialRendiciones({ rendiciones: rendicionesIniciales, esAdmi
                         {busyId === r.id ? "…" : <Icon name="document" size={15} />}
                       </button>
                     )}
+                    {!abierta && esAdmin && (
+                      <Link href={`/rendicion-gastos/${r.id}`} className="icon-btn" title="Editar rendición (reabrir)">
+                        <Icon name="edit" size={15} />
+                      </Link>
+                    )}
                     <a
                       className="icon-btn"
                       title="Descargar Excel"

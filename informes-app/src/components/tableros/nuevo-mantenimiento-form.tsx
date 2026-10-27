@@ -1,26 +1,50 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { crearMantenimientoAction } from "@/app/(app)/tableros/mantenimiento/actions";
+import { actualizarMantenimientoAction } from "@/app/(app)/tableros/mantenimiento/editar/[id]/actions";
 import { reportarErrorCliente } from "@/lib/client-error-report";
 import { ErrorNote, SuccessNote } from "@/components/notes";
 import { Icon } from "@/components/icon";
 import { labelSubsistemas, type TableroConCircuitos } from "./types";
 
+export interface MantenimientoInitialValues {
+  tableroId: string;
+  circuitoId: string;
+  fecha: string;
+  descripcion: string;
+  proximoMantenimiento: string;
+}
+
 export function NuevoMantenimientoForm({
   tableros,
   tableroIdInicial,
+  modo = "nuevo",
+  mantenimientoId,
+  initialValues,
+  fotoActualUrl,
 }: {
   tableros: TableroConCircuitos[];
   tableroIdInicial?: string | null;
+  /** "editar": precarga un mantenimiento existente y guarda con actualizarMantenimientoAction (solo Administrador) en vez de crear uno nuevo. */
+  modo?: "nuevo" | "editar";
+  mantenimientoId?: string;
+  initialValues?: MantenimientoInitialValues;
+  /** Link firmado de la foto ya guardada (modo editar) — se muestra como referencia; si se elige una foto nueva, la reemplaza. */
+  fotoActualUrl?: string | null;
 }) {
+  const router = useRouter();
+  const esEdicion = modo === "editar";
   // Deep-link desde el QR del tablero (ver /planos/tablero/[id]): llega con
   // ?tableroId= y ya se arranca con ese tablero elegido.
-  const [tableroId, setTableroId] = useState(() => (tableroIdInicial && tableros.some((t) => t.id === tableroIdInicial) ? tableroIdInicial : ""));
-  const [circuitoId, setCircuitoId] = useState("");
-  const [fecha, setFecha] = useState(() => new Date().toISOString().slice(0, 10));
-  const [descripcion, setDescripcion] = useState("");
-  const [proximoMantenimiento, setProximoMantenimiento] = useState("");
+  const [tableroId, setTableroId] = useState(
+    () => initialValues?.tableroId ?? (tableroIdInicial && tableros.some((t) => t.id === tableroIdInicial) ? tableroIdInicial : ""),
+  );
+  const [circuitoId, setCircuitoId] = useState(initialValues?.circuitoId ?? "");
+  const [fecha, setFecha] = useState(() => initialValues?.fecha ?? new Date().toISOString().slice(0, 10));
+  const [descripcion, setDescripcion] = useState(initialValues?.descripcion ?? "");
+  const [proximoMantenimiento, setProximoMantenimiento] = useState(initialValues?.proximoMantenimiento ?? "");
   const [foto, setFoto] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -59,18 +83,23 @@ export function NuevoMantenimientoForm({
       if (proximoMantenimiento) fd.append("proximoMantenimiento", proximoMantenimiento);
       if (foto) fd.append("foto", foto);
 
-      const res = await crearMantenimientoAction(fd);
+      const res = esEdicion ? await actualizarMantenimientoAction(mantenimientoId!, fd) : await crearMantenimientoAction(fd);
       if (!res.success) {
         const mensaje = res.error || "No se pudo guardar el mantenimiento.";
         setError(mensaje);
-        reportarErrorCliente(mensaje, "crear-mantenimiento-tablero");
+        reportarErrorCliente(mensaje, esEdicion ? "editar-mantenimiento-tablero" : "crear-mantenimiento-tablero");
+        return;
+      }
+      if (esEdicion) {
+        router.push("/tableros/historial");
+        router.refresh();
         return;
       }
       setSuccess(true);
     } catch (err) {
       const mensaje = err instanceof Error ? err.message : "Ocurrió un error inesperado guardando el mantenimiento.";
       setError(mensaje);
-      reportarErrorCliente(mensaje, "crear-mantenimiento-tablero", err instanceof Error ? err.stack : undefined);
+      reportarErrorCliente(mensaje, esEdicion ? "editar-mantenimiento-tablero" : "crear-mantenimiento-tablero", err instanceof Error ? err.stack : undefined);
     } finally {
       setSubmitting(false);
     }
@@ -88,8 +117,12 @@ export function NuevoMantenimientoForm({
   return (
     <div>
       <div className="page-heading">
-        <h1>Nuevo Mantenimiento</h1>
-        <p>Registrá el trabajo realizado en un tablero — no genera PDF, queda como registro en el historial.</p>
+        <h1>{esEdicion ? "Editar Mantenimiento" : "Nuevo Mantenimiento"}</h1>
+        <p>
+          {esEdicion
+            ? "Corregí el registro — solo Administrador."
+            : "Registrá el trabajo realizado en un tablero — no genera PDF, queda como registro en el historial."}
+        </p>
       </div>
 
       <div className="card">
@@ -173,8 +206,17 @@ export function NuevoMantenimientoForm({
             onChange={(e) => setFoto(e.target.files?.[0] ?? null)}
           />
           <button type="button" className="btn btn-secondary btn-sm" onClick={() => fotoInputRef.current?.click()} disabled={submitting}>
-            <Icon name="camera" size={13} /> {foto ? foto.name : "Agregar foto"}
+            <Icon name="camera" size={13} /> {foto ? foto.name : esEdicion && fotoActualUrl ? "Reemplazar foto" : "Agregar foto"}
           </button>
+          {esEdicion && !foto && fotoActualUrl && (
+            <div className="hint">
+              Ya tiene una foto cargada —{" "}
+              <a href={fotoActualUrl} target="_blank" rel="noreferrer">
+                verla
+              </a>
+              . Elegí una nueva solo si querés reemplazarla.
+            </div>
+          )}
         </div>
       </div>
 
@@ -194,7 +236,7 @@ export function NuevoMantenimientoForm({
         <div className="footer-nav">
           <span />
           <button type="button" className="btn btn-primary" onClick={guardar} disabled={submitting || tableros.length === 0}>
-            {submitting ? "Guardando..." : "Guardar mantenimiento"}
+            {submitting ? "Guardando..." : esEdicion ? "Guardar cambios" : "Guardar mantenimiento"}
           </button>
         </div>
       )}

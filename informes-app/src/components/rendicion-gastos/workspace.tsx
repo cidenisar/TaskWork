@@ -42,6 +42,7 @@ export function RendicionWorkspace({
   moneda,
   estado,
   pdfDisponible: pdfDisponibleInicial,
+  esAdmin,
   gastos,
   catalogos,
 }: {
@@ -55,11 +56,19 @@ export function RendicionWorkspace({
   moneda: Moneda;
   estado: EstadoRendicion;
   pdfDisponible: boolean;
+  esAdmin: boolean;
   gastos: GastoWorkspaceItem[];
   catalogos: CatalogosRendicion;
 }) {
   const router = useRouter();
   const abierta = estado === "abierta";
+  // Un Administrador puede reabrir una rendición ya cerrada (agregar/quitar
+  // gastos y volver a "cerrarla", lo que en los hechos regenera el PDF) —
+  // las Server Actions (ver actions.ts) ya aceptan esto con la service role
+  // key cuando quien llama es admin. `abierta` sigue reflejando el estado
+  // REAL (para el badge); `puedeEditar` es lo que controla qué se muestra.
+  const puedeEditar = abierta || esAdmin;
+  const reabriendoCerrada = !abierta && esAdmin;
   const totalGastado = gastos.reduce((sum, g) => sum + g.monto, 0);
   const saldo = viaticoRecibido - totalGastado;
   const aFavor = saldo >= 0;
@@ -70,7 +79,10 @@ export function RendicionWorkspace({
   const [busyGastoId, setBusyGastoId] = useState<string | null>(null);
 
   async function cerrar() {
-    if (!window.confirm("¿Cerrar esta rendición y generar el PDF? Después no vas a poder agregar más gastos.")) return;
+    const confirmacion = reabriendoCerrada
+      ? "¿Guardar los cambios y regenerar el PDF de esta rendición?"
+      : "¿Cerrar esta rendición y generar el PDF? Después no vas a poder agregar más gastos.";
+    if (!window.confirm(confirmacion)) return;
     setCerrando(true);
     setCerrarError(null);
     try {
@@ -140,12 +152,27 @@ export function RendicionWorkspace({
           </tbody>
         </table>
 
-        {abierta ? (
+        {puedeEditar ? (
           <>
+            {reabriendoCerrada && pdfDisponible && (
+              <div style={{ marginBottom: 10 }}>
+                <VerPdfLink
+                  className="btn btn-secondary"
+                  style={{ width: "100%", justifyContent: "center" }}
+                  obtenerUrl={() => obtenerUrlPdfRendicionAction(rendicionId)}
+                >
+                  <Icon name="document" size={14} /> Ver PDF actual (antes de la edición)
+                </VerPdfLink>
+              </div>
+            )}
             <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
               <button type="button" className="btn btn-primary" style={{ flex: 1, justifyContent: "center" }} onClick={cerrar} disabled={cerrando}>
                 {cerrando ? (
-                  "Cerrando..."
+                  reabriendoCerrada ? "Guardando..." : "Cerrando..."
+                ) : reabriendoCerrada ? (
+                  <>
+                    <Icon name="lock" size={14} /> Guardar cambios y regenerar PDF
+                  </>
                 ) : (
                   <>
                     <Icon name="lock" size={14} /> Cerrar rendición y generar PDF
@@ -159,7 +186,7 @@ export function RendicionWorkspace({
                 target="_blank"
                 rel="noreferrer"
               >
-                <Icon name="chart" size={14} /> Exportar Excel (parcial)
+                <Icon name="chart" size={14} /> Exportar Excel {reabriendoCerrada ? "" : "(parcial)"}
               </a>
             </div>
             {cerrarError && <ErrorNote>{cerrarError}</ErrorNote>}
@@ -188,7 +215,7 @@ export function RendicionWorkspace({
         )}
       </div>
 
-      {abierta && <AgregarGastoForm rendicionId={rendicionId} catalogos={catalogos} onAdded={() => router.refresh()} />}
+      {puedeEditar && <AgregarGastoForm rendicionId={rendicionId} catalogos={catalogos} onAdded={() => router.refresh()} />}
 
       <div className="card">
         <div className="review-block-title">Gastos cargados</div>
@@ -215,7 +242,7 @@ export function RendicionWorkspace({
                     </div>
                   </div>
                 </div>
-                {abierta && (
+                {puedeEditar && (
                   <button type="button" className="remove-btn" disabled={busyGastoId === g.id} onClick={() => quitarGasto(g.id)}>
                     <Icon name="x" size={13} />
                   </button>

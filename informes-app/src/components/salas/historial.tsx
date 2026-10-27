@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { obtenerUrlPdfSalaAction, eliminarSalaAction } from "@/app/(app)/salas/historial/actions";
 import { Icon } from "@/components/icon";
 import { SALA_TIPO_CONSTRUCCION_LABEL } from "./types";
@@ -104,6 +105,11 @@ export function HistorialSalas({ salas, esAdmin }: { salas: HistorialSalaRow[]; 
                   >
                     {busyId === s.id ? "…" : <Icon name="eye" size={15} />}
                   </button>
+                  {esAdmin && (
+                    <Link href={`/salas/editar/${s.id}`} className="icon-btn" title="Editar sala">
+                      <Icon name="edit" size={15} />
+                    </Link>
+                  )}
                   {esAdmin && (
                     <button
                       type="button"

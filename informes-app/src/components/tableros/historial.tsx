@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import {
   obtenerUrlFotoMantenimientoAction,
   obtenerUrlPdfMedicionAction,
@@ -274,6 +275,11 @@ export function HistorialTableros({
                       {busyId === m.id ? <Spinner size={15} /> : <Icon name="ai" size={15} />}
                     </button>
                     {esAdmin && (
+                      <Link href={`/tableros/editar/${m.id}`} className="icon-btn" title="Editar medición">
+                        <Icon name="edit" size={15} />
+                      </Link>
+                    )}
+                    {esAdmin && (
                       <button
                         type="button"
                         className="icon-btn icon-btn-danger"
@@ -324,6 +330,11 @@ export function HistorialTableros({
                   >
                     {busyId === m.id ? "…" : <Icon name="camera" size={15} />}
                   </button>
+                  {esAdmin && (
+                    <Link href={`/tableros/mantenimiento/editar/${m.id}`} className="icon-btn" title="Editar mantenimiento">
+                      <Icon name="edit" size={15} />
+                    </Link>
+                  )}
                   {esAdmin && (
                     <button
                       type="button"

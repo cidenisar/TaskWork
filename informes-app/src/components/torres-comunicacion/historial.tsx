@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import {
   obtenerUrlsFotosGeneralesTorreAction,
   obtenerUrlPdfRelevamientoAction,
@@ -137,6 +138,11 @@ export function HistorialTorresComunicacion({
                   >
                     {busyId === r.id ? "…" : <Icon name="eye" size={15} />}
                   </button>
+                  {esAdmin && (
+                    <Link href={`/torres-comunicacion/editar/${r.id}`} className="icon-btn" title="Editar relevamiento">
+                      <Icon name="edit" size={15} />
+                    </Link>
+                  )}
                   {esAdmin && (
                     <button
                       type="button"

@@ -21,7 +21,7 @@ export default async function HistorialEntregasDepositoPage() {
   const { data: entregasData } = await supabase
     .from("entregas_deposito")
     .select(
-      "id, numero_generacion, origen, tipo_equipo, descripcion, categoria, cantidad, condicion, motivo, comentario, fecha, ubicacion_id, pdf_url, fotos_evidencia_urls",
+      "id, numero_generacion, origen, tipo_equipo, descripcion, categoria, marca_modelo, numero_serie, etiqueta_ypf, cantidad, condicion, motivo, comentario, fecha, ubicacion_id, pdf_url, fotos_evidencia_urls",
     )
     .order("fecha", { ascending: false });
 
@@ -44,6 +44,9 @@ export default async function HistorialEntregasDepositoPage() {
       tipoEquipo: e.tipo_equipo,
       descripcion: e.descripcion,
       categoria: e.categoria,
+      marcaModelo: e.marca_modelo,
+      numeroSerie: e.numero_serie,
+      etiquetaYpf: e.etiqueta_ypf,
       cantidad: e.cantidad,
       condicion: e.condicion,
       motivo: e.motivo,
@@ -55,5 +58,5 @@ export default async function HistorialEntregasDepositoPage() {
     };
   });
 
-  return <HistorialEntregas entregas={entregas} />;
+  return <HistorialEntregas entregas={entregas} esAdmin={profile.rol === "admin"} />;
 }

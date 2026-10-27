@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import {
   obtenerUrlsFotosGeneralesRackAction,
   obtenerUrlPdfRelevamientoAction,
@@ -131,6 +132,11 @@ export function HistorialRacks({ relevamientos: relevamientosIniciales, esAdmin 
                   >
                     {busyId === r.id ? "…" : <Icon name="eye" size={15} />}
                   </button>
+                  {esAdmin && (
+                    <Link href={`/racks/editar/${r.id}`} className="icon-btn" title="Editar relevamiento">
+                      <Icon name="edit" size={15} />
+                    </Link>
+                  )}
                   {esAdmin && (
                     <button
                       type="button"

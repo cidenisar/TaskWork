@@ -52,5 +52,5 @@ export default async function HistorialBajasPage() {
     };
   });
 
-  return <HistorialBajas bajas={bajas} />;
+  return <HistorialBajas bajas={bajas} esAdmin={profile.rol === "admin"} />;
 }
