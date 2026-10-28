@@ -730,6 +730,25 @@ export type IaUsoRow = {
   created_at: string;
 }
 
+/** Una lectura "detallada" de tablero con IA (ENCARGO.md lectura-fotos) — fotos + JSON crudo + revisado + costo, ver tableros/lecturas-ia. */
+export type TableroLecturaIaRow = {
+  id: string;
+  tablero_id: string | null;
+  medicion_id: string | null;
+  fotos_urls: string[];
+  modelo: string;
+  input_tokens: number;
+  output_tokens: number;
+  costo_estimado_usd: number;
+  json_crudo: Record<string, unknown>;
+  circuitos_adaptados: unknown[];
+  circuitos_revisados: unknown[] | null;
+  porcentaje_acierto: number | null;
+  created_by: string;
+  revisor_id: string | null;
+  created_at: string;
+}
+
 export type MantenimientoIntervaloRow = {
   id: string;
   tipo_equipo: TipoEquipoMantenimiento;
@@ -1075,6 +1094,12 @@ export interface Database {
         Partial<IaUsoRow> &
           Pick<IaUsoRow, "endpoint" | "modulo" | "modelo" | "input_tokens" | "output_tokens" | "costo_estimado_usd" | "created_by">,
         Partial<IaUsoRow>
+      >;
+      tablero_lecturas_ia: Tbl<
+        TableroLecturaIaRow,
+        Partial<TableroLecturaIaRow> &
+          Pick<TableroLecturaIaRow, "modelo" | "input_tokens" | "output_tokens" | "costo_estimado_usd" | "json_crudo" | "circuitos_adaptados" | "created_by">,
+        Partial<TableroLecturaIaRow>
       >;
       mantenimiento_intervalos: Tbl<
         MantenimientoIntervaloRow,

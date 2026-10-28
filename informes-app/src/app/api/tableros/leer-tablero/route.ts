@@ -80,7 +80,38 @@ export async function POST(req: NextRequest) {
     const controles = controlarLecturaTablero(json);
     const circuitos = adaptarACircuitosDelMotor(json);
 
-    return NextResponse.json({ circuitos, controles, uso, observaciones: json.observaciones });
+    // Fase 3 (ENCARGO.md): registro de la lectura — fotos + JSON crudo, para
+    // poder listar costo por tablero/mes y medir el % de acierto cuando el
+    // técnico guarde la medición (ver tablero_lecturas_ia). Se guarda ACÁ
+    // (no recién al guardar) porque es el único momento en que tenemos el
+    // JSON crudo real — si el técnico abandona sin guardar, la fila queda
+    // sin tablero_id/medicion_id, pero el costo real igual quedó registrado.
+    let lecturaId: string | null = null;
+    const fotosUrls: string[] = [];
+    for (let i = 0; i < fotos.length; i++) {
+      const fotoPath = `${profile.id}/tableros/lecturas-ia/${crypto.randomUUID()}.jpg`;
+      const { error: fotoUpErr } = await supabase.storage
+        .from("informe-fotos")
+        .upload(fotoPath, fotos[i].buffer, { contentType: "image/jpeg", upsert: true });
+      if (!fotoUpErr) fotosUrls.push(fotoPath);
+    }
+    const { data: lecturaRow } = await supabase
+      .from("tablero_lecturas_ia")
+      .insert({
+        fotos_urls: fotosUrls,
+        modelo: uso.modelo,
+        input_tokens: uso.inputTokens,
+        output_tokens: uso.outputTokens,
+        costo_estimado_usd: uso.costoUsd,
+        json_crudo: json as unknown as Record<string, unknown>,
+        circuitos_adaptados: circuitos as unknown as unknown[],
+        created_by: profile.id,
+      })
+      .select("id")
+      .single();
+    lecturaId = lecturaRow?.id ?? null;
+
+    return NextResponse.json({ circuitos, controles, uso, observaciones: json.observaciones, lecturaId });
   } catch (err) {
     const detalle = err instanceof Error ? err.message : String(err);
     if (err instanceof LecturaTableroError) {

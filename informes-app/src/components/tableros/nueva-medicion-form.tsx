@@ -124,6 +124,12 @@ export function NuevaMedicionForm({
   const [fotosIa, setFotosIa] = useState<File[]>([]);
   const [iaBusy, setIaBusy] = useState(false);
   const [iaNote, setIaNote] = useState<string | null>(null);
+  // Qué fila de `circuitos` vino de qué lectura IA "detallada" (Fase 3,
+  // ENCARGO.md) y en qué posición de esa lectura — para poder, al guardar,
+  // mandar de vuelta el JSON revisado y medir qué % de los campos que
+  // propuso la IA el técnico no tuvo que tocar. Se reindexa igual que
+  // `lecturas` cuando se borra un circuito (ver quitarCircuito).
+  const [origenLecturaIa, setOrigenLecturaIa] = useState<Record<number, { lecturaId: string; posicion: number }>>({});
   const fotoCameraInputRef = useRef<HTMLInputElement>(null);
   const fotoGaleriaInputRef = useRef<HTMLInputElement>(null);
   const [fotosGenerales, setFotosGenerales] = useState<File[]>([]);
@@ -447,6 +453,16 @@ export function NuevaMedicionForm({
           revisar: d.revisar,
         })),
       ]);
+      const lecturaId: string | null = data.lecturaId ?? null;
+      if (lecturaId) {
+        setOrigenLecturaIa((prev) => {
+          const next = { ...prev };
+          adaptados.forEach((_, i) => {
+            next[baseIndex + i] = { lecturaId, posicion: i };
+          });
+          return next;
+        });
+      }
       setLecturas((prev) => {
         const next = { ...prev };
         adaptados.forEach((d, i) => {
@@ -490,6 +506,15 @@ export function NuevaMedicionForm({
     setCircuitos((prev) => prev.filter((_, idx) => idx !== i));
     setLecturas((prev) => {
       const next: Record<number, LecturaState> = {};
+      Object.entries(prev).forEach(([k, v]) => {
+        const idx = Number(k);
+        if (idx < i) next[idx] = v;
+        else if (idx > i) next[idx - 1] = v;
+      });
+      return next;
+    });
+    setOrigenLecturaIa((prev) => {
+      const next: Record<number, { lecturaId: string; posicion: number }> = {};
       Object.entries(prev).forEach(([k, v]) => {
         const idx = Number(k);
         if (idx < i) next[idx] = v;
@@ -567,6 +592,7 @@ export function NuevaMedicionForm({
           fecha,
           lecturas: circuitos.map((c, i) => {
             const l = lecturas[i] ?? LECTURA_VACIA;
+            const origen = origenLecturaIa[i];
             return {
               circuitoId: c.id,
               numero: c.numero,
@@ -585,6 +611,8 @@ export function NuevaMedicionForm({
               corrienteS: l.corrienteS,
               corrienteT: l.corrienteT,
               comentario: l.comentario,
+              origenLecturaId: origen?.lecturaId ?? null,
+              origenLecturaPosicion: origen?.posicion ?? null,
             };
           }),
           hallazgos: hallazgos

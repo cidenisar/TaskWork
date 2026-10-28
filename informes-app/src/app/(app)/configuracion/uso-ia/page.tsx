@@ -4,6 +4,7 @@ import { LockedPanel } from "@/components/locked-panel";
 import { createClient } from "@/lib/supabase/server";
 import { getResumenUsoIa } from "@/lib/ai/obtener-uso";
 import { BarList } from "@/components/estadisticas/bar-list";
+import Link from "next/link";
 
 const MODULO_LABEL: Record<string, string> = {
   tableros: "Tableros",
@@ -68,6 +69,15 @@ export default async function ConfiguracionUsoIaPage() {
             displayValue: `${fmtUsd(m.costoUsd)} · ${m.llamadas} llamada${m.llamadas === 1 ? "" : "s"}`,
           }))}
         />
+      </div>
+
+      <div className="card">
+        <div className="section-label">Lectura detallada de tableros</div>
+        <p className="hint" style={{ margin: "0 0 8px" }}>
+          Costo por tablero/mes y % de acierto (campos que el técnico no tuvo que corregir) de la &ldquo;lectura detallada&rdquo; de
+          tableros con IA.
+        </p>
+        <Link href="/tableros/lecturas-ia">Ver detalle →</Link>
       </div>
 
       <div className="card">

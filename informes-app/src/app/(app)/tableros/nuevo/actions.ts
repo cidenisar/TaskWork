@@ -41,6 +41,9 @@ interface PayloadLectura {
   corrienteS: string;
   corrienteT: string;
   comentario: string;
+  /** Fase 3 de lectura-fotos (ENCARGO.md): de qué lectura IA "detallada" (tablero_lecturas_ia) vino este circuito, y en qué posición de esa lectura — null si se cargó a mano o con el otro botón de IA. */
+  origenLecturaId: string | null;
+  origenLecturaPosicion: number | null;
 }
 
 export interface CrearMedicionPayload {
@@ -72,6 +75,80 @@ export interface CrearMedicionResult {
 function parseNum(v: string): number | null {
   const n = Number(v.replace(",", "."));
   return v.trim() !== "" && Number.isFinite(n) ? n : null;
+}
+
+/**
+ * Fase 3 de lectura-fotos (ENCARGO.md): completa cada `tablero_lecturas_ia`
+ * tocada en esta medición con tablero_id/medicion_id/revisor y el JSON tal
+ * como quedó después de la revisión del técnico, más el % de campos
+ * (texto/ampNominal/categoriaEquipo/tipoCircuito) que NO tuvo que tocar —
+ * la medida de acierto que pide el ENCARGO. Compara por POSICIÓN dentro de
+ * la lectura (no por "numero" de circuito, que el técnico puede editar a
+ * mano) — ver `origenLecturaPosicion` en nueva-medicion-form.tsx. Un
+ * circuito que el técnico borró cuenta como 0% de esa fila (sigue sumando
+ * al total, pero ningún campo "no se tocó"). Best-effort: nunca debe tirar
+ * abajo el guardado real de la medición.
+ */
+async function cerrarLecturasIa(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  lecturas: PayloadLectura[],
+  tableroId: string,
+  medicionId: string,
+  revisorId: string,
+) {
+  const porLectura = new Map<string, PayloadLectura[]>();
+  for (const l of lecturas) {
+    if (!l.origenLecturaId) continue;
+    const grupo = porLectura.get(l.origenLecturaId) ?? [];
+    grupo.push(l);
+    porLectura.set(l.origenLecturaId, grupo);
+  }
+  if (porLectura.size === 0) return;
+
+  const CAMPOS = ["texto", "ampNominal", "categoriaEquipo", "tipoCircuito"] as const;
+
+  for (const [lecturaId, grupo] of porLectura) {
+    try {
+      const { data: fila } = await supabase.from("tablero_lecturas_ia").select("circuitos_adaptados").eq("id", lecturaId).single();
+      const crudo = Array.isArray(fila?.circuitos_adaptados) ? (fila.circuitos_adaptados as Record<string, unknown>[]) : [];
+      if (crudo.length === 0) continue;
+
+      const revisadoPorPosicion = new Map(grupo.filter((l) => l.origenLecturaPosicion != null).map((l) => [l.origenLecturaPosicion!, l]));
+
+      let coinciden = 0;
+      let total = 0;
+      const circuitosRevisados: (Record<string, unknown> | null)[] = [];
+      crudo.forEach((c, posicion) => {
+        const r = revisadoPorPosicion.get(posicion);
+        circuitosRevisados.push(
+          r
+            ? { numero: r.numero, texto: r.texto, ampNominal: r.ampNominal || null, categoriaEquipo: r.categoriaEquipo, tipoCircuito: r.tipoCircuito, padreNumero: r.padreNumero }
+            : null,
+        );
+        for (const campo of CAMPOS) {
+          total++;
+          if (!r) continue; // el técnico borró esta fila — no cuenta como acierto
+          const valorCrudo = campo === "ampNominal" ? (c.ampNominal ?? "") : c[campo];
+          const valorRevisado = campo === "ampNominal" ? r.ampNominal || "" : r[campo];
+          if (valorCrudo === valorRevisado) coinciden++;
+        }
+      });
+      const porcentajeAcierto = total > 0 ? Math.round((coinciden / total) * 10000) / 100 : null;
+
+      await supabase
+        .from("tablero_lecturas_ia")
+        .update({
+          tablero_id: tableroId,
+          medicion_id: medicionId,
+          circuitos_revisados: circuitosRevisados,
+          porcentaje_acierto: porcentajeAcierto,
+          revisor_id: revisorId,
+        })
+        .eq("id", lecturaId);
+    } catch {
+      // best-effort — una lectura IA que no se pudo cerrar no debe romper el guardado de la medición
+    }
+  }
 }
 
 export async function crearMedicionTableroAction(formData: FormData): Promise<CrearMedicionResult> {
@@ -235,6 +312,8 @@ export async function crearMedicionTableroAction(formData: FormData): Promise<Cr
   if (!medicionId) {
     return { success: false, error: "No se pudo asignar un número de generación único. Probá de nuevo." };
   }
+
+  await cerrarLecturasIa(supabase, payload.lecturas, tableroId, medicionId, profile.id);
 
   // Cada elemento decide server-side (no solo en el formulario) si guarda
   // corriente por fase — en un tablero mixto, solo térmicas/disyuntores en
