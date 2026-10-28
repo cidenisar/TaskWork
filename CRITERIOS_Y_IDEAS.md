@@ -1490,3 +1490,71 @@ modelo interprete nada. Dos decisiones de diseño que valen la pena anotar:
    vez y se reusa" (`motor_unifilares_ejemplos`) pertenece a una tabla con
    una pantalla de carga, no a un archivo fuente — el código es para la
    lógica que transforma esos datos, no para los datos en sí.
+
+## 23. Lectura de un documento/tablero con fotos: "entera + mitades ampliadas" para no perder letra chica, y "nunca inventes, null si no se lee" como regla de oro
+
+**Contexto:** `informes-app/src/lib/tableros/leer-tablero.ts` (ENCARGO.md,
+repo `cidenisar/motor-unifilar` rama `lectura-fotos`) — un endpoint que lee
+fotos de un tablero eléctrico con Claude Vision para precargar la pantalla
+de carga de circuitos, igual problema de fondo que cualquier módulo de
+"IA lee una foto y completa un formulario" de este repo (Racks, Torres,
+Vehículos, etc.).
+
+**1. Las imágenes que manda cualquier proveedor de Vision tienen un tope
+de resolución efectiva (acá, 1568px de lado máximo) — más grande no suma
+nada, solo cuesta más tokens. El problema es que a ESE tamaño se pierde
+la letra chica (un "25A 30mA" impreso en una térmica).** La solución no
+es mandar la foto más grande (no sirve) ni pedirle al usuario que saque
+una foto de cerca de cada etiqueta (no es realista en campo): se manda la
+foto **entera** (achicada al tope) MÁS **2 mitades, recortadas del
+original ANTES de achicar** (10% de solape entre las dos, para no cortar
+un equipo justo por el medio), cada mitad achicada a su vez al mismo
+tope — el recorte conserva más resolución efectiva sobre esa porción que
+la entera sola. Hace falta avisarle explícitamente al modelo que las
+mitades son ampliaciones de la misma foto, no equipos nuevos, o las
+puede contar dos veces. Ver `partesDeFoto()` — usa `sharp(buffer).rotate()`
+(sin argumentos) para aplicar la orientación EXIF una sola vez, antes de
+cualquier recorte, con `toBuffer({resolveWithObject:true})` para obtener
+en el mismo paso el buffer ya rotado y sus dimensiones reales (necesarias
+para decidir si el recorte es horizontal o vertical).
+
+**2. "Nunca dejes un campo vacío, describí lo que ves si no hay etiqueta"
+(el criterio histórico de este repo, ver `/api/tableros/leer-foto`) y
+"si no se lee con seguridad, el campo va `null`, nunca inventes" (el
+criterio de `REGLAS_LECTURA.md`) son dos reglas de oro CONTRADICTORIAS,
+y la que conviene depende de qué va a pasar con ese campo después, no de
+cuál suena más prolijo.** Para un campo de TEXTO/CLASIFICACIÓN (qué es
+este elemento) donde cualquier respuesta es mejor que ninguna y el
+técnico de todos modos va a revisar, "describí lo que ves" funciona. Para
+un campo NUMÉRICO/DE MEDICIÓN (un calibre, un amperaje) donde un valor
+inventado queda indistinguible de uno leído una vez que está en el
+formulario — y en un plano eléctrico, un calibre equivocado que "parece
+confirmado" es peor que uno vacío que obviamente hay que revisar — la
+regla tiene que ser `null` si no hay certeza. El síntoma de violar esto
+sin darse cuenta: un modelo de vision completa calibres "por costumbre"
+cuando ve el mismo valor repetido varias veces en la foto (acá, 16A en
+casi todas las térmicas) — un control barato que lo agarra: si TODOS los
+valores leídos de un campo numérico son idénticos y hay 3 o más, marcarlo
+para revisar en vez de confiar en él (ver `controlarLecturaTablero` →
+sospecha "todos iguales"). Verificado contra fotos reales en esta misma
+sesión: de 25 circuitos, el único caso de sospecha real resultó ser un
+calibre tapado físicamente por la palanca del propio interruptor en la
+foto — no legible desde ningún ángulo disponible, exactamente el caso que
+la regla de oro está pensada para atajar.
+
+**3. Para medir "qué tan bien lee la IA" (cuántos campos el revisor no
+tuvo que tocar), nunca uses como clave un campo que el usuario puede
+editar en la pantalla de revisión — usá la POSICIÓN dentro de la lectura
+original.** El primer diseño de esto comparaba filas por su N° de
+circuito, hasta notar que ese campo es un `<input type="number">`
+editable en el formulario (el técnico puede renumerar sin querer, o a
+propósito): comparar por N° después de una renumeración compara filas que
+no son la misma fila. La solución (ver `origenLecturaId`/
+`origenLecturaPosicion` en `nueva-medicion-form.tsx` y `cerrarLecturasIa`
+en `tableros/nuevo/actions.ts`) es taggear cada fila, al insertarla en el
+estado del formulario, con su posición de origen dentro del array que
+devolvió la IA — un índice que el usuario nunca ve ni puede tocar — y
+reindexar ese tag exactamente como ya se reindexaba el estado de
+lecturas al borrar una fila (mismo patrón, nuevo campo). Una fila que el
+usuario borra del todo cuenta como 0% de acierto en vez de desaparecer
+del cálculo — borrar no es lo mismo que "la IA acertó".
