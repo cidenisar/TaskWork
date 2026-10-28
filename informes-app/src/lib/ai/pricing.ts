@@ -6,6 +6,7 @@
  */
 export const PRECIO_IA_USD_POR_MTOK: Record<string, { entrada: number; salida: number }> = {
   "claude-opus-5-5": { entrada: 4, salida: 20 },
+  "claude-sonnet-5-5": { entrada: 2, salida: 10 },
   "claude-haiku-4-5": { entrada: 1, salida: 5 },
 };
 
