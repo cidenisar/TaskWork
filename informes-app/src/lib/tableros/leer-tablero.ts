@@ -372,6 +372,10 @@ export interface CircuitoAdaptadoMotor {
   rolBypassUps: null;
   padreNumero: number | null;
   etiquetaCable: string | null;
+  /** true cuando el texto no viene de una etiqueta legible (o hay conflicto de etiquetas) — mismo criterio que "identificado" en /api/tableros/leer-foto. */
+  revisar: boolean;
+  /** Posición de la palanca leída en la foto — null si no aplica (general/protector/descargador) o no se pudo leer. */
+  estadoDetectado: "Cerrado" | "Abierto" | null;
 }
 
 /**
@@ -401,6 +405,8 @@ export function adaptarACircuitosDelMotor(j: TableroLeido): CircuitoAdaptadoMoto
     rolBypassUps: null,
     padreNumero: null,
     etiquetaCable: null,
+    revisar: !j.general.calibre || j.general.confirmar,
+    estadoDetectado: null,
   });
 
   // 2-3: protector de sobretensión, si se leyó algo — térmica propia (cuelga de la general) + descargador (sin padre, mismo criterio que FIXTURE_UNIFILAR).
@@ -417,6 +423,8 @@ export function adaptarACircuitosDelMotor(j: TableroLeido): CircuitoAdaptadoMoto
       rolBypassUps: null,
       padreNumero: 1,
       etiquetaCable: null,
+      revisar: !j.protector.calibre,
+      estadoDetectado: null,
     });
     siguiente++;
     filas.push({
@@ -430,6 +438,8 @@ export function adaptarACircuitosDelMotor(j: TableroLeido): CircuitoAdaptadoMoto
       rolBypassUps: null,
       padreNumero: null,
       etiquetaCable: null,
+      revisar: false,
+      estadoDetectado: null,
     });
     siguiente++;
   }
@@ -438,6 +448,8 @@ export function adaptarACircuitosDelMotor(j: TableroLeido): CircuitoAdaptadoMoto
     const base = c.destino ?? c.etiquetaExtra ?? "SIN ETIQUETA";
     const numDisyuntor = siguiente;
     const numTermica = siguiente + 1;
+    const revisar = !c.destino || c.etiquetaConflicto;
+    const estadoDetectado: "Cerrado" | "Abierto" = c.estado === "OFF" ? "Abierto" : "Cerrado";
     filas.push({
       numero: numDisyuntor,
       texto: `${base} - INT. DIFER.`,
@@ -449,6 +461,8 @@ export function adaptarACircuitosDelMotor(j: TableroLeido): CircuitoAdaptadoMoto
       rolBypassUps: null,
       padreNumero: 1,
       etiquetaCable: null,
+      revisar,
+      estadoDetectado,
     });
     filas.push({
       numero: numTermica,
@@ -461,6 +475,8 @@ export function adaptarACircuitosDelMotor(j: TableroLeido): CircuitoAdaptadoMoto
       rolBypassUps: null,
       padreNumero: numDisyuntor,
       etiquetaCable: null,
+      revisar,
+      estadoDetectado,
     });
     siguiente += 2;
   }

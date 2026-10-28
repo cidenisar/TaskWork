@@ -366,6 +366,114 @@ export function NuevaMedicionForm({
     }
   }
 
+  // Lectura "detallada" (ENCARGO.md lectura-fotos): pensada para tableros de
+  // energía con pares térmica+disyuntor — recorta cada foto en mitades
+  // ampliadas para no perder calibres chicos. Usa las mismas fotos ya
+  // cargadas en fotosIa, pero las manda SIN el achique a 1600px de
+  // leerFotosConIa (ese achique ya pierde la letra chica que esta lectura
+  // necesita leer de la foto original). Complementa a leerFotosConIa — no
+  // la reemplaza, un tablero mixto (con cámaras/UPS/etc.) sigue necesitando
+  // el otro botón para ese equipamiento.
+  async function leerTableroDetallado() {
+    if (fotosIa.length === 0) return;
+    setIaBusy(true);
+    setIaNote(null);
+    const fallidas: File[] = [];
+    let primerError: string | null = null;
+    try {
+      const fd = new FormData();
+      for (const f of fotosIa) {
+        try {
+          const jpeg = await resizeImageToJpeg(f, 3200);
+          fd.append("fotos", jpeg, "tablero.jpg");
+        } catch (err) {
+          fallidas.push(f);
+          const msg = err instanceof Error ? err.message : `No se pudo leer "${f.name}".`;
+          if (!primerError) primerError = msg;
+        }
+      }
+      const exitosas = fotosIa.length - fallidas.length;
+      if (exitosas === 0) {
+        setIaNote(primerError || "No se pudo leer ninguna de las fotos.");
+        return;
+      }
+      const res = await fetch("/api/tableros/leer-tablero", { method: "POST", body: fd });
+      const data = await res.json();
+      if (!res.ok) {
+        setIaNote(data.error || "No se pudo leer el tablero.");
+        setFotosIa(fallidas);
+        return;
+      }
+      const adaptados: {
+        numero: number;
+        texto: string;
+        categoriaEquipo: TableroCategoriaEquipo;
+        tipoCircuito: TableroTipoCircuito;
+        ampNominal: string | null;
+        padreNumero: number | null;
+        revisar: boolean;
+        estadoDetectado: "Cerrado" | "Abierto" | null;
+      }[] = data.circuitos ?? [];
+      if (adaptados.length === 0) {
+        setIaNote(
+          (data.error as string | undefined) ||
+            "No se detectó ningún circuito en las fotos — probá con otras o cargalos a mano." +
+              (fallidas.length > 0 ? ` (${fallidas.length} foto${fallidas.length === 1 ? "" : "s"} no se pudo leer: ${primerError})` : ""),
+        );
+        setFotosIa(fallidas);
+        return;
+      }
+      const siguienteBase = circuitos.length ? Math.max(...circuitos.map((c) => c.numero)) : 0;
+      const baseIndex = circuitos.length;
+      // Igual criterio que leerFotosConIa: la IA numera dentro de SU propia
+      // lectura (1..n), acá se traduce a los N° reales que van a quedar en
+      // el formulario para que el encadenado por padreNumero quede resuelto
+      // solo.
+      const numeroRealPorNumeroIa = new Map(adaptados.map((d, i) => [d.numero, siguienteBase + i + 1]));
+      setCircuitos((prev) => [
+        ...prev,
+        ...adaptados.map((d, i) => ({
+          id: null,
+          numero: siguienteBase + i + 1,
+          texto: d.texto,
+          ampNominal: d.ampNominal ?? "",
+          categoriaEquipo: d.categoriaEquipo,
+          tipoCircuito: d.tipoCircuito,
+          cuerpo: cuerpoActual.trim(),
+          alimentadoPorUps: false,
+          rolBypassUps: null,
+          padreNumero: d.padreNumero != null ? (numeroRealPorNumeroIa.get(d.padreNumero) ?? null) : null,
+          etiquetaCable: "",
+          revisar: d.revisar,
+        })),
+      ]);
+      setLecturas((prev) => {
+        const next = { ...prev };
+        adaptados.forEach((d, i) => {
+          if (d.estadoDetectado) {
+            next[baseIndex + i] = { ...(next[baseIndex + i] ?? LECTURA_VACIA), estado: d.estadoDetectado };
+          }
+        });
+        return next;
+      });
+      const controles: { aConfirmar: { donde: string; que: string }[]; avisos: string[] } = data.controles ?? { aConfirmar: [], avisos: [] };
+      const uso: { modelo: string; inputTokens: number; outputTokens: number; costoUsd: number } | undefined = data.uso;
+      setIaNote(
+        `Se agregaron ${adaptados.length} fila${adaptados.length === 1 ? "" : "s"} (térmicas/disyuntores) desde ${exitosas} foto${exitosas === 1 ? "" : "s"}` +
+          (uso ? ` — costo USD ${uso.costoUsd.toFixed(2)} (${uso.inputTokens + uso.outputTokens} tokens, ${uso.modelo}).` : ".") +
+          ` ${controles.aConfirmar.length} punto${controles.aConfirmar.length === 1 ? "" : "s"} a confirmar, marcados abajo.` +
+          (controles.avisos.length > 0 ? ` ⚠ ${controles.avisos.join(" ")}` : "") +
+          (fallidas.length > 0 ? ` (${fallidas.length} foto${fallidas.length === 1 ? "" : "s"} no se pudo leer: ${primerError})` : ""),
+      );
+      setFotosIa(fallidas);
+    } catch (err) {
+      setIaNote("No se pudo leer el tablero.");
+      reportarErrorCliente(err instanceof Error ? err.message : "Error en lectura detallada de tablero con IA", "leer-tablero-detallado");
+    } finally {
+      setIaBusy(false);
+    }
+  }
+
   function agregarCircuito() {
     const siguienteNumero = circuitos.length ? Math.max(...circuitos.map((c) => c.numero)) + 1 : 1;
     setCircuitos((prev) => [
@@ -879,7 +987,19 @@ export function NuevaMedicionForm({
                 {iaBusy ? "Procesando..." : `Procesar ${fotosIa.length} foto${fotosIa.length === 1 ? "" : "s"} con IA`}
               </button>
             )}
+            {fotosIa.length > 0 && (
+              <button type="button" className="ai-btn" onClick={() => void leerTableroDetallado()} disabled={submitting || iaBusy}>
+                {iaBusy ? <Spinner /> : <Icon name="ai" size={13} />}{" "}
+                {iaBusy ? "Procesando..." : "Lectura detallada (térmicas/disyuntores)"}
+              </button>
+            )}
           </div>
+          {fotosIa.length > 0 && (
+            <div className="hint" style={{ margin: "-4px 0 12px" }}>
+              &ldquo;Lectura detallada&rdquo; es para tableros de energía con pares térmica+disyuntor — lee calibres chicos con más
+              precisión que el botón de arriba, pero no reconoce cámaras/UPS/otro equipamiento mixto (usá el de arriba para eso).
+            </div>
+          )}
           {fotosIa.length > 0 && (
             <div className="chip-row" style={{ marginTop: 0, marginBottom: 12 }}>
               {fotosIa.map((f, i) => (
