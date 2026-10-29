@@ -1,20 +1,130 @@
 "use client";
 
-import { useRef, useState, type Dispatch, type SetStateAction } from "react";
+import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { Icon } from "@/components/icon";
 import { resizeImageToJpeg } from "@/lib/image-resize";
 import { reportarErrorCliente } from "@/lib/client-error-report";
 import { CATEGORIA_EQUIPO_OPCIONES, CATEGORIA_EQUIPO_LABEL } from "@/components/equipos/types";
 import {
+  CATEGORIAS_POSIBLES_EN_RACK,
   MATERIAL_FOTO_IA_MAX,
   MATERIAL_INFORME_BASE,
   REMITO_FOTO_MAX,
   type MaterialInformeItem,
   type RemitoItem,
 } from "./materiales-types";
-import type { EquipoCategoria, EstadoChecklist } from "@/lib/database.types";
+import {
+  listarRacksDeUbicacionAction,
+  buscarEquipoReemplazoAction,
+  type RackDeUbicacion,
+  type EquipoParaReemplazo,
+} from "@/app/(app)/informe-tecnico/nuevo/materiales-picker-actions";
+import type { EquipoCategoria, EstadoChecklist, TipoEquipoBaja } from "@/lib/database.types";
 import { mezclarHallazgos, type HallazgoInspeccionIa } from "@/lib/inspeccion-ia/types";
 import { HallazgosInspeccionIaSection } from "@/components/inspeccion-ia/hallazgos-section";
+
+/**
+ * Buscador de "¿reemplaza a un equipo existente?" acotado al sitio del
+ * informe — al elegir uno, el alta del material nuevo va a disparar,
+ * automáticamente, la baja de este equipo viejo (ver ejecutarBaja).
+ */
+function ReemplazaPicker({
+  ubicacionId,
+  valor,
+  onElegir,
+  onQuitar,
+  disabled,
+}: {
+  ubicacionId: string;
+  valor: { tipo: TipoEquipoBaja; texto: string } | null;
+  onElegir: (r: EquipoParaReemplazo) => void;
+  onQuitar: () => void;
+  disabled: boolean;
+}) {
+  const [abierto, setAbierto] = useState(false);
+  const [query, setQuery] = useState("");
+  const [resultados, setResultados] = useState<EquipoParaReemplazo[]>([]);
+  const [busy, setBusy] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function onOutside(e: MouseEvent | TouchEvent) {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setAbierto(false);
+    }
+    document.addEventListener("mousedown", onOutside);
+    document.addEventListener("touchstart", onOutside);
+    return () => {
+      document.removeEventListener("mousedown", onOutside);
+      document.removeEventListener("touchstart", onOutside);
+    };
+  }, []);
+
+  async function buscar(q: string) {
+    setQuery(q);
+    if (q.trim().length < 2) {
+      setResultados([]);
+      return;
+    }
+    setBusy(true);
+    const res = await buscarEquipoReemplazoAction(ubicacionId, q);
+    setResultados(res);
+    setBusy(false);
+  }
+
+  if (valor) {
+    return (
+      <div className="field" style={{ marginBottom: 0 }}>
+        <label style={{ fontSize: 11 }}>Reemplaza a</label>
+        <span className="chip">
+          {valor.texto}
+          <button type="button" onClick={onQuitar} disabled={disabled} aria-label="Quitar reemplazo">
+            <Icon name="x" size={11} />
+          </button>
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div ref={wrapRef} className="field autocomplete-wrap" style={{ marginBottom: 0, minWidth: 200 }}>
+      <label style={{ fontSize: 11 }}>¿Reemplaza a un equipo existente? (opcional)</label>
+      <input
+        type="text"
+        placeholder="Buscar por nombre, marca o N° de serie..."
+        value={query}
+        onFocus={() => setAbierto(true)}
+        onChange={(e) => void buscar(e.target.value)}
+        disabled={disabled}
+      />
+      {abierto && query.trim().length >= 2 && (
+        <div className="autocomplete-panel">
+          {busy && <div className="autocomplete-item" style={{ cursor: "default" }}>Buscando...</div>}
+          {!busy && resultados.length === 0 && (
+            <div className="autocomplete-item" style={{ cursor: "default" }}>
+              Sin resultados en este sitio.
+            </div>
+          )}
+          {resultados.map((r) => (
+            <button
+              type="button"
+              key={`${r.tipo}-${r.id}`}
+              className="autocomplete-item"
+              onMouseDown={(e) => {
+                e.preventDefault();
+                onElegir(r);
+                setQuery("");
+                setResultados([]);
+                setAbierto(false);
+              }}
+            >
+              {r.texto} — {r.detalle}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 /**
  * Sección opcional de "Materiales/equipos" dentro de Informe Técnico — no
@@ -27,6 +137,7 @@ import { HallazgosInspeccionIaSection } from "@/components/inspeccion-ia/hallazg
  * usó — eso genera sola la devolución a depósito al guardar el informe.
  */
 export function MaterialesSection({
+  ubicacionId,
   materiales,
   setMateriales,
   remitoFotos,
@@ -40,6 +151,7 @@ export function MaterialesSection({
   onComentarioHallazgo,
   disabled,
 }: {
+  ubicacionId: string | null;
   materiales: MaterialInformeItem[];
   setMateriales: Dispatch<SetStateAction<MaterialInformeItem[]>>;
   remitoFotos: File[];
@@ -63,6 +175,19 @@ export function MaterialesSection({
   const [remitoNote, setRemitoNote] = useState<string | null>(null);
   const remitoCameraInputRef = useRef<HTMLInputElement>(null);
   const remitoGaleriaInputRef = useRef<HTMLInputElement>(null);
+
+  // Racks ya registrados en el sitio — para el selector "¿va dentro de un rack?" (switch/UPS/banco de baterías).
+  const [racksDelSitio, setRacksDelSitio] = useState<RackDeUbicacion[]>([]);
+  useEffect(() => {
+    if (!ubicacionId) return;
+    let cancelado = false;
+    listarRacksDeUbicacionAction(ubicacionId).then((racks) => {
+      if (!cancelado) setRacksDelSitio(racks);
+    });
+    return () => {
+      cancelado = true;
+    };
+  }, [ubicacionId]);
 
   function agregarFotosIa(files: File[]) {
     if (files.length === 0) return;
@@ -223,7 +348,7 @@ export function MaterialesSection({
       if (data.remitoNumero) setRemitoNumero(data.remitoNumero);
       setRemitoItems((prev) => [
         ...prev,
-        ...detectados.map((d) => ({ descripcion: d.descripcion, cantidadEsperada: d.cantidad, cantidadSobrante: 0 })),
+        ...detectados.map((d) => ({ descripcion: d.descripcion, cantidadEsperada: d.cantidad, cantidadSobrante: 0, fotoConfirmacion: null })),
       ]);
       const hallazgosNuevos: HallazgoInspeccionIa[] = data.hallazgos ?? [];
       let hallazgosDetectadosAhora = 0;
@@ -252,7 +377,7 @@ export function MaterialesSection({
   }
 
   function agregarLineaRemito() {
-    setRemitoItems((prev) => [...prev, { descripcion: "", cantidadEsperada: 1, cantidadSobrante: 0 }]);
+    setRemitoItems((prev) => [...prev, { descripcion: "", cantidadEsperada: 1, cantidadSobrante: 0, fotoConfirmacion: null }]);
   }
 
   function actualizarLineaRemito(i: number, patch: Partial<RemitoItem>) {
@@ -567,6 +692,35 @@ export function MaterialesSection({
                   />
                 </div>
               </div>
+
+              {ubicacionId && (
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-end" }}>
+                  {CATEGORIAS_POSIBLES_EN_RACK.includes(m.categoriaEquipo) && racksDelSitio.length > 0 && (
+                    <div className="field" style={{ marginBottom: 0, width: 220 }}>
+                      <label style={{ fontSize: 11 }}>¿Va dentro de un rack ya registrado?</label>
+                      <select
+                        value={m.rackId ?? ""}
+                        onChange={(e) => actualizarMaterial(i, { rackId: e.target.value || null })}
+                        disabled={disabled}
+                      >
+                        <option value="">No — queda como equipo suelto</option>
+                        {racksDelSitio.map((r) => (
+                          <option key={r.id} value={r.id}>
+                            {r.denominacion}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                  <ReemplazaPicker
+                    ubicacionId={ubicacionId}
+                    valor={m.reemplazaEquipoId && m.reemplazaTipo ? { tipo: m.reemplazaTipo, texto: m.reemplazaTexto ?? "" } : null}
+                    onElegir={(r) => actualizarMaterial(i, { reemplazaEquipoId: r.id, reemplazaTipo: r.tipo, reemplazaTexto: r.texto })}
+                    onQuitar={() => actualizarMaterial(i, { reemplazaEquipoId: null, reemplazaTipo: null, reemplazaTexto: null })}
+                    disabled={disabled}
+                  />
+                </div>
+              )}
             </div>
           ))}
         </div>

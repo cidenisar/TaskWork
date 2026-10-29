@@ -12,6 +12,8 @@ import type { EstadoChecklist } from "@/lib/database.types";
 
 export interface MaterialesStepProps {
   tieneUbicacion: boolean;
+  /** null si todavía no hay un sitio real elegido/creado (p.ej. "__new" sin guardar) — sin esto no se puede buscar racks/equipos del sitio. */
+  ubicacionId: string | null;
   materiales: MaterialInformeItem[];
   setMateriales: Dispatch<SetStateAction<MaterialInformeItem[]>>;
   remitoFotos: File[];
@@ -178,6 +180,7 @@ export function Step2Equipo({
           mostrarMateriales ? (
             <>
               <MaterialesSection
+                ubicacionId={materialesProps.ubicacionId}
                 materiales={materialesProps.materiales}
                 setMateriales={materialesProps.setMateriales}
                 remitoFotos={materialesProps.remitoFotos}

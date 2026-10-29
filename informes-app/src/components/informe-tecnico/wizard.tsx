@@ -138,6 +138,9 @@ export function InformeTecnicoWizard({
             consumoPromedioW: m.consumoPromedioW,
             consumoMaxW: m.consumoMaxW,
             comentario: m.comentario.trim(),
+            rackId: m.rackId,
+            reemplazaEquipoId: m.reemplazaEquipoId,
+            reemplazaTipo: m.reemplazaTipo,
           })),
           remitoNumero: remitoNumero.trim() || null,
           remitoItems: remitoItems.map((r) => ({
@@ -155,6 +158,12 @@ export function InformeTecnicoWizard({
         const jpeg = await resizeImageToJpeg(foto);
         fd.append("remitoFoto", jpeg, "remito.jpg");
       }
+      materiales.forEach((m, i) => {
+        if (m.fotoConfirmacion) fd.append(`materialFotoConfirmacion_${i}`, m.fotoConfirmacion, "confirmacion.jpg");
+      });
+      remitoItems.forEach((r, i) => {
+        if (r.fotoConfirmacion) fd.append(`remitoItemFotoConfirmacion_${i}`, r.fotoConfirmacion, "confirmacion.jpg");
+      });
 
       const result = await crearInformeTecnicoAction(fd);
       if (!result.success) {
@@ -196,6 +205,7 @@ export function InformeTecnicoWizard({
           catalogos={catalogos}
           materialesProps={{
             tieneUbicacion: Boolean(form.ubicacionId),
+            ubicacionId: form.ubicacionId && form.ubicacionId !== "__new" ? form.ubicacionId : null,
             materiales,
             setMateriales,
             remitoFotos,
@@ -220,8 +230,10 @@ export function InformeTecnicoWizard({
           vehiculos={vehiculos}
           imagenes={imagenes}
           materiales={materiales}
+          setMateriales={setMateriales}
           remitoNumero={remitoNumero}
           remitoItems={remitoItems}
+          setRemitoItems={setRemitoItems}
           hallazgos={hallazgos}
           emails={emails}
           selectedEmails={selectedEmails}

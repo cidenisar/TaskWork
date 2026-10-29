@@ -68,7 +68,7 @@ export type EstadoEquipamiento = "activo" | "baja" | "en_deposito";
 export type OrigenEntregaDeposito = "equipo_existente" | "material_libre";
 export type CondicionMaterial = "nuevo" | "usado_funcional";
 export type MotivoEntregaDeposito = "sobrante_obra" | "reemplazo_funcional" | "retorno_mantenimiento" | "otro";
-export type MotivoBaja = "rotura" | "ampliacion" | "obsolescencia" | "otro";
+export type MotivoBaja = "rotura" | "ampliacion" | "obsolescencia" | "reemplazo" | "otro";
 export type TipoEquipoBaja = "tablero_circuito" | "rack_equipamiento" | "equipo_individual";
 /**
  * Tipo propio del Plan de Mantenimiento — separado de `TipoEquipoBaja` a
@@ -463,6 +463,9 @@ export type RackEquipamientoRow = {
   /** Puertos/bocas libres del equipo — manual, se completa al dar de alta. */
   bocas_disponibles: number | null;
   estado: EstadoEquipamiento;
+  /** Referencia "blanda" (sin FK, igual criterio que bajas_equipamiento.equipo_id): el equipo que este reemplaza, en la tabla que indique reemplaza_tipo. */
+  reemplaza_equipo_id: string | null;
+  reemplaza_tipo: TipoEquipoBaja | null;
   created_at: string;
 }
 
@@ -585,6 +588,9 @@ export type EquipoRow = {
   /** Solo tiene sentido en categoria_equipo='camara_cctv' — en el resto queda null. */
   tipo_montaje: TipoMontajeCamara | null;
   altura_montaje_m: number | null;
+  /** Referencia "blanda" (sin FK, igual criterio que bajas_equipamiento.equipo_id): el equipo que este reemplaza, en la tabla que indique reemplaza_tipo. */
+  reemplaza_equipo_id: string | null;
+  reemplaza_tipo: TipoEquipoBaja | null;
   created_by: string | null;
   created_at: string;
 }
@@ -831,6 +837,10 @@ export type InformeMaterialRow = {
   consumo_max_w: number | null;
   comentario: string | null;
   equipo_id: string | null;
+  /** Destino alternativo a equipo_id: cuando el material es un componente de un rack ya registrado, el alta va acá en vez de a `equipos`. */
+  rack_equipamiento_id: string | null;
+  /** Foto puntual que confirma la instalación, cargada cuando "Verificar instalación" no lo encontró en las fotos generales. */
+  foto_confirmacion_url: string | null;
   created_at: string;
 }
 
@@ -841,6 +851,8 @@ export type InformeRemitoItemRow = {
   descripcion: string;
   cantidad_esperada: number;
   cantidad_sobrante: number;
+  /** Foto puntual que confirma la instalación, cargada cuando "Verificar instalación" no lo encontró en las fotos generales. */
+  foto_confirmacion_url: string | null;
   created_at: string;
 }
 

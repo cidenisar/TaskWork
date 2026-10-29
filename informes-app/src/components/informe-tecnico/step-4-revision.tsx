@@ -1,5 +1,6 @@
 "use client";
 
+import { useRef, useState, type Dispatch, type SetStateAction } from "react";
 import type { ImagenInforme, Tecnico, Vehiculo } from "@/lib/types";
 import { labelUbicacionDesdeForm, type EmailDestinatario, type InformeFormState } from "./types";
 import type { Ubicacion } from "@/components/ubicaciones/types";
@@ -9,6 +10,36 @@ import { obtenerUrlPdfInformeAction } from "@/app/(app)/informe-tecnico/historia
 import { CATEGORIA_EQUIPO_LABEL } from "@/components/equipos/types";
 import type { MaterialInformeItem, RemitoItem } from "./materiales-types";
 import type { HallazgoInspeccionIa } from "@/lib/inspeccion-ia/types";
+import { Icon } from "@/components/icon";
+import { Spinner } from "@/components/spinner";
+import { resizeImageToJpeg } from "@/lib/image-resize";
+import { reportarErrorCliente } from "@/lib/client-error-report";
+
+type ClaveVerificacion = `material-${number}` | `remito-${number}`;
+
+/** Botón de cámara/subida para la foto puntual de respaldo de un ítem marcado "no visto". */
+function AgregarFotoConfirmacion({ onFoto, disabled }: { onFoto: (f: File) => void; disabled: boolean }) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  return (
+    <>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        style={{ display: "none" }}
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          e.target.value = "";
+          if (f) onFoto(f);
+        }}
+      />
+      <button type="button" className="ai-btn" onClick={() => inputRef.current?.click()} disabled={disabled}>
+        <Icon name="camera" size={13} /> Agregar foto de este material
+      </button>
+    </>
+  );
+}
 
 function fmtFecha(fecha: string) {
   if (!fecha) return "—";
@@ -24,8 +55,10 @@ export function Step4Revision({
   vehiculos,
   imagenes,
   materiales,
+  setMateriales,
   remitoNumero,
   remitoItems,
+  setRemitoItems,
   hallazgos,
   emails,
   selectedEmails,
@@ -41,8 +74,10 @@ export function Step4Revision({
   vehiculos: Vehiculo[];
   imagenes: ImagenInforme[];
   materiales: MaterialInformeItem[];
+  setMateriales: Dispatch<SetStateAction<MaterialInformeItem[]>>;
   remitoNumero: string;
   remitoItems: RemitoItem[];
+  setRemitoItems: Dispatch<SetStateAction<RemitoItem[]>>;
   hallazgos: HallazgoInspeccionIa[];
   emails: EmailDestinatario[];
   selectedEmails: Set<string>;
@@ -53,6 +88,72 @@ export function Step4Revision({
 }) {
   const tipoLabel = form.tipoInforme === "__new" ? form.tipoInformeNuevo || "Nuevo tipo sin nombrar" : form.tipoInforme || "—";
   const ubicacionLabel = labelUbicacionDesdeForm(form, ubicaciones);
+
+  const [verificando, setVerificando] = useState(false);
+  const [verificarNote, setVerificarNote] = useState<string | null>(null);
+  const [noVistos, setNoVistos] = useState<Set<ClaveVerificacion>>(new Set());
+
+  const remitoItemsUsados = remitoItems.filter((r) => r.cantidadEsperada - r.cantidadSobrante > 0);
+  const hayQueVerificar = imagenes.length > 0 && (materiales.length > 0 || remitoItemsUsados.length > 0);
+
+  async function verificarInstalacion() {
+    setVerificando(true);
+    setVerificarNote(null);
+    try {
+      const items: { key: ClaveVerificacion; descripcion: string }[] = [
+        ...materiales.map((m, i) => ({
+          key: `material-${i}` as ClaveVerificacion,
+          descripcion: `${m.descripcion}${m.marcaModelo ? ` (${m.marcaModelo})` : ""}`,
+        })),
+        ...remitoItems
+          .map((r, i) => ({ key: `remito-${i}` as ClaveVerificacion, descripcion: r.descripcion, usado: r.cantidadEsperada - r.cantidadSobrante > 0 }))
+          .filter((r) => r.usado),
+      ];
+      const fd = new FormData();
+      fd.append("items", JSON.stringify(items.map(({ key, descripcion }) => ({ key, descripcion }))));
+      for (const img of imagenes) fd.append("fotos", img.blob, "foto.jpg");
+
+      const res = await fetch("/api/informe-tecnico/verificar-instalacion", { method: "POST", body: fd });
+      const data = await res.json();
+      if (!res.ok) {
+        setVerificarNote(data.error || "No se pudo verificar la instalación.");
+        return;
+      }
+      const resultados: { key: ClaveVerificacion; visto: boolean }[] = data.resultados ?? [];
+      const nuevosNoVistos = new Set(resultados.filter((r) => !r.visto).map((r) => r.key));
+      setNoVistos(nuevosNoVistos);
+      setVerificarNote(
+        nuevosNoVistos.size === 0
+          ? "Todos los materiales/remito cargados se ven instalados en las fotos."
+          : `${nuevosNoVistos.size} de ${items.length} no se ve${nuevosNoVistos.size === 1 ? "" : "n"} instalado${nuevosNoVistos.size === 1 ? "" : "s"} en las fotos — revisalos abajo, o agregales una foto puntual.`,
+      );
+    } catch (err) {
+      setVerificarNote("No se pudo verificar la instalación.");
+      reportarErrorCliente(err instanceof Error ? err.message : "Error verificando instalación", "verificar-instalacion-informe");
+    } finally {
+      setVerificando(false);
+    }
+  }
+
+  async function agregarFotoConfirmacionMaterial(i: number, file: File) {
+    const jpeg = await resizeImageToJpeg(file);
+    setMateriales((prev) => prev.map((m, idx) => (idx === i ? { ...m, fotoConfirmacion: jpeg } : m)));
+    setNoVistos((prev) => {
+      const next = new Set(prev);
+      next.delete(`material-${i}`);
+      return next;
+    });
+  }
+
+  async function agregarFotoConfirmacionRemito(i: number, file: File) {
+    const jpeg = await resizeImageToJpeg(file);
+    setRemitoItems((prev) => prev.map((r, idx) => (idx === i ? { ...r, fotoConfirmacion: jpeg } : r)));
+    setNoVistos((prev) => {
+      const next = new Set(prev);
+      next.delete(`remito-${i}`);
+      return next;
+    });
+  }
   const tareas = form.tareasPendientes
     .split("\n")
     .map((s) => s.trim())
@@ -167,25 +268,79 @@ export function Step4Revision({
             {materiales.length > 0 && (
               <table className="review-table">
                 <tbody>
-                  {materiales.map((m, i) => (
-                    <tr key={i}>
-                      <td className="k">{CATEGORIA_EQUIPO_LABEL[m.categoriaEquipo]}</td>
-                      <td className="v">
-                        {m.descripcion} {m.cantidad > 1 ? `· x${m.cantidad}` : ""}
-                        {m.marcaModelo ? ` · ${m.marcaModelo}` : ""}
-                        {m.numeroSerie ? ` · S/N ${m.numeroSerie}` : ""}
-                      </td>
-                    </tr>
-                  ))}
+                  {materiales.map((m, i) => {
+                    const clave: ClaveVerificacion = `material-${i}`;
+                    const noVisto = noVistos.has(clave) && !m.fotoConfirmacion;
+                    return (
+                      <tr key={i}>
+                        <td className="k">{CATEGORIA_EQUIPO_LABEL[m.categoriaEquipo]}</td>
+                        <td className="v">
+                          {m.descripcion} {m.cantidad > 1 ? `· x${m.cantidad}` : ""}
+                          {m.marcaModelo ? ` · ${m.marcaModelo}` : ""}
+                          {m.numeroSerie ? ` · S/N ${m.numeroSerie}` : ""}
+                          {m.fotoConfirmacion && (
+                            <div className="hint" style={{ color: "var(--ok)", margin: "4px 0 0" }}>
+                              <Icon name="check" size={12} /> Foto de respaldo agregada.
+                            </div>
+                          )}
+                          {noVisto && (
+                            <div style={{ marginTop: 6, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                              <span className="hint" style={{ color: "var(--warn)", margin: 0 }}>
+                                <Icon name="warning" size={12} /> No se ve instalado en las fotos.
+                              </span>
+                              <AgregarFotoConfirmacion onFoto={(f) => void agregarFotoConfirmacionMaterial(i, f)} disabled={submitting} />
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             )}
             {remitoItems.length > 0 && (
-              <div className="hint" style={{ marginTop: 8 }}>
-                Remito{remitoNumero ? ` ${remitoNumero}` : ""}: {remitoItems.length} línea{remitoItems.length === 1 ? "" : "s"}
-                {remitoItems.some((r) => r.cantidadSobrante > 0)
-                  ? ` — se va a generar una devolución a depósito con ${remitoItems.reduce((acc, r) => acc + (r.cantidadSobrante || 0), 0)} unidad(es) sobrante(s).`
-                  : "."}
+              <>
+                <div className="hint" style={{ marginTop: 8 }}>
+                  Remito{remitoNumero ? ` ${remitoNumero}` : ""}: {remitoItems.length} línea{remitoItems.length === 1 ? "" : "s"}
+                  {remitoItems.some((r) => r.cantidadSobrante > 0)
+                    ? ` — se va a generar una devolución a depósito con ${remitoItems.reduce((acc, r) => acc + (r.cantidadSobrante || 0), 0)} unidad(es) sobrante(s).`
+                    : "."}
+                </div>
+                {remitoItems.map((r, i) => {
+                  const usado = r.cantidadEsperada - r.cantidadSobrante > 0;
+                  const clave: ClaveVerificacion = `remito-${i}`;
+                  const noVisto = usado && noVistos.has(clave) && !r.fotoConfirmacion;
+                  if (!r.fotoConfirmacion && !noVisto) return null;
+                  return (
+                    <div key={i} style={{ marginTop: 6, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                      <span className="hint" style={{ margin: 0 }}>
+                        {r.descripcion}:
+                      </span>
+                      {r.fotoConfirmacion ? (
+                        <span className="hint" style={{ color: "var(--ok)", margin: 0 }}>
+                          <Icon name="check" size={12} /> Foto de respaldo agregada.
+                        </span>
+                      ) : (
+                        <>
+                          <span className="hint" style={{ color: "var(--warn)", margin: 0 }}>
+                            <Icon name="warning" size={12} /> No se ve instalado en las fotos.
+                          </span>
+                          <AgregarFotoConfirmacion onFoto={(f) => void agregarFotoConfirmacionRemito(i, f)} disabled={submitting} />
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
+              </>
+            )}
+
+            {hayQueVerificar && (
+              <div style={{ marginTop: 10 }}>
+                <button type="button" className="ai-btn" onClick={() => void verificarInstalacion()} disabled={verificando || submitting}>
+                  {verificando ? <Spinner size={13} /> : <Icon name="ai" size={13} />}{" "}
+                  {verificando ? "Verificando..." : "Verificar instalación contra las fotos"}
+                </button>
+                {verificarNote && <div className="hint" style={{ marginTop: 8 }}>{verificarNote}</div>}
               </div>
             )}
           </>
