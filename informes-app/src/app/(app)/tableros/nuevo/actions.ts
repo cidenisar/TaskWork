@@ -7,7 +7,21 @@ import { renderTableroPdf } from "@/lib/pdf/render";
 import { buildTableroFilename } from "@/lib/pdf/filename";
 import { resolverUbicacionId, tagGpsSiFalta, type PayloadUbicacionNueva, type PayloadGps } from "@/lib/ubicaciones/resolver";
 import { calcularResumenEquipamiento, itemMideCorriente } from "@/components/tableros/types";
-import type { TableroCategoriaEquipo, TableroEventoTipo, TableroTipo, TableroTipoCircuito } from "@/lib/database.types";
+import type {
+  EstadoChecklist,
+  TableroCategoriaEquipo,
+  TableroEventoTipo,
+  TableroJerarquia,
+  TableroRolBypassUps,
+  TableroTipo,
+  TableroTipoCircuito,
+} from "@/lib/database.types";
+
+interface PayloadHallazgo {
+  itemId: string;
+  estado: EstadoChecklist;
+  comentario: string;
+}
 
 interface PayloadLectura {
   circuitoId: string | null;
@@ -16,12 +30,20 @@ interface PayloadLectura {
   ampNominal: string;
   categoriaEquipo: TableroCategoriaEquipo;
   tipoCircuito: TableroTipoCircuito;
+  cuerpo: string;
+  alimentadoPorUps: boolean;
+  rolBypassUps: TableroRolBypassUps | null;
+  padreNumero: number | null;
+  etiquetaCable: string;
   estado: string;
   corrienteF: string;
   corrienteR: string;
   corrienteS: string;
   corrienteT: string;
   comentario: string;
+  /** Fase 3 de lectura-fotos (ENCARGO.md): de qué lectura IA "detallada" (tablero_lecturas_ia) vino este circuito, y en qué posición de esa lectura — null si se cargó a mano o con el otro botón de IA. */
+  origenLecturaId: string | null;
+  origenLecturaPosicion: number | null;
 }
 
 export interface CrearMedicionPayload {
@@ -32,8 +54,14 @@ export interface CrearMedicionPayload {
   gps: PayloadGps | null;
   tableroId: string | null;
   denominacionNueva: string;
+  clienteNuevo: string;
+  equipamientoEsperadoNuevo: TableroCategoriaEquipo[];
+  tieneBypassUpsNuevo: boolean;
+  jerarquiaNueva: TableroJerarquia | null;
+  tableroPadreId: string | null;
   fecha: string;
   lecturas: PayloadLectura[];
+  hallazgos?: PayloadHallazgo[];
 }
 
 export interface CrearMedicionResult {
@@ -49,6 +77,80 @@ function parseNum(v: string): number | null {
   return v.trim() !== "" && Number.isFinite(n) ? n : null;
 }
 
+/**
+ * Fase 3 de lectura-fotos (ENCARGO.md): completa cada `tablero_lecturas_ia`
+ * tocada en esta medición con tablero_id/medicion_id/revisor y el JSON tal
+ * como quedó después de la revisión del técnico, más el % de campos
+ * (texto/ampNominal/categoriaEquipo/tipoCircuito) que NO tuvo que tocar —
+ * la medida de acierto que pide el ENCARGO. Compara por POSICIÓN dentro de
+ * la lectura (no por "numero" de circuito, que el técnico puede editar a
+ * mano) — ver `origenLecturaPosicion` en nueva-medicion-form.tsx. Un
+ * circuito que el técnico borró cuenta como 0% de esa fila (sigue sumando
+ * al total, pero ningún campo "no se tocó"). Best-effort: nunca debe tirar
+ * abajo el guardado real de la medición.
+ */
+async function cerrarLecturasIa(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  lecturas: PayloadLectura[],
+  tableroId: string,
+  medicionId: string,
+  revisorId: string,
+) {
+  const porLectura = new Map<string, PayloadLectura[]>();
+  for (const l of lecturas) {
+    if (!l.origenLecturaId) continue;
+    const grupo = porLectura.get(l.origenLecturaId) ?? [];
+    grupo.push(l);
+    porLectura.set(l.origenLecturaId, grupo);
+  }
+  if (porLectura.size === 0) return;
+
+  const CAMPOS = ["texto", "ampNominal", "categoriaEquipo", "tipoCircuito"] as const;
+
+  for (const [lecturaId, grupo] of porLectura) {
+    try {
+      const { data: fila } = await supabase.from("tablero_lecturas_ia").select("circuitos_adaptados").eq("id", lecturaId).single();
+      const crudo = Array.isArray(fila?.circuitos_adaptados) ? (fila.circuitos_adaptados as Record<string, unknown>[]) : [];
+      if (crudo.length === 0) continue;
+
+      const revisadoPorPosicion = new Map(grupo.filter((l) => l.origenLecturaPosicion != null).map((l) => [l.origenLecturaPosicion!, l]));
+
+      let coinciden = 0;
+      let total = 0;
+      const circuitosRevisados: (Record<string, unknown> | null)[] = [];
+      crudo.forEach((c, posicion) => {
+        const r = revisadoPorPosicion.get(posicion);
+        circuitosRevisados.push(
+          r
+            ? { numero: r.numero, texto: r.texto, ampNominal: r.ampNominal || null, categoriaEquipo: r.categoriaEquipo, tipoCircuito: r.tipoCircuito, padreNumero: r.padreNumero }
+            : null,
+        );
+        for (const campo of CAMPOS) {
+          total++;
+          if (!r) continue; // el técnico borró esta fila — no cuenta como acierto
+          const valorCrudo = campo === "ampNominal" ? (c.ampNominal ?? "") : c[campo];
+          const valorRevisado = campo === "ampNominal" ? r.ampNominal || "" : r[campo];
+          if (valorCrudo === valorRevisado) coinciden++;
+        }
+      });
+      const porcentajeAcierto = total > 0 ? Math.round((coinciden / total) * 10000) / 100 : null;
+
+      await supabase
+        .from("tablero_lecturas_ia")
+        .update({
+          tablero_id: tableroId,
+          medicion_id: medicionId,
+          circuitos_revisados: circuitosRevisados,
+          porcentaje_acierto: porcentajeAcierto,
+          revisor_id: revisorId,
+        })
+        .eq("id", lecturaId);
+    } catch {
+      // best-effort — una lectura IA que no se pudo cerrar no debe romper el guardado de la medición
+    }
+  }
+}
+
 export async function crearMedicionTableroAction(formData: FormData): Promise<CrearMedicionResult> {
   const profile = await requireProfile();
 
@@ -62,13 +164,16 @@ export async function crearMedicionTableroAction(formData: FormData): Promise<Cr
   } catch {
     return { success: false, error: "Faltan datos de la medición." };
   }
-  const fotoGeneral = formData.get("fotoGeneral");
+  const fotosGenerales = formData.getAll("fotoGeneral").filter((f): f is File => f instanceof File);
 
   if (!payload.lecturas.length) {
     return { success: false, error: "El tablero no tiene circuitos/elementos cargados." };
   }
   if (!payload.tableroId && !payload.denominacionNueva.trim()) {
     return { success: false, error: "Completá la denominación del tablero nuevo." };
+  }
+  if (!payload.tableroId && !payload.clienteNuevo.trim()) {
+    return { success: false, error: "Completá el cliente del tablero nuevo." };
   }
   if (!payload.tableroId && payload.subsistemas.length === 0) {
     return { success: false, error: "Elegí al menos un subsistema para el tablero nuevo." };
@@ -87,12 +192,25 @@ export async function crearMedicionTableroAction(formData: FormData): Promise<Cr
     const ubicacion = await resolverUbicacionId(supabase, payload, profile.id, "el tablero");
     if ("error" in ubicacion) return { success: false, error: ubicacion.error };
 
+    // Cliente al catálogo compartido (alta al vuelo) — mismo criterio que
+    // Informe Técnico (ver informe-tecnico/nuevo/actions.ts): si ya existe
+    // no pasa nada (ignoreDuplicates), y queda sugerido la próxima vez.
+    const clienteValue = payload.clienteNuevo.trim();
+    if (clienteValue) {
+      await supabase.from("catalogo_clientes").upsert({ nombre: clienteValue }, { onConflict: "nombre", ignoreDuplicates: true });
+    }
+
     const { data: nuevoTablero, error: tableroErr } = await supabase
       .from("tableros")
       .insert({
         subsistemas: payload.subsistemas,
         denominacion: payload.denominacionNueva.trim(),
+        cliente: clienteValue || "YPF",
         ubicacion_id: ubicacion.id,
+        equipamiento_esperado: payload.equipamientoEsperadoNuevo,
+        tiene_bypass_ups: payload.tieneBypassUpsNuevo,
+        jerarquia: payload.jerarquiaNueva,
+        tablero_padre_id: payload.jerarquiaNueva === "secundario" ? payload.tableroPadreId : null,
         created_by: profile.id,
       })
       .select("id")
@@ -105,7 +223,7 @@ export async function crearMedicionTableroAction(formData: FormData): Promise<Cr
 
   const { data: tableroRow, error: tableroReadErr } = await supabase
     .from("tableros")
-    .select("denominacion, subsistemas, ubicacion_id")
+    .select("denominacion, subsistemas, ubicacion_id, cliente")
     .eq("id", tableroId)
     .single();
   if (tableroReadErr || !tableroRow) {
@@ -139,6 +257,10 @@ export async function crearMedicionTableroAction(formData: FormData): Promise<Cr
         amp_nominal: l.ampNominal.trim() || null,
         categoria_equipo: l.categoriaEquipo,
         tipo_circuito: l.tipoCircuito,
+        cuerpo: l.cuerpo.trim() || null,
+        alimentado_por_ups: l.alimentadoPorUps,
+        rol_bypass_ups: l.rolBypassUps,
+        etiqueta_cable: l.etiquetaCable.trim() || null,
       })
       .select("id")
       .single();
@@ -146,6 +268,21 @@ export async function crearMedicionTableroAction(formData: FormData): Promise<Cr
       return { success: false, error: `No se pudo guardar el circuito "${l.texto}": ${circErr?.message ?? "error desconocido"}` };
     }
     circuitoIdPorIndice.push(nuevoCircuito.id);
+  }
+
+  // Encadenado (circuito_padre_id): se resuelve DESPUÉS de insertar todos los
+  // circuitos nuevos, porque `padreNumero` puede apuntar a un circuito que
+  // recién se creó en esta misma medición (y hasta ahí no tenía id) — se
+  // busca por N°, no por orden de carga, así no importa en qué orden el
+  // técnico los fue agregando. Puede encadenar tanto un circuito nuevo como
+  // uno que ya existía de una visita anterior.
+  const idPorNumero = new Map(payload.lecturas.map((l, i) => [l.numero, circuitoIdPorIndice[i]]));
+  for (let i = 0; i < payload.lecturas.length; i++) {
+    const l = payload.lecturas[i];
+    if (l.padreNumero == null) continue;
+    const padreId = idPorNumero.get(l.padreNumero);
+    if (!padreId) continue;
+    await supabase.from("tablero_circuitos").update({ circuito_padre_id: padreId }).eq("id", circuitoIdPorIndice[i]!);
   }
 
   // N° de generación único (TAB-{año}-{4 dígitos}), con reintento ante colisión.
@@ -176,6 +313,8 @@ export async function crearMedicionTableroAction(formData: FormData): Promise<Cr
     return { success: false, error: "No se pudo asignar un número de generación único. Probá de nuevo." };
   }
 
+  await cerrarLecturasIa(supabase, payload.lecturas, tableroId, medicionId, profile.id);
+
   // Cada elemento decide server-side (no solo en el formulario) si guarda
   // corriente por fase — en un tablero mixto, solo térmicas/disyuntores en
   // un circuito AC la llevan, y solo si la visita es de tipo Medición.
@@ -198,19 +337,39 @@ export async function crearMedicionTableroAction(formData: FormData): Promise<Cr
     return { success: false, error: `No se pudieron guardar las lecturas: ${lecturasErr.message}` };
   }
 
-  // Foto general del tablero (opcional): registro + queda adjunta en el PDF.
-  // Reusa el bucket informe-fotos ya existente, no hace falta storage nuevo.
-  // Una foto que falla no debe tirar abajo toda la medición.
-  let fotoGeneralBuffer: Buffer | null = null;
-  if (fotoGeneral instanceof File) {
-    fotoGeneralBuffer = Buffer.from(await fotoGeneral.arrayBuffer());
-    const fotoPath = `${profile.id}/tableros/${medicionId}/general.jpg`;
+  // Inspección IA (opcional): solo los ítems que el técnico confirmó/corrigió
+  // (estado no nulo) — ver catalogo_inspeccion_ia (modulo="tableros").
+  if (payload.hallazgos && payload.hallazgos.length > 0) {
+    await supabase.from("inspeccion_ia_hallazgos").insert(
+      payload.hallazgos.map((h) => ({
+        modulo: "tableros" as const,
+        registro_id: medicionId!,
+        item_id: h.itemId,
+        estado: h.estado,
+        comentario: h.comentario.trim() || null,
+      })),
+    );
+  }
+
+  // Fotos generales del tablero (opcionales, hasta TABLERO_FOTO_GENERAL_MAX):
+  // registro + quedan adjuntas en el PDF — una por cada cuerpo, u otros
+  // ángulos de detalle. Reusa el bucket informe-fotos ya existente. Una
+  // foto que falla no debe tirar abajo toda la medición.
+  const fotosGeneralesBuffers: Buffer[] = [];
+  const fotosGeneralesPaths: string[] = [];
+  for (let i = 0; i < fotosGenerales.length; i++) {
+    const buffer = Buffer.from(await fotosGenerales[i].arrayBuffer());
+    const fotoPath = `${profile.id}/tableros/${medicionId}/general-${i + 1}.jpg`;
     const { error: fotoUpErr } = await supabase.storage
       .from("informe-fotos")
-      .upload(fotoPath, fotoGeneralBuffer, { contentType: "image/jpeg", upsert: true });
+      .upload(fotoPath, buffer, { contentType: "image/jpeg", upsert: true });
     if (!fotoUpErr) {
-      await supabase.from("tablero_mediciones").update({ foto_general_url: fotoPath }).eq("id", medicionId);
+      fotosGeneralesBuffers.push(buffer);
+      fotosGeneralesPaths.push(fotoPath);
     }
+  }
+  if (fotosGeneralesPaths.length > 0) {
+    await supabase.from("tablero_mediciones").update({ fotos_generales_urls: fotosGeneralesPaths }).eq("id", medicionId);
   }
 
   // Logo de la empresa (cabecera del PDF), igual que Informe Técnico/Rendición.
@@ -227,6 +386,22 @@ export async function crearMedicionTableroAction(formData: FormData): Promise<Cr
 
   const resumen = calcularResumenEquipamiento(payload.lecturas);
 
+  const hallazgosConfirmados = (payload.hallazgos ?? []).filter((h) => h.estado);
+  let hallazgosPdf: { texto: string; estado: EstadoChecklist; comentario: string | null }[] = [];
+  if (hallazgosConfirmados.length > 0) {
+    const { data: hallazgosCatalogo } = await supabase
+      .from("catalogo_inspeccion_ia")
+      .select("id, texto")
+      .in(
+        "id",
+        hallazgosConfirmados.map((h) => h.itemId),
+      );
+    const textoPorId = new Map((hallazgosCatalogo ?? []).map((h) => [h.id, h.texto]));
+    hallazgosPdf = hallazgosConfirmados
+      .map((h) => ({ texto: textoPorId.get(h.itemId), estado: h.estado, comentario: h.comentario.trim() || null }))
+      .filter((h): h is { texto: string; estado: EstadoChecklist; comentario: string | null } => !!h.texto);
+  }
+
   const pdfBuffer = await renderTableroPdf({
     numeroGeneracion,
     subsistemas: tableroRow.subsistemas,
@@ -240,7 +415,9 @@ export async function crearMedicionTableroAction(formData: FormData): Promise<Cr
     oficina: ubicacionTablero.oficina,
     fecha: payload.fecha,
     resumen,
-    fotoGeneralBuffer,
+    fotosGeneralesBuffers,
+    unifilarBloques: null,
+    hallazgos: hallazgosPdf,
     lecturas: payload.lecturas.map((l) => {
       const mideCorriente = itemMideCorriente(l.categoriaEquipo, l.tipoCircuito, payload.tipoEvento);
       return {
@@ -258,7 +435,7 @@ export async function crearMedicionTableroAction(formData: FormData): Promise<Cr
       };
     }),
     logoBuffer,
-    appName: "Informe Técnico App",
+    appName: "TaskWork",
     realizoNombre: profile.nombreCompleto,
   });
 
@@ -278,6 +455,12 @@ export async function crearMedicionTableroAction(formData: FormData): Promise<Cr
     const { data: signed } = await supabase.storage.from("informes-pdf").createSignedUrl(pdfPath, 60 * 60);
     pdfUrl = signed?.signedUrl ?? null;
   }
+
+  // El unifilar (PDF A3 + DXF) queda fuera de esta app por decisión del
+  // usuario — el motor geométrico no daba un resultado utilizable; el plan
+  // es un motor aparte (otra app/carpeta del repo) al que esta acción va a
+  // llamar más adelante. Hasta entonces, el PDF de relevamiento vuelve a
+  // mostrar solo la tabla de componentes, como antes de esa iniciativa.
 
   return { success: true, medicionId: medicionId!, numeroGeneracion, pdfUrl };
 }

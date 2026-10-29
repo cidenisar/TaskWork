@@ -1,25 +1,40 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { crearMedicionTableroAction } from "@/app/(app)/tableros/nuevo/actions";
 import { reportarErrorCliente } from "@/lib/client-error-report";
 import { resizeImageToJpeg } from "@/lib/image-resize";
 import { ErrorNote, SuccessNote } from "@/components/notes";
 import { Icon } from "@/components/icon";
+import { Spinner } from "@/components/spinner";
 import { VerPdfLink } from "@/components/ver-pdf-link";
 import { obtenerUrlPdfMedicionAction } from "@/app/(app)/tableros/historial/actions";
 import { UbicacionFields, type GpsCapturado } from "@/components/ubicaciones/ubicacion-fields";
+import { AutocompleteInput } from "@/components/ui/autocomplete-input";
 import type { Ubicacion } from "@/components/ubicaciones/types";
-import type { TableroCategoriaEquipo, TableroEventoTipo, TableroTipo, TableroTipoCircuito } from "@/lib/database.types";
+import type {
+  TableroCategoriaEquipo,
+  TableroEventoTipo,
+  TableroJerarquia,
+  TableroRolBypassUps,
+  TableroTipo,
+  TableroTipoCircuito,
+} from "@/lib/database.types";
 import {
   TABLERO_TIPOS,
   TABLERO_TIPO_LABEL,
   TABLERO_EVENTO_LABEL,
   TABLERO_FOTO_IA_MAX,
+  TABLERO_FOTO_GENERAL_MAX,
+  TABLERO_JERARQUIA_OPCIONES,
+  TABLERO_JERARQUIA_LABEL,
   CATEGORIA_EQUIPO_OPCIONES,
   CATEGORIA_EQUIPO_LABEL,
+  TABLERO_EQUIPO_ESPERADO_OPCIONES,
   TIPO_CIRCUITO_OPCIONES,
   TIPO_CIRCUITO_LABEL,
+  ROL_BYPASS_UPS_OPCIONES,
+  ROL_BYPASS_UPS_LABEL,
   ESTADO_OPCIONES,
   categoriaLlevaAmp,
   itemMideCorriente,
@@ -29,6 +44,9 @@ import {
   type CircuitoItem,
   type TableroConCircuitos,
 } from "./types";
+import { mezclarHallazgos, type HallazgoInspeccionIa } from "@/lib/inspeccion-ia/types";
+import { HallazgosInspeccionIaSection } from "@/components/inspeccion-ia/hallazgos-section";
+import type { EstadoChecklist } from "@/lib/database.types";
 
 interface LecturaState {
   estado: string;
@@ -40,7 +58,14 @@ interface LecturaState {
 }
 
 const LECTURA_VACIA: LecturaState = { estado: "", corrienteF: "", corrienteR: "", corrienteS: "", corrienteT: "", comentario: "" };
-const CIRCUITO_NUEVO_BASE = { categoriaEquipo: "otro" as TableroCategoriaEquipo, tipoCircuito: "na" as TableroTipoCircuito };
+const CIRCUITO_NUEVO_BASE = {
+  categoriaEquipo: "otro" as TableroCategoriaEquipo,
+  tipoCircuito: "na" as TableroTipoCircuito,
+  alimentadoPorUps: false,
+  rolBypassUps: null as TableroRolBypassUps | null,
+  padreNumero: null as number | null,
+  etiquetaCable: "",
+};
 
 function toggleEnArray<T>(arr: T[], v: T): T[] {
   return arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v];
@@ -50,43 +75,85 @@ export function NuevaMedicionForm({
   tableros,
   ubicaciones,
   provincias,
+  tableroIdInicial,
+  catalogoHallazgos,
+  clientes,
 }: {
   tableros: TableroConCircuitos[];
   ubicaciones: Ubicacion[];
   provincias: string[];
+  tableroIdInicial?: string | null;
+  catalogoHallazgos: { id: string; texto: string }[];
+  clientes: string[];
 }) {
+  // Si se llega acá desde el QR del tablero (deep-link con ?tableroId=), se
+  // preselecciona tanto la ubicación como el tablero — el técnico ya está
+  // parado frente al equipo, no tiene sentido pedirle que lo busque de nuevo.
+  const tableroInicial = useMemo(
+    () => (tableroIdInicial ? tableros.find((t) => t.id === tableroIdInicial) ?? null : null),
+    [tableros, tableroIdInicial],
+  );
   const [provinciaFiltro, setProvinciaFiltro] = useState("");
-  const [ubicacionId, setUbicacionId] = useState<string>(""); // "" = sin elegir, "__new" = crear
+  const [ubicacionId, setUbicacionId] = useState<string>(tableroInicial?.ubicacionId ?? ""); // "" = sin elegir, "__new" = crear
   const [localidadNueva, setLocalidadNueva] = useState("");
   const [sitioNueva, setSitioNueva] = useState("");
   const [plantaNueva, setPlantaNueva] = useState("");
   const [oficinaNueva, setOficinaNueva] = useState("");
   const [gps, setGps] = useState<GpsCapturado | null>(null);
   const [filtroSubsistemas, setFiltroSubsistemas] = useState<TableroTipo[]>([]);
-  const [tableroId, setTableroId] = useState<string>(""); // "" = sin elegir, "__new" = crear
+  const [tableroId, setTableroId] = useState<string>(tableroInicial?.id ?? ""); // "" = sin elegir, "__new" = crear
   const [subsistemasNuevo, setSubsistemasNuevo] = useState<TableroTipo[]>([]);
+  const [equipamientoEsperadoNuevo, setEquipamientoEsperadoNuevo] = useState<TableroCategoriaEquipo[]>([]);
+  const [tieneBypassUpsNuevo, setTieneBypassUpsNuevo] = useState(false);
   const [denominacionNueva, setDenominacionNueva] = useState("");
+  const [clienteNuevo, setClienteNuevo] = useState("YPF");
+  const [jerarquiaNueva, setJerarquiaNueva] = useState<TableroJerarquia | "">("");
+  const [tableroPadreId, setTableroPadreId] = useState("");
   const [tipoEventoElegido, setTipoEventoElegido] = useState<TableroEventoTipo>("medicion");
   const [fecha, setFecha] = useState(() => new Date().toISOString().slice(0, 10));
-  const [circuitos, setCircuitos] = useState<CircuitoItem[]>([]);
+  const [circuitos, setCircuitos] = useState<CircuitoItem[]>(tableroInicial ? [...tableroInicial.circuitos] : []);
   const [lecturas, setLecturas] = useState<Record<number, LecturaState>>({});
+  // Contexto de "en qué cuerpo del tablero estoy parado ahora" — se lo suma
+  // automáticamente a los circuitos nuevos (manuales o detectados por IA) sin
+  // que la IA tenga que adivinarlo de la foto; el técnico lo cambia cuando
+  // pasa a relevar otro cuerpo/puerta del mismo gabinete.
+  const [cuerpoActual, setCuerpoActual] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<{ medicionId: string; numeroGeneracion: string; pdfUrl: string | null } | null>(null);
   const [fotosIa, setFotosIa] = useState<File[]>([]);
   const [iaBusy, setIaBusy] = useState(false);
   const [iaNote, setIaNote] = useState<string | null>(null);
+  // Qué fila de `circuitos` vino de qué lectura IA "detallada" (Fase 3,
+  // ENCARGO.md) y en qué posición de esa lectura — para poder, al guardar,
+  // mandar de vuelta el JSON revisado y medir qué % de los campos que
+  // propuso la IA el técnico no tuvo que tocar. Se reindexa igual que
+  // `lecturas` cuando se borra un circuito (ver quitarCircuito).
+  const [origenLecturaIa, setOrigenLecturaIa] = useState<Record<number, { lecturaId: string; posicion: number }>>({});
   const fotoCameraInputRef = useRef<HTMLInputElement>(null);
   const fotoGaleriaInputRef = useRef<HTMLInputElement>(null);
-  const [fotoGeneral, setFotoGeneral] = useState<File | null>(null);
+  const [fotosGenerales, setFotosGenerales] = useState<File[]>([]);
   const fotoGeneralCameraInputRef = useRef<HTMLInputElement>(null);
   const fotoGeneralGaleriaInputRef = useRef<HTMLInputElement>(null);
-  const fotoGeneralPreview = useMemo(() => (fotoGeneral ? URL.createObjectURL(fotoGeneral) : null), [fotoGeneral]);
-  useEffect(() => {
-    return () => {
-      if (fotoGeneralPreview) URL.revokeObjectURL(fotoGeneralPreview);
-    };
-  }, [fotoGeneralPreview]);
+  // Arranca con el catálogo completo sin evaluar (estado null) — el técnico
+  // puede marcarlos a mano aunque no use la lectura con IA; cada lectura IA
+  // sugiere un estado que igual queda a confirmar/corregir acá.
+  const [hallazgos, setHallazgos] = useState<HallazgoInspeccionIa[]>(
+    () => catalogoHallazgos.map((h) => ({ itemId: h.id, texto: h.texto, estado: null, comentario: "" })),
+  );
+
+  function agregarFotosGenerales(files: File[]) {
+    if (files.length === 0) return;
+    setFotosGenerales((prev) => {
+      const disponibles = TABLERO_FOTO_GENERAL_MAX - prev.length;
+      if (disponibles <= 0) return prev;
+      return [...prev, ...files.slice(0, disponibles)];
+    });
+  }
+
+  function quitarFotoGeneral(i: number) {
+    setFotosGenerales((prev) => prev.filter((_, idx) => idx !== i));
+  }
 
   // El Tablero solo se puede elegir/crear una vez que hay una Ubicación
   // elegida — un tablero nuevo siempre pertenece a la ubicación seleccionada,
@@ -100,6 +167,9 @@ export function NuevaMedicionForm({
   }, [tableros, ubicacionId, filtroSubsistemas]);
   const tableroExistente = useMemo(() => tableros.find((t) => t.id === tableroId) ?? null, [tableros, tableroId]);
   const subsistemasActuales = tableroId === "__new" ? subsistemasNuevo : (tableroExistente?.subsistemas ?? []);
+  const equipamientoEsperadoActual =
+    tableroId === "__new" ? equipamientoEsperadoNuevo : (tableroExistente?.equipamientoEsperado ?? []);
+  const tieneBypassUpsActual = tableroId === "__new" ? tieneBypassUpsNuevo : (tableroExistente?.tieneBypassUps ?? false);
   const tieneEnergia = subsistemasActuales.includes("energia");
   // Solo si el tablero tiene energía tiene sentido distinguir medición de
   // relevamiento — CCTV/Control de Acceso puros siempre son relevamiento
@@ -121,8 +191,11 @@ export function NuevaMedicionForm({
     setTableroId("");
     setSubsistemasNuevo([]);
     setDenominacionNueva("");
+    setJerarquiaNueva("");
+    setTableroPadreId("");
     setCircuitos([]);
     setLecturas({});
+    setCuerpoActual("");
     if (id !== "__new") {
       setLocalidadNueva("");
       setSitioNueva("");
@@ -134,8 +207,11 @@ export function NuevaMedicionForm({
   function elegirTablero(id: string) {
     setTableroId(id);
     setSuccess(null);
+    setCuerpoActual("");
     if (id === "__new") {
       setSubsistemasNuevo([]);
+      setJerarquiaNueva("");
+      setTableroPadreId("");
       setCircuitos([]);
       setLecturas({});
       return;
@@ -168,6 +244,14 @@ export function NuevaMedicionForm({
     setFotosIa((prev) => prev.filter((_, idx) => idx !== i));
   }
 
+  function setEstadoHallazgo(itemId: string, estado: EstadoChecklist) {
+    setHallazgos((prev) => prev.map((h) => (h.itemId === itemId ? { ...h, estado } : h)));
+  }
+
+  function setComentarioHallazgo(itemId: string, comentario: string) {
+    setHallazgos((prev) => prev.map((h) => (h.itemId === itemId ? { ...h, comentario } : h)));
+  }
+
   async function leerFotosConIa() {
     if (fotosIa.length === 0) return;
     setIaBusy(true);
@@ -195,6 +279,8 @@ export function NuevaMedicionForm({
         return;
       }
       fd.append("subsistemas", subsistemasActuales.join(","));
+      fd.append("equipamientoEsperado", equipamientoEsperadoActual.join(","));
+      if (tieneBypassUpsActual) fd.append("tieneBypassUps", "1");
       const res = await fetch("/api/tableros/leer-foto", { method: "POST", body: fd });
       const data = await res.json();
       if (!res.ok) {
@@ -210,6 +296,7 @@ export function NuevaMedicionForm({
         tipoCircuito: TableroTipoCircuito;
         identificado: boolean;
         estadoDetectado: string | null;
+        padreNumero: number | null;
       }[] = data.circuitos ?? [];
       if (detectados.length === 0) {
         setIaNote(
@@ -221,6 +308,13 @@ export function NuevaMedicionForm({
       }
       const siguienteBase = circuitos.length ? Math.max(...circuitos.map((c) => c.numero)) : 0;
       const baseIndex = circuitos.length;
+      // La IA encadena protecciones usando SU PROPIO "numero" (posición
+      // dentro de esta lectura, no el N° final de circuito) — acá se
+      // traduce a los N° reales que van a quedar en el formulario (que
+      // arrancan después de lo que ya había cargado), para que "Encadenar
+      // debajo de" quede resuelto solo, sin que el técnico tenga que
+      // repetir a mano lo que la IA ya vio en la foto.
+      const numeroRealPorNumeroIa = new Map(detectados.map((d, i) => [d.numero, siguienteBase + i + 1]));
       setCircuitos((prev) => [
         ...prev,
         ...detectados.map((d, i) => ({
@@ -230,6 +324,11 @@ export function NuevaMedicionForm({
           ampNominal: d.ampNominal,
           categoriaEquipo: d.categoriaEquipo,
           tipoCircuito: d.tipoCircuito,
+          cuerpo: cuerpoActual.trim(),
+          alimentadoPorUps: false,
+          rolBypassUps: null,
+          padreNumero: d.padreNumero != null ? (numeroRealPorNumeroIa.get(d.padreNumero) ?? null) : null,
+          etiquetaCable: "",
           revisar: d.identificado !== true,
         })),
       ]);
@@ -242,6 +341,13 @@ export function NuevaMedicionForm({
         });
         return next;
       });
+      const hallazgosNuevos: HallazgoInspeccionIa[] = data.hallazgos ?? [];
+      let hallazgosDetectadosAhora = 0;
+      if (hallazgosNuevos.length > 0) {
+        const combinados = mezclarHallazgos(hallazgos, hallazgosNuevos);
+        hallazgosDetectadosAhora = combinados.filter((h) => h.estado === "no_ok").length;
+        setHallazgos(combinados);
+      }
       const sinEtiqueta = detectados.filter((d) => d.identificado !== true).length;
       const conEstado = detectados.filter((d) => d.estadoDetectado).length;
       setIaNote(
@@ -251,6 +357,9 @@ export function NuevaMedicionForm({
             : " — revisá la categoría/tipo de circuito antes de guardar.") +
           (conEstado > 0
             ? ` El estado de ${conEstado} térmica${conEstado === 1 ? "" : "s"}/disyuntor${conEstado === 1 ? "" : "es"} se precargó según la posición de la palanca — confirmalo.`
+            : "") +
+          (hallazgosDetectadosAhora > 0
+            ? ` ⚠ Se detectaron ${hallazgosDetectadosAhora} hallazgo${hallazgosDetectadosAhora === 1 ? "" : "s"} de seguridad — revisalos más abajo.`
             : "") +
           (fallidas.length > 0 ? ` (${fallidas.length} foto${fallidas.length === 1 ? "" : "s"} no se pudo leer: ${primerError})` : ""),
       );
@@ -263,9 +372,130 @@ export function NuevaMedicionForm({
     }
   }
 
+  // Lectura "detallada" (ENCARGO.md lectura-fotos): pensada para tableros de
+  // energía con pares térmica+disyuntor — recorta cada foto en mitades
+  // ampliadas para no perder calibres chicos. Usa las mismas fotos ya
+  // cargadas en fotosIa, pero las manda SIN el achique a 1600px de
+  // leerFotosConIa (ese achique ya pierde la letra chica que esta lectura
+  // necesita leer de la foto original). Complementa a leerFotosConIa — no
+  // la reemplaza, un tablero mixto (con cámaras/UPS/etc.) sigue necesitando
+  // el otro botón para ese equipamiento.
+  async function leerTableroDetallado() {
+    if (fotosIa.length === 0) return;
+    setIaBusy(true);
+    setIaNote(null);
+    const fallidas: File[] = [];
+    let primerError: string | null = null;
+    try {
+      const fd = new FormData();
+      for (const f of fotosIa) {
+        try {
+          const jpeg = await resizeImageToJpeg(f, 3200);
+          fd.append("fotos", jpeg, "tablero.jpg");
+        } catch (err) {
+          fallidas.push(f);
+          const msg = err instanceof Error ? err.message : `No se pudo leer "${f.name}".`;
+          if (!primerError) primerError = msg;
+        }
+      }
+      const exitosas = fotosIa.length - fallidas.length;
+      if (exitosas === 0) {
+        setIaNote(primerError || "No se pudo leer ninguna de las fotos.");
+        return;
+      }
+      const res = await fetch("/api/tableros/leer-tablero", { method: "POST", body: fd });
+      const data = await res.json();
+      if (!res.ok) {
+        setIaNote(data.error || "No se pudo leer el tablero.");
+        setFotosIa(fallidas);
+        return;
+      }
+      const adaptados: {
+        numero: number;
+        texto: string;
+        categoriaEquipo: TableroCategoriaEquipo;
+        tipoCircuito: TableroTipoCircuito;
+        ampNominal: string | null;
+        padreNumero: number | null;
+        revisar: boolean;
+        estadoDetectado: "Cerrado" | "Abierto" | null;
+      }[] = data.circuitos ?? [];
+      if (adaptados.length === 0) {
+        setIaNote(
+          (data.error as string | undefined) ||
+            "No se detectó ningún circuito en las fotos — probá con otras o cargalos a mano." +
+              (fallidas.length > 0 ? ` (${fallidas.length} foto${fallidas.length === 1 ? "" : "s"} no se pudo leer: ${primerError})` : ""),
+        );
+        setFotosIa(fallidas);
+        return;
+      }
+      const siguienteBase = circuitos.length ? Math.max(...circuitos.map((c) => c.numero)) : 0;
+      const baseIndex = circuitos.length;
+      // Igual criterio que leerFotosConIa: la IA numera dentro de SU propia
+      // lectura (1..n), acá se traduce a los N° reales que van a quedar en
+      // el formulario para que el encadenado por padreNumero quede resuelto
+      // solo.
+      const numeroRealPorNumeroIa = new Map(adaptados.map((d, i) => [d.numero, siguienteBase + i + 1]));
+      setCircuitos((prev) => [
+        ...prev,
+        ...adaptados.map((d, i) => ({
+          id: null,
+          numero: siguienteBase + i + 1,
+          texto: d.texto,
+          ampNominal: d.ampNominal ?? "",
+          categoriaEquipo: d.categoriaEquipo,
+          tipoCircuito: d.tipoCircuito,
+          cuerpo: cuerpoActual.trim(),
+          alimentadoPorUps: false,
+          rolBypassUps: null,
+          padreNumero: d.padreNumero != null ? (numeroRealPorNumeroIa.get(d.padreNumero) ?? null) : null,
+          etiquetaCable: "",
+          revisar: d.revisar,
+        })),
+      ]);
+      const lecturaId: string | null = data.lecturaId ?? null;
+      if (lecturaId) {
+        setOrigenLecturaIa((prev) => {
+          const next = { ...prev };
+          adaptados.forEach((_, i) => {
+            next[baseIndex + i] = { lecturaId, posicion: i };
+          });
+          return next;
+        });
+      }
+      setLecturas((prev) => {
+        const next = { ...prev };
+        adaptados.forEach((d, i) => {
+          if (d.estadoDetectado) {
+            next[baseIndex + i] = { ...(next[baseIndex + i] ?? LECTURA_VACIA), estado: d.estadoDetectado };
+          }
+        });
+        return next;
+      });
+      const controles: { aConfirmar: { donde: string; que: string }[]; avisos: string[] } = data.controles ?? { aConfirmar: [], avisos: [] };
+      const uso: { modelo: string; inputTokens: number; outputTokens: number; costoUsd: number } | undefined = data.uso;
+      setIaNote(
+        `Se agregaron ${adaptados.length} fila${adaptados.length === 1 ? "" : "s"} (térmicas/disyuntores) desde ${exitosas} foto${exitosas === 1 ? "" : "s"}` +
+          (uso ? ` — costo USD ${uso.costoUsd.toFixed(2)} (${uso.inputTokens + uso.outputTokens} tokens, ${uso.modelo}).` : ".") +
+          ` ${controles.aConfirmar.length} punto${controles.aConfirmar.length === 1 ? "" : "s"} a confirmar, marcados abajo.` +
+          (controles.avisos.length > 0 ? ` ⚠ ${controles.avisos.join(" ")}` : "") +
+          (fallidas.length > 0 ? ` (${fallidas.length} foto${fallidas.length === 1 ? "" : "s"} no se pudo leer: ${primerError})` : ""),
+      );
+      setFotosIa(fallidas);
+    } catch (err) {
+      setIaNote("No se pudo leer el tablero.");
+      reportarErrorCliente(err instanceof Error ? err.message : "Error en lectura detallada de tablero con IA", "leer-tablero-detallado");
+    } finally {
+      setIaBusy(false);
+    }
+  }
+
   function agregarCircuito() {
     const siguienteNumero = circuitos.length ? Math.max(...circuitos.map((c) => c.numero)) + 1 : 1;
-    setCircuitos((prev) => [...prev, { id: null, numero: siguienteNumero, texto: "", ampNominal: "", ...CIRCUITO_NUEVO_BASE }]);
+    setCircuitos((prev) => [
+      ...prev,
+      { id: null, numero: siguienteNumero, texto: "", ampNominal: "", cuerpo: cuerpoActual.trim(), ...CIRCUITO_NUEVO_BASE },
+    ]);
   }
 
   function actualizarCircuito(i: number, patch: Partial<CircuitoItem>) {
@@ -276,6 +506,15 @@ export function NuevaMedicionForm({
     setCircuitos((prev) => prev.filter((_, idx) => idx !== i));
     setLecturas((prev) => {
       const next: Record<number, LecturaState> = {};
+      Object.entries(prev).forEach(([k, v]) => {
+        const idx = Number(k);
+        if (idx < i) next[idx] = v;
+        else if (idx > i) next[idx - 1] = v;
+      });
+      return next;
+    });
+    setOrigenLecturaIa((prev) => {
+      const next: Record<number, { lecturaId: string; posicion: number }> = {};
       Object.entries(prev).forEach(([k, v]) => {
         const idx = Number(k);
         if (idx < i) next[idx] = v;
@@ -305,6 +544,10 @@ export function NuevaMedicionForm({
     }
     if (tableroId === "__new" && !denominacionNueva.trim()) {
       setError("Completá la denominación del tablero nuevo.");
+      return;
+    }
+    if (tableroId === "__new" && !clienteNuevo.trim()) {
+      setError("Completá el cliente del tablero nuevo.");
       return;
     }
     if (tableroId === "__new" && subsistemasNuevo.length === 0) {
@@ -341,9 +584,15 @@ export function NuevaMedicionForm({
           gps,
           tableroId: tableroId === "__new" ? null : tableroId,
           denominacionNueva,
+          clienteNuevo,
+          equipamientoEsperadoNuevo,
+          tieneBypassUpsNuevo,
+          jerarquiaNueva: jerarquiaNueva || null,
+          tableroPadreId: jerarquiaNueva === "secundario" && tableroPadreId ? tableroPadreId : null,
           fecha,
           lecturas: circuitos.map((c, i) => {
             const l = lecturas[i] ?? LECTURA_VACIA;
+            const origen = origenLecturaIa[i];
             return {
               circuitoId: c.id,
               numero: c.numero,
@@ -351,22 +600,32 @@ export function NuevaMedicionForm({
               ampNominal: c.ampNominal.trim(),
               categoriaEquipo: c.categoriaEquipo,
               tipoCircuito: c.tipoCircuito,
+              cuerpo: c.cuerpo.trim(),
+              alimentadoPorUps: c.alimentadoPorUps,
+              rolBypassUps: c.rolBypassUps,
+              padreNumero: c.padreNumero,
+              etiquetaCable: c.etiquetaCable.trim(),
               estado: l.estado,
               corrienteF: l.corrienteF,
               corrienteR: l.corrienteR,
               corrienteS: l.corrienteS,
               corrienteT: l.corrienteT,
               comentario: l.comentario,
+              origenLecturaId: origen?.lecturaId ?? null,
+              origenLecturaPosicion: origen?.posicion ?? null,
             };
           }),
+          hallazgos: hallazgos
+            .filter((h) => h.estado !== null)
+            .map((h) => ({ itemId: h.itemId, estado: h.estado, comentario: h.comentario.trim() })),
         }),
       );
-      if (fotoGeneral) {
+      for (let i = 0; i < fotosGenerales.length; i++) {
         try {
-          const jpeg = await resizeImageToJpeg(fotoGeneral);
-          fd.append("fotoGeneral", jpeg, "general.jpg");
+          const jpeg = await resizeImageToJpeg(fotosGenerales[i]);
+          fd.append("fotoGeneral", jpeg, `general-${i + 1}.jpg`);
         } catch (err) {
-          setError(err instanceof Error ? err.message : "No se pudo leer la foto general del tablero.");
+          setError(err instanceof Error ? err.message : "No se pudo leer una de las fotos generales del tablero.");
           return;
         }
       }
@@ -378,7 +637,7 @@ export function NuevaMedicionForm({
         return;
       }
       setSuccess({ medicionId: res.medicionId!, numeroGeneracion: res.numeroGeneracion!, pdfUrl: res.pdfUrl ?? null });
-      setFotoGeneral(null);
+      setFotosGenerales([]);
     } catch (err) {
       const mensaje = err instanceof Error ? err.message : "Ocurrió un error inesperado guardando la medición.";
       setError(mensaje);
@@ -400,9 +659,12 @@ export function NuevaMedicionForm({
     setTableroId("");
     setSubsistemasNuevo([]);
     setDenominacionNueva("");
+    setJerarquiaNueva("");
+    setTableroPadreId("");
     setCircuitos([]);
     setLecturas({});
-    setFotoGeneral(null);
+    setCuerpoActual("");
+    setFotosGenerales([]);
   }
 
   return (
@@ -485,6 +747,19 @@ export function NuevaMedicionForm({
               </div>
               <div className="field">
                 <label>
+                  Cliente <span className="req">*</span>
+                </label>
+                <AutocompleteInput
+                  value={clienteNuevo}
+                  onChange={setClienteNuevo}
+                  suggestions={clientes}
+                  placeholder="Nombre del cliente"
+                  disabled={submitting}
+                  required
+                />
+              </div>
+              <div className="field">
+                <label>
                   Subsistemas presentes en el tablero <span className="req">*</span>
                 </label>
                 <div className="hint" style={{ margin: "-2px 0 8px" }}>
@@ -504,6 +779,75 @@ export function NuevaMedicionForm({
                   ))}
                 </div>
               </div>
+              <div className="field">
+                <label>
+                  Equipamiento especial presente <span className="opt">(opcional)</span>
+                </label>
+                <div className="hint" style={{ margin: "-2px 0 8px" }}>
+                  Marcalo de antemano, antes de sacar las fotos — así sabés qué buscar en el gabinete, y la lectura con IA lo usa como
+                  pista para interpretar mejor lo que ve (sin inventar nada que no esté en la foto).
+                </div>
+                <div className="tech-form-grid" style={{ gridTemplateColumns: "repeat(3, 1fr)" }}>
+                  {TABLERO_EQUIPO_ESPERADO_OPCIONES.map((c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      className={`btn ${equipamientoEsperadoNuevo.includes(c) ? "btn-primary" : "btn-secondary"}`}
+                      onClick={() => setEquipamientoEsperadoNuevo((prev) => toggleEnArray(prev, c))}
+                      disabled={submitting}
+                    >
+                      {CATEGORIA_EQUIPO_LABEL[c]}
+                    </button>
+                  ))}
+                </div>
+                <label style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+                  <input
+                    type="checkbox"
+                    checked={tieneBypassUpsNuevo}
+                    onChange={(e) => setTieneBypassUpsNuevo(e.target.checked)}
+                    disabled={submitting}
+                  />
+                  Tiene bypass manual de UPS (3 térmicas: entrada / bypass / salida)
+                </label>
+              </div>
+              <div className="field">
+                <label>
+                  Jerarquía <span className="opt">(opcional)</span>
+                </label>
+                <div className="hint" style={{ margin: "-2px 0 8px" }}>
+                  Para poder relacionar un tablero secundario con el principal (o con otro secundario) del que depende, y más adelante
+                  ir viendo cómo se reparten las cargas.
+                </div>
+                <div className="tech-form-grid" style={{ gridTemplateColumns: "repeat(2, 1fr)" }}>
+                  {TABLERO_JERARQUIA_OPCIONES.map((j) => (
+                    <button
+                      key={j}
+                      type="button"
+                      className={`btn ${jerarquiaNueva === j ? "btn-primary" : "btn-secondary"}`}
+                      onClick={() => setJerarquiaNueva((prev) => (prev === j ? "" : j))}
+                      disabled={submitting}
+                    >
+                      {TABLERO_JERARQUIA_LABEL[j]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {jerarquiaNueva === "secundario" && (
+                <div className="field">
+                  <label>
+                    Asociado a <span className="opt">(opcional — el tablero principal o secundario del que depende)</span>
+                  </label>
+                  <select value={tableroPadreId} onChange={(e) => setTableroPadreId(e.target.value)} disabled={submitting}>
+                    <option value="">Sin identificar todavía</option>
+                    {tablerosFiltrados.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.denominacion}
+                        {t.jerarquia ? ` (${TABLERO_JERARQUIA_LABEL[t.jerarquia]})` : ""}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </>
           )}
           {tieneEnergia && (
@@ -538,10 +882,11 @@ export function NuevaMedicionForm({
           </div>
           <div className="field" style={{ marginBottom: 0 }}>
             <label>
-              Foto general del tablero <span className="opt">(opcional)</span>
+              Fotos generales del tablero <span className="opt">(opcional)</span>
             </label>
             <div className="hint" style={{ margin: "-2px 0 8px" }}>
-              Queda guardada como registro y se imprime en el PDF de esta visita.
+              Hasta {TABLERO_FOTO_GENERAL_MAX} fotos (ej: una por cada cuerpo, u otros ángulos de detalle) — quedan guardadas como
+              registro y se imprimen en el PDF de esta visita.
             </div>
             <input
               ref={fotoGeneralCameraInputRef}
@@ -550,52 +895,51 @@ export function NuevaMedicionForm({
               capture="environment"
               style={{ display: "none" }}
               onChange={(e) => {
-                const file = e.target.files?.[0] ?? null;
+                const files = Array.from(e.target.files ?? []);
                 e.target.value = "";
-                if (file) setFotoGeneral(file);
+                agregarFotosGenerales(files);
               }}
             />
             <input
               ref={fotoGeneralGaleriaInputRef}
               type="file"
               accept="image/*"
+              multiple
               style={{ display: "none" }}
               onChange={(e) => {
-                const file = e.target.files?.[0] ?? null;
+                const files = Array.from(e.target.files ?? []);
                 e.target.value = "";
-                if (file) setFotoGeneral(file);
+                agregarFotosGenerales(files);
               }}
             />
-            {fotoGeneral && fotoGeneralPreview ? (
-              <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                {/* eslint-disable-next-line @next/next/no-img-element -- preview local, no vale la pena next/image acá */}
-                <img
-                  src={fotoGeneralPreview}
-                  alt=""
-                  style={{ width: 64, height: 64, objectFit: "cover", borderRadius: 8, border: "1px solid var(--field-border)" }}
-                />
-                <button type="button" className="btn btn-secondary btn-sm" onClick={() => setFotoGeneral(null)} disabled={submitting}>
-                  <Icon name="x" size={12} /> Quitar
-                </button>
-              </div>
-            ) : (
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                <button
-                  type="button"
-                  className="ai-btn"
-                  onClick={() => fotoGeneralCameraInputRef.current?.click()}
-                  disabled={submitting}
-                >
-                  <Icon name="camera" size={13} /> Sacar foto
-                </button>
-                <button
-                  type="button"
-                  className="ai-btn"
-                  onClick={() => fotoGeneralGaleriaInputRef.current?.click()}
-                  disabled={submitting}
-                >
-                  <Icon name="upload" size={13} /> Subir foto
-                </button>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: fotosGenerales.length ? 8 : 0 }}>
+              <button
+                type="button"
+                className="ai-btn"
+                onClick={() => fotoGeneralCameraInputRef.current?.click()}
+                disabled={submitting || fotosGenerales.length >= TABLERO_FOTO_GENERAL_MAX}
+              >
+                <Icon name="camera" size={13} /> Sacar foto ({fotosGenerales.length}/{TABLERO_FOTO_GENERAL_MAX})
+              </button>
+              <button
+                type="button"
+                className="ai-btn"
+                onClick={() => fotoGeneralGaleriaInputRef.current?.click()}
+                disabled={submitting || fotosGenerales.length >= TABLERO_FOTO_GENERAL_MAX}
+              >
+                <Icon name="upload" size={13} /> Subir foto
+              </button>
+            </div>
+            {fotosGenerales.length > 0 && (
+              <div className="chip-row" style={{ marginTop: 0 }}>
+                {fotosGenerales.map((f, i) => (
+                  <span className="chip" key={i}>
+                    Foto {i + 1}
+                    <button type="button" onClick={() => quitarFotoGeneral(i)} disabled={submitting} aria-label={`Quitar foto ${i + 1}`}>
+                      <Icon name="x" size={11} />
+                    </button>
+                  </span>
+                ))}
               </div>
             )}
           </div>
@@ -606,9 +950,23 @@ export function NuevaMedicionForm({
         <div className="card">
           <div className="section-label">Circuitos / Elementos</div>
           <div className="hint" style={{ margin: "-4px 0 12px" }}>
-            <Icon name="ai" size={13} /> Sacale hasta {TABLERO_FOTO_IA_MAX} fotos al tablero (distintos ángulos o secciones) y la IA
-            combina todas para armar la lista de elementos sin repetir — clasifica categoría y tipo de circuito, pero siempre revisala y
-            corregí lo que haga falta antes de guardar.
+            <Icon name="ai" size={13} /> Sacale hasta {TABLERO_FOTO_IA_MAX} fotos al tablero (distintos ángulos o secciones — si tiene
+            varios cuerpos, sacale varias a cada uno) y la IA combina todas para armar la lista de elementos sin repetir — clasifica
+            categoría y tipo de circuito, pero siempre revisala y corregí lo que haga falta antes de guardar.
+          </div>
+          <div className="field" style={{ marginBottom: 12, maxWidth: 320 }}>
+            <label style={{ fontSize: 11 }}>Cuerpo actual (opcional)</label>
+            <input
+              type="text"
+              placeholder="Ej: Cuerpo 1 / Puerta exterior izq."
+              value={cuerpoActual}
+              onChange={(e) => setCuerpoActual(e.target.value)}
+              disabled={submitting}
+            />
+            <div className="hint" style={{ margin: "4px 0 0" }}>
+              Si el tablero tiene más de un cuerpo/puerta, indicá en cuál estás parado — se lo suma automáticamente a los
+              circuitos/elementos que cargues o leas con IA a partir de ahora.
+            </div>
           </div>
           <input
             ref={fotoCameraInputRef}
@@ -653,11 +1011,23 @@ export function NuevaMedicionForm({
             </button>
             {fotosIa.length > 0 && (
               <button type="button" className="ai-btn" onClick={() => void leerFotosConIa()} disabled={submitting || iaBusy}>
-                <Icon name="ai" size={13} />{" "}
+                {iaBusy ? <Spinner /> : <Icon name="ai" size={13} />}{" "}
                 {iaBusy ? "Procesando..." : `Procesar ${fotosIa.length} foto${fotosIa.length === 1 ? "" : "s"} con IA`}
               </button>
             )}
+            {fotosIa.length > 0 && (
+              <button type="button" className="ai-btn" onClick={() => void leerTableroDetallado()} disabled={submitting || iaBusy}>
+                {iaBusy ? <Spinner /> : <Icon name="ai" size={13} />}{" "}
+                {iaBusy ? "Procesando..." : "Lectura detallada (térmicas/disyuntores)"}
+              </button>
+            )}
           </div>
+          {fotosIa.length > 0 && (
+            <div className="hint" style={{ margin: "-4px 0 12px" }}>
+              &ldquo;Lectura detallada&rdquo; es para tableros de energía con pares térmica+disyuntor — lee calibres chicos con más
+              precisión que el botón de arriba, pero no reconoce cámaras/UPS/otro equipamiento mixto (usá el de arriba para eso).
+            </div>
+          )}
           {fotosIa.length > 0 && (
             <div className="chip-row" style={{ marginTop: 0, marginBottom: 12 }}>
               {fotosIa.map((f, i) => (
@@ -675,6 +1045,13 @@ export function NuevaMedicionForm({
               <span>{iaNote}</span>
             </div>
           )}
+
+          <HallazgosInspeccionIaSection
+            hallazgos={hallazgos}
+            onEstado={setEstadoHallazgo}
+            onComentario={setComentarioHallazgo}
+            disabled={submitting}
+          />
 
           {circuitos.length > 0 && (
             <div
@@ -778,6 +1155,72 @@ export function NuevaMedicionForm({
                             />
                           </div>
                         )}
+                        <div className="field" style={{ marginBottom: 0, width: 140 }}>
+                          <label style={{ fontSize: 11 }}>Cuerpo</label>
+                          <input
+                            type="text"
+                            placeholder="Ej: Cuerpo 1"
+                            value={c.cuerpo}
+                            onChange={(e) => actualizarCircuito(i, { cuerpo: e.target.value })}
+                            disabled={submitting}
+                          />
+                        </div>
+                        <div className="field" style={{ marginBottom: 0, width: 140 }}>
+                          <label style={{ fontSize: 11 }}>Rol en bypass UPS</label>
+                          <select
+                            value={c.rolBypassUps ?? ""}
+                            onChange={(e) =>
+                              actualizarCircuito(i, { rolBypassUps: (e.target.value || null) as TableroRolBypassUps | null })
+                            }
+                            disabled={submitting}
+                          >
+                            <option value="">—</option>
+                            {ROL_BYPASS_UPS_OPCIONES.map((r) => (
+                              <option key={r} value={r}>
+                                {ROL_BYPASS_UPS_LABEL[r]}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <label
+                          className="field"
+                          style={{ marginBottom: 0, display: "flex", alignItems: "center", gap: 6, whiteSpace: "nowrap" }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={c.alimentadoPorUps}
+                            onChange={(e) => actualizarCircuito(i, { alimentadoPorUps: e.target.checked })}
+                            disabled={submitting}
+                          />
+                          <span style={{ fontSize: 11 }}>Circuito de UPS</span>
+                        </label>
+                        <div className="field" style={{ marginBottom: 0, width: 170 }}>
+                          <label style={{ fontSize: 11 }}>Encadenar debajo de</label>
+                          <select
+                            value={c.padreNumero ?? ""}
+                            onChange={(e) => actualizarCircuito(i, { padreNumero: e.target.value ? Number(e.target.value) : null })}
+                            disabled={submitting}
+                          >
+                            <option value="">— (cabeza de columna)</option>
+                            {circuitos
+                              .filter((otro) => otro.numero !== c.numero)
+                              .map((otro) => (
+                                <option key={otro.numero} value={otro.numero}>
+                                  {otro.numero} — {otro.texto || "(sin nombre)"}
+                                </option>
+                              ))}
+                          </select>
+                        </div>
+                        <div className="field" style={{ marginBottom: 0, width: 120 }}>
+                          <label style={{ fontSize: 11 }}>Etiqueta de cable</label>
+                          <input
+                            type="text"
+                            placeholder="Ej: A80"
+                            value={c.etiquetaCable}
+                            onChange={(e) => actualizarCircuito(i, { etiquetaCable: e.target.value })}
+                            disabled={submitting}
+                          />
+                        </div>
                         <button type="button" className="remove-btn" onClick={() => quitarCircuito(i)} disabled={submitting}>
                           <Icon name="x" size={12} />
                         </button>
@@ -788,6 +1231,11 @@ export function NuevaMedicionForm({
                       {c.numero} — {c.texto} · {CATEGORIA_EQUIPO_LABEL[c.categoriaEquipo]}
                       {c.tipoCircuito !== "na" ? ` · ${TIPO_CIRCUITO_LABEL[c.tipoCircuito]}` : ""}
                       {categoriaLlevaAmp(c.categoriaEquipo) && c.ampNominal ? ` (${c.ampNominal})` : ""}
+                      {c.cuerpo ? ` · ${c.cuerpo}` : ""}
+                      {c.rolBypassUps ? ` · ${ROL_BYPASS_UPS_LABEL[c.rolBypassUps]}` : ""}
+                      {c.padreNumero != null ? ` · debajo de N°${c.padreNumero}` : ""}
+                      {c.etiquetaCable ? ` · Cable ${c.etiquetaCable}` : ""}
+                      {c.alimentadoPorUps ? " · Circuito de UPS" : ""}
                     </div>
                   )}
 

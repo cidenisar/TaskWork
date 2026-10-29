@@ -11,6 +11,8 @@ import {
   TABLERO_FOTO_IA_MAX,
 } from "@/components/tableros/types";
 import type { TableroCategoriaEquipo, TableroTipo, TableroTipoCircuito } from "@/lib/database.types";
+import { instruccionInspeccionIa, INSTRUCCION_RESPUESTA_HALLAZGOS, parseHallazgosDetectados } from "@/lib/inspeccion-ia/prompt";
+import { registrarUsoIa } from "@/lib/ai/registrar-uso";
 
 /** Solo térmicas/disyuntores tienen una palanca cuya posición física dice el estado. */
 const CATEGORIAS_CON_PALANCA: TableroCategoriaEquipo[] = ["termica", "disyuntor"];
@@ -40,6 +42,7 @@ interface CircuitoDetectado {
   tipoCircuito: TableroTipoCircuito;
   identificado: boolean;
   estadoDetectado: string | null;
+  padreNumero: number | null;
 }
 
 const CATEGORIAS_TEXTO = CATEGORIA_EQUIPO_OPCIONES.map((c) => `"${c}" (${CATEGORIA_EQUIPO_LABEL[c]})`).join(", ");
@@ -84,6 +87,13 @@ export async function POST(req: NextRequest) {
     .split(",")
     .map((s) => s.trim())
     .filter((s): s is TableroTipo => s === "energia" || s === "cctv" || s === "control_acceso");
+  const equipamientoEsperadoParam = (formData.get("equipamientoEsperado") as string | null) ?? "";
+  const categoriasValidasParam = new Set<string>(CATEGORIA_EQUIPO_OPCIONES);
+  const equipamientoEsperado = equipamientoEsperadoParam
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s): s is TableroCategoriaEquipo => categoriasValidasParam.has(s));
+  const tieneBypassUps = (formData.get("tieneBypassUps") as string | null) === "1";
   if (files.length === 0) {
     return NextResponse.json({ error: "Falta al menos una foto." }, { status: 400 });
   }
@@ -98,9 +108,40 @@ export async function POST(req: NextRequest) {
     })),
   );
 
+  // Catálogo configurable de Inspección IA (Configuración → Catálogos,
+  // módulo "tableros") — se evalúa contra las mismas fotos, además de
+  // identificar circuitos. Si no hay ningún ítem cargado, se le pide a la
+  // IA una lista vacía (nunca se inventa hallazgos fuera del catálogo).
+  const { data: catalogoHallazgos } = await supabase
+    .from("catalogo_inspeccion_ia")
+    .select("id, texto")
+    .eq("modulo", "tableros")
+    .order("orden");
+  const hallazgosItems = catalogoHallazgos ?? [];
+
   const contextoSubsistemas =
     subsistemas.length > 0
       ? ` Este tablero en particular tiene relevado: ${subsistemas.map((s) => TABLERO_TIPO_LABEL[s]).join(", ")} — pero puede ser mixto, así que igual clasificá cada elemento por lo que ves, no asumas que todo pertenece a esos subsistemas.`
+      : "";
+  // Checklist que el técnico cargó al dar de alta el tablero, ANTES de sacar
+  // las fotos (ver tableros.equipamiento_esperado/tiene_bypass_ups) — es
+  // contexto para DESAMBIGUAR lo que se ve en la foto, nunca una directiva
+  // de "buscá esto": si no hay base visual real, no se marca igual.
+  const pistasEquipamiento: string[] = [];
+  if (equipamientoEsperado.length > 0) {
+    pistasEquipamiento.push(`puede tener: ${equipamientoEsperado.map((c) => CATEGORIA_EQUIPO_LABEL[c]).join(", ")}`);
+  }
+  if (tieneBypassUps) {
+    pistasEquipamiento.push(
+      "tiene un bypass manual de UPS (3 térmicas/disyuntores juntos: entrada del UPS, bypass, y salida del UPS) — si ves un grupo de " +
+        "3 interruptores iguales que encaja con esa descripción, es más probable que sea eso que 3 circuitos de carga sueltos",
+    );
+  }
+  const contextoEquipamiento =
+    pistasEquipamiento.length > 0
+      ? ` De antemano se sabe que este tablero ${pistasEquipamiento.join("; ")} — usá esto SOLO para interpretar mejor lo que ves en la ` +
+        "foto (por ejemplo, para no confundir un conversor DC con \"otro\"), nunca para inventar un elemento que la foto no muestra: si " +
+        "no hay base visual, no lo agregues igual."
       : "";
   const contextoFotos =
     imagenes.length > 1
@@ -110,16 +151,20 @@ export async function POST(req: NextRequest) {
         "amperaje/categoría), y numerá de forma correlativa el conjunto combinado, no cada foto por separado."
       : "";
 
+  const instruccionHallazgos = instruccionInspeccionIa(hallazgosItems);
+
   try {
     const client = new Anthropic();
-    const response = await client.messages.create({
-      model: "claude-opus-5",
-      max_tokens: 8192,
-      output_config: { effort: "medium" },
+    const response = await client.beta.messages.create({
+      model: "claude-opus-5-5",
+      betas: ["server-side-fallback-2026-07-01"],
+      fallbacks: "default",
+      max_tokens: 16000,
+      output_config: { effort: "high" },
       system:
         "Sos un asistente que ayuda a un técnico de campo a relevar un tablero eléctrico, que puede ser mixto: interruptores/térmicas " +
         "de energía, fuentes/UPS/baterías/conversores, y también elementos de CCTV o control de acceso (cámaras, lectoras, cerraduras) " +
-        `conviviendo en el mismo gabinete.${contextoSubsistemas}${contextoFotos}\n\n` +
+        `conviviendo en el mismo gabinete.${contextoSubsistemas}${contextoEquipamiento}${contextoFotos}\n\n` +
         "Listá cada circuito/elemento identificable, en el orden en que aparecen físicamente (de arriba hacia abajo y de izquierda a " +
         "derecha). Devolvé SIEMPRE al menos los elementos que puedas distinguir, aunque no tengan etiqueta — describilos por su aspecto " +
         "en vez de omitirlos; solo dejá la lista vacía si la foto no muestra ningún tablero o elemento reconocible.\n\n" +
@@ -141,12 +186,24 @@ export async function POST(req: NextRequest) {
         'energizado): palanca hacia ARRIBA → "Cerrado". Palanca hacia ABAJO → "Abierto". Palanca en una posición intermedia entre arriba y ' +
         'abajo, o el interruptor muestra una marca/bandera/ventana de color (normalmente roja) indicando que saltó → "Disparado". Si no se ' +
         've la palanca con claridad (ángulo, obstruida, foto borrosa) → null (nunca inventes el estado). Para cualquier otra ' +
-        "categoriaEquipo, estadoDetectado siempre null.\n\n" +
-        "No inventes elementos que no estén en la foto, y no adivines un amperaje, tensión o estado que no puedas justificar por lo que " +
-        'ves — pero "texto" y "categoriaEquipo" son obligatorios en todos los casos, con tu mejor estimación visual si hace falta.\n\n' +
-        'Respondé ÚNICAMENTE con un JSON válido: un array de objetos {"numero": number, "texto": string, "ampNominal": string, ' +
-        '"categoriaEquipo": string, "tipoCircuito": string, "identificado": boolean, "estadoDetectado": string | null}, sin texto antes ' +
-        "ni después, sin bloque de código markdown.",
+        "categoriaEquipo, estadoDetectado siempre null.\n" +
+        '- "padreNumero": cuándo este elemento es una protección (térmica o disyuntor) que va EN SERIE después de otra protección de esta ' +
+        "misma lista, dentro del mismo circuito físico (no hay ningún otro circuito independiente entre las dos) — por ejemplo una térmica " +
+        "seguida de un disyuntor diferencial que protege lo mismo, o un disyuntor general del que cuelgan varias térmicas de carga, cada una " +
+        'yendo a su propio destino. Poné acá el "numero" de la OTRA protección de la lista (la que está más cerca de la barra de entrada, ' +
+        "la que alimenta a esta). null si este elemento es la cabeza de su propio circuito (no recibe la corriente desde otra protección de " +
+        "la lista) o si no podés distinguir el orden con la foto. Una misma protección puede ser el padreNumero de VARIOS elementos a la vez " +
+        "(un disyuntor general con varias térmicas de carga colgando, cada una con su propia salida). EXCEPCIÓN IMPORTANTE: las 3 térmicas/" +
+        "disyuntores de un bypass manual de UPS (entrada del UPS, bypass, salida del UPS — normalmente 3 interruptores iguales juntos) NUNCA " +
+        "se encadenan entre sí con padreNumero aunque estén físicamente pegados: son 3 circuitos independientes al mismo nivel, ninguno " +
+        "cuelga del otro.\n\n" +
+        "No inventes elementos que no estén en la foto, y no adivines un amperaje, tensión, estado o padreNumero que no puedas justificar " +
+        'por lo que ves — pero "texto" y "categoriaEquipo" son obligatorios en todos los casos, con tu mejor estimación visual si hace falta.' +
+        `${instruccionHallazgos}\n\n` +
+        'Respondé ÚNICAMENTE con un JSON válido: un objeto {"circuitos": [...], "hallazgos": [...]} donde "circuitos" es un array de ' +
+        'objetos {"numero": number, "texto": string, "ampNominal": string, "categoriaEquipo": string, "tipoCircuito": string, ' +
+        '"identificado": boolean, "estadoDetectado": string | null, "padreNumero": number | null} y ' +
+        `${INSTRUCCION_RESPUESTA_HALLAZGOS}. Sin texto antes ni después, sin bloque de código markdown.`,
       messages: [
         {
           role: "user",
@@ -167,21 +224,31 @@ export async function POST(req: NextRequest) {
       ],
     });
 
+    await registrarUsoIa(supabase, {
+      endpoint: "tableros/leer-foto",
+      modulo: "tableros",
+      modelo: response.model,
+      inputTokens: response.usage.input_tokens,
+      outputTokens: response.usage.output_tokens,
+      userId: profile.id,
+    });
+
     const textBlock = response.content.find((b) => b.type === "text");
     if (response.stop_reason === "refusal" || !textBlock) {
       await logDiagnostico(supabase, profile.id, `leer-foto: stop_reason=${response.stop_reason}, sin bloque de texto utilizable`);
       return NextResponse.json({ error: "No se pudo leer la foto." }, { status: 502 });
     }
 
-    let circuitos: CircuitoDetectado[];
+    let resultado: { circuitos: CircuitoDetectado[]; hallazgos?: unknown[] };
     try {
-      const match = textBlock.text.match(/\[[\s\S]*\]/);
-      circuitos = JSON.parse(match ? match[0] : textBlock.text);
+      const match = textBlock.text.match(/\{[\s\S]*\}/);
+      resultado = JSON.parse(match ? match[0] : textBlock.text);
     } catch {
       await logDiagnostico(supabase, profile.id, "leer-foto: la respuesta no fue JSON parseable", textBlock.text);
       return NextResponse.json({ error: "La IA no devolvió una lista reconocible — probá con otra foto o cargá los circuitos a mano." }, { status: 502 });
     }
-    if (!Array.isArray(circuitos) || circuitos.length === 0) {
+    const circuitos = Array.isArray(resultado?.circuitos) ? resultado.circuitos : [];
+    if (circuitos.length === 0) {
       await logDiagnostico(supabase, profile.id, "leer-foto: la IA devolvió una lista vacía", textBlock.text);
       return NextResponse.json({ error: "No se detectó ningún circuito/elemento en la foto." }, { status: 200 });
     }
@@ -190,25 +257,37 @@ export async function POST(req: NextRequest) {
     const tiposCircuitoValidos = new Set<string>(TIPO_CIRCUITO_OPCIONES);
     const estadosPalancaValidos = new Set<string>(ESTADOS_PALANCA);
 
+    // padreNumero referencia el "numero" de OTRO elemento de esta misma
+    // lista (no un id de la base) — se sanea en dos pasadas: primero se
+    // arma la lista sin tocar padreNumero, recién después se descarta
+    // cualquier padreNumero que apunte a sí mismo o a un "numero" que no
+    // existe en la lista final (dato mal formado de la IA).
+    const circuitosFiltrados = circuitos.filter((c) => c && typeof c.texto === "string" && c.texto.trim());
+    const circuitosBase = circuitosFiltrados.map((c, i) => {
+      const categoriaEquipo = (categoriasValidas.has(c.categoriaEquipo) ? c.categoriaEquipo : "otro") as TableroCategoriaEquipo;
+      const estadoDetectado =
+        CATEGORIAS_CON_PALANCA.includes(categoriaEquipo) && typeof c.estadoDetectado === "string" && estadosPalancaValidos.has(c.estadoDetectado)
+          ? c.estadoDetectado
+          : null;
+      return {
+        numero: Number.isFinite(c.numero) ? c.numero : i + 1,
+        texto: String(c.texto).trim().slice(0, 120),
+        ampNominal: typeof c.ampNominal === "string" ? c.ampNominal.trim().slice(0, 20) : "",
+        categoriaEquipo,
+        tipoCircuito: (tiposCircuitoValidos.has(c.tipoCircuito) ? c.tipoCircuito : "na") as TableroTipoCircuito,
+        identificado: c.identificado === true,
+        estadoDetectado,
+        padreNumeroCrudo: Number.isFinite(c.padreNumero) ? (c.padreNumero as number) : null,
+      };
+    });
+    const numerosValidos = new Set(circuitosBase.map((c) => c.numero));
+
     return NextResponse.json({
-      circuitos: circuitos
-        .filter((c) => c && typeof c.texto === "string" && c.texto.trim())
-        .map((c, i) => {
-          const categoriaEquipo = (categoriasValidas.has(c.categoriaEquipo) ? c.categoriaEquipo : "otro") as TableroCategoriaEquipo;
-          const estadoDetectado =
-            CATEGORIAS_CON_PALANCA.includes(categoriaEquipo) && typeof c.estadoDetectado === "string" && estadosPalancaValidos.has(c.estadoDetectado)
-              ? c.estadoDetectado
-              : null;
-          return {
-            numero: Number.isFinite(c.numero) ? c.numero : i + 1,
-            texto: String(c.texto).trim().slice(0, 120),
-            ampNominal: typeof c.ampNominal === "string" ? c.ampNominal.trim().slice(0, 20) : "",
-            categoriaEquipo,
-            tipoCircuito: (tiposCircuitoValidos.has(c.tipoCircuito) ? c.tipoCircuito : "na") as TableroTipoCircuito,
-            identificado: c.identificado === true,
-            estadoDetectado,
-          };
-        }),
+      circuitos: circuitosBase.map(({ padreNumeroCrudo, ...c }) => ({
+        ...c,
+        padreNumero: padreNumeroCrudo != null && padreNumeroCrudo !== c.numero && numerosValidos.has(padreNumeroCrudo) ? padreNumeroCrudo : null,
+      })),
+      hallazgos: parseHallazgosDetectados(resultado?.hallazgos, hallazgosItems),
     });
   } catch (err) {
     const detalle = err instanceof Error ? err.message : String(err);

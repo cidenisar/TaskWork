@@ -1,11 +1,57 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { requireProfile } from "@/lib/auth";
 import { nuevoNumeroGeneracionInforme } from "@/lib/informe-tecnico/numero-generacion";
 import { renderInformeTecnicoPdf } from "@/lib/pdf/render";
 import { buildInformeTecnicoFilename } from "@/lib/pdf/filename";
 import { resolverUbicacionId, tagGpsSiFalta, type PayloadGps } from "@/lib/ubicaciones/resolver";
+import { crearEntregaDepositoLote, type MaterialLoteDeposito } from "@/lib/deposito/crear-lote";
+import { CATEGORIA_EQUIPO_LABEL } from "@/components/equipos/types";
+import { ejecutarBaja } from "@/lib/equipamiento/dar-de-baja";
+import type { EquipoCategoria, EstadoChecklist, RackCategoriaEquipo, TipoEquipoBaja } from "@/lib/database.types";
+
+/**
+ * Antes de dar de alta un equipo nuevo suelto, chequea si ya existe uno
+ * ACTIVO con el mismo N° de serie o etiqueta YPF en el mismo sitio — evita
+ * duplicar el mismo equipo físico si quedó cargado dos veces (dos informes
+ * distintos, o un olvido). No es búsqueda difusa: solo coincidencia exacta
+ * de un dato identificador real.
+ */
+async function buscarEquipoDuplicado(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  ubicacionId: string,
+  numeroSerie: string,
+  etiquetaYpf: string,
+): Promise<string | null> {
+  if (numeroSerie) {
+    const { data } = await supabase.from("equipos").select("id").eq("ubicacion_id", ubicacionId).eq("estado", "activo").eq("numero_serie", numeroSerie).limit(1).maybeSingle();
+    if (data) return data.id;
+  }
+  if (etiquetaYpf) {
+    const { data } = await supabase.from("equipos").select("id").eq("ubicacion_id", ubicacionId).eq("estado", "activo").eq("etiqueta_ypf", etiquetaYpf).limit(1).maybeSingle();
+    if (data) return data.id;
+  }
+  return null;
+}
+
+/** Mismo chequeo que buscarEquipoDuplicado, pero para un componente dentro de un rack puntual. */
+async function buscarRackEquipamientoDuplicado(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  rackId: string,
+  numeroSerie: string,
+  etiquetaYpf: string,
+): Promise<string | null> {
+  if (numeroSerie) {
+    const { data } = await supabase.from("rack_equipamientos").select("id").eq("rack_id", rackId).eq("estado", "activo").eq("numero_serie", numeroSerie).limit(1).maybeSingle();
+    if (data) return data.id;
+  }
+  if (etiquetaYpf) {
+    const { data } = await supabase.from("rack_equipamientos").select("id").eq("rack_id", rackId).eq("estado", "activo").eq("etiqueta_ypf", etiquetaYpf).limit(1).maybeSingle();
+    if (data) return data.id;
+  }
+  return null;
+}
 
 interface PayloadTecnico {
   nombre: string;
@@ -21,6 +67,31 @@ interface PayloadImagenMeta {
   lon: number | null;
   accuracyM: number | null;
   tomadaEn: string;
+}
+interface PayloadMaterial {
+  categoriaEquipo: EquipoCategoria;
+  descripcion: string;
+  marcaModelo: string;
+  numeroSerie: string;
+  etiquetaYpf: string;
+  cantidad: number;
+  consumoPromedioW: number | null;
+  consumoMaxW: number | null;
+  comentario: string;
+  /** Si está elegido, el alta va a `rack_equipamientos` (en ese rack) en vez de a `equipos`. */
+  rackId: string | null;
+  reemplazaEquipoId: string | null;
+  reemplazaTipo: TipoEquipoBaja | null;
+}
+interface PayloadRemitoItem {
+  descripcion: string;
+  cantidadEsperada: number;
+  cantidadSobrante: number;
+}
+interface PayloadHallazgo {
+  itemId: string;
+  estado: EstadoChecklist;
+  comentario: string;
 }
 interface Payload {
   titulo: string;
@@ -45,6 +116,10 @@ interface Payload {
   imagenes: PayloadImagenMeta[];
   emailsSeleccionados: string[];
   numeroGeneracionPreferido: string;
+  materiales: PayloadMaterial[];
+  remitoNumero: string | null;
+  remitoItems: PayloadRemitoItem[];
+  hallazgos?: PayloadHallazgo[];
 }
 
 /**
@@ -155,6 +230,9 @@ export async function crearInformeTecnicoAction(formData: FormData): Promise<Cre
   if (!payload.titulo?.trim() || !payload.fecha || !payload.cliente?.trim() || !payload.proyecto?.trim()) {
     return { success: false, error: "Faltan campos obligatorios (título, fecha, cliente, proyecto)." };
   }
+  if (payload.materiales.length > 0 && !payload.ubicacionId) {
+    return { success: false, error: "Elegí una ubicación para poder agregar materiales/equipos." };
+  }
 
   const supabase = await createClient();
 
@@ -253,6 +331,20 @@ export async function crearInformeTecnicoAction(formData: FormData): Promise<Cre
     if (error) return { success: false, error: `No se pudieron guardar los vehículos: ${error.message}` };
   }
 
+  // Inspección IA (opcional): solo los ítems que el técnico confirmó/corrigió
+  // (estado no nulo) — ver catalogo_inspeccion_ia (modulo="informe_tecnico").
+  if (payload.hallazgos && payload.hallazgos.length > 0) {
+    await supabase.from("inspeccion_ia_hallazgos").insert(
+      payload.hallazgos.map((h) => ({
+        modulo: "informe_tecnico" as const,
+        registro_id: informeId!,
+        item_id: h.itemId,
+        estado: h.estado,
+        comentario: h.comentario.trim() || null,
+      })),
+    );
+  }
+
   // Imágenes: subir a Storage, insertar la fila y guardar el buffer para el PDF.
   const imagenesPdf: { buffer: Buffer; lat: number | null; lon: number | null; accuracyM: number | null }[] = [];
   for (let i = 0; i < payload.imagenes.length; i++) {
@@ -278,6 +370,257 @@ export async function crearInformeTecnicoAction(formData: FormData): Promise<Cre
     imagenesPdf.push({ buffer, lat: meta.lat, lon: meta.lon, accuracyM: meta.accuracyM });
   }
 
+  // Materiales/equipos (opcional): cada uno se da de alta como equipo real
+  // — en `equipos` (suelto, estado='activo') o, si el técnico marcó que va
+  // dentro de un rack ya registrado, en `rack_equipamientos` — y queda
+  // vinculado a este informe vía `informe_materiales`. Ambas tablas tienen
+  // INSERT abierto a cualquier autenticado, no hace falta service-role para
+  // esto. Si coincide N° de serie/etiqueta YPF con un equipo ya activo en
+  // el mismo ámbito, no se duplica: se linkea al existente. Si el técnico
+  // marcó "reemplaza a", la baja automática del viejo sí necesita Service
+  // Role (RLS de UPDATE en esas tablas es admin-only) — mismo criterio que
+  // la devolución a depósito del sobrante del remito: es un efecto
+  // mecánico de una decisión que el técnico ya tomó en el campo, no una
+  // habilitación nueva de rol.
+  const materialesPdf: {
+    categoriaLabel: string;
+    descripcion: string;
+    marcaModelo: string | null;
+    numeroSerie: string | null;
+    etiquetaYpf: string | null;
+    cantidad: number;
+    comentario: string | null;
+  }[] = [];
+  if (payload.materiales.length > 0 && ubicacionResuelta.ubicacionId) {
+    const ubicacionIdMateriales = ubicacionResuelta.ubicacionId;
+    let serviceParaBajas: ReturnType<typeof createServiceRoleClient> | null = null;
+    for (let indiceMaterial = 0; indiceMaterial < payload.materiales.length; indiceMaterial++) {
+      const m = payload.materiales[indiceMaterial];
+      const marcaModelo = m.marcaModelo.trim() || null;
+      const numeroSerie = m.numeroSerie.trim() || null;
+      const etiquetaYpf = m.etiquetaYpf.trim() || null;
+
+      let equipoId: string | null = null;
+      let rackEquipamientoId: string | null = null;
+
+      if (m.rackId) {
+        rackEquipamientoId = await buscarRackEquipamientoDuplicado(supabase, m.rackId, numeroSerie ?? "", etiquetaYpf ?? "");
+        if (!rackEquipamientoId) {
+          const { data: existentesDelRack } = await supabase.from("rack_equipamientos").select("numero").eq("rack_id", m.rackId);
+          const siguienteNumero = (existentesDelRack ?? []).reduce((max, e) => Math.max(max, e.numero), 0) + 1;
+          const { data: nuevoEquipoRack, error: rackErr } = await supabase
+            .from("rack_equipamientos")
+            .insert({
+              rack_id: m.rackId,
+              // Las únicas categorías que ofrece el selector "¿va a un rack?" (switch/ups/banco_baterias)
+              // son literales válidos en los dos enums — ver CATEGORIAS_POSIBLES_EN_RACK.
+              categoria_equipo: m.categoriaEquipo as unknown as RackCategoriaEquipo,
+              numero: siguienteNumero,
+              texto: m.descripcion.trim(),
+              marca_modelo: marcaModelo,
+              numero_serie: numeroSerie,
+              etiqueta_ypf: etiquetaYpf,
+              cantidad: m.cantidad || 1,
+              consumo_promedio_w: m.consumoPromedioW,
+              consumo_max_w: m.consumoMaxW,
+            })
+            .select("id")
+            .single();
+          if (rackErr || !nuevoEquipoRack) continue; // un material que falla no debe tirar abajo todo el informe
+          rackEquipamientoId = nuevoEquipoRack.id;
+        }
+      } else {
+        equipoId = await buscarEquipoDuplicado(supabase, ubicacionIdMateriales, numeroSerie ?? "", etiquetaYpf ?? "");
+        if (!equipoId) {
+          const { data: nuevoEquipo, error: equipoErr } = await supabase
+            .from("equipos")
+            .insert({
+              ubicacion_id: ubicacionIdMateriales,
+              categoria_equipo: m.categoriaEquipo,
+              texto: m.descripcion.trim(),
+              marca_modelo: marcaModelo,
+              numero_serie: numeroSerie,
+              etiqueta_ypf: etiquetaYpf,
+              cantidad: m.cantidad || 1,
+              consumo_promedio_w: m.consumoPromedioW,
+              consumo_max_w: m.consumoMaxW,
+              created_by: profile.id,
+            })
+            .select("id")
+            .single();
+          if (equipoErr || !nuevoEquipo) continue;
+          equipoId = nuevoEquipo.id;
+        }
+      }
+
+      if (m.reemplazaEquipoId && m.reemplazaTipo) {
+        try {
+          if (!serviceParaBajas) serviceParaBajas = createServiceRoleClient();
+          const resultadoBaja = await ejecutarBaja(serviceParaBajas, {
+            tipoEquipo: m.reemplazaTipo,
+            equipoId: m.reemplazaEquipoId,
+            motivo: "reemplazo",
+            comentario: `Reemplazado por "${m.descripcion.trim()}" cargado en el informe ${payload.numeroGeneracionPreferido || informeId}.`,
+            fecha: payload.fecha,
+            realizadoPorProfileId: profile.id,
+            realizoNombre: profile.nombreCompleto,
+          });
+          if (resultadoBaja.success) {
+            const tablaNueva = rackEquipamientoId ? "rack_equipamientos" : "equipos";
+            await supabase
+              .from(tablaNueva)
+              .update({ reemplaza_equipo_id: m.reemplazaEquipoId, reemplaza_tipo: m.reemplazaTipo })
+              .eq("id", rackEquipamientoId ?? equipoId!);
+          }
+        } catch {
+          // Sin SUPABASE_SERVICE_ROLE_KEY, o el equipo viejo ya no se pudo dar de baja — el alta del material
+          // nuevo ya se hizo, no se revierte por esto; el vínculo de reemplazo queda sin cerrar.
+        }
+      }
+
+      // Foto puntual de respaldo ("Verificar instalación" no lo encontró en las fotos generales) — opcional, una por índice de material.
+      let fotoConfirmacionUrl: string | null = null;
+      const fotoConfirmacionMaterial = formData.get(`materialFotoConfirmacion_${indiceMaterial}`);
+      if (fotoConfirmacionMaterial instanceof File) {
+        const path = `${profile.id}/${informeId}/material-confirmacion-${indiceMaterial}.jpg`;
+        const { error: fotoErr } = await supabase.storage
+          .from("informe-fotos")
+          .upload(path, Buffer.from(await fotoConfirmacionMaterial.arrayBuffer()), { contentType: "image/jpeg", upsert: true });
+        if (!fotoErr) fotoConfirmacionUrl = path;
+      }
+
+      await supabase.from("informe_materiales").insert({
+        informe_id: informeId,
+        categoria_equipo: m.categoriaEquipo,
+        descripcion: m.descripcion.trim(),
+        marca_modelo: marcaModelo,
+        numero_serie: numeroSerie,
+        etiqueta_ypf: etiquetaYpf,
+        cantidad: m.cantidad || 1,
+        consumo_promedio_w: m.consumoPromedioW,
+        consumo_max_w: m.consumoMaxW,
+        comentario: m.comentario.trim() || null,
+        equipo_id: equipoId,
+        rack_equipamiento_id: rackEquipamientoId,
+        foto_confirmacion_url: fotoConfirmacionUrl,
+      });
+      materialesPdf.push({
+        categoriaLabel: CATEGORIA_EQUIPO_LABEL[m.categoriaEquipo],
+        descripcion: m.descripcion.trim(),
+        marcaModelo,
+        numeroSerie,
+        etiquetaYpf,
+        cantidad: m.cantidad || 1,
+        comentario: m.comentario.trim() || null,
+      });
+    }
+  }
+
+  // Remito (opcional): foto + N° se guardan en el informe; los sobrantes
+  // marcados generan sola una devolución a depósito. `entregas_deposito` es
+  // admin/supervisor-only por RLS, así que ese paso puntual usa
+  // service-role — cualquier técnico puede cargar materiales en su propio
+  // informe, la devolución es un efecto mecánico de eso, no una decisión
+  // operativa nueva (mismo criterio que Bajas/"traer de depósito").
+  const remitoFotoBuffers: Buffer[] = [];
+  const remitoFotoPaths: string[] = [];
+  const remitoFotosRecibidas = formData.getAll("remitoFoto").filter((f): f is File => f instanceof File);
+  for (let i = 0; i < remitoFotosRecibidas.length; i++) {
+    const buffer = Buffer.from(await remitoFotosRecibidas[i].arrayBuffer());
+    const path = `${profile.id}/${informeId}/remito-${i + 1}.jpg`;
+    const { error: fotoUpErr } = await supabase.storage
+      .from("informe-fotos")
+      .upload(path, buffer, { contentType: "image/jpeg", upsert: true });
+    if (!fotoUpErr) {
+      remitoFotoBuffers.push(buffer);
+      remitoFotoPaths.push(path);
+    }
+  }
+
+  // Trazabilidad de materiales a granel (cañería, bulonería, cable — lo que
+  // no se da de alta como equipo individual): cada línea del remito queda
+  // como fila real, no solo impresa en el PDF, para poder buscarla después
+  // (ver /materiales/buscar) — incluye lo que se usó (cantidadSobrante=0),
+  // no solo lo que volvió a depósito.
+  for (let indiceRemito = 0; indiceRemito < payload.remitoItems.length; indiceRemito++) {
+    const r = payload.remitoItems[indiceRemito];
+    if (!r.descripcion.trim()) continue;
+
+    let fotoConfirmacionUrl: string | null = null;
+    const fotoConfirmacionRemito = formData.get(`remitoItemFotoConfirmacion_${indiceRemito}`);
+    if (fotoConfirmacionRemito instanceof File) {
+      const path = `${profile.id}/${informeId}/remito-item-confirmacion-${indiceRemito}.jpg`;
+      const { error: fotoErr } = await supabase.storage
+        .from("informe-fotos")
+        .upload(path, Buffer.from(await fotoConfirmacionRemito.arrayBuffer()), { contentType: "image/jpeg", upsert: true });
+      if (!fotoErr) fotoConfirmacionUrl = path;
+    }
+
+    await supabase.from("informe_remito_items").insert({
+      informe_id: informeId,
+      descripcion: r.descripcion.trim(),
+      cantidad_esperada: r.cantidadEsperada,
+      cantidad_sobrante: r.cantidadSobrante,
+      foto_confirmacion_url: fotoConfirmacionUrl,
+    });
+  }
+
+  const sobrantes = payload.remitoItems.filter((r) => r.cantidadSobrante > 0);
+  let entregaDepositoNumeroGeneracion: string | null = null;
+  if (sobrantes.length > 0 && ubicacionResuelta.ubicacionId) {
+    let service: ReturnType<typeof createServiceRoleClient>;
+    try {
+      service = createServiceRoleClient();
+    } catch {
+      return {
+        success: false,
+        error: "Falta configurar SUPABASE_SERVICE_ROLE_KEY en el servidor — sin esa variable no se puede generar la devolución de sobrantes.",
+      };
+    }
+    const { data: ubicacionRowDevolucion } = await supabase
+      .from("ubicaciones")
+      .select("region, provincia, localidad, sitio, planta, oficina")
+      .eq("id", ubicacionResuelta.ubicacionId)
+      .single();
+    if (ubicacionRowDevolucion) {
+      const materialesSobrantes: MaterialLoteDeposito[] = sobrantes.map((r) => ({
+        descripcion: r.descripcion,
+        categoria: "",
+        marcaModelo: "",
+        numeroSerie: "",
+        etiquetaYpf: "",
+        cantidad: r.cantidadSobrante,
+        condicion: "nuevo",
+        motivo: "sobrante_obra",
+        comentario: `Sobrante del Informe Técnico ${numeroGeneracion}${payload.remitoNumero ? ` (remito ${payload.remitoNumero})` : ""}.`,
+      }));
+      const resultadoDevolucion = await crearEntregaDepositoLote({
+        supabase: service,
+        ubicacionId: ubicacionResuelta.ubicacionId,
+        ubicacion: ubicacionRowDevolucion,
+        fecha: payload.fecha,
+        materiales: materialesSobrantes,
+        createdBy: profile.id,
+        realizoNombre: profile.nombreCompleto,
+        fotosEvidencia: [],
+      });
+      if (resultadoDevolucion.success) {
+        entregaDepositoNumeroGeneracion = resultadoDevolucion.numeroGeneracion ?? null;
+      }
+    }
+  }
+
+  if (remitoFotoPaths.length > 0 || payload.remitoNumero || entregaDepositoNumeroGeneracion) {
+    await supabase
+      .from("informes_tecnicos")
+      .update({
+        remito_fotos_urls: remitoFotoPaths.length > 0 ? remitoFotoPaths : null,
+        remito_numero: payload.remitoNumero,
+        entrega_deposito_numero_generacion: entregaDepositoNumeroGeneracion,
+      })
+      .eq("id", informeId);
+  }
+
   // Config general: logo de la empresa (cabecera del PDF) + envío automático.
   const { data: config } = await supabase
     .from("config_general")
@@ -299,6 +642,22 @@ export async function crearInformeTecnicoAction(formData: FormData): Promise<Cre
     .split("\n")
     .map((s) => s.trim())
     .filter(Boolean);
+
+  const hallazgosConfirmados = (payload.hallazgos ?? []).filter((h) => h.estado);
+  let hallazgosPdf: { texto: string; estado: EstadoChecklist; comentario: string | null }[] = [];
+  if (hallazgosConfirmados.length > 0) {
+    const { data: hallazgosCatalogo } = await supabase
+      .from("catalogo_inspeccion_ia")
+      .select("id, texto")
+      .in(
+        "id",
+        hallazgosConfirmados.map((h) => h.itemId),
+      );
+    const textoPorId = new Map((hallazgosCatalogo ?? []).map((h) => [h.id, h.texto]));
+    hallazgosPdf = hallazgosConfirmados
+      .map((h) => ({ texto: textoPorId.get(h.itemId), estado: h.estado, comentario: h.comentario.trim() || null }))
+      .filter((h): h is { texto: string; estado: EstadoChecklist; comentario: string | null } => !!h.texto);
+  }
 
   const pdfBuffer = await renderInformeTecnicoPdf({
     numeroGeneracion,
@@ -323,8 +682,14 @@ export async function crearInformeTecnicoAction(formData: FormData): Promise<Cre
       marcaModelo: v.marcaModelo?.trim() || null,
     })),
     imagenes: imagenesPdf,
+    materiales: materialesPdf,
+    remitoNumero: payload.remitoNumero,
+    remitoItems: payload.remitoItems,
+    remitoFotoBuffers,
+    hallazgos: hallazgosPdf,
+    entregaDepositoNumeroGeneracion,
     logoBuffer,
-    appName: "Informe Técnico App",
+    appName: "TaskWork",
     realizoNombre: profile.nombreCompleto,
   });
 

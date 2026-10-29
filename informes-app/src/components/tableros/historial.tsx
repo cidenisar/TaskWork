@@ -1,8 +1,18 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { obtenerUrlFotoMantenimientoAction, obtenerUrlPdfMedicionAction } from "@/app/(app)/tableros/historial/actions";
+import Link from "next/link";
+import {
+  obtenerUrlFotoMantenimientoAction,
+  obtenerUrlPdfMedicionAction,
+  obtenerUrlDxfMedicionAction,
+  obtenerUrlUnifilarPdfMedicionAction,
+  eliminarMedicionAction,
+  eliminarMantenimientoAction,
+} from "@/app/(app)/tableros/historial/actions";
+import { generarUnifilarAction } from "@/app/(app)/tableros/historial/unifilar-actions";
 import { Icon } from "@/components/icon";
+import { Spinner } from "@/components/spinner";
 import { TABLERO_EVENTO_LABEL, labelSubsistemas, type MantenimientoRow } from "./types";
 import type { TableroEventoTipo, TableroTipo } from "@/lib/database.types";
 
@@ -15,7 +25,16 @@ export interface HistorialMedicionRow {
   denominacion: string;
   ubicacionLabel: string;
   pdfDisponible: boolean;
+  dxfDisponible: boolean;
+  unifilarPdfDisponible: boolean;
+  unifilarEstado: "pendiente" | "generando" | "listo" | "error" | null;
+  unifilarError: string | null;
 }
+
+const UNIFILAR_ESTADO_LABEL: Record<"pendiente" | "generando", string> = {
+  pendiente: "Unifilar: en cola",
+  generando: "Unifilar: generando",
+};
 
 function fmtFecha(fecha: string) {
   const [y, m, d] = fecha.split("-");
@@ -23,12 +42,16 @@ function fmtFecha(fecha: string) {
 }
 
 export function HistorialTableros({
-  mediciones,
-  mantenimientos,
+  mediciones: medicionesIniciales,
+  mantenimientos: mantenimientosIniciales,
+  esAdmin,
 }: {
   mediciones: HistorialMedicionRow[];
   mantenimientos: MantenimientoRow[];
+  esAdmin: boolean;
 }) {
+  const [mediciones, setMediciones] = useState(medicionesIniciales);
+  const [mantenimientos, setMantenimientos] = useState(mantenimientosIniciales);
   const [tab, setTab] = useState<"mediciones" | "mantenimientos">("mediciones");
   const [query, setQuery] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -52,7 +75,7 @@ export function HistorialTableros({
     );
   }, [mantenimientos, query]);
 
-  async function verDescargarPdf(id: string, numeroGeneracion: string) {
+  async function verPdf(id: string) {
     setBusyId(id);
     setNotice(null);
     const res = await obtenerUrlPdfMedicionAction(id);
@@ -61,15 +84,44 @@ export function HistorialTableros({
       setNotice(res.error || "No se pudo abrir el PDF.");
       return;
     }
-    const blob = await fetch(res.url).then((r) => r.blob());
-    const blobUrl = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = blobUrl;
-    a.download = res.filename || `${numeroGeneracion}.pdf`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(blobUrl);
+    window.open(res.url, "_blank", "noopener,noreferrer");
+  }
+
+  async function descargarDxf(id: string) {
+    setBusyId(id);
+    setNotice(null);
+    const res = await obtenerUrlDxfMedicionAction(id);
+    setBusyId(null);
+    if (!res.url) {
+      setNotice(res.error || "No se pudo descargar el DXF.");
+      return;
+    }
+    window.open(res.url, "_blank", "noopener,noreferrer");
+  }
+
+  async function verUnifilarPdf(id: string) {
+    setBusyId(id);
+    setNotice(null);
+    const res = await obtenerUrlUnifilarPdfMedicionAction(id);
+    setBusyId(null);
+    if (!res.url) {
+      setNotice(res.error || "No se pudo abrir el plano unifilar.");
+      return;
+    }
+    window.open(res.url, "_blank", "noopener,noreferrer");
+  }
+
+  async function generarUnifilar(id: string) {
+    setBusyId(id);
+    setNotice(null);
+    const res = await generarUnifilarAction(id);
+    setBusyId(null);
+    if (!res.success) {
+      setNotice(res.error || "No se pudo generar el unifilar.");
+      return;
+    }
+    setMediciones((prev) => prev.map((m) => (m.id === id ? { ...m, unifilarEstado: "pendiente", unifilarError: null } : m)));
+    setNotice("Pedido en cola — la IA puede tardar bastante en generarlo. Actualizá la página más tarde para ver el resultado.");
   }
 
   async function verFoto(id: string) {
@@ -82,6 +134,32 @@ export function HistorialTableros({
       return;
     }
     window.open(res.url, "_blank", "noopener,noreferrer");
+  }
+
+  async function eliminarMedicion(id: string, denominacion: string) {
+    if (!window.confirm(`¿Borrar definitivamente la medición de "${denominacion}"? Esto no se puede deshacer.`)) return;
+    setBusyId(id);
+    setNotice(null);
+    const res = await eliminarMedicionAction(id);
+    setBusyId(null);
+    if (!res.success) {
+      setNotice(res.error || "No se pudo borrar la medición.");
+      return;
+    }
+    setMediciones((prev) => prev.filter((m) => m.id !== id));
+  }
+
+  async function eliminarMantenimiento(id: string, denominacion: string) {
+    if (!window.confirm(`¿Borrar definitivamente el mantenimiento de "${denominacion}"? Esto no se puede deshacer.`)) return;
+    setBusyId(id);
+    setNotice(null);
+    const res = await eliminarMantenimientoAction(id);
+    setBusyId(null);
+    if (!res.success) {
+      setNotice(res.error || "No se pudo borrar el mantenimiento.");
+      return;
+    }
+    setMantenimientos((prev) => prev.filter((m) => m.id !== id));
   }
 
   return (
@@ -126,7 +204,7 @@ export function HistorialTableros({
           medicionesFiltradas.length === 0 ? (
             <div className="empty-note">No se encontraron mediciones ni relevamientos con esa búsqueda.</div>
           ) : (
-            <div>
+            <div className="list-grid">
               {medicionesFiltradas.map((m) => (
                 <div className={`hist-item${m.pdfDisponible ? "" : " archived"}`} key={m.id}>
                   <div className="info">
@@ -141,18 +219,77 @@ export function HistorialTableros({
                         {m.numeroGeneracion} · {TABLERO_EVENTO_LABEL[m.tipoEvento]} · {labelSubsistemas(m.subsistemas)} · {m.ubicacionLabel} ·{" "}
                         {fmtFecha(m.fecha)}
                       </div>
+                      {(m.unifilarEstado === "pendiente" || m.unifilarEstado === "generando") && (
+                        <div className="hist-meta" style={{ color: "var(--warn)" }}>
+                          {UNIFILAR_ESTADO_LABEL[m.unifilarEstado]}…
+                        </div>
+                      )}
+                      {m.unifilarEstado === "error" && (
+                        <div className="hist-meta" style={{ color: "var(--danger, #d9534f)" }}>
+                          Unifilar: error — {m.unifilarError || "no se pudo generar."}
+                        </div>
+                      )}
                     </div>
                   </div>
                   <div className="hist-actions">
                     <button
                       type="button"
                       className="icon-btn"
-                      title={m.pdfDisponible ? "Ver / descargar PDF" : "Sin PDF disponible"}
+                      title={m.pdfDisponible ? "Ver PDF" : "Sin PDF disponible"}
                       disabled={!m.pdfDisponible || busyId === m.id}
-                      onClick={() => verDescargarPdf(m.id, m.numeroGeneracion)}
+                      onClick={() => verPdf(m.id)}
+                    >
+                      {busyId === m.id ? "…" : <Icon name="eye" size={15} />}
+                    </button>
+                    <button
+                      type="button"
+                      className="icon-btn"
+                      title={m.dxfDisponible ? "Descargar DXF (esquema unifilar)" : "Sin DXF disponible"}
+                      disabled={!m.dxfDisponible || busyId === m.id}
+                      onClick={() => descargarDxf(m.id)}
                     >
                       {busyId === m.id ? "…" : <Icon name="download" size={15} />}
                     </button>
+                    <button
+                      type="button"
+                      className="icon-btn"
+                      title={m.unifilarPdfDisponible ? "Ver plano unifilar (PDF)" : "Sin plano unifilar generado todavía"}
+                      disabled={!m.unifilarPdfDisponible || busyId === m.id}
+                      onClick={() => verUnifilarPdf(m.id)}
+                    >
+                      {busyId === m.id ? "…" : <Icon name="document" size={15} />}
+                    </button>
+                    <button
+                      type="button"
+                      className="icon-btn"
+                      title={
+                        m.unifilarEstado === "pendiente" || m.unifilarEstado === "generando"
+                          ? "Ya hay un pedido en curso para este unifilar"
+                          : m.unifilarPdfDisponible
+                            ? "Regenerar el unifilar con la IA"
+                            : "Generar el unifilar con la IA"
+                      }
+                      disabled={busyId === m.id || m.unifilarEstado === "pendiente" || m.unifilarEstado === "generando"}
+                      onClick={() => generarUnifilar(m.id)}
+                    >
+                      {busyId === m.id ? <Spinner size={15} /> : <Icon name="ai" size={15} />}
+                    </button>
+                    {esAdmin && (
+                      <Link href={`/tableros/editar/${m.id}`} className="icon-btn" title="Editar medición">
+                        <Icon name="edit" size={15} />
+                      </Link>
+                    )}
+                    {esAdmin && (
+                      <button
+                        type="button"
+                        className="icon-btn icon-btn-danger"
+                        title="Borrar medición"
+                        disabled={busyId === m.id}
+                        onClick={() => eliminarMedicion(m.id, m.denominacion)}
+                      >
+                        <Icon name="trash" size={15} />
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}
@@ -161,7 +298,7 @@ export function HistorialTableros({
         ) : mantenimientosFiltrados.length === 0 ? (
           <div className="empty-note">No se encontraron mantenimientos con esa búsqueda.</div>
         ) : (
-          <div>
+          <div className="list-grid">
             {mantenimientosFiltrados.map((m) => (
               <div className="hist-item" key={m.id}>
                 <div className="info">
@@ -193,6 +330,22 @@ export function HistorialTableros({
                   >
                     {busyId === m.id ? "…" : <Icon name="camera" size={15} />}
                   </button>
+                  {esAdmin && (
+                    <Link href={`/tableros/mantenimiento/editar/${m.id}`} className="icon-btn" title="Editar mantenimiento">
+                      <Icon name="edit" size={15} />
+                    </Link>
+                  )}
+                  {esAdmin && (
+                    <button
+                      type="button"
+                      className="icon-btn icon-btn-danger"
+                      title="Borrar mantenimiento"
+                      disabled={busyId === m.id}
+                      onClick={() => eliminarMantenimiento(m.id, m.tableroDenominacion)}
+                    >
+                      <Icon name="trash" size={15} />
+                    </button>
+                  )}
                 </div>
               </div>
             ))}

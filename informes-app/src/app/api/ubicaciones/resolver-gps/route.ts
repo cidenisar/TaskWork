@@ -4,6 +4,7 @@ import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { distanciaMetros } from "@/lib/geo";
 import { labelUbicacion, type Ubicacion } from "@/components/ubicaciones/types";
+import { registrarUsoIa } from "@/lib/ai/registrar-uso";
 
 /**
  * Dado un punto GPS, intenta ubicar al técnico sin que tenga que buscar a
@@ -45,7 +46,7 @@ function normalizarProvincia(nombreDetectado: string, catalogo: string[]): strin
 }
 
 export async function POST(req: NextRequest) {
-  await requireProfile();
+  const profile = await requireProfile();
   const supabase = await createClient();
 
   const body = await req.json().catch(() => null);
@@ -88,7 +89,7 @@ export async function POST(req: NextRequest) {
   try {
     const res = await fetch(
       `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&zoom=14&addressdetails=1`,
-      { headers: { "User-Agent": "InformesApp/1.0 (uso interno)" } },
+      { headers: { "User-Agent": "TaskWorkApp/1.0 (uso interno)" } },
     );
     if (res.ok) {
       const data = await res.json();
@@ -143,6 +144,15 @@ export async function POST(req: NextRequest) {
             },
           ],
         });
+        await registrarUsoIa(supabase, {
+          endpoint: "ubicaciones/resolver-gps",
+          modulo: "ubicaciones",
+          modelo: response.model,
+          inputTokens: response.usage.input_tokens,
+          outputTokens: response.usage.output_tokens,
+          userId: profile.id,
+        });
+
         const textBlock = response.content.find((b) => b.type === "text");
         const sugerida = textBlock && "text" in textBlock ? textBlock.text.trim() : "";
         if (sugerida && sugerida !== "NINGUNA" && localidadesConocidas.includes(sugerida)) {

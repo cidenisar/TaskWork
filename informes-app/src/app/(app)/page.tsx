@@ -1,13 +1,34 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 import { requireProfile } from "@/lib/auth";
-import { puedeVerEstadisticas, puedeVerConfiguracion } from "@/lib/types";
+import { puedeVerEstadisticas, puedeGestionarBajas, puedeGestionarDeposito, puedeVerPanel } from "@/lib/types";
 import { ModuleIcon } from "@/components/module-icon";
 import { Icon } from "@/components/icon";
 
+/** Heurística simple de "¿esto es un celular?" por user-agent — alcanza para elegir pantalla de arranque, no hace falta nada más fino. */
+function esMobile(userAgent: string): boolean {
+  return /Mobi|Android|iPhone|iPad|iPod/i.test(userAgent);
+}
+
 export default async function HomePage() {
   const profile = await requireProfile();
+
+  // En notebook/PC, Admin y Supervisor arrancan directo en el Panel de Supervisión (para eso lo usan) — en el
+  // celular (el técnico en el campo) se queda en este menú de módulos, que es mobile-first. Si volvió acá a
+  // propósito desde el Panel (el link "Volver a la app" de su sidebar), no lo rebota de nuevo — si no, "Volver a
+  // la app" nunca llegaría a ningún lado.
+  if (puedeVerPanel(profile.rol)) {
+    const encabezados = await headers();
+    const userAgent = encabezados.get("user-agent") ?? "";
+    const vieneDelPanel = (encabezados.get("referer") ?? "").includes("/panel");
+    if (!esMobile(userAgent) && !vieneDelPanel) redirect("/panel");
+  }
+
   const statsLocked = !puedeVerEstadisticas(profile.rol);
-  const configLocked = !puedeVerConfiguracion(profile.rol);
+  const panelLocked = !puedeVerPanel(profile.rol);
+  const bajasLocked = !puedeGestionarBajas(profile.rol);
+  const depositoLocked = !puedeGestionarDeposito(profile.rol);
 
   return (
     <div>
@@ -50,6 +71,51 @@ export default async function HomePage() {
             Navegá Región → Provincia → Sitio y mirá todo lo cargado en cada lugar — informes, rendiciones, tableros, racks y equipos
           </div>
         </Link>
+        <Link href="/escanear-qr" className="module-card">
+          <div className="module-ico">
+            <ModuleIcon name="escanear" />
+          </div>
+          <div className="module-title">Escanear QR</div>
+          <div className="module-sub">Apuntá la cámara al QR de un tablero o sala y abrí su plano al toque</div>
+        </Link>
+        <Link href="/materiales/buscar" className="module-card">
+          <div className="module-ico">
+            <ModuleIcon name="buscar" />
+          </div>
+          <div className="module-title">Buscar Material</div>
+          <div className="module-sub">Rastreá un equipo o material instalado — N° de serie, etiqueta YPF o descripción del remito</div>
+        </Link>
+        <Link href="/bajas/historial" className="module-card">
+          <div className="module-ico">
+            <ModuleIcon name="bajas" />
+          </div>
+          <div className="module-title">
+            Bajas de Equipamiento {bajasLocked && <span className="lock"><Icon name="lock" size={12} /></span>}
+          </div>
+          <div className="module-sub">
+            Dar de baja equipamiento por rotura, ampliación u obsolescencia y generar el comprobante para depósito
+          </div>
+        </Link>
+        <Link href="/entregas-deposito/nueva" className="module-card">
+          <div className="module-ico">
+            <ModuleIcon name="deposito" />
+          </div>
+          <div className="module-title">
+            Entregas a Depósito {depositoLocked && <span className="lock"><Icon name="lock" size={12} /></span>}
+          </div>
+          <div className="module-sub">
+            Material o equipo (nuevo o usado-funcional) que vuelve al depósito — con comprobante de constancia
+          </div>
+        </Link>
+        <Link href="/panel" className="module-card">
+          <div className="module-ico">
+            <ModuleIcon name="panel" />
+          </div>
+          <div className="module-title">
+            Panel de Supervisión {panelLocked && <span className="lock"><Icon name="lock" size={12} /></span>}
+          </div>
+          <div className="module-sub">Vista general de sitios, equipamiento y vencimientos — pensado para pantalla grande</div>
+        </Link>
         <Link href="/estadisticas" className="module-card">
           <div className="module-ico">
             <ModuleIcon name="estadisticas" />
@@ -58,15 +124,6 @@ export default async function HomePage() {
             Estadísticas {statsLocked && <span className="lock"><Icon name="lock" size={12} /></span>}
           </div>
           <div className="module-sub">Vista general de informes, gastos y actividad del equipo</div>
-        </Link>
-        <Link href="/configuracion" className="module-card">
-          <div className="module-ico">
-            <ModuleIcon name="configuracion" />
-          </div>
-          <div className="module-title">
-            Configuración {configLocked && <span className="lock"><Icon name="lock" size={12} /></span>}
-          </div>
-          <div className="module-sub">Usuarios, catálogos, vehículos y almacenamiento — solo Administrador</div>
         </Link>
       </div>
     </div>

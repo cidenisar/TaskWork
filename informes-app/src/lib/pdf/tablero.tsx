@@ -1,4 +1,4 @@
-import { Document, Page, Text, View, Image, StyleSheet } from "@react-pdf/renderer";
+import { Document, Page, Text, View, Image, StyleSheet, Svg, Line, Rect, Circle, Ellipse } from "@react-pdf/renderer";
 import { BORDER, commonStyles, KeyValueRow, PdfHeader, PdfFooter, formatFechaArg } from "./common";
 import {
   CATEGORIA_EQUIPO_LABEL,
@@ -7,7 +7,30 @@ import {
   labelSubsistemas,
   type ResumenEquipamiento,
 } from "@/components/tableros/types";
-import type { TableroCategoriaEquipo, TableroEventoTipo, TableroTipo, TableroTipoCircuito } from "@/lib/database.types";
+import { HALLAZGO_ESTADO_LABEL } from "@/lib/inspeccion-ia/types";
+import type { CapaDxf, UnifilarDrawing } from "@/lib/tableros/unifilar";
+import type { EstadoChecklist, TableroCategoriaEquipo, TableroEventoTipo, TableroTipo, TableroTipoCircuito } from "@/lib/database.types";
+
+/**
+ * Mismo criterio de color por capa que `lib/dxf/writer.ts`
+ * (COLOR_ACI_POR_CAPA) — una sola convención de color para los dos
+ * formatos, aproximando cada ACI a un hex legible sobre fondo blanco. 9
+ * capas del estándar TerraLogic (ver docs/referencias-unifilar/
+ * REGLAS_UNIFILAR.md, sección A9); A_CONFIRMAR en naranja (ACI 30) para
+ * que un dato faltante salte a la vista — sin ningún `DrawCommand` que la
+ * use todavía.
+ */
+const COLOR_POR_CAPA: Record<CapaDxf, string> = {
+  MARCO: "#1a1a1a",
+  POTENCIA: "#2a4d8f",
+  SIMBOLOS: "#8a6d1a",
+  BORNES: "#2a4d8f",
+  NUM_CONDUCTOR: "#2a4d8f",
+  CABLES: "#8a2be2",
+  ETIQUETAS: "#1a7a3c",
+  DESTINOS: "#1a7a3c",
+  A_CONFIRMAR: "#d9730d",
+};
 
 /**
  * Reemplaza la planilla Excel manual de medición de consumo — misma cabecera
@@ -41,6 +64,12 @@ export interface TableroPdfLectura {
   comentario: string | null;
 }
 
+export interface TableroPdfHallazgo {
+  texto: string;
+  estado: EstadoChecklist;
+  comentario: string | null;
+}
+
 export interface TableroPdfProps {
   numeroGeneracion: string;
   subsistemas: TableroTipo[];
@@ -55,7 +84,9 @@ export interface TableroPdfProps {
   fecha: string;
   lecturas: TableroPdfLectura[];
   resumen: ResumenEquipamiento;
-  fotoGeneralBuffer: Buffer | null;
+  fotosGeneralesBuffers: Buffer[] | null;
+  unifilarBloques: UnifilarDrawing[] | null;
+  hallazgos: TableroPdfHallazgo[];
   logoBuffer: Buffer | null;
   appName: string;
   realizoNombre: string;
@@ -88,7 +119,9 @@ export function TableroPdf(props: TableroPdfProps) {
     fecha,
     lecturas,
     resumen,
-    fotoGeneralBuffer,
+    fotosGeneralesBuffers,
+    unifilarBloques,
+    hallazgos,
     logoBuffer,
     appName,
     realizoNombre,
@@ -146,11 +179,116 @@ export function TableroPdf(props: TableroPdfProps) {
           )}
         </View>
 
-        {fotoGeneralBuffer && (
+        {fotosGeneralesBuffers && fotosGeneralesBuffers.length > 0 && (
           <>
-            <Text style={commonStyles.sectionTitle}>Foto General del Tablero</Text>
-            <View style={{ marginBottom: 6 }}>
-              <Image src={fotoGeneralBuffer} style={commonStyles.photo} />
+            <Text style={commonStyles.sectionTitle}>
+              Foto{fotosGeneralesBuffers.length === 1 ? "" : "s"} General{fotosGeneralesBuffers.length === 1 ? "" : "es"} del Tablero
+            </Text>
+            <View style={commonStyles.photoGrid}>
+              {fotosGeneralesBuffers.map((buf, i) => (
+                <View style={commonStyles.photoCell} key={i} wrap={false}>
+                  <Image src={buf} style={commonStyles.photo} />
+                </View>
+              ))}
+            </View>
+          </>
+        )}
+
+        {unifilarBloques && unifilarBloques.length > 0 && (
+          <Text style={{ fontSize: 7, color: "#555", marginTop: 6 }}>
+            Esquema Unifilar: ver hoja{unifilarBloques.length === 1 ? "" : "s"} A3 a continuación.
+          </Text>
+        )}
+
+        <PdfFooter realizo={realizoNombre.toUpperCase()} documentoLinea={documentoLinea} />
+      </Page>
+
+      {unifilarBloques && unifilarBloques.length > 0 && (
+        <Page size="A3" orientation="landscape" style={commonStyles.unifilarPage} wrap>
+          {unifilarBloques.map((bloque, b) => (
+            // `break`: cada hoja ya es un plano completo con su propio
+            // marco/grilla/rótulo (A2 del estándar) — tiene que arrancar
+            // SIEMPRE en una página física A3 nueva, nunca compartir hoja
+            // con otra (el ajuste automático de react-pdf, sin `break`,
+            // amontonaba 2-3 hojas chicas en la misma página porque
+            // entraban por altura — visualmente incorrecto, un plano real
+            // nunca mete dos números de hoja distintos en la misma lámina).
+            <View key={b} break={b > 0} style={{ position: "relative", width: bloque.width, height: bloque.height }} wrap={false}>
+              <Svg width={bloque.width} height={bloque.height}>
+                {bloque.commands.map((cmd, i) => {
+                  const color = COLOR_POR_CAPA[cmd.layer] ?? "#1a1a1a";
+                  if (cmd.type === "line") {
+                    return <Line key={i} x1={cmd.x1} y1={cmd.y1} x2={cmd.x2} y2={cmd.y2} stroke={color} strokeWidth={0.75} />;
+                  }
+                  if (cmd.type === "rect") {
+                    return (
+                      <Rect key={i} x={cmd.x} y={cmd.y} width={cmd.width} height={cmd.height} stroke={color} strokeWidth={0.75} fill={cmd.fill ? color : "none"} />
+                    );
+                  }
+                  if (cmd.type === "circle") {
+                    return <Circle key={i} cx={cmd.x} cy={cmd.y} r={cmd.r} stroke={color} strokeWidth={0.75} fill="none" />;
+                  }
+                  if (cmd.type === "ellipse") {
+                    return <Ellipse key={i} cx={cmd.x} cy={cmd.y} rx={cmd.rx} ry={cmd.ry} stroke={color} strokeWidth={0.6} fill="none" />;
+                  }
+                  return null;
+                })}
+              </Svg>
+              {bloque.commands.map((cmd, i) =>
+                cmd.type === "text" ? (
+                  <Text
+                    key={`t${i}`}
+                    style={{
+                      position: "absolute",
+                      left: cmd.x,
+                      top: cmd.y - cmd.size,
+                      fontSize: cmd.size,
+                      fontFamily: cmd.bold ? "Helvetica-Bold" : "Helvetica",
+                      color: COLOR_POR_CAPA[cmd.layer] ?? "#1a1a1a",
+                    }}
+                  >
+                    {cmd.text}
+                  </Text>
+                ) : null,
+              )}
+            </View>
+          ))}
+        </Page>
+      )}
+
+      <Page size="A4" style={commonStyles.page} wrap>
+        <PdfHeader
+          documentoLabel={documentoLabel}
+          titulo={denominacion}
+          fechaLabel={fechaLabel}
+          numeroGeneracion={numeroGeneracion}
+          logoBuffer={logoBuffer}
+        />
+
+        {hallazgos.length > 0 && (
+          <>
+            <Text style={commonStyles.sectionTitle}>Inspección IA</Text>
+            <View style={styles.table}>
+              <View style={styles.headRow} fixed>
+                <Text style={[styles.th, { width: "40%" }]}>Ítem</Text>
+                <Text style={[styles.th, { width: "15%" }]}>Estado</Text>
+                <Text style={[styles.th, { width: "45%" }]}>Comentario</Text>
+              </View>
+              {hallazgos.map((h, i) => (
+                <View style={i === hallazgos.length - 1 ? styles.rowLast : styles.row} key={i}>
+                  <Text style={[styles.td, { width: "40%" }]}>{h.texto}</Text>
+                  <Text
+                    style={[
+                      styles.td,
+                      { width: "15%" },
+                      h.estado === "no_ok" ? { fontFamily: "Helvetica-Bold" } : {},
+                    ]}
+                  >
+                    {HALLAZGO_ESTADO_LABEL[h.estado]}
+                  </Text>
+                  <Text style={[styles.td, { width: "45%" }]}>{h.comentario || "—"}</Text>
+                </View>
+              ))}
             </View>
           </>
         )}
@@ -176,7 +314,7 @@ export function TableroPdf(props: TableroPdfProps) {
           {lecturas.map((l, i) => {
             const mideCorriente = itemMideCorriente(l.categoriaEquipo, l.tipoCircuito, tipoEvento);
             return (
-              <View style={i === lecturas.length - 1 ? styles.rowLast : styles.row} key={i} wrap={false}>
+              <View style={i === lecturas.length - 1 ? styles.rowLast : styles.row} key={i}>
                 <Text style={[styles.td, { width: w.n }]}>{l.numero}</Text>
                 <Text style={[styles.td, { width: w.circuito }]}>{l.texto}</Text>
                 <Text style={[styles.td, { width: w.categoria }]}>{CATEGORIA_EQUIPO_LABEL[l.categoriaEquipo]}</Text>

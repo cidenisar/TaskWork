@@ -1,5 +1,7 @@
 import { Document, Page, Text, View, Image, StyleSheet } from "@react-pdf/renderer";
-import { commonStyles, KeyValueRow, PdfHeader, PdfFooter } from "./common";
+import { BORDER, commonStyles, KeyValueRow, PdfHeader, PdfFooter } from "./common";
+import { HALLAZGO_ESTADO_LABEL } from "@/lib/inspeccion-ia/types";
+import type { EstadoChecklist } from "@/lib/database.types";
 
 /**
  * Replica el layout de "Informe Tecnico - Diseño PDF.pdf" (ver spec sección 11):
@@ -12,7 +14,16 @@ const styles = StyleSheet.create({
   bulletRow: { flexDirection: "row", marginBottom: 3 },
   bulletDot: { width: 10, fontSize: 9 },
   bulletText: { flex: 1, fontSize: 9, lineHeight: 1.4 },
+  table: { border: `1pt solid ${BORDER}`, marginBottom: 4 },
+  headRow: { flexDirection: "row", backgroundColor: "#EDEFF2", borderBottom: `1pt solid ${BORDER}` },
+  row: { flexDirection: "row", borderBottom: `1pt solid ${BORDER}` },
+  rowLast: { flexDirection: "row" },
+  th: { fontSize: 7, fontFamily: "Helvetica-Bold", padding: 3.5 },
+  td: { fontSize: 7, padding: 3.5 },
 });
+
+const W_MAT = { n: "5%", categoria: "16%", descripcion: "27%", marca: "16%", serie: "16%", cantidad: "6%", comentario: "14%" };
+const W_REM = { descripcion: "60%", esperada: "20%", sobrante: "20%" };
 
 export interface InformePdfTecnico {
   nombre: string;
@@ -32,6 +43,28 @@ export interface InformePdfImagen {
   accuracyM: number | null;
 }
 
+export interface InformePdfMaterial {
+  categoriaLabel: string;
+  descripcion: string;
+  marcaModelo: string | null;
+  numeroSerie: string | null;
+  etiquetaYpf: string | null;
+  cantidad: number;
+  comentario: string | null;
+}
+
+export interface InformePdfRemitoItem {
+  descripcion: string;
+  cantidadEsperada: number;
+  cantidadSobrante: number;
+}
+
+export interface InformeHallazgo {
+  texto: string;
+  estado: EstadoChecklist;
+  comentario: string | null;
+}
+
 export interface InformePdfProps {
   numeroGeneracion: string;
   titulo: string;
@@ -48,6 +81,12 @@ export interface InformePdfProps {
   tecnicos: InformePdfTecnico[];
   vehiculos: InformePdfVehiculo[];
   imagenes: InformePdfImagen[];
+  materiales: InformePdfMaterial[];
+  remitoNumero: string | null;
+  remitoItems: InformePdfRemitoItem[];
+  remitoFotoBuffers: Buffer[] | null;
+  hallazgos: InformeHallazgo[];
+  entregaDepositoNumeroGeneracion: string | null;
   logoBuffer: Buffer | null;
   appName: string;
   realizoNombre: string;
@@ -70,6 +109,12 @@ export function InformeTecnicoPdf(props: InformePdfProps) {
     tecnicos,
     vehiculos,
     imagenes,
+    materiales,
+    remitoNumero,
+    remitoItems,
+    remitoFotoBuffers,
+    hallazgos,
+    entregaDepositoNumeroGeneracion,
     logoBuffer,
     appName,
     realizoNombre,
@@ -123,6 +168,107 @@ export function InformeTecnicoPdf(props: InformePdfProps) {
               <Text style={[commonStyles.paragraph, { marginBottom: 0 }]}>{descripcionTrabajo}</Text>
             </View>
           </>
+        )}
+
+        {materiales.length > 0 && (
+          <>
+            <Text style={commonStyles.sectionTitle}>Materiales / equipos ({materiales.length})</Text>
+            <View style={styles.table}>
+              <View style={styles.headRow} fixed>
+                <Text style={[styles.th, { width: W_MAT.n }]}>N°</Text>
+                <Text style={[styles.th, { width: W_MAT.categoria }]}>Categoría</Text>
+                <Text style={[styles.th, { width: W_MAT.descripcion }]}>Descripción</Text>
+                <Text style={[styles.th, { width: W_MAT.marca }]}>Marca/Modelo</Text>
+                <Text style={[styles.th, { width: W_MAT.serie }]}>Serie / Etiq. YPF</Text>
+                <Text style={[styles.th, { width: W_MAT.cantidad, textAlign: "right" }]}>Cant.</Text>
+                <Text style={[styles.th, { width: W_MAT.comentario }]}>Comentario</Text>
+              </View>
+              {materiales.map((m, i) => {
+                const serieYpf = [m.numeroSerie ? `S/N ${m.numeroSerie}` : null, m.etiquetaYpf ? `YPF ${m.etiquetaYpf}` : null]
+                  .filter(Boolean)
+                  .join(" · ");
+                return (
+                  <View style={i === materiales.length - 1 ? styles.rowLast : styles.row} key={i} wrap={false}>
+                    <Text style={[styles.td, { width: W_MAT.n }]}>{i + 1}</Text>
+                    <Text style={[styles.td, { width: W_MAT.categoria }]}>{m.categoriaLabel}</Text>
+                    <Text style={[styles.td, { width: W_MAT.descripcion }]}>{m.descripcion}</Text>
+                    <Text style={[styles.td, { width: W_MAT.marca }]}>{m.marcaModelo || "—"}</Text>
+                    <Text style={[styles.td, { width: W_MAT.serie }]}>{serieYpf || "—"}</Text>
+                    <Text style={[styles.td, { width: W_MAT.cantidad, textAlign: "right" }]}>{m.cantidad}</Text>
+                    <Text style={[styles.td, { width: W_MAT.comentario }]}>{m.comentario || "—"}</Text>
+                  </View>
+                );
+              })}
+            </View>
+          </>
+        )}
+
+        {remitoFotoBuffers && remitoFotoBuffers.length > 0 && (
+          <>
+            <Text style={commonStyles.sectionTitle}>Remito{remitoNumero ? ` — N° ${remitoNumero}` : ""}</Text>
+            <View style={commonStyles.photoGrid}>
+              {remitoFotoBuffers.map((buf, i) => (
+                <View style={commonStyles.photoCell} key={i} wrap={false}>
+                  <Image src={buf} style={commonStyles.photo} />
+                </View>
+              ))}
+            </View>
+          </>
+        )}
+
+        {remitoItems.length > 0 && (
+          <>
+            <Text style={commonStyles.sectionTitle}>Lista del remito</Text>
+            <View style={styles.table}>
+              <View style={styles.headRow} fixed>
+                <Text style={[styles.th, { width: W_REM.descripcion }]}>Descripción</Text>
+                <Text style={[styles.th, { width: W_REM.esperada, textAlign: "right" }]}>Cant. remito</Text>
+                <Text style={[styles.th, { width: W_REM.sobrante, textAlign: "right" }]}>Cant. sobrante</Text>
+              </View>
+              {remitoItems.map((r, i) => (
+                <View style={i === remitoItems.length - 1 ? styles.rowLast : styles.row} key={i} wrap={false}>
+                  <Text style={[styles.td, { width: W_REM.descripcion }]}>{r.descripcion}</Text>
+                  <Text style={[styles.td, { width: W_REM.esperada, textAlign: "right" }]}>{r.cantidadEsperada}</Text>
+                  <Text style={[styles.td, { width: W_REM.sobrante, textAlign: "right" }]}>{r.cantidadSobrante || "—"}</Text>
+                </View>
+              ))}
+            </View>
+          </>
+        )}
+
+        {hallazgos.length > 0 && (
+          <>
+            <Text style={commonStyles.sectionTitle}>Inspección IA</Text>
+            <View style={styles.table}>
+              <View style={styles.headRow} fixed>
+                <Text style={[styles.th, { width: "40%" }]}>Ítem</Text>
+                <Text style={[styles.th, { width: "15%" }]}>Estado</Text>
+                <Text style={[styles.th, { width: "45%" }]}>Comentario</Text>
+              </View>
+              {hallazgos.map((h, i) => (
+                <View style={i === hallazgos.length - 1 ? styles.rowLast : styles.row} key={i} wrap={false}>
+                  <Text style={[styles.td, { width: "40%" }]}>{h.texto}</Text>
+                  <Text
+                    style={[
+                      styles.td,
+                      { width: "15%" },
+                      h.estado === "no_ok" ? { fontFamily: "Helvetica-Bold" } : {},
+                    ]}
+                  >
+                    {HALLAZGO_ESTADO_LABEL[h.estado]}
+                  </Text>
+                  <Text style={[styles.td, { width: "45%" }]}>{h.comentario || "—"}</Text>
+                </View>
+              ))}
+            </View>
+          </>
+        )}
+
+        {entregaDepositoNumeroGeneracion && (
+          <Text style={commonStyles.paragraph}>
+            El material sobrante del remito se devolvió automáticamente a depósito — comprobante{" "}
+            <Text style={{ fontFamily: "Helvetica-Bold" }}>{entregaDepositoNumeroGeneracion}</Text>.
+          </Text>
         )}
 
         {imagenes.length > 0 && (

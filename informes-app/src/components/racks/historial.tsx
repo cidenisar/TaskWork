@@ -1,7 +1,12 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { obtenerUrlFotoGeneralRackAction, obtenerUrlPdfRelevamientoAction } from "@/app/(app)/racks/historial/actions";
+import Link from "next/link";
+import {
+  obtenerUrlsFotosGeneralesRackAction,
+  obtenerUrlPdfRelevamientoAction,
+  eliminarRelevamientoRackAction,
+} from "@/app/(app)/racks/historial/actions";
 import { Icon } from "@/components/icon";
 
 export interface HistorialRelevamientoRow {
@@ -11,7 +16,7 @@ export interface HistorialRelevamientoRow {
   denominacion: string;
   ubicacionLabel: string;
   pdfDisponible: boolean;
-  fotoDisponible: boolean;
+  fotosDisponibles: boolean;
 }
 
 function fmtFecha(fecha: string) {
@@ -19,7 +24,8 @@ function fmtFecha(fecha: string) {
   return d && m && y ? `${d}/${m}/${y}` : fecha;
 }
 
-export function HistorialRacks({ relevamientos }: { relevamientos: HistorialRelevamientoRow[] }) {
+export function HistorialRacks({ relevamientos: relevamientosIniciales, esAdmin }: { relevamientos: HistorialRelevamientoRow[]; esAdmin: boolean }) {
+  const [relevamientos, setRelevamientos] = useState(relevamientosIniciales);
   const [query, setQuery] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -30,7 +36,7 @@ export function HistorialRacks({ relevamientos }: { relevamientos: HistorialRele
     return relevamientos.filter((r) => `${r.numeroGeneracion} ${r.denominacion} ${r.ubicacionLabel}`.toLowerCase().includes(q));
   }, [relevamientos, query]);
 
-  async function verDescargarPdf(id: string, numeroGeneracion: string) {
+  async function verPdf(id: string) {
     setBusyId(id);
     setNotice(null);
     const res = await obtenerUrlPdfRelevamientoAction(id);
@@ -39,27 +45,32 @@ export function HistorialRacks({ relevamientos }: { relevamientos: HistorialRele
       setNotice(res.error || "No se pudo abrir el PDF.");
       return;
     }
-    const blob = await fetch(res.url).then((r) => r.blob());
-    const blobUrl = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = blobUrl;
-    a.download = res.filename || `${numeroGeneracion}.pdf`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(blobUrl);
+    window.open(res.url, "_blank", "noopener,noreferrer");
   }
 
-  async function verFoto(id: string) {
+  async function verFotos(id: string) {
     setBusyId(id);
     setNotice(null);
-    const res = await obtenerUrlFotoGeneralRackAction(id);
+    const res = await obtenerUrlsFotosGeneralesRackAction(id);
     setBusyId(null);
-    if (!res.url) {
-      setNotice(res.error || "No se pudo abrir la foto.");
+    if (res.urls.length === 0) {
+      setNotice(res.error || "No se pudieron abrir las fotos.");
       return;
     }
-    window.open(res.url, "_blank", "noopener,noreferrer");
+    res.urls.forEach((url) => window.open(url, "_blank", "noopener,noreferrer"));
+  }
+
+  async function eliminar(id: string, denominacion: string) {
+    if (!window.confirm(`¿Borrar definitivamente el relevamiento de "${denominacion}"? Esto no se puede deshacer.`)) return;
+    setBusyId(id);
+    setNotice(null);
+    const res = await eliminarRelevamientoRackAction(id);
+    setBusyId(null);
+    if (!res.success) {
+      setNotice(res.error || "No se pudo borrar el relevamiento.");
+      return;
+    }
+    setRelevamientos((prev) => prev.filter((r) => r.id !== id));
   }
 
   return (
@@ -86,7 +97,7 @@ export function HistorialRacks({ relevamientos }: { relevamientos: HistorialRele
         {filtrados.length === 0 ? (
           <div className="empty-note">No se encontraron relevamientos con esa búsqueda.</div>
         ) : (
-          <div>
+          <div className="list-grid">
             {filtrados.map((r) => (
               <div className={`hist-item${r.pdfDisponible ? "" : " archived"}`} key={r.id}>
                 <div className="info">
@@ -106,21 +117,37 @@ export function HistorialRacks({ relevamientos }: { relevamientos: HistorialRele
                   <button
                     type="button"
                     className="icon-btn"
-                    title={r.fotoDisponible ? "Ver foto general" : "Sin foto general"}
-                    disabled={!r.fotoDisponible || busyId === r.id}
-                    onClick={() => verFoto(r.id)}
+                    title={r.fotosDisponibles ? "Ver fotos generales" : "Sin fotos generales"}
+                    disabled={!r.fotosDisponibles || busyId === r.id}
+                    onClick={() => verFotos(r.id)}
                   >
                     {busyId === r.id ? "…" : <Icon name="camera" size={15} />}
                   </button>
                   <button
                     type="button"
                     className="icon-btn"
-                    title={r.pdfDisponible ? "Ver / descargar PDF" : "Sin PDF disponible"}
+                    title={r.pdfDisponible ? "Ver PDF" : "Sin PDF disponible"}
                     disabled={!r.pdfDisponible || busyId === r.id}
-                    onClick={() => verDescargarPdf(r.id, r.numeroGeneracion)}
+                    onClick={() => verPdf(r.id)}
                   >
-                    {busyId === r.id ? "…" : <Icon name="download" size={15} />}
+                    {busyId === r.id ? "…" : <Icon name="eye" size={15} />}
                   </button>
+                  {esAdmin && (
+                    <Link href={`/racks/editar/${r.id}`} className="icon-btn" title="Editar relevamiento">
+                      <Icon name="edit" size={15} />
+                    </Link>
+                  )}
+                  {esAdmin && (
+                    <button
+                      type="button"
+                      className="icon-btn icon-btn-danger"
+                      title="Borrar relevamiento"
+                      disabled={busyId === r.id}
+                      onClick={() => eliminar(r.id, r.denominacion)}
+                    >
+                      <Icon name="trash" size={15} />
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
