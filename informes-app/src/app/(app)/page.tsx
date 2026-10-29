@@ -78,6 +78,13 @@ export default async function HomePage() {
           <div className="module-title">Escanear QR</div>
           <div className="module-sub">Apuntá la cámara al QR de un tablero o sala y abrí su plano al toque</div>
         </Link>
+        <Link href="/materiales/buscar" className="module-card">
+          <div className="module-ico">
+            <ModuleIcon name="buscar" />
+          </div>
+          <div className="module-title">Buscar Material</div>
+          <div className="module-sub">Rastreá un equipo o material instalado — N° de serie, etiqueta YPF o descripción del remito</div>
+        </Link>
         <Link href="/bajas/historial" className="module-card">
           <div className="module-ico">
             <ModuleIcon name="bajas" />

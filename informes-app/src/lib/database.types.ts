@@ -834,6 +834,16 @@ export type InformeMaterialRow = {
   created_at: string;
 }
 
+/** Trazabilidad de materiales a granel del remito (sin alta de equipo) — ver InformeMaterialRow/equipos para eso. */
+export type InformeRemitoItemRow = {
+  id: string;
+  informe_id: string;
+  descripcion: string;
+  cantidad_esperada: number;
+  cantidad_sobrante: number;
+  created_at: string;
+}
+
 export type ClientErrorRow = {
   id: string;
   user_id: string | null;
@@ -920,6 +930,11 @@ export interface Database {
         InformeMaterialRow,
         Partial<InformeMaterialRow> & Pick<InformeMaterialRow, "informe_id" | "categoria_equipo" | "descripcion">,
         Partial<InformeMaterialRow>
+      >;
+      informe_remito_items: Tbl<
+        InformeRemitoItemRow,
+        Partial<InformeRemitoItemRow> & Pick<InformeRemitoItemRow, "informe_id" | "descripcion">,
+        Partial<InformeRemitoItemRow>
       >;
       rendiciones_gastos: Tbl<
         RendicionGastosRow,

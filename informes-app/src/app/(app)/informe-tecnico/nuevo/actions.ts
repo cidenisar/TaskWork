@@ -403,6 +403,23 @@ export async function crearInformeTecnicoAction(formData: FormData): Promise<Cre
     }
   }
 
+  // Trazabilidad de materiales a granel (cañería, bulonería, cable — lo que
+  // no se da de alta como equipo individual): cada línea del remito queda
+  // como fila real, no solo impresa en el PDF, para poder buscarla después
+  // (ver /materiales/buscar) — incluye lo que se usó (cantidadSobrante=0),
+  // no solo lo que volvió a depósito.
+  const remitoItemsConDescripcion = payload.remitoItems.filter((r) => r.descripcion.trim());
+  if (remitoItemsConDescripcion.length > 0) {
+    await supabase.from("informe_remito_items").insert(
+      remitoItemsConDescripcion.map((r) => ({
+        informe_id: informeId,
+        descripcion: r.descripcion.trim(),
+        cantidad_esperada: r.cantidadEsperada,
+        cantidad_sobrante: r.cantidadSobrante,
+      })),
+    );
+  }
+
   const sobrantes = payload.remitoItems.filter((r) => r.cantidadSobrante > 0);
   let entregaDepositoNumeroGeneracion: string | null = null;
   if (sobrantes.length > 0 && ubicacionResuelta.ubicacionId) {

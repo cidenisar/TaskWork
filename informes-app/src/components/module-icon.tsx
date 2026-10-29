@@ -36,6 +36,12 @@ export const ICON_PATHS: Record<string, React.ReactNode> = {
       <path d="M8 11V7a4 4 0 0 1 8 0v4" />
     </>
   ),
+  buscar: (
+    <>
+      <circle cx="10.5" cy="10.5" r="6.5" />
+      <path d="m20 20-4.8-4.8" />
+    </>
+  ),
   tableros: (
     <>
       <rect x="4" y="3.5" width="16" height="17" rx="1.5" />
