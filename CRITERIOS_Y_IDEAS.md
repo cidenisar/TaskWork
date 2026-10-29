@@ -1558,3 +1558,65 @@ reindexar ese tag exactamente como ya se reindexaba el estado de
 lecturas al borrar una fila (mismo patrón, nuevo campo). Una fila que el
 usuario borra del todo cuenta como 0% de acierto en vez de desaparecer
 del cálculo — borrar no es lo mismo que "la IA acertó".
+
+## 24. "Equipo" vs. "material a granel", referencias blandas entre tablas de equipamiento, y contraste al revés (lista conocida → evidencia) en vez de detección abierta
+
+**Contexto:** `informes-app` — trazabilidad de materiales de Informe
+Técnico (sección "Materiales/equipos" + remito), y las tres
+inconsistencias reales que señaló el usuario al revisarla: un componente
+de rack cargado como material quedaba duplicado en dos tablas sin
+relación; dar de baja un equipo reemplazado era un trámite manual
+desconectado del alta del nuevo; y faltaba una forma de confirmar que lo
+cargado como "usado" realmente se ve instalado en las fotos de evidencia.
+
+**1. "Equipo" (activo discreto, con marca/modelo/N° de serie, vida propia:
+mantenimientos, bajas) y "material a granel" (cañería, bulonería — solo
+cantidad, sin identidad individual) son dos conceptos de datos distintos,
+y cuando una misma categoría puede significar cualquiera de los dos según
+dónde esté instalado (acá: switch/UPS/banco de baterías — equipo suelto O
+componente de un rack), la UI tiene que preguntar explícitamente "¿dónde
+va?" ANTES de decidir a qué tabla insertar, en vez de insertar siempre en
+la tabla "por defecto" y confiar en una búsqueda posterior para no
+duplicar. Buscar duplicados después de los hechos es un parche; preguntar
+el destino correcto antes de crear la fila resuelve la causa.
+
+**2. Cuando un equipo puede vivir en 3 tablas distintas según su tipo
+(`tablero_circuitos`/`rack_equipamientos`/`equipos`, acá vía
+`TipoEquipoBaja`), una referencia entre equipos ("este reemplaza a aquel")
+no puede ser una FK real — tiene que ser el mismo patrón "blando" que ya
+usa `bajas_equipamiento` (`tipo_equipo` + `equipo_id` sin constraint de FK,
+porque `equipo_id` apunta a una tabla distinta según `tipo_equipo`).
+Replicar ese mismo par de columnas (`reemplaza_equipo_id`+`reemplaza_tipo`)
+en las tablas de destino, en vez de inventar un esquema nuevo, es lo que
+permite reusar el resolver ya existente (`resolverEquipo`/`TABLA_POR_TIPO`
+en `lib/equipamiento/resolver-equipo.ts`) para los dos sentidos de la
+relación.
+
+**3. Una acción que hoy es manual y de otro rol (dar de baja, solo
+Admin/Supervisor) se puede disparar automáticamente desde una acción de un
+rol distinto (el técnico, al cargar el material nuevo que reemplaza al
+viejo) sin tocar el gate de rol de la acción original — extrayendo el
+núcleo de la lógica (resolver, insertar el registro, actualizar estado,
+generar el PDF) a una función separada (`ejecutarBaja` en
+`lib/equipamiento/dar-de-baja.ts`) que la action gateada por rol sigue
+usando igual que antes, y que el flujo automático llama directo con
+Service Role. El gate de rol vive en la action, nunca en el núcleo — así
+el núcleo se puede reusar desde cualquier lugar donde la decisión de "dar
+de baja esto" ya se tomó por otro camino (acá, el técnico marcando
+"reemplaza a" en el momento de instalar). Mismo criterio que ya aplicaba
+la devolución a depósito automática del sobrante del remito: un efecto
+mecánico de una decisión que el usuario ya tomó no es una habilitación de
+rol nueva.
+
+**4. Para "¿lo cargado está realmente instalado?" con Vision, el contraste
+correcto parte de la lista CONOCIDA (materiales/remito ya cargados) y
+pregunta contra la evidencia (fotos) "¿esto está?", en vez de pedirle a
+la IA que mire las fotos y adivine qué hay sin lista previa.** Preguntar
+al revés ("¿qué ves en la foto que no está en la lista?") es un problema
+mucho más difícil y propenso a falsos positivos (la IA puede "ver" un
+equipo que ya estaba antes, de otra visita, y marcarlo como nuevo). El
+riesgo se invierte también: con la lista conocida como punto de partida,
+el riesgo real es el falso NEGATIVO (un material chico/oculto/mal
+encuadrado que SÍ está pero no se nota) — por eso el resultado tiene que
+ser siempre una sugerencia para que el humano revise y agregue una foto
+puntual si hace falta, nunca un bloqueo ni una verdad asumida.
