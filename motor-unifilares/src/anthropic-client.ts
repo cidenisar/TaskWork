@@ -35,7 +35,9 @@ geometría a mano como siempre (líneas/rects/círculos/elipses).
 
 CAPA es EXACTAMENTE una de: ${CAPAS_DXF.join(", ")} (A9 del documento de reglas).
 
-Unidades: milímetros reales, sobre una hoja A3 apaisada de 420x297mm. Origen
+Unidades: milímetros reales, ancho de hoja fijo en 420mm (A3 apaisado) pero
+el ALTO NO tiene tope — la hoja crece hacia abajo lo que el dibujo necesite
+(ver A1/B2/H6 de las reglas: nunca se corta en una hoja 2). Origen
 arriba-a-la-izquierda, Y crece hacia ABAJO (igual que una página normal, no
 como un plano CAD — eso lo maneja el escritor DXF al final, no vos).
 `.trim();
@@ -401,6 +403,31 @@ function validarResultadoLote(parsed: Record<string, unknown>): ResultadoLote {
   return { commands: validarComandos(parsed.commands), height: parsed.height, tierra };
 }
 
+/**
+ * Ancho real del dibujo, calculado del bounding box de los comandos ya
+ * expandidos (nunca de lo que diga el prompt) — mismo espíritu que el alto
+ * (`alturaAcumulada`/`parsedMarco.height`, ver `drawCommandsToPdf`): el
+ * prompt le pide a la IA que use 420mm de ancho (A3 apaisado), pero un
+ * patrón "grupo" (H3) con muchas térmicas puede necesitar más, y confiar
+ * en que la IA nunca se pase sería repetir el mismo bug que tenía el
+ * alto antes de la Fase de "sin tope" (ver pdf-renderer.ts). El texto no
+ * tiene métricas de fuente reales acá, así que se aproxima con
+ * `largo * tamaño * 0.6` (ancho medio de carácter en Helvetica) — de
+ * sobra para evitar un recorte, no para medir con precisión.
+ */
+function calcularAnchoReal(commands: DrawCommand[]): number {
+  let max = 0;
+  for (const cmd of commands) {
+    if (cmd.type === "line") max = Math.max(max, cmd.x1, cmd.x2);
+    else if (cmd.type === "rect") max = Math.max(max, cmd.x + cmd.width);
+    else if (cmd.type === "circle") max = Math.max(max, cmd.x + cmd.r);
+    else if (cmd.type === "ellipse") max = Math.max(max, cmd.x + cmd.rx);
+    else if (cmd.type === "text") max = Math.max(max, cmd.x + cmd.text.length * cmd.size * 0.6);
+    else max = Math.max(max, cmd.x);
+  }
+  return max;
+}
+
 const PATRON_CONDUCTOR = /^([APT]) \d+$/;
 
 /**
@@ -537,10 +564,11 @@ export async function generarUnifilar(
   }
   const comandosMarco = validarComandos(parsedMarco.commands);
 
+  const commands = expandirSimbolos([...comandosRenumerados, ...comandosMarco], biblioteca);
   return {
     drawing: {
-      commands: expandirSimbolos([...comandosRenumerados, ...comandosMarco], biblioteca),
-      width: 420,
+      commands,
+      width: Math.max(420, calcularAnchoReal(commands)),
       height: Math.max(alturaAcumulada, parsedMarco.height),
     },
     uso,

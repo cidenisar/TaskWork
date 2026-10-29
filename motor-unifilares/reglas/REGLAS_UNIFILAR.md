@@ -19,9 +19,8 @@ Cada tablero se entrega como un juego, en este orden:
 
 | Orden | Plano | Formato | Contenido |
 | --- | --- | --- | --- |
-| 1 | Unifilar potencia – Hoja 1 | A3 apaisado | Acometida, protección general, protector de sobretensión, luces piloto, borneras de distribución, tabla de PUESTA A TIERRA |
-| 2..n | Unifilar potencia – Hojas de circuitos | A3 apaisado | Máximo **8 circuitos por hoja** |
-| n+1.. | Unifilar 24V – una hoja por conjunto fuente/UPS | A4 vertical | Batería, fuente, UPS, convertidor, bornera de distribución 24V con fusibles |
+| 1 | Unifilar potencia | A3 apaisado, alto variable | **Una sola hoja continua, sin límite de circuitos ni de alto**: acometida, protección general, protector de sobretensión, luces piloto, borneras de distribución, tabla de PUESTA A TIERRA, y TODOS los circuitos del tablero, uno debajo del otro — nunca se corta en una hoja 2 |
+| 2.. | Unifilar 24V – una hoja por conjunto fuente/UPS | A4 vertical | Batería, fuente, UPS, convertidor, bornera de distribución 24V con fusibles |
 | … | Conexión de relés / comunicaciones (si hay) | A3 | Relés, switches, conversores |
 | último | Topográfico | A3 vertical | Vista frontal interior, cotas de bandejas, gabinete |
 
@@ -117,10 +116,9 @@ Reglas:
 - Cada destino lleva al lado su `T n`.
 - El protector de sobretensión baja a tierra con su propio `Tn`.
 
-## A8. Referencias entre hojas
+## A8. Referencia al unifilar 24V
 
-- Una línea que sigue en otra hoja termina en la grilla con el texto `HOJA n` en negrita.
-- La alimentación de una fuente de 24 V se dibuja con una caja `CIRCUITO n / FUENTE` y los números `A` del circuito del unifilar de potencia, más la tierra `Tn`.
+El unifilar de potencia es siempre una sola hoja continua (A1) — no hay "hoja 2" del mismo plano a la que referenciar. Lo único que cruza de plano es la alimentación de un equipo de 24V: se dibuja con una caja `CIRCUITO n / FUENTE` y los números `A` del circuito del unifilar de potencia, más la tierra `Tn`, para que se pueda seguir el conductor hasta el plano de 24V.
 
 ## A9. Capas y colores
 
@@ -155,9 +153,9 @@ Reglas:
 8. **Bornera BNR-02** (distribución): caja ancha con grupo N a la izquierda y F a la derecha; bornes de entrada arriba y de salida abajo con sus números `A`. Rótulo `BORNERA <sección>`.
 9. Recuadro **PUESTA A TIERRA** arriba a la derecha.
 
-## B2. Hojas de circuitos
+## B2. Circuitos
 
-- Barra horizontal arriba con punto de unión en cada derivación; **8 circuitos por hoja**, separación constante.
+- Barra horizontal arriba con punto de unión en cada derivación, separación constante. **Sin límite de circuitos ni de alto de hoja (A1): todos los circuitos del tablero van en la misma hoja continua, uno debajo del otro — nunca se corta ni se arranca una hoja nueva.**
 - Cada circuito, de arriba hacia abajo:
   1. Cable `2XSmm` desde la barra.
   2. Bornes de entrada (N / F con sus `A`).
@@ -365,18 +363,12 @@ trazado.
 - `EPO` y `LUZ PILOTO SALIDA UPS` cuelgan de la salida de `S.UPS` al mismo
   nivel que el bloque `PD-n`, a su izquierda.
 
-## H6. Referencias entre hojas (completa A8)
-- El corte entre hojas pasa siempre por un límite de columna completa —
-  nunca a mitad de un grupo (H3) ni a mitad de la numeración de un circuito
-  individual.
-- La columna donde corta termina con el texto `CONTINÚA EN HOJA n` (negrita,
-  A8) a la altura de la barra de esa hoja.
-- La hoja siguiente arranca esa misma rama con `VIENE DE HOJA n` a la misma
-  altura relativa (justo bajo su propia barra), antes de retomar el dibujo
-  normal del circuito (bornes, térmica, disyuntor, destino) como si nunca
-  se hubiera cortado.
-- El código `Cnn` (o `PD-n`) es el mismo a los dos lados del corte — nunca
-  se renumera por haber cambiado de hoja.
+## H6. No hay corte entre hojas (ver A1/A8)
+El unifilar de potencia es siempre una sola hoja continua: no existe "hoja 2"
+del mismo plano, así que nunca se dibuja `CONTINÚA EN HOJA n` ni `VIENE DE
+HOJA n` — un grupo (H3) o un circuito individual nunca se corta a la mitad
+porque nunca hace falta cortar nada: la hoja crece hacia abajo lo que haga
+falta.
 
 ## H7. Varias zonas de tensión en una misma hoja
 - Cada zona (`ENERGÍA 380V/220V`, `ENERGÍA 24V/12V`, etc.) tiene su **propia
@@ -505,7 +497,7 @@ Controles antes de entregar:
 - [ ] Cada destino con su `T n` y la tabla de PUESTA A TIERRA completa.
 - [ ] Sección del cable acorde a la protección.
 - [ ] Códigos de equipos idénticos en unifilar 220, unifilar 24V y topográfico.
-- [ ] Máximo 8 circuitos por hoja y referencias `HOJA n` en los cortes.
+- [ ] Todos los circuitos en la misma hoja continua, sin cortes ni referencias `HOJA n`.
 - [ ] Textos sin errores de tipeo (`2.5mm`, `A 117`).
 
 ---
