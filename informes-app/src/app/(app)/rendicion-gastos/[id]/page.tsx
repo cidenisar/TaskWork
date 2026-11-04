@@ -80,8 +80,6 @@ export default async function RendicionAbiertaPage({ params }: { params: Promise
       esAdmin={profile.rol === "admin"}
       gastos={gastos}
       catalogos={{
-        provincias: [],
-        ubicaciones: [],
         categoriasGasto: (categoriasRes.data ?? []).map((c) => c.nombre),
         tecnicos: (tecnicosRes.data ?? []).map((t) => ({ nombre: t.nombre_completo, torre: t.torre })),
         torres: (torresRes.data ?? []).map((t) => t.nombre),
