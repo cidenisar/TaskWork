@@ -1,5 +1,6 @@
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { puedeBorrarDefinitivo } from "@/lib/types";
 import { HistorialSalas, type HistorialSalaRow } from "@/components/salas/historial";
 import { labelUbicacion } from "@/components/ubicaciones/types";
 import { fetchTodasLasUbicaciones } from "@/lib/ubicaciones/fetch-todas";
@@ -33,5 +34,11 @@ export default async function HistorialSalasPage() {
     })
     .filter((r): r is HistorialSalaRow => r !== null);
 
-  return <HistorialSalas salas={salas} esAdmin={profile.rol === "admin"} />;
+  return (
+    <HistorialSalas
+      salas={salas}
+      esAdmin={profile.rol === "admin" || puedeBorrarDefinitivo(profile.rol)}
+      esSuperusuario={puedeBorrarDefinitivo(profile.rol)}
+    />
+  );
 }

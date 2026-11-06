@@ -45,10 +45,12 @@ export function HistorialTableros({
   mediciones: medicionesIniciales,
   mantenimientos: mantenimientosIniciales,
   esAdmin,
+  esSuperusuario,
 }: {
   mediciones: HistorialMedicionRow[];
   mantenimientos: MantenimientoRow[];
   esAdmin: boolean;
+  esSuperusuario: boolean;
 }) {
   const [mediciones, setMediciones] = useState(medicionesIniciales);
   const [mantenimientos, setMantenimientos] = useState(mantenimientosIniciales);
@@ -279,7 +281,7 @@ export function HistorialTableros({
                         <Icon name="edit" size={15} />
                       </Link>
                     )}
-                    {esAdmin && (
+                    {esSuperusuario && (
                       <button
                         type="button"
                         className="icon-btn icon-btn-danger"
@@ -335,7 +337,7 @@ export function HistorialTableros({
                       <Icon name="edit" size={15} />
                     </Link>
                   )}
-                  {esAdmin && (
+                  {esSuperusuario && (
                     <button
                       type="button"
                       className="icon-btn icon-btn-danger"

@@ -77,7 +77,7 @@ export default async function RendicionAbiertaPage({ params }: { params: Promise
       moneda={rendicion.moneda}
       estado={rendicion.estado}
       pdfDisponible={pdfDisponible}
-      esAdmin={profile.rol === "admin"}
+      esAdmin={(profile.rol === "admin" || profile.rol === "superusuario")}
       gastos={gastos}
       catalogos={{
         categoriasGasto: (categoriasRes.data ?? []).map((c) => c.nombre),

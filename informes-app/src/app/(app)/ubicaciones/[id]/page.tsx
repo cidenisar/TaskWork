@@ -458,7 +458,7 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
                       <div className="hint" style={{ margin: "4px 0 0" }}>
                         Para pegar en el tablero físico — al escanearlo se ve el esquema unifilar siempre actualizado, sin login.
                       </div>
-                      <AdjuntosTablero tableroId={t.id} adjuntos={adjuntosPorTableroId.get(t.id) ?? []} esAdmin={profile.rol === "admin"} />
+                      <AdjuntosTablero tableroId={t.id} adjuntos={adjuntosPorTableroId.get(t.id) ?? []} esAdmin={(profile.rol === "admin" || profile.rol === "superusuario")} />
                     </div>
                     {circuitosDelTablero.length === 0 ? (
                       <div className="empty-note" style={{ margin: "0 14px 14px" }}>
@@ -559,7 +559,7 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
           Tocá un rack para ver su equipamiento — categoría, marca/modelo y posición U, con el último estado conocido y el consumo
           estimado por IA (nunca una medición real).
         </div>
-        {racks.length > 0 && profile.rol === "admin" && (
+        {racks.length > 0 && (profile.rol === "admin" || profile.rol === "superusuario") && (
           <div style={{ marginBottom: 10 }}>
             <EstimarConsumoButton accion={estimarConsumoRacksAction.bind(null, rackIds)} />
           </div>
@@ -675,7 +675,7 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
 
       <div className="card">
         <div className="section-label">Equipos individuales en este sitio</div>
-        {equipos.length > 0 && profile.rol === "admin" && (
+        {equipos.length > 0 && (profile.rol === "admin" || profile.rol === "superusuario") && (
           <div style={{ marginBottom: 10 }}>
             <EstimarConsumoButton accion={estimarConsumoEquiposAction.bind(null, siblingIds)} />
           </div>

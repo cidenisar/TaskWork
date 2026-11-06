@@ -1,6 +1,6 @@
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { puedeGestionarDeposito } from "@/lib/types";
+import { puedeGestionarDeposito, puedeBorrarDefinitivo } from "@/lib/types";
 import { LockedPanel } from "@/components/locked-panel";
 import { HistorialEntregas, type HistorialEntregaRow } from "@/components/deposito/historial";
 import { labelUbicacion } from "@/components/ubicaciones/types";
@@ -58,5 +58,11 @@ export default async function HistorialEntregasDepositoPage() {
     };
   });
 
-  return <HistorialEntregas entregas={entregas} esAdmin={profile.rol === "admin"} />;
+  return (
+    <HistorialEntregas
+      entregas={entregas}
+      esAdmin={profile.rol === "admin" || puedeBorrarDefinitivo(profile.rol)}
+      esSuperusuario={puedeBorrarDefinitivo(profile.rol)}
+    />
+  );
 }

@@ -53,16 +53,28 @@ export async function requireProfile(): Promise<Profile> {
   return profile;
 }
 
-/** Redirige a "/" si el usuario no es Administrador (defensa en profundidad además de RLS). */
+/** Redirige a "/" si el usuario no es Administrador (Superusuario también pasa — tiene todo lo de Admin y más). */
 export async function requireAdmin(): Promise<Profile> {
   const profile = await requireProfile();
-  if (profile.rol !== "admin") redirect("/");
+  if (profile.rol !== "admin" && profile.rol !== "superusuario") redirect("/");
   return profile;
 }
 
 /** Redirige a "/" si el usuario no es Administrador ni Supervisor — mismo gate que Estadísticas. */
 export async function requireAdminOrSupervisor(): Promise<Profile> {
   const profile = await requireProfile();
-  if (profile.rol !== "admin" && profile.rol !== "supervisor") redirect("/");
+  if (profile.rol !== "admin" && profile.rol !== "supervisor" && profile.rol !== "superusuario") redirect("/");
+  return profile;
+}
+
+/**
+ * Redirige a "/" si el usuario no es Superusuario — gate exclusivo para las
+ * acciones más irreversibles (los 9 "Eliminar" de Historial, "Vaciar datos
+ * de prueba", borrado real de un usuario). A propósito NO acepta "admin":
+ * un Administrador común ya no puede hacer esto.
+ */
+export async function requireSuperusuario(): Promise<Profile> {
+  const profile = await requireProfile();
+  if (profile.rol !== "superusuario") redirect("/");
   return profile;
 }

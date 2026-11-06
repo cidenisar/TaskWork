@@ -38,7 +38,7 @@ export async function agregarGastoAction(rendicionId: string, formData: FormData
   if (rendicion.estado !== "abierta" && profile.rol !== "admin") {
     return { success: false, error: "Esta rendición ya está cerrada." };
   }
-  const db = profile.rol === "admin" ? createServiceRoleClient() : supabase;
+  const db = (profile.rol === "admin" || profile.rol === "superusuario") ? createServiceRoleClient() : supabase;
 
   const fecha = String(formData.get("fecha") ?? "");
   const categoria = String(formData.get("categoria") ?? "").trim();
@@ -99,7 +99,7 @@ export async function eliminarGastoAction(rendicionId: string, gastoId: string):
   if (rendicion.estado !== "abierta" && profile.rol !== "admin") {
     return { success: false, error: "Esta rendición ya está cerrada." };
   }
-  const db = profile.rol === "admin" ? createServiceRoleClient() : supabase;
+  const db = (profile.rol === "admin" || profile.rol === "superusuario") ? createServiceRoleClient() : supabase;
 
   const { data: gasto } = await db.from("gastos").select("comprobante_url").eq("id", gastoId).single();
   const { error } = await db.from("gastos").delete().eq("id", gastoId);
@@ -139,7 +139,7 @@ export async function cerrarRendicionAction(rendicionId: string): Promise<Cerrar
   if (rendicion.estado !== "abierta" && profile.rol !== "admin") {
     return { success: false, error: "Esta rendición ya está cerrada." };
   }
-  const db = profile.rol === "admin" ? createServiceRoleClient() : supabase;
+  const db = (profile.rol === "admin" || profile.rol === "superusuario") ? createServiceRoleClient() : supabase;
 
   const { data: gastosRows } = await db
     .from("gastos")

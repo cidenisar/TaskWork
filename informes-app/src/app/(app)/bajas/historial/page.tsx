@@ -1,6 +1,6 @@
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { puedeGestionarBajas } from "@/lib/types";
+import { puedeGestionarBajas, puedeBorrarDefinitivo } from "@/lib/types";
 import { LockedPanel } from "@/components/locked-panel";
 import { HistorialBajas, type HistorialBajaRow } from "@/components/bajas/historial";
 import { labelUbicacion } from "@/components/ubicaciones/types";
@@ -52,5 +52,11 @@ export default async function HistorialBajasPage() {
     };
   });
 
-  return <HistorialBajas bajas={bajas} esAdmin={profile.rol === "admin"} />;
+  return (
+    <HistorialBajas
+      bajas={bajas}
+      esAdmin={profile.rol === "admin" || puedeBorrarDefinitivo(profile.rol)}
+      esSuperusuario={puedeBorrarDefinitivo(profile.rol)}
+    />
+  );
 }

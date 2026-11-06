@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
-import { requireProfile, requireAdmin } from "@/lib/auth";
+import { requireProfile, requireAdmin, requireSuperusuario } from "@/lib/auth";
 import { filenameDesdeStoragePath } from "@/lib/pdf/filename";
 import { renderEntregaDepositoPdf } from "@/lib/pdf/render";
 import { eliminarRegistroConArchivos, type EliminarResult } from "@/lib/admin/eliminar-registro";
@@ -78,7 +78,7 @@ async function logoBufferActual(service: ReturnType<typeof createServiceRoleClie
  * real (origen "equipo_existente"), ese equipo vuelve a quedar "activo".
  */
 export async function eliminarEntregaAction(entregaId: string): Promise<EliminarResult> {
-  const profile = await requireAdmin();
+  const profile = await requireSuperusuario();
   const service = createServiceRoleClient();
 
   const { data: fila } = await service

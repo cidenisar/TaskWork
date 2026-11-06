@@ -5,7 +5,7 @@
  * (conservar los tipos de dominio de src/lib/types.ts, que son los que usa la UI).
  */
 
-export type Rol = "tecnico" | "supervisor" | "admin";
+export type Rol = "tecnico" | "supervisor" | "admin" | "superusuario";
 export type EstadoInforme = "borrador" | "generado";
 export type EstadoRendicion = "abierta" | "cerrada";
 export type Moneda = "ARS" | "USD";

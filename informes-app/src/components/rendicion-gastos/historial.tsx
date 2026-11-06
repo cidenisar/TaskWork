@@ -24,7 +24,15 @@ function fmtMonto(monto: number, moneda: string) {
   return `${moneda} ${monto.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
-export function HistorialRendiciones({ rendiciones: rendicionesIniciales, esAdmin }: { rendiciones: HistorialRendicionRow[]; esAdmin: boolean }) {
+export function HistorialRendiciones({
+  rendiciones: rendicionesIniciales,
+  esAdmin,
+  esSuperusuario,
+}: {
+  rendiciones: HistorialRendicionRow[];
+  esAdmin: boolean;
+  esSuperusuario: boolean;
+}) {
   const [rendiciones, setRendiciones] = useState(rendicionesIniciales);
   const [query, setQuery] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -142,7 +150,7 @@ export function HistorialRendiciones({ rendiciones: rendicionesIniciales, esAdmi
                     >
                       <Icon name="chart" size={15} />
                     </a>
-                    {esAdmin && (
+                    {esSuperusuario && (
                       <button
                         type="button"
                         className="icon-btn icon-btn-danger"

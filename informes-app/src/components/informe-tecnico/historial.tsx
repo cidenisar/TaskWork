@@ -17,7 +17,7 @@ function fmtFecha(fecha: string) {
   return d && m && y ? `${d}/${m}/${y}` : fecha;
 }
 
-export function HistorialInformes({ informes: informesIniciales, esAdmin }: { informes: HistorialInformeRow[]; esAdmin: boolean }) {
+export function HistorialInformes({ informes: informesIniciales, esSuperusuario }: { informes: HistorialInformeRow[]; esSuperusuario: boolean }) {
   const [informes, setInformes] = useState(informesIniciales);
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -192,7 +192,7 @@ export function HistorialInformes({ informes: informesIniciales, esAdmin }: { in
                   >
                     {busyId === i.id ? "…" : <Icon name="eye" size={15} />}
                   </button>
-                  {esAdmin && (
+                  {esSuperusuario && (
                     <button
                       type="button"
                       className="icon-btn icon-btn-danger"

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
-import { requireProfile, requireAdmin } from "@/lib/auth";
+import { requireProfile, requireSuperusuario } from "@/lib/auth";
 import { filenameDesdeStoragePath } from "@/lib/pdf/filename";
 import { eliminarRegistroConArchivos, type EliminarResult } from "@/lib/admin/eliminar-registro";
 
@@ -86,7 +86,7 @@ export async function obtenerUrlFotoMantenimientoAction(mantenimientoId: string)
 
 /** Solo Administrador. Borra la medición, sus lecturas (cascada por FK) y el PDF/foto del storage. */
 export async function eliminarMedicionAction(medicionId: string): Promise<EliminarResult> {
-  const profile = await requireAdmin();
+  const profile = await requireSuperusuario();
   const service = createServiceRoleClient();
 
   const { data: medicion } = await service
@@ -116,7 +116,7 @@ export async function eliminarMedicionAction(medicionId: string): Promise<Elimin
 
 /** Solo Administrador. Borra el mantenimiento y su foto del storage. */
 export async function eliminarMantenimientoAction(mantenimientoId: string): Promise<EliminarResult> {
-  const profile = await requireAdmin();
+  const profile = await requireSuperusuario();
   const service = createServiceRoleClient();
 
   const { data: mantenimiento } = await service.from("tablero_mantenimientos").select("foto_url, fecha").eq("id", mantenimientoId).single();

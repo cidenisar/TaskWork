@@ -36,7 +36,15 @@ function fmtFechaHora(iso: string) {
   return d.toLocaleString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
-export function HistorialBajas({ bajas: bajasIniciales, esAdmin }: { bajas: HistorialBajaRow[]; esAdmin: boolean }) {
+export function HistorialBajas({
+  bajas: bajasIniciales,
+  esAdmin,
+  esSuperusuario,
+}: {
+  bajas: HistorialBajaRow[];
+  esAdmin: boolean;
+  esSuperusuario: boolean;
+}) {
   const [bajas, setBajas] = useState(bajasIniciales);
   const [query, setQuery] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -160,7 +168,7 @@ export function HistorialBajas({ bajas: bajasIniciales, esAdmin }: { bajas: Hist
                         <Icon name="edit" size={15} />
                       </button>
                     )}
-                    {esAdmin && (
+                    {esSuperusuario && (
                       <button
                         type="button"
                         className="icon-btn icon-btn-danger"

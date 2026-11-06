@@ -126,5 +126,5 @@ export default async function PanelPlanosQrPage() {
     };
   });
 
-  return <PlanosQrView tableros={filasTableros} salas={filasSalas} esAdmin={profile.rol === "admin"} />;
+  return <PlanosQrView tableros={filasTableros} salas={filasSalas} esAdmin={(profile.rol === "admin" || profile.rol === "superusuario")} />;
 }

@@ -2,9 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
-import { requireAdmin } from "@/lib/auth";
+import { requireAdmin, requireSuperusuario } from "@/lib/auth";
 import { logAudit } from "@/lib/config/audit";
 import { ROL_LABEL, type Rol } from "@/lib/types";
+import { ejecutarEliminarUsuario } from "@/lib/admin/eliminar-usuario";
 import type { ConfigActionResult } from "./empresa";
 
 export interface CrearUsuarioResult extends ConfigActionResult {
@@ -46,7 +47,7 @@ export async function crearUsuarioAction(
   torre: string,
   passwordManual?: string,
 ): Promise<CrearUsuarioResult> {
-  const profile = await requireAdmin();
+  const profile = rol === "superusuario" ? await requireSuperusuario() : await requireAdmin();
   const correo = email.trim().toLowerCase();
   const nombre = nombreCompleto.trim();
   const torreValue = torre.trim() || null;
@@ -109,7 +110,7 @@ export async function cambiarRolAction(
   nombre: string,
   nuevoRol: Rol,
 ): Promise<ConfigActionResult> {
-  const profile = await requireAdmin();
+  const profile = nuevoRol === "superusuario" ? await requireSuperusuario() : await requireAdmin();
   if (userId === profile.id) {
     return { success: false, error: "No podés cambiar tu propio rol." };
   }
@@ -240,6 +241,32 @@ export async function reactivarUsuarioAction(userId: string, nombre: string): Pr
   if (error) return { success: false, error: error.message };
 
   await logAudit(supabase, profile, `Reactivó al usuario "${nombre}"`);
+  revalidatePath("/configuracion");
+  revalidatePath("/informe-tecnico/nuevo");
+  revalidatePath("/rendicion-gastos/nueva");
+  return { success: true };
+}
+
+/**
+ * Solo Superusuario. Borrado REAL de la cuenta (a diferencia de Desactivar,
+ * que nunca borra nada) — se rechaza si el usuario ya tiene actividad
+ * registrada en cualquier otro módulo (ver ejecutarEliminarUsuario), así
+ * nunca se pierde trabajo real por accidente.
+ */
+export async function eliminarUsuarioAction(userId: string, nombre: string): Promise<ConfigActionResult> {
+  const profile = await requireSuperusuario();
+  if (userId === profile.id) {
+    return { success: false, error: "No podés borrar tu propia cuenta." };
+  }
+
+  const adminRes = obtenerClienteAdmin();
+  if ("error" in adminRes) return { success: false, error: adminRes.error };
+
+  const resultado = await ejecutarEliminarUsuario(adminRes.client, userId);
+  if (!resultado.success) return resultado;
+
+  const supabase = await createClient();
+  await logAudit(supabase, profile, `Borró definitivamente al usuario "${nombre}"`);
   revalidatePath("/configuracion");
   revalidatePath("/informe-tecnico/nuevo");
   revalidatePath("/rendicion-gastos/nueva");

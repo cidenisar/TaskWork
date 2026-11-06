@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
-import { requireProfile, requireAdmin } from "@/lib/auth";
+import { requireProfile, requireAdmin, requireSuperusuario } from "@/lib/auth";
 import { puedeGestionarBajas } from "@/lib/types";
 import { filenameDesdeStoragePath, buildBajaFilename } from "@/lib/pdf/filename";
 import { renderBajaPdf } from "@/lib/pdf/render";
@@ -70,7 +70,7 @@ export async function confirmarEntregaDepositoAction(bajaId: string): Promise<Co
  * marcado "baja" sin ningún registro que lo explique.
  */
 export async function eliminarBajaAction(bajaId: string): Promise<EliminarResult> {
-  const profile = await requireAdmin();
+  const profile = await requireSuperusuario();
   const service = createServiceRoleClient();
 
   const { data: baja } = await service

@@ -22,7 +22,15 @@ function fmtFecha(fecha: string) {
   return d && m && y ? `${d}/${m}/${y}` : fecha;
 }
 
-export function HistorialSalas({ salas, esAdmin }: { salas: HistorialSalaRow[]; esAdmin: boolean }) {
+export function HistorialSalas({
+  salas,
+  esAdmin,
+  esSuperusuario,
+}: {
+  salas: HistorialSalaRow[];
+  esAdmin: boolean;
+  esSuperusuario: boolean;
+}) {
   const [query, setQuery] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -110,7 +118,7 @@ export function HistorialSalas({ salas, esAdmin }: { salas: HistorialSalaRow[]; 
                       <Icon name="edit" size={15} />
                     </Link>
                   )}
-                  {esAdmin && (
+                  {esSuperusuario && (
                     <button
                       type="button"
                       className="icon-btn icon-btn-danger"

@@ -1,5 +1,6 @@
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { puedeBorrarDefinitivo } from "@/lib/types";
 import { HistorialTableros, type HistorialMedicionRow } from "@/components/tableros/historial";
 import { labelUbicacion } from "@/components/ubicaciones/types";
 import type { MantenimientoRow } from "@/components/tableros/types";
@@ -79,5 +80,12 @@ export default async function HistorialTablerosPage() {
     })
     .filter((r): r is MantenimientoRow => r !== null);
 
-  return <HistorialTableros mediciones={mediciones} mantenimientos={mantenimientos} esAdmin={profile.rol === "admin"} />;
+  return (
+    <HistorialTableros
+      mediciones={mediciones}
+      mantenimientos={mantenimientos}
+      esAdmin={profile.rol === "admin" || puedeBorrarDefinitivo(profile.rol)}
+      esSuperusuario={puedeBorrarDefinitivo(profile.rol)}
+    />
+  );
 }

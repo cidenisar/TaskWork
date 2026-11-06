@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
-import { requireProfile, requireAdmin } from "@/lib/auth";
+import { requireProfile, requireSuperusuario } from "@/lib/auth";
 import { filenameDesdeStoragePath } from "@/lib/pdf/filename";
 import { eliminarRegistroConArchivos, type EliminarResult } from "@/lib/admin/eliminar-registro";
 
@@ -61,7 +61,7 @@ export async function obtenerUrlsFotosGeneralesRackAction(relevamientoId: string
 
 /** Solo Administrador. Borra el relevamiento, sus lecturas (cascada por FK) y el PDF/foto del storage. */
 export async function eliminarRelevamientoRackAction(relevamientoId: string): Promise<EliminarResult> {
-  const profile = await requireAdmin();
+  const profile = await requireSuperusuario();
   const service = createServiceRoleClient();
 
   const { data: relevamiento } = await service

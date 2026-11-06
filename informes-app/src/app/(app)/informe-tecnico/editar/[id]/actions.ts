@@ -67,7 +67,7 @@ export async function actualizarInformeTecnicoAction(
   // role key, recién después de confirmar el rol server-side. Para
   // cualquier otro usuario se mantiene el cliente normal, que sigue
   // forzando "informes_tecnicos_update_own" — solo puede editar lo suyo.
-  const supabase = profile.rol === "admin" ? createServiceRoleClient() : await createClient();
+  const supabase = (profile.rol === "admin" || profile.rol === "superusuario") ? createServiceRoleClient() : await createClient();
 
   const raw = formData.get("payload");
   if (typeof raw !== "string") return { success: false, error: "Datos inválidos." };

@@ -27,9 +27,11 @@ function fmtFecha(fecha: string) {
 export function HistorialTorresComunicacion({
   relevamientos: relevamientosIniciales,
   esAdmin,
+  esSuperusuario,
 }: {
   relevamientos: HistorialRelevamientoTorreRow[];
   esAdmin: boolean;
+  esSuperusuario: boolean;
 }) {
   const [relevamientos, setRelevamientos] = useState(relevamientosIniciales);
   const [query, setQuery] = useState("");
@@ -143,7 +145,7 @@ export function HistorialTorresComunicacion({
                       <Icon name="edit" size={15} />
                     </Link>
                   )}
-                  {esAdmin && (
+                  {esSuperusuario && (
                     <button
                       type="button"
                       className="icon-btn icon-btn-danger"

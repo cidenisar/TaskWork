@@ -1,5 +1,6 @@
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { puedeBorrarDefinitivo } from "@/lib/types";
 import { HistorialTorresComunicacion, type HistorialRelevamientoTorreRow } from "@/components/torres-comunicacion/historial";
 import { labelUbicacion } from "@/components/ubicaciones/types";
 import { fetchTodasLasUbicaciones } from "@/lib/ubicaciones/fetch-todas";
@@ -39,5 +40,11 @@ export default async function HistorialTorresComunicacionPage() {
     })
     .filter((r): r is HistorialRelevamientoTorreRow => r !== null);
 
-  return <HistorialTorresComunicacion relevamientos={relevamientos} esAdmin={profile.rol === "admin"} />;
+  return (
+    <HistorialTorresComunicacion
+      relevamientos={relevamientos}
+      esAdmin={profile.rol === "admin" || puedeBorrarDefinitivo(profile.rol)}
+      esSuperusuario={puedeBorrarDefinitivo(profile.rol)}
+    />
+  );
 }

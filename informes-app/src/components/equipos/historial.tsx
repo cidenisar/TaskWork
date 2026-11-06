@@ -23,7 +23,15 @@ function fmtFecha(fecha: string) {
   return d && m && y ? `${d}/${m}/${y}` : fecha;
 }
 
-export function HistorialEquipos({ relevamientos: relevamientosIniciales, esAdmin }: { relevamientos: HistorialRelevamientoRow[]; esAdmin: boolean }) {
+export function HistorialEquipos({
+  relevamientos: relevamientosIniciales,
+  esAdmin,
+  esSuperusuario,
+}: {
+  relevamientos: HistorialRelevamientoRow[];
+  esAdmin: boolean;
+  esSuperusuario: boolean;
+}) {
   const [relevamientos, setRelevamientos] = useState(relevamientosIniciales);
   const [query, setQuery] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -136,7 +144,7 @@ export function HistorialEquipos({ relevamientos: relevamientosIniciales, esAdmi
                       <Icon name="edit" size={15} />
                     </Link>
                   )}
-                  {esAdmin && (
+                  {esSuperusuario && (
                     <button
                       type="button"
                       className="icon-btn icon-btn-danger"

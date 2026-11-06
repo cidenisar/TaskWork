@@ -62,7 +62,7 @@ export default async function PanelVehiculosPage() {
         kilometraje: Number(s.kilometraje),
         descripcion: s.descripcion,
       }))}
-      esAdmin={profile.rol === "admin"}
+      esAdmin={(profile.rol === "admin" || profile.rol === "superusuario")}
     />
   );
 }

@@ -1,5 +1,5 @@
 import { requireProfile } from "@/lib/auth";
-import { puedeVerConfiguracion } from "@/lib/types";
+import { puedeVerConfiguracion, puedeBorrarDefinitivo } from "@/lib/types";
 import { LockedPanel } from "@/components/locked-panel";
 import { createClient } from "@/lib/supabase/server";
 import { UsuariosCard } from "@/components/config/usuarios";
@@ -35,6 +35,7 @@ export default async function ConfiguracionUsuariosPage() {
         }))}
         currentUserId={profile.id}
         torres={(torresRes.data ?? []).map((t) => t.nombre)}
+        esSuperusuario={puedeBorrarDefinitivo(profile.rol)}
       />
     </div>
   );

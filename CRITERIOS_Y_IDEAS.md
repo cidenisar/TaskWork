@@ -1620,3 +1620,112 @@ el riesgo real es el falso NEGATIVO (un material chico/oculto/mal
 encuadrado que SÍ está pero no se nota) — por eso el resultado tiene que
 ser siempre una sugerencia para que el humano revise y agregue una foto
 puntual si hace falta, nunca un bloqueo ni una verdad asumida.
+
+## 25. "Borrado real" en una app Next.js/Server Actions sobre Supabase: el borrado en sí no es el bug, el cache stale de OTRAS pantallas sí
+
+**Contexto:** `informes-app` — el usuario reportó que un relevamiento que
+él mismo había borrado desde Historial seguía "apareciendo en otros
+lados" (el mapa del Panel, por ejemplo), aunque la lista de Historial ya
+mostraba el conteo correcto y reducido.
+
+**El borrado de la fila nunca fue el problema — faltaba
+`revalidatePath` después del borrado.** El helper compartido detrás de
+los 9 botones "Eliminar" de Historial (`eliminarRegistroConArchivos` en
+`lib/admin/eliminar-registro.ts`) sí borra la fila de la DB y sus archivos
+de Storage correctamente; lo que no hace, a propósito, es llamar
+`revalidatePath` — esa responsabilidad queda en cada Server Action que lo
+llama. El cliente de Supabase no es parte del Data Cache de Next (sus
+fetches no pasan por `fetch()` de Next), así que borrar la fila es
+inmediato en la base — pero el Router Cache/Full Route Cache de CUALQUIER
+OTRA página que renderizó esa data server-side antes puede seguir
+sirviendo RSC output viejo hasta que se invalide explícitamente esa ruta.
+Si la action solo revalida su propia página (`revalidatePath("/x/historial")`,
+patrón que ya existía en un par de módulos), todas las DEMÁS pantallas que
+muestran la misma data (el mapa del Panel, un conteo en Estadísticas, otra
+lista) van a seguir mostrando el dato borrado hasta que alguien las fuerce
+a refrescar de otra forma.
+
+**La solución generalizable: cuando una acción de borrado/alta puede
+afectar la data que se ve en pantallas que no conocés de antemano (un
+mapa, un panel, estadísticas — consumidores indirectos de la misma
+tabla), usar `revalidatePath("/", "layout")` en vez de tratar de enumerar
+cada ruta afectada.** Enumerar rutas es un acoplamiento oculto que se
+rompe en silencio el día que se agrega una pantalla nueva que también
+muestra esa data — invalidar todo el árbol desde el layout raíz es más
+caro (un refetch más amplio en la próxima navegación) pero correcto por
+construcción, y en una app de este tamaño el costo es insignificante
+comparado con el bug de mostrar data borrada como si existiera.
+
+## 26. Rol "por encima" de otro (superset) vs. rol "al costado" (sibling) — y el borrado real de usuarios cuando ninguna FK tiene cascade
+
+**Contexto:** `informes-app` — el usuario pidió un rol nuevo,
+"superusuario", que reemplaza a Admin como el techo de la jerarquía:
+Admin se queda con casi todo lo que ya tenía, pero pierde la capacidad de
+borrar definitivamente (los 9 "Eliminar" de Historial, "Vaciar datos de
+prueba", y un borrado real de usuario que no existía todavía — antes solo
+había Desactivar/Reactivar). Solo otro superusuario puede asignar el rol
+superusuario.
+
+**1. Un rol que es superset de otro (tiene TODO lo que el otro tiene, más
+algo exclusivo) se modela ampliando los gates existentes, nunca creándolo
+como un rol "al costado".** Si "superusuario" se agrega como una rama
+paralela a "admin" en cada chequeo (`rol === "admin" || rol ===
+"superusuario"`... en CADA lugar donde hoy dice `rol === "admin"`), es
+fácil olvidarse de uno y crear una regresión silenciosa (un admin con todo
+menos una función al azar, o un superusuario que no puede hacer algo que
+un admin común sí puede). La forma correcta es tratar la relación como lo
+que es — superset, no sibling — y ampliar los puntos de entrada
+compartidos: si la mayoría de las políticas RLS de borrado dependen de dos
+funciones SQL (`is_admin()`/`is_admin_or_supervisor()`), ampliar ESAS DOS
+funciones para incluir el rol nuevo propaga el cambio a todas las policies
+que las usan sin tocarlas una por una; y a nivel TypeScript, el guard
+compartido (`requireAdmin()`) se amplía de la misma forma, así cualquier
+action que ya llamaba `requireAdmin()` sigue funcionando para superusuario
+sin cambios. El gate EXCLUSIVO nuevo (`requireSuperusuario()`, a propósito
+SIN aceptar `"admin"`) se agrega aparte, solo en los puntos puntuales que
+pasan a ser exclusivos.
+
+**2. Un ENUM de Postgres no permite agregar un valor nuevo y usarlo en la
+misma transacción.** `alter type rol add value 'superusuario'` seguido de
+una función que hace `... and rol = 'superusuario'` en el mismo
+`apply_migration`/transacción tira `55P04: unsafe use of new value ...
+New enum values must be committed before they can be used`. Hay que
+partirlo en dos migraciones separadas (el `alter type` en un archivo, las
+funciones/policies que usan el valor nuevo en el siguiente) — no es un
+detalle de la herramienta de turno, es una regla de Postgres sobre
+transacciones y tipos enum, así que aplica en cualquier proyecto que
+agregue un valor a un enum y lo use enseguida.
+
+**3. Antes de ofrecer un "borrado real" (DELETE de verdad, no
+Desactivar/soft-delete) sobre una tabla central como `profiles`/`usuarios`,
+hay que relevar TODA la cadena de FKs que apuntan a esa tabla y verificar
+si tienen `on delete cascade`/`set null` o son `NO ACTION` (el default de
+Postgres).** En este proyecto, ninguna de las ~37 columnas que referencian
+`profiles.id` en todo el esquema tenía cascade — todas eran `NO ACTION` a
+propósito (nunca se pensó un usuario como algo borrable con historial real
+atrás). Eso significa que un DELETE directo sobre esa fila falla con un
+error de FK en cuanto exista UN solo registro que la referencie en
+cualquier tabla — lo cual, para una cuenta con cualquier actividad real
+(un informe, una medición, un solo renglón de auditoría), es casi
+garantizado. La forma segura de ofrecer "borrado real" sin arriesgar
+integridad referencial ni duplicar lógica de cascada a mano es: (a) barrer
+cada tabla que referencia `profiles.id` con un `count` por columna (sin
+JOIN posible entre tablas tan distintas entre sí) y rechazar el borrado si
+CUALQUIERA tiene actividad — señalando al usuario que la herramienta
+correcta para ese caso sigue siendo Desactivar; (b) para la cuenta que
+pasa ese chequeo (sin ningún rastro real todavía), usar
+`auth.admin.deleteUser(id)` de la API de administración de Supabase en vez
+de un DELETE manual sobre `profiles` — esa es la única FK que SÍ tiene
+`on delete cascade` (`profiles.id references auth.users(id) on delete
+cascade`), así que borrar del lado de `auth.users` cae en cascada
+correctamente sobre `profiles` sin violar ninguna otra FK.
+
+**4. Quién puede asignar un rol "techo" (el más alto de la jerarquía) a
+otra cuenta — regla de bootstrap.** Si la regla es "solo otro superusuario
+puede asignar superusuario" (para que un Admin nunca pueda
+auto-promoverse), hace falta un paso de bootstrap manual (una sola vez,
+por SQL directo contra la DB) para que exista el primer superusuario —
+ninguna UI puede crear al primero sin romper la regla. Vale la pena
+decidir y ejecutar ese bootstrap ANTES de dar por terminada la feature, no
+después: hasta que exista al menos un superusuario, ninguna de las
+acciones exclusivas nuevas es alcanzable por nadie.

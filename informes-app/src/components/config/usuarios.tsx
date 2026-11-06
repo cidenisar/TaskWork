@@ -10,6 +10,7 @@ import {
   desactivarUsuarioAction,
   reactivarUsuarioAction,
   subirFotoPerfilUsuarioAction,
+  eliminarUsuarioAction,
 } from "@/app/(app)/configuracion/actions/usuarios";
 import { ROL_LABEL, type Rol } from "@/lib/types";
 import { Icon } from "@/components/icon";
@@ -25,17 +26,21 @@ export interface UsuarioRow {
   fotoPerfilUrl?: string | null;
 }
 
-const ROLES: Rol[] = ["tecnico", "supervisor", "admin"];
+const ROLES_BASE: Rol[] = ["tecnico", "supervisor", "admin"];
+const ROLES_CON_SUPERUSUARIO: Rol[] = [...ROLES_BASE, "superusuario"];
 
 export function UsuariosCard({
   usuarios: initial,
   currentUserId,
   torres,
+  esSuperusuario,
 }: {
   usuarios: UsuarioRow[];
   currentUserId: string;
   torres: string[];
+  esSuperusuario: boolean;
 }) {
+  const ROLES = esSuperusuario ? ROLES_CON_SUPERUSUARIO : ROLES_BASE;
   const [usuarios, setUsuarios] = useState(initial);
   const [email, setEmail] = useState("");
   const [nombre, setNombre] = useState("");
@@ -206,6 +211,19 @@ export function UsuariosCard({
       return;
     }
     setUsuarios((prev) => prev.map((x) => (x.id === u.id ? { ...x, activo: !u.activo } : x)));
+  }
+
+  async function eliminar(u: UsuarioRow) {
+    if (!window.confirm(`¿Borrar definitivamente la cuenta de "${u.nombreCompleto}"? Esto no se puede deshacer.`)) return;
+    setRowBusyId(u.id);
+    setRowError((prev) => ({ ...prev, [u.id]: "" }));
+    const res = await eliminarUsuarioAction(u.id, u.nombreCompleto);
+    setRowBusyId(null);
+    if (!res.success) {
+      setRowError((prev) => ({ ...prev, [u.id]: res.error || "No se pudo borrar el usuario." }));
+      return;
+    }
+    setUsuarios((prev) => prev.filter((x) => x.id !== u.id));
   }
 
   return (
@@ -392,6 +410,11 @@ export function UsuariosCard({
                   {u.id !== currentUserId && (
                     <button type="button" className="btn btn-secondary btn-sm" onClick={() => toggleActivo(u)} disabled={rowBusy}>
                       <Icon name={u.activo ? "x" : "check"} size={13} /> {u.activo ? "Desactivar" : "Reactivar"}
+                    </button>
+                  )}
+                  {esSuperusuario && u.id !== currentUserId && (
+                    <button type="button" className="btn btn-danger btn-sm" onClick={() => eliminar(u)} disabled={rowBusy}>
+                      <Icon name="trash" size={13} /> Borrar usuario
                     </button>
                   )}
                 </div>

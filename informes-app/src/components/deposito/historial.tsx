@@ -37,7 +37,15 @@ function fmtFecha(fecha: string) {
   return d && m && y ? `${d}/${m}/${y}` : fecha;
 }
 
-export function HistorialEntregas({ entregas: entregasIniciales, esAdmin }: { entregas: HistorialEntregaRow[]; esAdmin: boolean }) {
+export function HistorialEntregas({
+  entregas: entregasIniciales,
+  esAdmin,
+  esSuperusuario,
+}: {
+  entregas: HistorialEntregaRow[];
+  esAdmin: boolean;
+  esSuperusuario: boolean;
+}) {
   const [entregas, setEntregas] = useState(entregasIniciales);
   const [query, setQuery] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -152,7 +160,7 @@ export function HistorialEntregas({ entregas: entregasIniciales, esAdmin }: { en
                       <Icon name="edit" size={15} />
                     </button>
                   )}
-                  {esAdmin && (
+                  {esSuperusuario && (
                     <button
                       type="button"
                       className="icon-btn icon-btn-danger"

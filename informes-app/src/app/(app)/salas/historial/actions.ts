@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
-import { requireProfile, requireAdmin } from "@/lib/auth";
+import { requireProfile, requireSuperusuario } from "@/lib/auth";
 import { filenameDesdeStoragePath } from "@/lib/pdf/filename";
 import { eliminarRegistroConArchivos, type EliminarResult } from "@/lib/admin/eliminar-registro";
 
@@ -31,7 +31,7 @@ export async function obtenerUrlPdfSalaAction(salaId: string): Promise<UrlPdfRes
 
 /** Solo Administrador. Borra la sala y sus fotos/PDF del storage. */
 export async function eliminarSalaAction(salaId: string): Promise<EliminarResult> {
-  const profile = await requireAdmin();
+  const profile = await requireSuperusuario();
   const service = createServiceRoleClient();
 
   const { data: sala } = await service

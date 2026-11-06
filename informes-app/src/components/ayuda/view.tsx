@@ -300,7 +300,11 @@ export function AyudaView({ rol }: { rol: Rol }) {
 
       <div className="card">
         <div className="hint" style={{ margin: "0 0 4px" }}>
-          Tu rol actual: <b>{rol === "admin" ? "Administrador" : rol === "supervisor" ? "Supervisor" : "Técnico"}</b>. Las secciones
+          Tu rol actual:{" "}
+          <b>
+            {rol === "superusuario" ? "Superusuario" : rol === "admin" ? "Administrador" : rol === "supervisor" ? "Supervisor" : "Técnico"}
+          </b>
+          . Las secciones
           marcadas &ldquo;Supervisor y Administrador&rdquo; o &ldquo;Solo Administrador&rdquo; existen igual en esta guía aunque no las
           veas en tu menú — así sabés qué hace el resto del equipo.
         </div>

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
-import { requireProfile, requireAdmin } from "@/lib/auth";
+import { requireProfile, requireSuperusuario } from "@/lib/auth";
 import { filenameDesdeStoragePath } from "@/lib/pdf/filename";
 import { eliminarRegistroConArchivos, type EliminarResult } from "@/lib/admin/eliminar-registro";
 
@@ -38,7 +38,7 @@ export async function obtenerUrlPdfRendicionAction(rendicionId: string): Promise
 
 /** Solo Administrador. Borra la rendición, sus gastos/técnicos (cascada por FK) y el PDF/comprobantes del storage. */
 export async function eliminarRendicionAction(rendicionId: string): Promise<EliminarResult> {
-  const profile = await requireAdmin();
+  const profile = await requireSuperusuario();
   const service = createServiceRoleClient();
 
   const [{ data: rendicion }, { data: gastos }] = await Promise.all([

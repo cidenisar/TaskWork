@@ -46,7 +46,7 @@ export default async function PanelMantenimientosPage({ searchParams }: { search
         kpis={kpis}
         realizados={realizados}
         dotacion={dotacion}
-        esAdmin={profile.rol === "admin"}
+        esAdmin={(profile.rol === "admin" || profile.rol === "superusuario")}
         intervalos={intervalos}
         supuestosDotacion={supuestosDotacion}
         checklistItems={checklistItems}
