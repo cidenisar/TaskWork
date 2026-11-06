@@ -107,6 +107,10 @@ interface ServicePayload {
   fecha: string;
   kilometraje: string;
   descripcion: string;
+  /** Control periódico (opcional): lo que quedó en pantalla después de "Leer con IA" en comparar-estado, revisado/corregido por el Admin — ver service-tab.tsx. */
+  estadoGeneral?: string;
+  tieneDanios?: boolean | null;
+  inconsistenciasDetectadas?: string | null;
 }
 
 export async function addServiceAction(formData: FormData): Promise<ConfigActionResult> {
@@ -136,6 +140,10 @@ export async function addServiceAction(formData: FormData): Promise<ConfigAction
     numeroGeneracion = nuevoNumeroGeneracionServiceVehiculo();
   }
 
+  const estadoGeneral = payload.estadoGeneral?.trim() || null;
+  const tieneDanios = payload.tieneDanios ?? null;
+  const inconsistenciasDetectadas = payload.inconsistenciasDetectadas?.trim() || null;
+
   const { data: service, error } = await supabase
     .from("vehiculo_services")
     .insert({
@@ -144,6 +152,9 @@ export async function addServiceAction(formData: FormData): Promise<ConfigAction
       kilometraje: km,
       descripcion: payload.descripcion.trim() || null,
       numero_generacion: numeroGeneracion,
+      estado_general: estadoGeneral,
+      tiene_danios: tieneDanios,
+      inconsistencias_detectadas: inconsistenciasDetectadas,
       created_by: profile.id,
     })
     .select("id")
@@ -163,6 +174,21 @@ export async function addServiceAction(formData: FormData): Promise<ConfigAction
     }
   }
 
+  // Fotos del control periódico (opcional, distintas de "foto" de arriba,
+  // que es la del trabajo de service en sí) — quedan como la referencia
+  // contra la que se compara el PRÓXIMO control (ver comparar-estado).
+  const fotosExterior = formData.getAll("fotosExterior").filter((f): f is File => f instanceof File && f.size > 0);
+  if (fotosExterior.length > 0) {
+    const urls: string[] = [];
+    for (let i = 0; i < fotosExterior.length; i++) {
+      const buffer = Buffer.from(await fotosExterior[i].arrayBuffer());
+      const path = `${payload.vehiculoId}/control-${service.id}-${i + 1}.jpg`;
+      const { error: upErr } = await supabase.storage.from("vehiculo-docs").upload(path, buffer, { contentType: "image/jpeg", upsert: true });
+      if (!upErr) urls.push(path);
+    }
+    if (urls.length > 0) await supabase.from("vehiculo_services").update({ fotos_exterior_urls: urls }).eq("id", service.id);
+  }
+
   const contextoLabel = [vehiculo?.patente, vehiculo?.marca_modelo].filter(Boolean).join(" — ") || payload.vehiculoId;
 
   const { data: config } = await supabase.from("config_general").select("logo_empresa_url").eq("id", 1).single();
@@ -176,6 +202,14 @@ export async function addServiceAction(formData: FormData): Promise<ConfigAction
     }
   }
 
+  const descripcionPdf = [
+    payload.descripcion.trim() || null,
+    estadoGeneral ? `Estado detectado: ${estadoGeneral}` : null,
+    inconsistenciasDetectadas ? `⚠ Distinto respecto del control anterior: ${inconsistenciasDetectadas}` : null,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+
   const pdfBuffer = await renderMantenimientoPdf({
     numeroGeneracion,
     documentoLabel: "SERVICE DE VEHÍCULO",
@@ -187,7 +221,7 @@ export async function addServiceAction(formData: FormData): Promise<ConfigAction
     planta: null,
     oficina: null,
     fecha: payload.fecha,
-    descripcion: payload.descripcion.trim() || null,
+    descripcion: descripcionPdf || null,
     kilometraje: km,
     proximoMantenimiento: null,
     checklist: null,
@@ -208,15 +242,22 @@ export async function addServiceAction(formData: FormData): Promise<ConfigAction
     if (destinatarios.length > 0) {
       await enviarPdfPorEmail({
         to: destinatarios,
-        asunto: `Service de Vehículo ${numeroGeneracion} — ${contextoLabel}`,
-        texto: `Se registró un service para "${contextoLabel}" (${numeroGeneracion}). Se adjunta el PDF.`,
+        asunto: `${inconsistenciasDetectadas ? "⚠ " : ""}Service de Vehículo ${numeroGeneracion} — ${contextoLabel}`,
+        texto: inconsistenciasDetectadas
+          ? `Se registró un service para "${contextoLabel}" (${numeroGeneracion}) — la IA detectó algo distinto respecto del control anterior: ${inconsistenciasDetectadas}. Se adjunta el PDF.`
+          : `Se registró un service para "${contextoLabel}" (${numeroGeneracion}). Se adjunta el PDF.`,
         pdfBuffer,
         filename: pdfFilename,
       });
     }
   }
 
-  await logAudit(supabase, profile, `Registró un service para "${vehiculo?.patente ?? payload.vehiculoId}" (${km.toLocaleString("es-AR")} km)`);
+  await logAudit(
+    supabase,
+    profile,
+    `Registró un service para "${vehiculo?.patente ?? payload.vehiculoId}" (${km.toLocaleString("es-AR")} km)` +
+      (inconsistenciasDetectadas ? ` — IA detectó: ${inconsistenciasDetectadas}` : ""),
+  );
   revalidateAll();
   return { success: true };
 }
@@ -344,4 +385,23 @@ export async function agregarFotosVehiculoAction(formData: FormData): Promise<Ag
 
   revalidateAll();
   return { success: true, subidas: nuevasUrls.length };
+}
+
+/**
+ * Cada cuántos días le toca un control periódico a un vehículo (igual para
+ * toda la flota, mismo criterio que los supuestos de PDM) — ver
+ * lib/config/fleet-alerts.ts.
+ */
+export async function guardarFrecuenciaControlVehiculosAction(frecuenciaDias: string): Promise<ConfigActionResult> {
+  const profile = await requireAdmin();
+  const dias = Number(frecuenciaDias);
+  if (!Number.isFinite(dias) || dias <= 0) return { success: false, error: "La frecuencia tiene que ser un número de días mayor a 0." };
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("config_general").update({ vehiculo_control_frecuencia_dias: Math.round(dias) }).eq("id", 1);
+  if (error) return { success: false, error: error.message };
+
+  await logAudit(supabase, profile, `Actualizó la frecuencia de control periódico de vehículos a ${Math.round(dias)} días`);
+  revalidatePath("/panel/vehiculos");
+  return { success: true };
 }

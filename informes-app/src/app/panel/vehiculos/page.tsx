@@ -6,18 +6,22 @@ export default async function PanelVehiculosPage() {
   const profile = await requireProfile();
   const supabase = await createClient();
 
-  const [vehiculosRes, servicesRes, hallazgosRes] = await Promise.all([
+  const [vehiculosRes, servicesRes, hallazgosRes, configRes] = await Promise.all([
     supabase
       .from("catalogo_vehiculos")
       .select(
         "id, patente, marca_modelo, vencimiento_tarjeta_verde, vencimiento_rto, kilometraje_actual, estado_alta, tiene_danios_alta, fotos_exterior_urls, fotos_interior_urls",
       )
       .order("patente"),
-    supabase.from("vehiculo_services").select("id, vehiculo_id, fecha, kilometraje, descripcion").order("fecha", { ascending: false }),
+    supabase
+      .from("vehiculo_services")
+      .select("id, vehiculo_id, fecha, kilometraje, descripcion, inconsistencias_detectadas")
+      .order("fecha", { ascending: false }),
     // Solo los hallazgos detectados (no_ok) importan para el indicador de la
     // Flota — es un conteo a simple vista, no un detalle (eso queda para una
     // futura pantalla dedicada si hace falta).
     supabase.from("inspeccion_ia_hallazgos").select("registro_id").eq("modulo", "vehiculos").eq("estado", "no_ok"),
+    supabase.from("config_general").select("vehiculo_control_frecuencia_dias").eq("id", 1).single(),
   ]);
 
   const patentePorVehiculo = new Map((vehiculosRes.data ?? []).map((v) => [v.id, v.patente]));
@@ -61,8 +65,10 @@ export default async function PanelVehiculosPage() {
         fecha: s.fecha,
         kilometraje: Number(s.kilometraje),
         descripcion: s.descripcion,
+        inconsistenciasDetectadas: s.inconsistencias_detectadas,
       }))}
       esAdmin={(profile.rol === "admin" || profile.rol === "superusuario")}
+      frecuenciaControlDias={configRes.data?.vehiculo_control_frecuencia_dias ?? 30}
     />
   );
 }

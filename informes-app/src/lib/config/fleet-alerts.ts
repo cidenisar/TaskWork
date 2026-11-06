@@ -27,6 +27,30 @@ export interface ServiceParaAlerta {
   vehiculoId: string;
   fecha: string;
   kilometraje: number;
+  inconsistenciasDetectadas?: string | null;
+}
+
+const VENTANA_PROXIMO_CONTROL_DIAS = 7;
+
+/**
+ * Control periódico por TIEMPO (ej. "cada 30 días") — distinto del
+ * intervalo por kilometraje de arriba, que ya existía. Se calcula sobre la
+ * fecha del último service registrado (cualquiera cuenta como "control",
+ * tenga fotos o no) + la frecuencia configurada por un Admin
+ * (`config_general.vehiculo_control_frecuencia_dias`).
+ */
+export function estadoControlPeriodico(
+  frecuenciaDias: number,
+  ultimoControlFecha: string | null,
+  hoy: Date = new Date(),
+): { urgencia: "warn" | "danger"; mensaje: string } | null {
+  if (!ultimoControlFecha) return { urgencia: "warn", mensaje: "Nunca tuvo un control registrado" };
+  hoy.setHours(0, 0, 0, 0);
+  const diasDesde = Math.round((hoy.getTime() - new Date(`${ultimoControlFecha}T00:00:00`).getTime()) / 86_400_000);
+  const restantes = frecuenciaDias - diasDesde;
+  if (restantes < 0) return { urgencia: "danger", mensaje: `Control vencido hace ${Math.abs(restantes)} día${Math.abs(restantes) === 1 ? "" : "s"}` };
+  if (restantes <= VENTANA_PROXIMO_CONTROL_DIAS) return { urgencia: "warn", mensaje: `Próximo control en ${restantes} día${restantes === 1 ? "" : "s"}` };
+  return null;
 }
 
 /** null = sin fecha cargada (no genera alerta). */
@@ -41,7 +65,11 @@ export function estadoVencimiento(fecha: string | null): "ok" | "warn" | "danger
   return "ok";
 }
 
-export function computeFleetAlerts(vehiculos: VehiculoParaAlerta[], services: ServiceParaAlerta[]): AlertaFlota[] {
+export function computeFleetAlerts(
+  vehiculos: VehiculoParaAlerta[],
+  services: ServiceParaAlerta[],
+  frecuenciaControlDias: number | null = null,
+): AlertaFlota[] {
   const ultimoServicePorVehiculo = new Map<string, ServiceParaAlerta>();
   for (const s of services) {
     const actual = ultimoServicePorVehiculo.get(s.vehiculoId);
@@ -51,6 +79,21 @@ export function computeFleetAlerts(vehiculos: VehiculoParaAlerta[], services: Se
   const alertas: AlertaFlota[] = [];
 
   for (const v of vehiculos) {
+    if (frecuenciaControlDias != null) {
+      const ultimo = ultimoServicePorVehiculo.get(v.id);
+      const estado = estadoControlPeriodico(frecuenciaControlDias, ultimo?.fecha ?? null);
+      if (estado) alertas.push({ id: `${v.id}-control`, patente: v.patente, urgencia: estado.urgencia, mensaje: estado.mensaje });
+    }
+
+    const ultimoConInconsistencia = ultimoServicePorVehiculo.get(v.id);
+    if (ultimoConInconsistencia?.inconsistenciasDetectadas) {
+      alertas.push({
+        id: `${v.id}-inconsistencia`,
+        patente: v.patente,
+        urgencia: "danger",
+        mensaje: `La IA detectó algo distinto respecto del control anterior: ${ultimoConInconsistencia.inconsistenciasDetectadas}`,
+      });
+    }
     const tarjetaEstado = estadoVencimiento(v.vencimientoTarjetaVerde);
     if (tarjetaEstado === "warn" || tarjetaEstado === "danger") {
       alertas.push({

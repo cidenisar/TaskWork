@@ -186,6 +186,12 @@ export type VehiculoServiceRow = {
   numero_generacion: string | null;
   pdf_url: string | null;
   pdf_generado_at: string | null;
+  /** Galería de fotos del exterior tomadas EN este control — pasa a ser la referencia ("baseline") contra la que se compara el próximo control (ver comparar-estado). */
+  fotos_exterior_urls: string[] | null;
+  estado_general: string | null;
+  tiene_danios: boolean | null;
+  /** Lo que la IA detectó de nuevo/distinto respecto del control anterior (o del alta, si es el primer control) — null si no hay nada nuevo o no hay referencia contra qué comparar. */
+  inconsistencias_detectadas: string | null;
   created_by: string | null;
   created_at: string;
 }
@@ -295,6 +301,8 @@ export type ConfigGeneralRow = {
   pdm_dias_habiles_anio: number;
   pdm_horas_por_visita: number;
   pdm_velocidad_kmh: number;
+  /** Cada cuántos días le toca un control periódico a un vehículo (ver lib/config/fleet-alerts.ts) — fijo para toda la flota, no por vehículo. */
+  vehiculo_control_frecuencia_dias: number;
 }
 
 export type AuditLogRow = {

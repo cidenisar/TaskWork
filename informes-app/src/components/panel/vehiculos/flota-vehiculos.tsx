@@ -28,10 +28,12 @@ export function FlotaVehiculos({
   vehiculos: vehiculosIniciales,
   services: servicesIniciales,
   esAdmin,
+  frecuenciaControlDias,
 }: {
   vehiculos: VehiculoItem[];
   services: ServiceItem[];
   esAdmin: boolean;
+  frecuenciaControlDias: number;
 }) {
   const [tab, setTab] = useState<Tab>("flota");
   const [vehiculos, setVehiculos] = useState(vehiculosIniciales);
@@ -191,7 +193,7 @@ export function FlotaVehiculos({
       {tab === "vencimientos" && (
         <div className="card">
           <div className="section-label">Vencimientos</div>
-          <VencimientosTab vehiculos={vehiculos} services={services} />
+          <VencimientosTab vehiculos={vehiculos} services={services} frecuenciaControlDias={frecuenciaControlDias} esAdmin={esAdmin} />
         </div>
       )}
     </div>
