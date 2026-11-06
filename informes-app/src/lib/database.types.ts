@@ -183,6 +183,9 @@ export type VehiculoServiceRow = {
   kilometraje: number;
   foto_url: string | null;
   descripcion: string | null;
+  numero_generacion: string | null;
+  pdf_url: string | null;
+  pdf_generado_at: string | null;
   created_by: string | null;
   created_at: string;
 }
@@ -378,6 +381,9 @@ export type TableroMantenimientoRow = {
   descripcion: string;
   foto_url: string | null;
   proximo_mantenimiento: string | null;
+  numero_generacion: string | null;
+  pdf_url: string | null;
+  pdf_generado_at: string | null;
   created_by: string;
   created_at: string;
 }
@@ -781,6 +787,9 @@ export type MantenimientoEquipamientoRow = {
   fecha: string;
   descripcion: string | null;
   foto_url: string | null;
+  numero_generacion: string | null;
+  pdf_url: string | null;
+  pdf_generado_at: string | null;
   created_by: string;
   created_at: string;
 }

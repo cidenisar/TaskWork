@@ -3,6 +3,8 @@ import type { Database, CondicionMaterial, MotivoEntregaDeposito } from "@/lib/d
 import { nuevoNumeroGeneracionEntrega } from "@/lib/deposito/numero-generacion";
 import { renderEntregaDepositoPdf } from "@/lib/pdf/render";
 import { buildEntregaDepositoFilename } from "@/lib/pdf/filename";
+import { obtenerDestinatariosAutoEnvio } from "@/lib/email/destinatarios-auto-envio";
+import { enviarPdfPorEmail } from "@/lib/email/enviar-pdf";
 
 export interface MaterialLoteDeposito {
   descripcion: string;
@@ -149,6 +151,17 @@ export async function crearEntregaDepositoLote(params: CrearEntregaDepositoLoteP
         fotos_evidencia_urls: fotosEvidenciaPaths.length > 0 ? fotosEvidenciaPaths : null,
       })
       .in("id", idsInsertados);
+
+    const destinatarios = await obtenerDestinatariosAutoEnvio(supabase);
+    if (destinatarios.length > 0) {
+      await enviarPdfPorEmail({
+        to: destinatarios,
+        asunto: `Entrega a Depósito ${numeroGeneracion} — ${detalleArchivo}`,
+        texto: `Se entregó a depósito ${detalleArchivo} (${numeroGeneracion}). Se adjunta el PDF.`,
+        pdfBuffer,
+        filename: pdfFilename,
+      });
+    }
   }
 
   return { success: true, numeroGeneracion };

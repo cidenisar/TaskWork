@@ -1,8 +1,9 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { CATEGORIA_EQUIPO_LABEL as RACK_CATEGORIA_LABEL } from "@/components/racks/types";
 import { CATEGORIA_EQUIPO_LABEL as EQUIPO_CATEGORIA_LABEL } from "@/components/equipos/types";
 import { CATEGORIA_EQUIPO_LABEL as TABLERO_CATEGORIA_LABEL } from "@/components/tableros/types";
-import type { TipoEquipoBaja } from "@/lib/database.types";
+import type { Database, TipoEquipoBaja, TipoEquipoMantenimiento } from "@/lib/database.types";
 
 export interface EquipoResuelto {
   texto: string;
@@ -87,4 +88,38 @@ export async function resolverEquipo(
     ubicacionId: item.ubicacion_id,
     estadoActual: item.estado,
   };
+}
+
+export interface EquipoMantenimientoResuelto {
+  texto: string;
+  ubicacionId: string;
+}
+
+/**
+ * Mismo criterio que resolverEquipo, pero para TipoEquipoMantenimiento
+ * (incluye "sala", que no es un tipo de Baja) — usado por
+ * registrarMantenimientoAction para armar el PDF del Plan de Mantenimiento
+ * genérico. No hace falta categoría/marca/serie acá, solo identificar el
+ * equipo/sala y su ubicación.
+ */
+export async function resolverEquipoMantenimiento(
+  supabase: SupabaseClient<Database>,
+  tipoEquipo: TipoEquipoMantenimiento,
+  equipoId: string,
+): Promise<EquipoMantenimientoResuelto | null> {
+  if (tipoEquipo === "rack_equipamiento") {
+    const { data: item } = await supabase.from("rack_equipamientos").select("texto, rack_id").eq("id", equipoId).single();
+    if (!item) return null;
+    const { data: rack } = await supabase.from("racks").select("ubicacion_id").eq("id", item.rack_id).single();
+    if (!rack) return null;
+    return { texto: item.texto, ubicacionId: rack.ubicacion_id };
+  }
+  if (tipoEquipo === "sala") {
+    const { data: sala } = await supabase.from("salas").select("denominacion, ubicacion_id").eq("id", equipoId).single();
+    if (!sala) return null;
+    return { texto: sala.denominacion, ubicacionId: sala.ubicacion_id };
+  }
+  const { data: item } = await supabase.from("equipos").select("texto, ubicacion_id").eq("id", equipoId).single();
+  if (!item) return null;
+  return { texto: item.texto, ubicacionId: item.ubicacion_id };
 }

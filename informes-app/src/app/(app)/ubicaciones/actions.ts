@@ -11,8 +11,11 @@ import { TIPO_EQUIPO_LABEL as TIPO_EQUIPO_DEPOSITO_LABEL } from "@/components/de
 import { nuevoNumeroGeneracionEntrega } from "@/lib/deposito/numero-generacion";
 import { renderEntregaDepositoPdf } from "@/lib/pdf/render";
 import { buildEntregaDepositoFilename } from "@/lib/pdf/filename";
-import { resolverEquipo, TABLA_POR_TIPO } from "@/lib/equipamiento/resolver-equipo";
+import { resolverEquipo, resolverEquipoMantenimiento, TABLA_POR_TIPO } from "@/lib/equipamiento/resolver-equipo";
 import { ejecutarBaja } from "@/lib/equipamiento/dar-de-baja";
+import { nuevoNumeroGeneracionMantenimientoEquipamiento } from "@/lib/mantenimiento/numero-generacion";
+import { renderMantenimientoPdf } from "@/lib/pdf/render";
+import { buildMantenimientoFilename } from "@/lib/pdf/filename";
 import { obtenerDestinatariosAutoEnvio } from "@/lib/email/destinatarios-auto-envio";
 import { enviarPdfPorEmail } from "@/lib/email/enviar-pdf";
 import type {
@@ -382,10 +385,12 @@ export interface RegistrarMantenimientoResult {
 }
 
 /**
- * Registrar un mantenimiento realizado (Racks/Equipos Individuales — ver
- * `lib/mantenimiento/types.ts` para por qué Tableros/Torres no entran
- * acá) es trabajo de campo normal, no una decisión operativa como Bajas/
- * Entregas a Depósito — abierto a cualquier técnico, sin gate de rol.
+ * Registrar un mantenimiento realizado (Racks/Equipos Individuales/Salas —
+ * ver `lib/mantenimiento/types.ts` para por qué Tableros/Torres no entran
+ * acá, tienen su propio flujo) es trabajo de campo normal, no una decisión
+ * operativa como Bajas/Entregas a Depósito — abierto a cualquier técnico,
+ * sin gate de rol. Genera un PDF simple (misma plantilla que mantenimiento
+ * de Tablero y Service de Vehículos) y lo manda por mail.
  */
 export async function registrarMantenimientoAction(formData: FormData): Promise<RegistrarMantenimientoResult> {
   const profile = await requireProfile();
@@ -409,6 +414,27 @@ export async function registrarMantenimientoAction(formData: FormData): Promise<
   }
 
   const supabase = await createClient();
+
+  const equipo = await resolverEquipoMantenimiento(supabase, payload.tipoEquipo, payload.equipoId);
+  if (!equipo) return { success: false, error: "No se encontró el equipo/sala." };
+  const { data: ubicacion } = await supabase
+    .from("ubicaciones")
+    .select("region, provincia, localidad, sitio, planta, oficina")
+    .eq("id", equipo.ubicacionId)
+    .single();
+
+  let numeroGeneracion = nuevoNumeroGeneracionMantenimientoEquipamiento();
+  for (let intento = 0; intento < 5; intento++) {
+    const { data: existente } = await supabase
+      .from("mantenimientos_equipamiento")
+      .select("id")
+      .eq("numero_generacion", numeroGeneracion)
+      .limit(1)
+      .maybeSingle();
+    if (!existente) break;
+    numeroGeneracion = nuevoNumeroGeneracionMantenimientoEquipamiento();
+  }
+
   const { data: mantenimiento, error } = await supabase
     .from("mantenimientos_equipamiento")
     .insert({
@@ -416,6 +442,7 @@ export async function registrarMantenimientoAction(formData: FormData): Promise<
       equipo_id: payload.equipoId,
       fecha: payload.fecha,
       descripcion: payload.descripcion.trim() || null,
+      numero_generacion: numeroGeneracion,
       created_by: profile.id,
     })
     .select("id")
@@ -425,13 +452,19 @@ export async function registrarMantenimientoAction(formData: FormData): Promise<
   }
 
   const foto = formData.get("foto");
+  let fotoBuffer: Buffer | null = null;
   if (foto instanceof File && foto.size > 0) {
-    const buffer = Buffer.from(await foto.arrayBuffer());
+    fotoBuffer = Buffer.from(await foto.arrayBuffer());
     const path = `${profile.id}/mantenimientos/${mantenimiento.id}.jpg`;
-    const { error: upErr } = await supabase.storage.from("informe-fotos").upload(path, buffer, { contentType: "image/jpeg", upsert: true });
-    if (!upErr) await supabase.from("mantenimientos_equipamiento").update({ foto_url: path }).eq("id", mantenimiento.id);
+    const { error: upErr } = await supabase.storage.from("informe-fotos").upload(path, fotoBuffer, { contentType: "image/jpeg", upsert: true });
+    if (!upErr) {
+      await supabase.from("mantenimientos_equipamiento").update({ foto_url: path }).eq("id", mantenimiento.id);
+    } else {
+      fotoBuffer = null;
+    }
   }
 
+  let checklistPdf: { texto: string; estado: string; observacion: string | null }[] | null = null;
   if (payload.checklist && payload.checklist.length > 0) {
     await supabase.from("mantenimiento_checklist_respuestas").insert(
       payload.checklist.map((c) => ({
@@ -441,6 +474,71 @@ export async function registrarMantenimientoAction(formData: FormData): Promise<
         observacion: c.observacion.trim() || null,
       })),
     );
+    const { data: itemsCatalogo } = await supabase
+      .from("mantenimiento_checklist_items")
+      .select("id, texto")
+      .in(
+        "id",
+        payload.checklist.map((c) => c.itemId),
+      );
+    const textoPorId = new Map((itemsCatalogo ?? []).map((i) => [i.id, i.texto]));
+    checklistPdf = payload.checklist
+      .map((c) => ({ texto: textoPorId.get(c.itemId), estado: c.estado, observacion: c.observacion.trim() || null }))
+      .filter((c): c is { texto: string; estado: EstadoChecklist; observacion: string | null } => !!c.texto);
+  }
+
+  const { data: config } = await supabase.from("config_general").select("logo_empresa_url").eq("id", 1).single();
+  let logoBuffer: Buffer | null = null;
+  if (config?.logo_empresa_url) {
+    try {
+      const res = await fetch(config.logo_empresa_url);
+      if (res.ok) logoBuffer = Buffer.from(await res.arrayBuffer());
+    } catch {
+      // seguimos sin logo antes que fallar la generación del PDF
+    }
+  }
+
+  const pdfBuffer = await renderMantenimientoPdf({
+    numeroGeneracion,
+    documentoLabel: "MANTENIMIENTO DE EQUIPAMIENTO",
+    contextoLabel: equipo.texto,
+    region: ubicacion?.region ?? null,
+    provincia: ubicacion?.provincia ?? null,
+    localidad: ubicacion?.localidad ?? null,
+    sitio: ubicacion?.sitio ?? null,
+    planta: ubicacion?.planta ?? null,
+    oficina: ubicacion?.oficina ?? null,
+    fecha: payload.fecha,
+    descripcion: payload.descripcion.trim() || null,
+    kilometraje: null,
+    proximoMantenimiento: null,
+    checklist: checklistPdf,
+    fotoBuffer,
+    logoBuffer,
+    appName: "TaskWork",
+    realizoNombre: profile.nombreCompleto,
+  });
+  const pdfFilename = buildMantenimientoFilename({ numeroGeneracion, contexto: equipo.texto, sitio: ubicacion?.sitio });
+  const pdfPath = `${profile.id}/mantenimientos/${mantenimiento.id}/${pdfFilename}`;
+  const { error: pdfUpErr } = await supabase.storage
+    .from("informes-pdf")
+    .upload(pdfPath, pdfBuffer, { contentType: "application/pdf", upsert: true });
+  if (!pdfUpErr) {
+    await supabase
+      .from("mantenimientos_equipamiento")
+      .update({ pdf_url: pdfPath, pdf_generado_at: new Date().toISOString() })
+      .eq("id", mantenimiento.id);
+
+    const destinatarios = await obtenerDestinatariosAutoEnvio(supabase);
+    if (destinatarios.length > 0) {
+      await enviarPdfPorEmail({
+        to: destinatarios,
+        asunto: `Mantenimiento de Equipamiento ${numeroGeneracion} — ${equipo.texto}`,
+        texto: `Se registró un mantenimiento de "${equipo.texto}" (${numeroGeneracion}). Se adjunta el PDF.`,
+        pdfBuffer,
+        filename: pdfFilename,
+      });
+    }
   }
 
   revalidatePath("/ubicaciones/[id]", "page");

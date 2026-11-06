@@ -4,6 +4,11 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireAdmin } from "@/lib/auth";
 import { logAudit } from "@/lib/config/audit";
+import { nuevoNumeroGeneracionServiceVehiculo } from "@/lib/mantenimiento/numero-generacion";
+import { renderMantenimientoPdf } from "@/lib/pdf/render";
+import { buildMantenimientoFilename } from "@/lib/pdf/filename";
+import { obtenerDestinatariosAutoEnvio } from "@/lib/email/destinatarios-auto-envio";
+import { enviarPdfPorEmail } from "@/lib/email/enviar-pdf";
 import type { ConfigActionResult } from "./empresa";
 import type { EstadoChecklist } from "@/lib/database.types";
 
@@ -116,6 +121,21 @@ export async function addServiceAction(formData: FormData): Promise<ConfigAction
   }
 
   const supabase = await createClient();
+
+  const { data: vehiculo } = await supabase.from("catalogo_vehiculos").select("patente, marca_modelo").eq("id", payload.vehiculoId).single();
+
+  let numeroGeneracion = nuevoNumeroGeneracionServiceVehiculo();
+  for (let intento = 0; intento < 5; intento++) {
+    const { data: existente } = await supabase
+      .from("vehiculo_services")
+      .select("id")
+      .eq("numero_generacion", numeroGeneracion)
+      .limit(1)
+      .maybeSingle();
+    if (!existente) break;
+    numeroGeneracion = nuevoNumeroGeneracionServiceVehiculo();
+  }
+
   const { data: service, error } = await supabase
     .from("vehiculo_services")
     .insert({
@@ -123,6 +143,7 @@ export async function addServiceAction(formData: FormData): Promise<ConfigAction
       fecha: payload.fecha,
       kilometraje: km,
       descripcion: payload.descripcion.trim() || null,
+      numero_generacion: numeroGeneracion,
       created_by: profile.id,
     })
     .select("id")
@@ -130,14 +151,71 @@ export async function addServiceAction(formData: FormData): Promise<ConfigAction
   if (error || !service) return { success: false, error: error?.message || "No se pudo registrar el service." };
 
   const foto = formData.get("foto");
+  let fotoBuffer: Buffer | null = null;
   if (foto instanceof File && foto.size > 0) {
-    const buffer = Buffer.from(await foto.arrayBuffer());
+    fotoBuffer = Buffer.from(await foto.arrayBuffer());
     const path = `${payload.vehiculoId}/services/${service.id}.jpg`;
-    const { error: upErr } = await supabase.storage.from("vehiculo-docs").upload(path, buffer, { contentType: "image/jpeg", upsert: true });
-    if (!upErr) await supabase.from("vehiculo_services").update({ foto_url: path }).eq("id", service.id);
+    const { error: upErr } = await supabase.storage.from("vehiculo-docs").upload(path, fotoBuffer, { contentType: "image/jpeg", upsert: true });
+    if (!upErr) {
+      await supabase.from("vehiculo_services").update({ foto_url: path }).eq("id", service.id);
+    } else {
+      fotoBuffer = null;
+    }
   }
 
-  const { data: vehiculo } = await supabase.from("catalogo_vehiculos").select("patente").eq("id", payload.vehiculoId).single();
+  const contextoLabel = [vehiculo?.patente, vehiculo?.marca_modelo].filter(Boolean).join(" — ") || payload.vehiculoId;
+
+  const { data: config } = await supabase.from("config_general").select("logo_empresa_url").eq("id", 1).single();
+  let logoBuffer: Buffer | null = null;
+  if (config?.logo_empresa_url) {
+    try {
+      const res = await fetch(config.logo_empresa_url);
+      if (res.ok) logoBuffer = Buffer.from(await res.arrayBuffer());
+    } catch {
+      // seguimos sin logo antes que fallar la generación del PDF
+    }
+  }
+
+  const pdfBuffer = await renderMantenimientoPdf({
+    numeroGeneracion,
+    documentoLabel: "SERVICE DE VEHÍCULO",
+    contextoLabel,
+    region: null,
+    provincia: null,
+    localidad: null,
+    sitio: null,
+    planta: null,
+    oficina: null,
+    fecha: payload.fecha,
+    descripcion: payload.descripcion.trim() || null,
+    kilometraje: km,
+    proximoMantenimiento: null,
+    checklist: null,
+    fotoBuffer,
+    logoBuffer,
+    appName: "TaskWork",
+    realizoNombre: profile.nombreCompleto,
+  });
+  const pdfFilename = buildMantenimientoFilename({ numeroGeneracion, contexto: contextoLabel });
+  const pdfPath = `${payload.vehiculoId}/services/${service.id}/${pdfFilename}`;
+  const { error: pdfUpErr } = await supabase.storage
+    .from("informes-pdf")
+    .upload(pdfPath, pdfBuffer, { contentType: "application/pdf", upsert: true });
+  if (!pdfUpErr) {
+    await supabase.from("vehiculo_services").update({ pdf_url: pdfPath, pdf_generado_at: new Date().toISOString() }).eq("id", service.id);
+
+    const destinatarios = await obtenerDestinatariosAutoEnvio(supabase);
+    if (destinatarios.length > 0) {
+      await enviarPdfPorEmail({
+        to: destinatarios,
+        asunto: `Service de Vehículo ${numeroGeneracion} — ${contextoLabel}`,
+        texto: `Se registró un service para "${contextoLabel}" (${numeroGeneracion}). Se adjunta el PDF.`,
+        pdfBuffer,
+        filename: pdfFilename,
+      });
+    }
+  }
+
   await logAudit(supabase, profile, `Registró un service para "${vehiculo?.patente ?? payload.vehiculoId}" (${km.toLocaleString("es-AR")} km)`);
   revalidateAll();
   return { success: true };

@@ -136,6 +136,21 @@ export function buildSalaFilename(opts: {
   return `${partes.join("_")}.pdf`;
 }
 
+export function buildMantenimientoFilename(opts: {
+  numeroGeneracion: string;
+  contexto: string;
+  sitio?: string | null;
+  generadoEn?: Date;
+}): string {
+  const partes = [
+    opts.numeroGeneracion,
+    timestampCompacto(opts.generadoEn ?? new Date()),
+    slug(opts.contexto),
+    opts.sitio ? slug(opts.sitio) : null,
+  ].filter((p): p is string => Boolean(p));
+  return `${partes.join("_")}.pdf`;
+}
+
 export function buildEntregaDepositoFilename(opts: {
   numeroGeneracion: string;
   descripcion: string;
