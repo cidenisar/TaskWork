@@ -35,6 +35,12 @@ export interface MaterialInformeItem {
   reemplazaTexto: string | null;
   /** Foto puntual (ya redimensionada a JPEG) cargada cuando "Verificar instalación" no encontró este material en las fotos generales. */
   fotoConfirmacion: Blob | null;
+  /**
+   * Solo transitorio en el form (no se persiste): sugerencia de la IA sobre
+   * si el modelo identificado parece viejo/discontinuado — a modo de aviso
+   * para evaluar un reemplazo por obsolescencia, nunca una afirmación.
+   */
+  posibleObsolescencia: string | null;
 }
 
 export const MATERIAL_INFORME_BASE: Omit<MaterialInformeItem, "descripcion" | "revisar"> = {
@@ -51,6 +57,7 @@ export const MATERIAL_INFORME_BASE: Omit<MaterialInformeItem, "descripcion" | "r
   reemplazaTipo: null,
   reemplazaTexto: null,
   fotoConfirmacion: null,
+  posibleObsolescencia: null,
 };
 
 /**

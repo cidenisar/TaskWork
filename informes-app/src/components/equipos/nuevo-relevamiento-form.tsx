@@ -182,6 +182,7 @@ export function NuevoRelevamientoEquiposForm({
         identificado: boolean;
         consumoPromedioW: number | null;
         consumoMaxW: number | null;
+        posibleObsolescencia: string | null;
       }[] = data.equipos ?? [];
       if (detectados.length === 0) {
         setIaNote(
@@ -206,6 +207,7 @@ export function NuevoRelevamientoEquiposForm({
           tipoMontaje: null,
           alturaMontajeM: null,
           revisar: d.identificado !== true,
+          posibleObsolescencia: d.posibleObsolescencia,
         })),
       ]);
       const hallazgosNuevos: HallazgoInspeccionIa[] = data.hallazgos ?? [];
@@ -828,6 +830,11 @@ export function NuevoRelevamientoEquiposForm({
                           </button>
                         </>
                       )}
+                    </div>
+                  )}
+                  {e.posibleObsolescencia && (
+                    <div className="hint" style={{ color: "var(--warn)", margin: "2px 0 0" }}>
+                      <Icon name="warning" size={11} /> {e.posibleObsolescencia}
                     </div>
                   )}
 

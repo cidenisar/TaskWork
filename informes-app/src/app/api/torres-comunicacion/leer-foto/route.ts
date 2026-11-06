@@ -28,6 +28,7 @@ interface EquipoDetectado {
   identificado: boolean;
   consumoPromedioW: number | null;
   consumoMaxW: number | null;
+  posibleObsolescencia: string | null;
 }
 
 interface TorreDetectada {
@@ -141,7 +142,12 @@ export async function POST(req: NextRequest) {
         '- "consumoMaxW": igual criterio que consumoPromedioW pero para el consumo PICO/MÁXIMO — siempre mayor o igual a ' +
         "consumoPromedioW, null si consumoPromedioW también es null.\n" +
         'Para ambos campos de consumo: es una ESTIMACIÓN para planificación energética, no una medición — nunca inventes un número ' +
-        "para un equipo que no podés justificar de ninguna forma.\n\n" +
+        "para un equipo que no podés justificar de ninguna forma.\n" +
+        '- "posibleObsolescencia": SOLO si identificaste una marca/modelo específica y la reconocés con confianza — tu mejor estimación, ' +
+        "por tu conocimiento general de ese producto, de si es un modelo viejo/discontinuado (ej. \"Modelo discontinuado hace varios " +
+        'años, posible candidato a reemplazo por obsolescencia\"). Si el modelo te parece actual/vigente, no tenés con qué juzgar su ' +
+        'antigüedad, o el equipo es pasivo (antenas, pararrayos, cableado), devolvé null — nunca inventes una antigüedad que no podés ' +
+        "justificar por el modelo en sí. Es una sugerencia para que un humano la evalúe, nunca una afirmación categórica.\n\n" +
         "No inventes equipos que no estén en la foto, y no adivines una marca/modelo/altura/etiqueta que no puedas justificar por lo " +
         'que ves — pero "texto" y "categoriaEquipo" son obligatorios en todos los casos, con tu mejor estimación visual si hace falta.\n\n' +
         "Además de la lista de equipamiento, evaluá la TORRE EN SÍ (una sola evaluación combinando todas las fotos, no por equipo) para " +
@@ -160,8 +166,9 @@ export async function POST(req: NextRequest) {
         `${instruccionHallazgos}\n\n` +
         'Respondé ÚNICAMENTE con un JSON válido: {"equipos": [{"numero": number, "texto": string, "categoriaEquipo": string, ' +
         '"marcaModelo": string, "alturaM": string, "etiquetaYpf": string, "identificado": boolean, "consumoPromedioW": number | null, ' +
-        '"consumoMaxW": number | null}], "torre": {"tipoTorre": string, "tramosContados": number | null, "tramosConfiable": boolean}, ' +
-        `"hallazgos": [...]} donde ${INSTRUCCION_RESPUESTA_HALLAZGOS}. Sin texto antes ni después, sin bloque de código markdown.`,
+        '"consumoMaxW": number | null, "posibleObsolescencia": string | null}], "torre": {"tipoTorre": string, "tramosContados": ' +
+        `number | null, "tramosConfiable": boolean}, "hallazgos": [...]} donde ${INSTRUCCION_RESPUESTA_HALLAZGOS}. Sin texto antes ni ` +
+        "después, sin bloque de código markdown.",
       messages: [
         {
           role: "user",
@@ -228,6 +235,8 @@ export async function POST(req: NextRequest) {
           identificado: e.identificado === true,
           consumoPromedioW: Number.isFinite(e.consumoPromedioW) && (e.consumoPromedioW as number) > 0 ? (e.consumoPromedioW as number) : null,
           consumoMaxW: Number.isFinite(e.consumoMaxW) && (e.consumoMaxW as number) > 0 ? (e.consumoMaxW as number) : null,
+          posibleObsolescencia:
+            typeof e.posibleObsolescencia === "string" && e.posibleObsolescencia.trim() ? e.posibleObsolescencia.trim().slice(0, 300) : null,
         })),
       torre: {
         tipoTorre: (torre && tiposTorreValidos.has(torre.tipoTorre) ? torre.tipoTorre : "otro") as TorreTipo,

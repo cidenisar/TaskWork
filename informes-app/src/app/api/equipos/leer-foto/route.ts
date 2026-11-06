@@ -30,6 +30,7 @@ interface EquipoDetectado {
   identificado: boolean;
   consumoPromedioW: number | null;
   consumoMaxW: number | null;
+  posibleObsolescencia: string | null;
 }
 
 const CATEGORIAS_TEXTO = CATEGORIA_EQUIPO_OPCIONES.map((c) => `"${c}" (${CATEGORIA_EQUIPO_LABEL[c]})`).join(", ");
@@ -149,14 +150,20 @@ export async function POST(req: NextRequest) {
         'Para ambos campos de consumo: es una ESTIMACIÓN para planificación energética, no una medición — está bien dar un número ' +
         "aproximado si conocés el rango típico de ese modelo o de modelos muy similares de la misma familia/fabricante. Usá null en " +
         "los dos si no viste marca/modelo legible, o si la marca/modelo no te resulta nada familiar — nunca inventes un número para " +
-        "un equipo que no podés justificar de ninguna forma.\n\n" +
+        "un equipo que no podés justificar de ninguna forma.\n" +
+        '- "posibleObsolescencia": SOLO si identificaste una marca/modelo específica y la reconocés con confianza — tu mejor estimación, ' +
+        "por tu conocimiento general de ese producto, de si es un modelo viejo/discontinuado (ej. \"Modelo discontinuado hace varios " +
+        'años, posible candidato a reemplazo por obsolescencia\"). Si el modelo te parece actual/vigente, o no tenés con qué juzgar su ' +
+        'antigüedad, devolvé null — nunca inventes una antigüedad que no podés justificar por el modelo en sí (no por el ASPECTO FÍSICO ' +
+        "del equipo en la foto, que no es un dato confiable de antigüedad real). Es una sugerencia para que un humano la evalúe, nunca " +
+        "una afirmación categórica.\n\n" +
         "No inventes equipos que no estén en la foto, y no adivines una marca/modelo/serie/etiqueta que no puedas justificar por lo " +
         'que ves — pero "texto" y "categoriaEquipo" son obligatorios en todos los casos, con tu mejor estimación visual si hace falta.' +
         `${instruccionHallazgos}\n\n` +
         'Respondé ÚNICAMENTE con un JSON válido: un objeto {"equipos": [...], "hallazgos": [...]} donde "equipos" es un array de ' +
         'objetos {"texto": string, "categoriaEquipo": string, "marcaModelo": string, "numeroSerie": string, "etiquetaYpf": string, ' +
-        `"identificado": boolean, "consumoPromedioW": number | null, "consumoMaxW": number | null} y ${INSTRUCCION_RESPUESTA_HALLAZGOS}. ` +
-        "Sin texto antes ni después, sin bloque de código markdown.",
+        '"identificado": boolean, "consumoPromedioW": number | null, "consumoMaxW": number | null, "posibleObsolescencia": string | ' +
+        `null} y ${INSTRUCCION_RESPUESTA_HALLAZGOS}. Sin texto antes ni después, sin bloque de código markdown.`,
       messages: [
         {
           role: "user",
@@ -220,6 +227,8 @@ export async function POST(req: NextRequest) {
           identificado: e.identificado === true,
           consumoPromedioW: Number.isFinite(e.consumoPromedioW) && (e.consumoPromedioW as number) > 0 ? (e.consumoPromedioW as number) : null,
           consumoMaxW: Number.isFinite(e.consumoMaxW) && (e.consumoMaxW as number) > 0 ? (e.consumoMaxW as number) : null,
+          posibleObsolescencia:
+            typeof e.posibleObsolescencia === "string" && e.posibleObsolescencia.trim() ? e.posibleObsolescencia.trim().slice(0, 300) : null,
         })),
       hallazgos: parseHallazgosDetectados(resultado?.hallazgos, hallazgosItems),
     });

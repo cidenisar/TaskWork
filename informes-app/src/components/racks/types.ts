@@ -80,6 +80,12 @@ export interface EquipamientoItem {
    * verificarlo/corregirlo antes de guardar.
    */
   revisar?: boolean;
+  /**
+   * Solo transitorio en el form (no se persiste): sugerencia de la IA sobre
+   * si el modelo identificado parece viejo/discontinuado — a modo de aviso
+   * para evaluar un reemplazo por obsolescencia, nunca una afirmación.
+   */
+  posibleObsolescencia?: string | null;
 }
 
 export interface RackConEquipamiento {

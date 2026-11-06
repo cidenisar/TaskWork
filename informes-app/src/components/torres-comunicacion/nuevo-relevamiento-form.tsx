@@ -226,6 +226,7 @@ export function NuevoRelevamientoForm({
         identificado: boolean;
         consumoPromedioW: number | null;
         consumoMaxW: number | null;
+        posibleObsolescencia: string | null;
       }[] = data.equipos ?? [];
       const torreDetectada: { tipoTorre: TorreTipo; tramosContados: number | null; tramosConfiable: boolean } | undefined = data.torre;
       if (torreId === "__new" && torreDetectada) {
@@ -257,6 +258,7 @@ export function NuevoRelevamientoForm({
           consumoPromedioW: d.consumoPromedioW,
           consumoMaxW: d.consumoMaxW,
           revisar: d.identificado !== true,
+          posibleObsolescencia: d.posibleObsolescencia,
         })),
       ]);
       const hallazgosNuevos: HallazgoInspeccionIa[] = data.hallazgos ?? [];
@@ -869,6 +871,11 @@ export function NuevoRelevamientoForm({
                       {e.cantidad > 1 ? ` · x${e.cantidad}` : ""}
                       {e.consumoPromedioW ? ` · ~${e.consumoPromedioW}W prom.` : ""}
                       {e.consumoMaxW ? ` · ~${e.consumoMaxW}W máx.` : ""}
+                    </div>
+                  )}
+                  {e.posibleObsolescencia && (
+                    <div className="hint" style={{ color: "var(--warn)", margin: "2px 0 0" }}>
+                      <Icon name="warning" size={11} /> {e.posibleObsolescencia}
                     </div>
                   )}
 

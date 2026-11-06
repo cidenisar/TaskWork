@@ -209,6 +209,7 @@ export function NuevoRelevamientoForm({
         identificado: boolean;
         consumoPromedioW: number | null;
         consumoMaxW: number | null;
+        posibleObsolescencia: string | null;
       }[] = data.equipos ?? [];
       if (detectados.length === 0) {
         setIaNote(
@@ -235,6 +236,7 @@ export function NuevoRelevamientoForm({
           consumoMaxW: d.consumoMaxW,
           bocasDisponibles: null,
           revisar: d.identificado !== true,
+          posibleObsolescencia: d.posibleObsolescencia,
         })),
       ]);
       const hallazgosNuevos: HallazgoInspeccionIa[] = data.hallazgos ?? [];
@@ -894,6 +896,11 @@ export function NuevoRelevamientoForm({
                       {e.consumoPromedioW ? ` · ~${e.consumoPromedioW}W prom.` : ""}
                       {e.consumoMaxW ? ` · ~${e.consumoMaxW}W máx.` : ""}
                       {e.bocasDisponibles != null ? ` · ${e.bocasDisponibles} bocas disp.` : ""}
+                    </div>
+                  )}
+                  {e.posibleObsolescencia && (
+                    <div className="hint" style={{ color: "var(--warn)", margin: "2px 0 0" }}>
+                      <Icon name="warning" size={11} /> {e.posibleObsolescencia}
                     </div>
                   )}
 

@@ -242,6 +242,7 @@ export function MaterialesSection({
         identificado: boolean;
         consumoPromedioW: number | null;
         consumoMaxW: number | null;
+        posibleObsolescencia: string | null;
       }[] = data.equipos ?? [];
       if (detectados.length === 0) {
         setIaNote(
@@ -263,6 +264,7 @@ export function MaterialesSection({
           consumoPromedioW: d.consumoPromedioW,
           consumoMaxW: d.consumoMaxW,
           revisar: d.identificado !== true,
+          posibleObsolescencia: d.posibleObsolescencia,
         })),
       ]);
       const sinEtiqueta = detectados.filter((d) => d.identificado !== true).length;
@@ -608,6 +610,11 @@ export function MaterialesSection({
               {m.revisar && (
                 <div className="hint" style={{ color: "var(--warn)", margin: 0 }}>
                   <Icon name="warning" size={12} /> Sin etiqueta legible en la foto — revisá y corregí lo que no coincida.
+                </div>
+              )}
+              {m.posibleObsolescencia && (
+                <div className="hint" style={{ color: "var(--warn)", margin: 0 }}>
+                  <Icon name="warning" size={12} /> {m.posibleObsolescencia}
                 </div>
               )}
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-end" }}>
