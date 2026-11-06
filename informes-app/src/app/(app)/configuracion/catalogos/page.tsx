@@ -24,6 +24,7 @@ export default async function ConfiguracionCatalogosPage() {
     tiposRecursoAlturaRes,
     calibreCableRes,
     inspeccionIaRes,
+    lecturaGastosIaRes,
   ] = await Promise.all([
     supabase.from("catalogo_torres").select("id, nombre").order("nombre"),
     supabase.from("catalogo_clientes").select("id, nombre").order("nombre"),
@@ -36,6 +37,7 @@ export default async function ConfiguracionCatalogosPage() {
     supabase.from("catalogo_tipos_recurso_altura").select("id, nombre").order("nombre"),
     supabase.from("catalogo_calibre_cable").select("id, amperaje_max, calibre_mm2").order("amperaje_max"),
     supabase.from("catalogo_inspeccion_ia").select("id, modulo, orden, texto").order("orden"),
+    supabase.from("catalogo_lectura_gastos_ia").select("id, orden, texto").order("orden"),
   ]);
 
   const inspeccionIaItems = inspeccionIaRes.data ?? [];
@@ -77,6 +79,7 @@ export default async function ConfiguracionCatalogosPage() {
           inspeccionIaTorres: porModulo("torres"),
           inspeccionIaVehiculos: porModulo("vehiculos"),
           inspeccionIaInformeTecnico: porModulo("informe_tecnico"),
+          lecturaGastosIa: lecturaGastosIaRes.data ?? [],
         }}
       />
     </div>

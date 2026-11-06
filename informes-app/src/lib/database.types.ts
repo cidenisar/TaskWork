@@ -407,6 +407,15 @@ export type CatalogoInspeccionIaRow = {
   created_at: string;
 }
 
+/** Catálogo admin-configurable de instrucciones extra para la lectura de tickets/comprobantes con IA en Rendición de Gastos (ver leer-tickets). */
+export type CatalogoLecturaGastosIaRow = {
+  id: string;
+  orden: number;
+  texto: string;
+  created_by: string | null;
+  created_at: string;
+}
+
 export type InspeccionIaHallazgoRow = {
   id: string;
   modulo: ModuloInspeccionIa;
@@ -1007,6 +1016,11 @@ export interface Database {
         CatalogoInspeccionIaRow,
         Partial<CatalogoInspeccionIaRow> & Pick<CatalogoInspeccionIaRow, "modulo" | "texto">,
         Partial<CatalogoInspeccionIaRow>
+      >;
+      catalogo_lectura_gastos_ia: Tbl<
+        CatalogoLecturaGastosIaRow,
+        Partial<CatalogoLecturaGastosIaRow> & Pick<CatalogoLecturaGastosIaRow, "texto">,
+        Partial<CatalogoLecturaGastosIaRow>
       >;
       inspeccion_ia_hallazgos: Tbl<
         InspeccionIaHallazgoRow,

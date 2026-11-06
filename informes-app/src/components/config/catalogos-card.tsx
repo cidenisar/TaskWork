@@ -6,6 +6,7 @@ import { TorreTramosTab, type TramoTorreItem } from "./catalogos/torre-tramos-ta
 import { RecursoAlturaTab, type RecursoAlturaItem, type BandaRecursoAlturaItem } from "./catalogos/recurso-altura-tab";
 import { CalibreCableTab, type CalibreCableItem } from "./catalogos/calibre-cable-tab";
 import { InspeccionIaTab, type InspeccionIaItem } from "./catalogos/inspeccion-ia-tab";
+import { LecturaGastosIaTab, type LecturaGastosIaItem } from "./catalogos/lectura-gastos-ia-tab";
 
 type TabId =
   | "torres"
@@ -19,6 +20,7 @@ type TabId =
   | "iatorres"
   | "iavehiculos"
   | "iainformetecnico"
+  | "ialecturagastos"
   | "provincias"
   | "tipos"
   | "gastocat";
@@ -35,6 +37,7 @@ const TABS: { id: TabId; label: React.ReactNode }[] = [
   { id: "iatorres", label: "Inspección IA — Torres" },
   { id: "iavehiculos", label: "Inspección IA — Vehículos" },
   { id: "iainformetecnico", label: "Inspección IA — Informe Técnico" },
+  { id: "ialecturagastos", label: "Lectura de Tickets IA — Gastos" },
   { id: "provincias", label: "Provincias" },
   { id: "tipos", label: "Tipos de Informe" },
   { id: "gastocat", label: "Categorías de Gasto" },
@@ -57,6 +60,7 @@ export interface CatalogosData {
   inspeccionIaTorres: InspeccionIaItem[];
   inspeccionIaVehiculos: InspeccionIaItem[];
   inspeccionIaInformeTecnico: InspeccionIaItem[];
+  lecturaGastosIa: LecturaGastosIaItem[];
 }
 
 /** Vehículos (alta, service, vencimientos) se trasladó a Panel de Supervisión → Vehículos — ver src/components/panel/vehiculos/. */
@@ -102,6 +106,7 @@ export function CatalogosCard({ data }: { data: CatalogosData }) {
       {tab === "iatorres" && <InspeccionIaTab modulo="torres" items={data.inspeccionIaTorres} />}
       {tab === "iavehiculos" && <InspeccionIaTab modulo="vehiculos" items={data.inspeccionIaVehiculos} />}
       {tab === "iainformetecnico" && <InspeccionIaTab modulo="informe_tecnico" items={data.inspeccionIaInformeTecnico} />}
+      {tab === "ialecturagastos" && <LecturaGastosIaTab items={data.lecturaGastosIa} />}
       {tab === "provincias" && (
         <SimpleCatalogTab
           tabla="catalogo_provincias"

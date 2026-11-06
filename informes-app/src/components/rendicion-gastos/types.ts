@@ -26,3 +26,6 @@ export interface CatalogosRendicion {
   tecnicos: { nombre: string; torre: string | null }[];
   torres: string[];
 }
+
+/** Máximo de fotos de tickets por lectura con IA — mismo criterio que REMITO_FOTO_MAX (ver materiales-types.ts): suficiente para una carga típica, sin pasarse de tokens por request. */
+export const TICKETS_FOTO_MAX = 12;
