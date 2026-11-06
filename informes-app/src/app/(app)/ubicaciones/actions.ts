@@ -18,6 +18,7 @@ import { renderMantenimientoPdf } from "@/lib/pdf/render";
 import { buildMantenimientoFilename } from "@/lib/pdf/filename";
 import { obtenerDestinatariosAutoEnvio } from "@/lib/email/destinatarios-auto-envio";
 import { enviarPdfPorEmail } from "@/lib/email/enviar-pdf";
+import { verificarLimiteIa } from "@/lib/ai/rate-limit";
 import type {
   MotivoBaja,
   MotivoEntregaDeposito,
@@ -115,6 +116,9 @@ export async function estimarConsumoRacksAction(rackIds: string[]): Promise<Esti
   if (rackIds.length === 0) return { success: true, estimados: 0, sinDato: 0 };
 
   const supabase = await createClient();
+  const limite = await verificarLimiteIa(supabase, profile.id);
+  if (!limite.permitido) return { success: false, error: limite.error };
+
   const { data: pendientes, error } = await supabase
     .from("rack_equipamientos")
     .select("id, texto, marca_modelo, categoria_equipo")
@@ -150,6 +154,9 @@ export async function estimarConsumoEquiposAction(ubicacionIds: string[]): Promi
   if (ubicacionIds.length === 0) return { success: true, estimados: 0, sinDato: 0 };
 
   const supabase = await createClient();
+  const limite = await verificarLimiteIa(supabase, profile.id);
+  if (!limite.permitido) return { success: false, error: limite.error };
+
   const { data: pendientes, error } = await supabase
     .from("equipos")
     .select("id, texto, marca_modelo, categoria_equipo")

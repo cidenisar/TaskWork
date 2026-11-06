@@ -3,6 +3,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { registrarUsoIa } from "@/lib/ai/registrar-uso";
+import { verificarLimiteIa } from "@/lib/ai/rate-limit";
 
 /**
  * "Mejorar con IA" (spec sección 6.1 / 10, funcionalidad #1): corrige ortografía
@@ -27,6 +28,11 @@ export async function POST(request: Request) {
   }
 
   const supabase = await createClient();
+
+  const limite = await verificarLimiteIa(supabase, profile.id);
+  if (!limite.permitido) {
+    return NextResponse.json({ error: limite.error }, { status: 429 });
+  }
 
   try {
     const client = new Anthropic();

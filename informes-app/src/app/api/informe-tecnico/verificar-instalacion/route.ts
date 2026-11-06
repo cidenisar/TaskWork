@@ -3,6 +3,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { registrarUsoIa } from "@/lib/ai/registrar-uso";
+import { verificarLimiteIa } from "@/lib/ai/rate-limit";
 
 /** Tope de fotos de evidencia que se mandan a esta verificación — más que esto no suma precisión y encarece/alenta la llamada. */
 const FOTOS_VERIFICACION_MAX = 15;
@@ -41,6 +42,11 @@ export async function POST(req: NextRequest) {
 
   if (!process.env.ANTHROPIC_API_KEY) {
     return NextResponse.json({ error: "La verificación con IA no está configurada en este entorno (falta ANTHROPIC_API_KEY)." }, { status: 503 });
+  }
+
+  const limite = await verificarLimiteIa(supabase, profile.id);
+  if (!limite.permitido) {
+    return NextResponse.json({ error: limite.error }, { status: 429 });
   }
 
   const formData = await req.formData();

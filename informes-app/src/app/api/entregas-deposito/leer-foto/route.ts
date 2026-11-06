@@ -6,6 +6,7 @@ import { CATEGORIA_EQUIPO_OPCIONES, CATEGORIA_EQUIPO_LABEL } from "@/components/
 import { ENTREGA_FOTO_IA_MAX } from "@/components/deposito/types";
 import type { EquipoCategoria } from "@/lib/database.types";
 import { registrarUsoIa } from "@/lib/ai/registrar-uso";
+import { verificarLimiteIa } from "@/lib/ai/rate-limit";
 
 /**
  * Lee hasta ENTREGA_FOTO_IA_MAX fotos de material/equipo que se entrega a
@@ -60,6 +61,11 @@ export async function POST(req: NextRequest) {
 
   if (!process.env.ANTHROPIC_API_KEY) {
     return NextResponse.json({ error: "La lectura de fotos con IA no está configurada en este entorno (falta ANTHROPIC_API_KEY)." }, { status: 503 });
+  }
+
+  const limite = await verificarLimiteIa(supabase, profile.id);
+  if (!limite.permitido) {
+    return NextResponse.json({ error: limite.error }, { status: 429 });
   }
 
   const formData = await req.formData();

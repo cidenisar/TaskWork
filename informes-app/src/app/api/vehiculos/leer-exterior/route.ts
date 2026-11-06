@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { VEHICULO_EXTERIOR_FOTO_MAX } from "@/components/panel/vehiculos/alta-types";
 import { instruccionInspeccionIa, INSTRUCCION_RESPUESTA_HALLAZGOS, parseHallazgosDetectados } from "@/lib/inspeccion-ia/prompt";
 import { registrarUsoIa } from "@/lib/ai/registrar-uso";
+import { verificarLimiteIa } from "@/lib/ai/rate-limit";
 
 /**
  * Lee fotos del EXTERIOR de un vehículo (patente, marca/modelo, estado
@@ -42,6 +43,11 @@ export async function POST(req: NextRequest) {
 
   if (!process.env.ANTHROPIC_API_KEY) {
     return NextResponse.json({ error: "La lectura de fotos con IA no está configurada en este entorno (falta ANTHROPIC_API_KEY)." }, { status: 503 });
+  }
+
+  const limite = await verificarLimiteIa(supabase, profile.id);
+  if (!limite.permitido) {
+    return NextResponse.json({ error: limite.error }, { status: 429 });
   }
 
   const formData = await req.formData();

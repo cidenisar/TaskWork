@@ -5,6 +5,7 @@ import { puedeVerEstadisticas } from "@/lib/types";
 import { createClient } from "@/lib/supabase/server";
 import { getEstadisticasBase } from "@/lib/estadisticas/aggregates";
 import { registrarUsoIa } from "@/lib/ai/registrar-uso";
+import { verificarLimiteIa } from "@/lib/ai/rate-limit";
 
 /**
  * Insights automáticos (spec sección 8.4 / 10 #5): pre-calculamos números
@@ -34,6 +35,11 @@ export async function GET() {
 
   if (!process.env.ANTHROPIC_API_KEY) {
     return NextResponse.json({ error: "Los insights automáticos no están configurados en este entorno (falta ANTHROPIC_API_KEY)." }, { status: 503 });
+  }
+
+  const limite = await verificarLimiteIa(supabase, profile.id);
+  if (!limite.permitido) {
+    return NextResponse.json({ error: limite.error }, { status: 429 });
   }
 
   try {

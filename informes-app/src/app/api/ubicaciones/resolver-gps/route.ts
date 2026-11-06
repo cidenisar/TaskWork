@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { distanciaMetros } from "@/lib/geo";
 import { labelUbicacion, type Ubicacion } from "@/components/ubicaciones/types";
 import { registrarUsoIa } from "@/lib/ai/registrar-uso";
+import { verificarLimiteIa } from "@/lib/ai/rate-limit";
 
 /**
  * Dado un punto GPS, intenta ubicar al técnico sin que tenga que buscar a
@@ -118,7 +119,7 @@ export async function POST(req: NextRequest) {
   }
 
   let localidad = localidadCruda;
-  if (localidadCruda && process.env.ANTHROPIC_API_KEY) {
+  if (localidadCruda && process.env.ANTHROPIC_API_KEY && (await verificarLimiteIa(supabase, profile.id)).permitido) {
     const { data: localidadesData } = await supabase
       .from("ubicaciones")
       .select("localidad")

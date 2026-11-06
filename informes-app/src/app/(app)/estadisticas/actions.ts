@@ -4,6 +4,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { requireProfile } from "@/lib/auth";
 import { puedeVerEstadisticas } from "@/lib/types";
 import { createClient } from "@/lib/supabase/server";
+import { verificarLimiteIa } from "@/lib/ai/rate-limit";
 
 export interface VerificacionResult {
   success: boolean;
@@ -29,6 +30,8 @@ export async function verificarFotosInformeAction(informeId: string): Promise<Ve
   }
 
   const supabase = await createClient();
+  const limite = await verificarLimiteIa(supabase, profile.id);
+  if (!limite.permitido) return { success: false, error: limite.error };
 
   const { data: informe, error: informeErr } = await supabase
     .from("informes_tecnicos")

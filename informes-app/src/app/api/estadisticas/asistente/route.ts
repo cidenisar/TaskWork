@@ -5,6 +5,7 @@ import { puedeVerEstadisticas } from "@/lib/types";
 import { createClient } from "@/lib/supabase/server";
 import { ESTADISTICAS_TOOLS, ejecutarHerramienta } from "@/lib/estadisticas/tools";
 import { registrarUsoIa } from "@/lib/ai/registrar-uso";
+import { verificarLimiteIa } from "@/lib/ai/rate-limit";
 
 const SYSTEM_PROMPT =
   "Sos un asistente que responde preguntas sobre informes técnicos y rendiciones de gastos de un equipo de " +
@@ -34,6 +35,12 @@ export async function POST(request: Request) {
   }
 
   const supabase = await createClient();
+
+  const limite = await verificarLimiteIa(supabase, profile.id);
+  if (!limite.permitido) {
+    return NextResponse.json({ error: limite.error }, { status: 429 });
+  }
+
   const client = new Anthropic();
   const messages: Anthropic.Beta.BetaMessageParam[] = [{ role: "user", content: pregunta }];
 
