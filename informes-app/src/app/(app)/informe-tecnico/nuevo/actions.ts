@@ -1,5 +1,6 @@
 "use server";
 
+import nodemailer from "nodemailer";
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { requireProfile } from "@/lib/auth";
 import { nuevoNumeroGeneracionInforme } from "@/lib/informe-tecnico/numero-generacion";
@@ -185,6 +186,15 @@ function formatFechaArg(fecha: string): string {
   return d && m && y ? `${d}/${m}/${y}` : fecha;
 }
 
+/**
+ * Envío por Gmail SMTP (cuenta `GMAIL_USER`, autenticada con una
+ * "contraseña de aplicación" en `GMAIL_APP_PASSWORD` — nunca la contraseña
+ * normal de la cuenta). Reemplaza al envío anterior por Resend: Resend solo
+ * deja mandar "from" un dominio que vos verificás con DNS, y nadie puede
+ * verificar `gmail.com` porque es de Google — por eso, para mandar
+ * realmente como una cuenta de Gmail, hay que ir directo al SMTP de Gmail
+ * en vez de pasar por un proveedor tipo Resend.
+ */
 async function enviarEmailInforme(opts: {
   to: string[];
   numeroGeneracion: string;
@@ -193,21 +203,18 @@ async function enviarEmailInforme(opts: {
   filename: string;
 }): Promise<boolean> {
   try {
-    const res = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        from: process.env.RESEND_FROM_EMAIL || "informes@resend.dev",
-        to: opts.to,
-        subject: `Informe Técnico ${opts.numeroGeneracion} — ${opts.titulo}`,
-        text: `Se generó el informe técnico ${opts.numeroGeneracion} (${opts.titulo}). Se adjunta el PDF.`,
-        attachments: [{ filename: opts.filename, content: opts.pdfBuffer.toString("base64") }],
-      }),
+    const transporter = nodemailer.createTransport({
+      service: "gmail",
+      auth: { user: process.env.GMAIL_USER, pass: process.env.GMAIL_APP_PASSWORD },
     });
-    return res.ok;
+    await transporter.sendMail({
+      from: process.env.GMAIL_USER,
+      to: opts.to,
+      subject: `Informe Técnico ${opts.numeroGeneracion} — ${opts.titulo}`,
+      text: `Se generó el informe técnico ${opts.numeroGeneracion} (${opts.titulo}). Se adjunta el PDF.`,
+      attachments: [{ filename: opts.filename, content: opts.pdfBuffer }],
+    });
+    return true;
   } catch {
     return false;
   }
@@ -717,7 +724,7 @@ export async function crearInformeTecnicoAction(formData: FormData): Promise<Cre
   }
 
   let emailEnviado = false;
-  if (config?.auto_enviar_email && payload.emailsSeleccionados.length && process.env.RESEND_API_KEY) {
+  if (config?.auto_enviar_email && payload.emailsSeleccionados.length && process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD) {
     emailEnviado = await enviarEmailInforme({
       to: payload.emailsSeleccionados,
       numeroGeneracion,
