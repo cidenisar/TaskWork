@@ -1729,3 +1729,96 @@ ninguna UI puede crear al primero sin romper la regla. Vale la pena
 decidir y ejecutar ese bootstrap ANTES de dar por terminada la feature, no
 después: hasta que exista al menos un superusuario, ninguna de las
 acciones exclusivas nuevas es alcanzable por nadie.
+
+## 27. Auditoría de seguridad de una app Next.js/Supabase — checklist y hallazgos reusables
+
+**Contexto:** `informes-app` — el usuario pidió una auditoría completa de
+seguridad (código + base + dependencias) y un diagnóstico de contra qué
+estándar está la app. El proceso y los hallazgos de tipo "esto puede pasar
+en cualquier proyecto de esta familia" quedan acá.
+
+**1. El gate de un rol "techo" tiene que estar en LAS DOS capas, con la
+MISMA regla exacta — la capa de Next.js sola no alcanza.** En §26 se
+documentó la regla "solo un superusuario puede asignar superusuario", y la
+Server Action (`usuarios.ts`) la cumplía bien
+(`rol === "superusuario" ? requireSuperusuario() : requireAdmin()`). Pero
+el trigger de Postgres que protege `profiles.rol` contra ediciones propias
+(`protect_profile_privileged_fields`) solo chequeaba `is_admin()` — que
+devuelve true tanto para 'admin' como para 'superusuario' por ser un rol
+superset (ver §26.1). Resultado: un Admin común, pegándole directo a la
+REST API de Supabase con su propia sesión (sin pasar por la UI/Server
+Action), podía hacer `PATCH profiles?id=eq.<su-propio-id>` con
+`{"rol":"superusuario"}` y el trigger lo dejaba pasar — rompiendo la regla
+de bootstrap exclusiva. La regla "exclusiva" de un rol techo nunca es
+"nadie más puede hacer esto en la UI", es "nadie más puede hacer esto,
+punto" — y la única capa que de verdad lo garantiza contra cualquier
+cliente (app, curl, Postman) es la base. Siempre que un rol sea superset
+de otro (§26.1), cualquier regla MÁS estricta que aplique solo al rol
+superior (asignar/quitar ESE rol puntual, no las demás acciones que sí
+comparte con el rol de abajo) necesita su propio chequeo explícito en el
+trigger/policy — no alcanza con el chequeo genérico `is_admin()` que ya
+usan las demás columnas protegidas.
+
+**2. Un `next`/`redirect_to` que sale de un query param nunca se valida
+solo con `startsWith("/")`.** `"//evil.com"` también empieza con `/` —
+los navegadores lo interpretan como URL protocol-relative (mismo esquema
+que la página actual, pero dominio distinto) y redirigen afuera del sitio
+igual. Cualquier login/flujo con un parámetro "volver a esta página
+después" tiene que rechazar explícitamente los que arrancan con `//` (y,
+si se quiere ser estricto, con `/\` — algunos navegadores viejos también
+lo tratan como protocol-relative).
+
+**3. Los advisors de seguridad/performance de Supabase (`get_advisors`)
+son el primer paso de cualquier auditoría, no un detalle opcional —** y
+conviene correrlos de nuevo después de cualquier tanda de migraciones,
+no solo al final. En esta pasada encontraron: una tabla de diagnóstico
+vieja con RLS deshabilitada y expuesta en el schema público (quedó
+documentada en el README como pendiente de un DROP que se colgaba con la
+herramienta de turno — funcionó con `apply_migration`, igual que el resto
+de esta sesión); y 5 funciones `SECURITY DEFINER` (los helpers `is_admin`,
+`is_admin_or_supervisor`, `is_superusuario`, `protect_profile_privileged_fields`,
+`handle_new_user`) invocables directo como RPC
+(`/rest/v1/rpc/is_admin`) por `anon`/`authenticated` — bajo riesgo real en
+este caso puntual (son funciones de solo-lectura sobre el propio usuario, o
+funciones de trigger que fallan si se llaman fuera de un trigger), pero la
+forma correcta a mediano plazo es moverlas a un schema no expuesto
+(`private.is_admin()`) en vez de dejarlas en `public`
+— **ojo:** no alcanza con `REVOKE EXECUTE FROM anon, authenticated` a
+secas, porque esas mismas funciones las siguen llamando las policies de
+RLS que corren como el rol de quien hace la consulta — revocar el EXECUTE
+rompe todas las policies que las usan. El fix real es "moverlas de
+schema", no "sacarles el permiso".
+
+**4. No hay rate-limiting de ningún tipo en los endpoints que llaman a la
+API de Anthropic (`/api/**/leer-*`, `/api/estadisticas/asistente`,
+`/api/vehiculos/comparar-estado`, etc.).** Cualquier usuario autenticado
+(cualquier rol, no solo Admin) puede llamarlos sin límite — no es solo un
+tema de performance, es un vector de abuso de costo real (cada llamada
+gasta crédito de la cuenta de Anthropic). Vale la pena, en el próximo
+proyecto con módulos de IA por foto, pensar el límite (por usuario y por
+ventana de tiempo) DESDE el diseño del endpoint, reusando la tabla de
+`ia_uso`/`registrarUsoIa` que ya existe para medir costo — no hace falta
+infra nueva (Redis/Upstash) si ya se está logueando cada llamada con
+usuario y timestamp: alcanza con un `count` contra esa tabla antes de
+dejar pasar la llamada.
+
+**5. `next.config.ts` sin un bloque `headers()` es el default de
+`create-next-app`, no una decisión — así que toda app nueva arranca sin
+`X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`,
+`Permissions-Policy` ni HSTS.** Agregarlos es una sola función en
+`next.config.ts`, sin riesgo de romper nada (son headers de respuesta, no
+cambian comportamiento de la app) — conviene copiarlo en el scaffold de
+cualquier proyecto nuevo de esta familia en vez de esperar a una
+auditoría para notarlo. Un Content-Security-Policy real, en cambio, sí
+hay que armarlo caso por caso (depende de qué CDNs/fuentes/scripts use
+cada app — Leaflet, Google Fonts, etc.) y probarlo visualmente antes de
+mandarlo a producción, así que no entra en ese mismo "default gratis".
+
+**6. `npm audit` no es solo para dependencias de testing/lint — revisa
+siempre el árbol de producción primero (`npm audit --omit=dev`).** En esta
+pasada encontró a Next.js mismo con un CVE crítico (RCE) vigente en la
+versión que estaba instalada — subirlo de versión dentro del mismo major
+(16.3.4 → 16.4.5) fue seguro (típecheck + lint + build limpios después),
+pero conviene correr esta auditoría como parte del checklist de cualquier
+sesión de "mantenimiento" o antes de un deploy grande, no solo cuando el
+usuario pide una auditoría explícita.
