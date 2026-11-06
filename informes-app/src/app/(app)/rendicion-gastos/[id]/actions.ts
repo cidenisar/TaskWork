@@ -6,6 +6,8 @@ import { requireProfile } from "@/lib/auth";
 import { renderRendicionGastosPdf } from "@/lib/pdf/render";
 import { formatFechaArg } from "@/lib/pdf/common";
 import { buildRendicionGastosFilename } from "@/lib/pdf/filename";
+import { obtenerDestinatariosAutoEnvio } from "@/lib/email/destinatarios-auto-envio";
+import { enviarPdfPorEmail } from "@/lib/email/enviar-pdf";
 
 export interface GastoActionResult {
   success: boolean;
@@ -223,6 +225,17 @@ export async function cerrarRendicionAction(rendicionId: string): Promise<Cerrar
 
   await db.from("rendiciones_gastos").update({ pdf_url: pdfPath, estado: "cerrada" }).eq("id", rendicionId);
   const { data: signed } = await db.storage.from("informes-pdf").createSignedUrl(pdfPath, 60 * 60);
+
+  const destinatarios = await obtenerDestinatariosAutoEnvio(db);
+  if (destinatarios.length > 0) {
+    await enviarPdfPorEmail({
+      to: destinatarios,
+      asunto: `Rendición de Gastos ${rendicion.numero_generacion} — ${rendicion.motivo}`,
+      texto: `Se cerró la rendición de gastos "${rendicion.motivo}" (${rendicion.numero_generacion}). Se adjunta el PDF.`,
+      pdfBuffer,
+      filename: pdfFilename,
+    });
+  }
 
   revalidatePath(`/rendicion-gastos/${rendicionId}`);
   revalidatePath("/rendicion-gastos/historial");

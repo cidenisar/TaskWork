@@ -7,6 +7,8 @@ import { renderTorreComunicacionPdf } from "@/lib/pdf/render";
 import { buildTorreComunicacionFilename } from "@/lib/pdf/filename";
 import { resolverUbicacionId, tagGpsSiFalta, type PayloadUbicacionNueva, type PayloadGps } from "@/lib/ubicaciones/resolver";
 import { calcularResumenEquipamientoTorre } from "@/components/torres-comunicacion/types";
+import { obtenerDestinatariosAutoEnvio } from "@/lib/email/destinatarios-auto-envio";
+import { enviarPdfPorEmail } from "@/lib/email/enviar-pdf";
 import type { EstadoChecklist, TorreComunicacionCategoriaEquipo, TorreTipo } from "@/lib/database.types";
 
 interface PayloadHallazgo {
@@ -301,6 +303,17 @@ export async function crearRelevamientoTorreComunicacionAction(formData: FormDat
       .eq("id", relevamientoId);
     const { data: signed } = await supabase.storage.from("informes-pdf").createSignedUrl(pdfPath, 60 * 60);
     pdfUrl = signed?.signedUrl ?? null;
+
+    const destinatarios = await obtenerDestinatariosAutoEnvio(supabase);
+    if (destinatarios.length > 0) {
+      await enviarPdfPorEmail({
+        to: destinatarios,
+        asunto: `Torre de Comunicación ${numeroGeneracion} — ${torreRow.denominacion}`,
+        texto: `Se registró un relevamiento de la torre "${torreRow.denominacion}" (${numeroGeneracion}). Se adjunta el PDF.`,
+        pdfBuffer,
+        filename: pdfFilename,
+      });
+    }
   }
 
   return { success: true, relevamientoId: relevamientoId!, numeroGeneracion, pdfUrl };

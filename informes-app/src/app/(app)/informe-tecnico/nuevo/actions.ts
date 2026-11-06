@@ -1,7 +1,7 @@
 "use server";
 
-import nodemailer from "nodemailer";
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
+import { enviarPdfPorEmail } from "@/lib/email/enviar-pdf";
 import { requireProfile } from "@/lib/auth";
 import { nuevoNumeroGeneracionInforme } from "@/lib/informe-tecnico/numero-generacion";
 import { renderInformeTecnicoPdf } from "@/lib/pdf/render";
@@ -184,40 +184,6 @@ export interface CrearInformeResult {
 function formatFechaArg(fecha: string): string {
   const [y, m, d] = fecha.split("-");
   return d && m && y ? `${d}/${m}/${y}` : fecha;
-}
-
-/**
- * Envío por Gmail SMTP (cuenta `GMAIL_USER`, autenticada con una
- * "contraseña de aplicación" en `GMAIL_APP_PASSWORD` — nunca la contraseña
- * normal de la cuenta). Reemplaza al envío anterior por Resend: Resend solo
- * deja mandar "from" un dominio que vos verificás con DNS, y nadie puede
- * verificar `gmail.com` porque es de Google — por eso, para mandar
- * realmente como una cuenta de Gmail, hay que ir directo al SMTP de Gmail
- * en vez de pasar por un proveedor tipo Resend.
- */
-async function enviarEmailInforme(opts: {
-  to: string[];
-  numeroGeneracion: string;
-  titulo: string;
-  pdfBuffer: Buffer;
-  filename: string;
-}): Promise<boolean> {
-  try {
-    const transporter = nodemailer.createTransport({
-      service: "gmail",
-      auth: { user: process.env.GMAIL_USER, pass: process.env.GMAIL_APP_PASSWORD },
-    });
-    await transporter.sendMail({
-      from: process.env.GMAIL_USER,
-      to: opts.to,
-      subject: `Informe Técnico ${opts.numeroGeneracion} — ${opts.titulo}`,
-      text: `Se generó el informe técnico ${opts.numeroGeneracion} (${opts.titulo}). Se adjunta el PDF.`,
-      attachments: [{ filename: opts.filename, content: opts.pdfBuffer }],
-    });
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 export async function crearInformeTecnicoAction(formData: FormData): Promise<CrearInformeResult> {
@@ -725,10 +691,10 @@ export async function crearInformeTecnicoAction(formData: FormData): Promise<Cre
 
   let emailEnviado = false;
   if (config?.auto_enviar_email && payload.emailsSeleccionados.length && process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD) {
-    emailEnviado = await enviarEmailInforme({
+    emailEnviado = await enviarPdfPorEmail({
       to: payload.emailsSeleccionados,
-      numeroGeneracion,
-      titulo: payload.titulo.trim(),
+      asunto: `Informe Técnico ${numeroGeneracion} — ${payload.titulo.trim()}`,
+      texto: `Se generó el informe técnico ${numeroGeneracion} (${payload.titulo.trim()}). Se adjunta el PDF.`,
       pdfBuffer,
       filename: pdfFilename,
     });

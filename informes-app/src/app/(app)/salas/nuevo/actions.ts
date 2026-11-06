@@ -6,6 +6,8 @@ import { nuevoNumeroGeneracionSala } from "@/lib/salas/numero-generacion";
 import { renderSalaPdf } from "@/lib/pdf/render";
 import { buildSalaFilename } from "@/lib/pdf/filename";
 import { resolverUbicacionId, tagGpsSiFalta, type PayloadUbicacionNueva, type PayloadGps } from "@/lib/ubicaciones/resolver";
+import { obtenerDestinatariosAutoEnvio } from "@/lib/email/destinatarios-auto-envio";
+import { enviarPdfPorEmail } from "@/lib/email/enviar-pdf";
 import type { SalaTipoConstruccion } from "@/lib/database.types";
 
 export interface CrearSalaPayload {
@@ -136,6 +138,17 @@ export async function crearSalaAction(formData: FormData): Promise<CrearSalaResu
     await supabase.from("salas").update({ pdf_url: pdfPath, pdf_generado_at: new Date().toISOString() }).eq("id", salaId);
     const { data: signed } = await supabase.storage.from("informes-pdf").createSignedUrl(pdfPath, 60 * 60);
     pdfUrl = signed?.signedUrl ?? null;
+
+    const destinatarios = await obtenerDestinatariosAutoEnvio(supabase);
+    if (destinatarios.length > 0) {
+      await enviarPdfPorEmail({
+        to: destinatarios,
+        asunto: `Sala ${numeroGeneracion} — ${payload.denominacion.trim()}`,
+        texto: `Se registró la sala "${payload.denominacion.trim()}" (${numeroGeneracion}). Se adjunta el PDF.`,
+        pdfBuffer,
+        filename: pdfFilename,
+      });
+    }
   }
 
   return { success: true, salaId, numeroGeneracion, pdfUrl };

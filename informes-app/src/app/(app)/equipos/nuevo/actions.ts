@@ -7,6 +7,8 @@ import { renderEquipoPdf } from "@/lib/pdf/render";
 import { buildEquipoFilename } from "@/lib/pdf/filename";
 import { resolverUbicacionId, tagGpsSiFalta, type PayloadUbicacionNueva, type PayloadGps } from "@/lib/ubicaciones/resolver";
 import { calcularResumenEquipos } from "@/components/equipos/types";
+import { obtenerDestinatariosAutoEnvio } from "@/lib/email/destinatarios-auto-envio";
+import { enviarPdfPorEmail } from "@/lib/email/enviar-pdf";
 import { puedeGestionarDeposito } from "@/lib/types";
 import { labelUbicacion } from "@/components/ubicaciones/types";
 import type { EquipoCategoria, EstadoChecklist, TipoMontajeCamara } from "@/lib/database.types";
@@ -292,6 +294,17 @@ export async function crearRelevamientoEquiposAction(formData: FormData): Promis
       .eq("id", relevamientoId);
     const { data: signed } = await supabase.storage.from("informes-pdf").createSignedUrl(pdfPath, 60 * 60);
     pdfUrl = signed?.signedUrl ?? null;
+
+    const destinatarios = await obtenerDestinatariosAutoEnvio(supabase);
+    if (destinatarios.length > 0) {
+      await enviarPdfPorEmail({
+        to: destinatarios,
+        asunto: `Equipos Individuales ${numeroGeneracion} — ${ubicacionRow.sitio}`,
+        texto: `Se registró un relevamiento de equipos individuales en "${ubicacionRow.sitio}" (${numeroGeneracion}). Se adjunta el PDF.`,
+        pdfBuffer,
+        filename: pdfFilename,
+      });
+    }
   }
 
   return { success: true, relevamientoId: relevamientoId!, numeroGeneracion, pdfUrl };

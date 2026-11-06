@@ -7,6 +7,8 @@ import { renderTableroPdf } from "@/lib/pdf/render";
 import { buildTableroFilename } from "@/lib/pdf/filename";
 import { resolverUbicacionId, tagGpsSiFalta, type PayloadUbicacionNueva, type PayloadGps } from "@/lib/ubicaciones/resolver";
 import { calcularResumenEquipamiento, itemMideCorriente } from "@/components/tableros/types";
+import { obtenerDestinatariosAutoEnvio } from "@/lib/email/destinatarios-auto-envio";
+import { enviarPdfPorEmail } from "@/lib/email/enviar-pdf";
 import type {
   EstadoChecklist,
   TableroCategoriaEquipo,
@@ -454,6 +456,17 @@ export async function crearMedicionTableroAction(formData: FormData): Promise<Cr
     await supabase.from("tablero_mediciones").update({ pdf_url: pdfPath, pdf_generado_at: new Date().toISOString() }).eq("id", medicionId);
     const { data: signed } = await supabase.storage.from("informes-pdf").createSignedUrl(pdfPath, 60 * 60);
     pdfUrl = signed?.signedUrl ?? null;
+
+    const destinatarios = await obtenerDestinatariosAutoEnvio(supabase);
+    if (destinatarios.length > 0) {
+      await enviarPdfPorEmail({
+        to: destinatarios,
+        asunto: `Tablero ${numeroGeneracion} — ${tableroRow.denominacion}`,
+        texto: `Se registró una medición del tablero "${tableroRow.denominacion}" (${numeroGeneracion}). Se adjunta el PDF.`,
+        pdfBuffer,
+        filename: pdfFilename,
+      });
+    }
   }
 
   // El unifilar (PDF A3 + DXF) queda fuera de esta app por decisión del

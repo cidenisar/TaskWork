@@ -13,6 +13,8 @@ import { renderEntregaDepositoPdf } from "@/lib/pdf/render";
 import { buildEntregaDepositoFilename } from "@/lib/pdf/filename";
 import { resolverEquipo, TABLA_POR_TIPO } from "@/lib/equipamiento/resolver-equipo";
 import { ejecutarBaja } from "@/lib/equipamiento/dar-de-baja";
+import { obtenerDestinatariosAutoEnvio } from "@/lib/email/destinatarios-auto-envio";
+import { enviarPdfPorEmail } from "@/lib/email/enviar-pdf";
 import type {
   MotivoBaja,
   MotivoEntregaDeposito,
@@ -357,6 +359,17 @@ export async function entregarEquipoADepositoAction(payload: EntregarEquipoADepo
     .upload(pdfPath, pdfBuffer, { contentType: "application/pdf", upsert: true });
   if (!pdfUpErr) {
     await service.from("entregas_deposito").update({ pdf_url: pdfPath, pdf_generado_at: new Date().toISOString() }).eq("id", entregaId);
+
+    const destinatarios = await obtenerDestinatariosAutoEnvio(service);
+    if (destinatarios.length > 0) {
+      await enviarPdfPorEmail({
+        to: destinatarios,
+        asunto: `Entrega a Depósito ${numeroGeneracion} — ${equipo.texto}`,
+        texto: `Se entregó a depósito "${equipo.texto}" (${numeroGeneracion}). Se adjunta el PDF.`,
+        pdfBuffer,
+        filename: pdfFilename,
+      });
+    }
   }
 
   revalidatePath("/ubicaciones/[id]", "page");

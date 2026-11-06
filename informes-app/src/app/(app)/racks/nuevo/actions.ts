@@ -7,6 +7,8 @@ import { renderRackPdf } from "@/lib/pdf/render";
 import { buildRackFilename } from "@/lib/pdf/filename";
 import { resolverUbicacionId, tagGpsSiFalta, type PayloadUbicacionNueva, type PayloadGps } from "@/lib/ubicaciones/resolver";
 import { calcularResumenEquipamiento } from "@/components/racks/types";
+import { obtenerDestinatariosAutoEnvio } from "@/lib/email/destinatarios-auto-envio";
+import { enviarPdfPorEmail } from "@/lib/email/enviar-pdf";
 import type { EstadoChecklist, RackCategoriaEquipo } from "@/lib/database.types";
 
 interface PayloadHallazgo {
@@ -298,6 +300,17 @@ export async function crearRelevamientoRackAction(formData: FormData): Promise<C
     await supabase.from("rack_relevamientos").update({ pdf_url: pdfPath, pdf_generado_at: new Date().toISOString() }).eq("id", relevamientoId);
     const { data: signed } = await supabase.storage.from("informes-pdf").createSignedUrl(pdfPath, 60 * 60);
     pdfUrl = signed?.signedUrl ?? null;
+
+    const destinatarios = await obtenerDestinatariosAutoEnvio(supabase);
+    if (destinatarios.length > 0) {
+      await enviarPdfPorEmail({
+        to: destinatarios,
+        asunto: `Rack ${numeroGeneracion} — ${rackRow.denominacion}`,
+        texto: `Se registró un relevamiento del rack "${rackRow.denominacion}" (${numeroGeneracion}). Se adjunta el PDF.`,
+        pdfBuffer,
+        filename: pdfFilename,
+      });
+    }
   }
 
   return { success: true, relevamientoId: relevamientoId!, numeroGeneracion, pdfUrl };

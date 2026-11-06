@@ -4,6 +4,8 @@ import { nuevoNumeroGeneracionBaja } from "@/lib/bajas/numero-generacion";
 import { renderBajaPdf } from "@/lib/pdf/render";
 import { buildBajaFilename } from "@/lib/pdf/filename";
 import { resolverEquipo, TABLA_POR_TIPO } from "./resolver-equipo";
+import { obtenerDestinatariosAutoEnvio } from "@/lib/email/destinatarios-auto-envio";
+import { enviarPdfPorEmail } from "@/lib/email/enviar-pdf";
 import type { MotivoBaja, TipoEquipoBaja } from "@/lib/database.types";
 
 export interface EjecutarBajaPayload {
@@ -125,6 +127,17 @@ export async function ejecutarBaja(
     .upload(pdfPath, pdfBuffer, { contentType: "application/pdf", upsert: true });
   if (!pdfUpErr) {
     await service.from("bajas_equipamiento").update({ pdf_url: pdfPath, pdf_generado_at: new Date().toISOString() }).eq("id", bajaId);
+
+    const destinatarios = await obtenerDestinatariosAutoEnvio(service);
+    if (destinatarios.length > 0) {
+      await enviarPdfPorEmail({
+        to: destinatarios,
+        asunto: `Baja de Equipamiento ${numeroGeneracion} — ${equipo.texto}`,
+        texto: `Se dio de baja "${equipo.texto}" (${numeroGeneracion}). Se adjunta el PDF.`,
+        pdfBuffer,
+        filename: pdfFilename,
+      });
+    }
   }
 
   return { success: true, bajaId, numeroGeneracion };
