@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { requireProfile, requireAdmin } from "@/lib/auth";
 import { filenameDesdeStoragePath } from "@/lib/pdf/filename";
@@ -69,7 +70,7 @@ export async function eliminarRelevamientoRackAction(relevamientoId: string): Pr
     .eq("id", relevamientoId)
     .single();
 
-  return eliminarRegistroConArchivos(
+  const resultado = await eliminarRegistroConArchivos(
     service,
     profile,
     "rack_relevamientos",
@@ -80,4 +81,7 @@ export async function eliminarRelevamientoRackAction(relevamientoId: string): Pr
     ],
     `Eliminó el relevamiento de rack ${relevamiento?.numero_generacion ?? relevamientoId}`,
   );
+  // Revalida TODA la app — este rack puede seguir mostrado (stale) en la ficha de sitio, el Panel o el mapa.
+  if (resultado.success) revalidatePath("/", "layout");
+  return resultado;
 }

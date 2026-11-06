@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { requireProfile, requireAdmin } from "@/lib/auth";
 import { filenameDesdeStoragePath } from "@/lib/pdf/filename";
@@ -62,7 +63,7 @@ export async function eliminarRelevamientoEquiposAction(relevamientoId: string):
     .eq("id", relevamientoId)
     .single();
 
-  return eliminarRegistroConArchivos(
+  const resultado = await eliminarRegistroConArchivos(
     service,
     profile,
     "equipo_relevamientos",
@@ -73,4 +74,7 @@ export async function eliminarRelevamientoEquiposAction(relevamientoId: string):
     ],
     `Eliminó el relevamiento de equipos ${relevamiento?.numero_generacion ?? relevamientoId}`,
   );
+  // Revalida TODA la app — este equipo puede seguir mostrado (stale) en la ficha de sitio, el Panel o el mapa.
+  if (resultado.success) revalidatePath("/", "layout");
+  return resultado;
 }

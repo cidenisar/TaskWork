@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { requireProfile, requireAdmin } from "@/lib/auth";
 import { filenameDesdeStoragePath } from "@/lib/pdf/filename";
@@ -50,7 +51,7 @@ export async function eliminarInformeAction(informeId: string): Promise<Eliminar
     service.from("informe_imagenes").select("url").eq("informe_id", informeId),
   ]);
 
-  return eliminarRegistroConArchivos(
+  const resultado = await eliminarRegistroConArchivos(
     service,
     profile,
     "informes_tecnicos",
@@ -61,4 +62,8 @@ export async function eliminarInformeAction(informeId: string): Promise<Eliminar
     ],
     `Eliminó el informe técnico ${informe?.numero_generacion ?? informeId}${informe?.titulo ? ` (${informe.titulo})` : ""}`,
   );
+  // Revalida TODA la app, no solo este historial — un informe eliminado puede seguir mostrado (stale) en la
+  // ficha de sitio, el Panel o Estadísticas si no se invalida ese cache también.
+  if (resultado.success) revalidatePath("/", "layout");
+  return resultado;
 }

@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { requireProfile, requireAdmin } from "@/lib/auth";
 import { filenameDesdeStoragePath } from "@/lib/pdf/filename";
@@ -73,7 +74,7 @@ export async function eliminarRelevamientoTorreComunicacionAction(relevamientoId
     .eq("id", relevamientoId)
     .single();
 
-  return eliminarRegistroConArchivos(
+  const resultado = await eliminarRegistroConArchivos(
     service,
     profile,
     "torre_comunicacion_relevamientos",
@@ -84,4 +85,7 @@ export async function eliminarRelevamientoTorreComunicacionAction(relevamientoId
     ],
     `Eliminó el relevamiento de torre de comunicaciones ${relevamiento?.numero_generacion ?? relevamientoId}`,
   );
+  // Revalida TODA la app — esta torre puede seguir mostrada (stale) en la ficha de sitio, el Panel o el mapa.
+  if (resultado.success) revalidatePath("/", "layout");
+  return resultado;
 }

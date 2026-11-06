@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { requireProfile, requireAdmin } from "@/lib/auth";
 import { filenameDesdeStoragePath } from "@/lib/pdf/filename";
@@ -94,7 +95,7 @@ export async function eliminarMedicionAction(medicionId: string): Promise<Elimin
     .eq("id", medicionId)
     .single();
 
-  return eliminarRegistroConArchivos(
+  const resultado = await eliminarRegistroConArchivos(
     service,
     profile,
     "tablero_mediciones",
@@ -108,6 +109,9 @@ export async function eliminarMedicionAction(medicionId: string): Promise<Elimin
     ],
     `Eliminó la medición de tablero ${medicion?.numero_generacion ?? medicionId}`,
   );
+  // Revalida TODA la app — este tablero puede seguir mostrado (stale) en la ficha de sitio, el Panel o el mapa.
+  if (resultado.success) revalidatePath("/", "layout");
+  return resultado;
 }
 
 /** Solo Administrador. Borra el mantenimiento y su foto del storage. */
@@ -117,7 +121,7 @@ export async function eliminarMantenimientoAction(mantenimientoId: string): Prom
 
   const { data: mantenimiento } = await service.from("tablero_mantenimientos").select("foto_url, fecha").eq("id", mantenimientoId).single();
 
-  return eliminarRegistroConArchivos(
+  const resultado = await eliminarRegistroConArchivos(
     service,
     profile,
     "tablero_mantenimientos",
@@ -125,4 +129,6 @@ export async function eliminarMantenimientoAction(mantenimientoId: string): Prom
     [{ bucket: "informe-fotos", path: mantenimiento?.foto_url ?? null }],
     `Eliminó el mantenimiento de tablero del ${mantenimiento?.fecha ?? mantenimientoId}`,
   );
+  if (resultado.success) revalidatePath("/", "layout");
+  return resultado;
 }

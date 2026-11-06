@@ -60,7 +60,7 @@ export async function confirmarEntregaDepositoAction(bajaId: string): Promise<Co
     .eq("id", bajaId);
   if (error) return { success: false, error: error.message };
 
-  revalidatePath("/bajas/historial");
+  revalidatePath("/", "layout");
   return { success: true };
 }
 
@@ -93,7 +93,7 @@ export async function eliminarBajaAction(bajaId: string): Promise<EliminarResult
     await service.from(TABLA_POR_TIPO[baja.tipo_equipo]).update({ estado: "activo" }).eq("id", baja.equipo_id);
   }
 
-  revalidatePath("/bajas/historial");
+  revalidatePath("/", "layout");
   return resultado;
 }
 
@@ -188,6 +188,6 @@ export async function actualizarBajaAction(bajaId: string, payload: ActualizarBa
     await service.from("bajas_equipamiento").update({ pdf_url: pdfPath }).eq("id", bajaId);
   }
 
-  revalidatePath("/bajas/historial");
+  revalidatePath("/", "layout");
   return { success: true };
 }

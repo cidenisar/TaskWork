@@ -110,7 +110,7 @@ export async function eliminarEntregaAction(entregaId: string): Promise<Eliminar
   if (!filasRestantes || filasRestantes.length === 0) {
     if (fila.pdf_url) await service.storage.from("informes-pdf").remove([fila.pdf_url]);
     if (fila.fotos_evidencia_urls?.length) await service.storage.from("informe-fotos").remove(fila.fotos_evidencia_urls);
-    revalidatePath("/entregas-deposito/historial");
+    revalidatePath("/", "layout");
     return resultado;
   }
 
@@ -152,7 +152,7 @@ export async function eliminarEntregaAction(entregaId: string): Promise<Eliminar
     }
   }
 
-  revalidatePath("/entregas-deposito/historial");
+  revalidatePath("/", "layout");
   return resultado;
 }
 
@@ -258,6 +258,6 @@ export async function actualizarEntregaAction(entregaId: string, payload: Actual
   await service.storage.from("informes-pdf").upload(fila.pdf_url, pdfBuffer, { contentType: "application/pdf", upsert: true });
   await service.from("entregas_deposito").update({ pdf_generado_at: new Date().toISOString() }).eq("numero_generacion", fila.numero_generacion);
 
-  revalidatePath("/entregas-deposito/historial");
+  revalidatePath("/", "layout");
   return { success: true };
 }

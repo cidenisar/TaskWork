@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { requireProfile, requireAdmin } from "@/lib/auth";
 import { filenameDesdeStoragePath } from "@/lib/pdf/filename";
@@ -39,7 +40,7 @@ export async function eliminarSalaAction(salaId: string): Promise<EliminarResult
     .eq("id", salaId)
     .single();
 
-  return eliminarRegistroConArchivos(
+  const resultado = await eliminarRegistroConArchivos(
     service,
     profile,
     "salas",
@@ -50,4 +51,7 @@ export async function eliminarSalaAction(salaId: string): Promise<EliminarResult
     ],
     `Eliminó la sala ${sala?.numero_generacion ?? salaId}`,
   );
+  // Revalida TODA la app — esta sala puede seguir mostrada (stale) en la ficha de sitio, el Panel o el mapa.
+  if (resultado.success) revalidatePath("/", "layout");
+  return resultado;
 }
