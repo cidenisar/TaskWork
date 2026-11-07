@@ -65,7 +65,7 @@ export function EvolucionRiesgoViaje({ evaluaciones }: { evaluaciones: Evaluacio
   return (
     <div>
       <div className="page-heading">
-        <h1>Evolución de Riesgo de Viaje</h1>
+        <h1>Evaluación de Riesgo de Viaje</h1>
         <p>Cómo viene el riesgo de los viajes en el tiempo — filtrá por vehículo o conductor para ver una ruta puntual</p>
       </div>
 
