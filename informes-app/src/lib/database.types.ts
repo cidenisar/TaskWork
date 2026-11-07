@@ -196,6 +196,47 @@ export type VehiculoServiceRow = {
   created_at: string;
 }
 
+export type NivelRiesgoViaje = "bajo" | "medio" | "alto";
+export type EstadoViaje = "pendiente" | "iniciado" | "en_punto_medio" | "finalizado";
+
+export type EvaluacionRiesgoViajeRow = {
+  id: string;
+  numero_generacion: string;
+  vehiculo_id: string;
+  conductor_nombre: string;
+  empresa: string;
+  fecha_hora: string;
+  origen: string;
+  destino: string;
+  /** Sugerido (no obligatorio) cuando el criterio de distancia es "Mayor 300 Km". */
+  punto_medio: string | null;
+  criterio_a_distancia: number;
+  criterio_b_tiempo_viaje: number;
+  criterio_c_clima: number;
+  criterio_d_tipo_ruta: number;
+  criterio_e_conocimiento: number;
+  criterio_f_comunicacion: number;
+  criterio_g_personas_vehiculo: number;
+  criterio_h_horas_trabajadas: number;
+  total: number;
+  nivel_riesgo: NivelRiesgoViaje;
+  mensaje_riesgo: string;
+  estado_viaje: EstadoViaje;
+  iniciado_at: string | null;
+  punto_medio_at: string | null;
+  finalizado_at: string | null;
+  pdf_url: string | null;
+  pdf_generado_at: string | null;
+  created_by: string;
+  created_at: string;
+}
+
+export type EvaluacionRiesgoViajeAcompananteRow = {
+  id: string;
+  evaluacion_id: string;
+  nombre_completo: string;
+}
+
 export type InformeTecnicoRow = {
   id: string;
   numero_generacion: string;
@@ -942,6 +983,38 @@ export interface Database {
         VehiculoServiceRow,
         Partial<VehiculoServiceRow> & Pick<VehiculoServiceRow, "vehiculo_id" | "fecha" | "kilometraje">,
         Partial<VehiculoServiceRow>
+      >;
+      evaluaciones_riesgo_viaje: Tbl<
+        EvaluacionRiesgoViajeRow,
+        Partial<EvaluacionRiesgoViajeRow> &
+          Pick<
+            EvaluacionRiesgoViajeRow,
+            | "numero_generacion"
+            | "vehiculo_id"
+            | "conductor_nombre"
+            | "empresa"
+            | "fecha_hora"
+            | "origen"
+            | "destino"
+            | "criterio_a_distancia"
+            | "criterio_b_tiempo_viaje"
+            | "criterio_c_clima"
+            | "criterio_d_tipo_ruta"
+            | "criterio_e_conocimiento"
+            | "criterio_f_comunicacion"
+            | "criterio_g_personas_vehiculo"
+            | "criterio_h_horas_trabajadas"
+            | "total"
+            | "nivel_riesgo"
+            | "mensaje_riesgo"
+            | "created_by"
+          >,
+        Partial<EvaluacionRiesgoViajeRow>
+      >;
+      evaluaciones_riesgo_viaje_acompanantes: Tbl<
+        EvaluacionRiesgoViajeAcompananteRow,
+        Partial<EvaluacionRiesgoViajeAcompananteRow> & Pick<EvaluacionRiesgoViajeAcompananteRow, "evaluacion_id" | "nombre_completo">,
+        Partial<EvaluacionRiesgoViajeAcompananteRow>
       >;
       informes_tecnicos: Tbl<
         InformeTecnicoRow,

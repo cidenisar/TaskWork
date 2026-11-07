@@ -123,6 +123,13 @@ const NAV_CONFIG: Record<string, ModuleConfig> = {
       { href: "/entregas-deposito/historial", label: "Historial" },
     ],
   },
+  "riesgo-viaje": {
+    brand: "Riesgo de Viaje",
+    tabs: [
+      { href: "/riesgo-viaje/nueva", label: "Nueva Evaluación" },
+      { href: "/riesgo-viaje/historial", label: "Historial" },
+    ],
+  },
   estadisticas: {
     brand: "Estadísticas",
     tabs: [{ href: "/estadisticas", label: "Resumen" }],

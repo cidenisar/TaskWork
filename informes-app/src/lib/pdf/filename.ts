@@ -166,6 +166,21 @@ export function buildEntregaDepositoFilename(opts: {
   return `${partes.join("_")}.pdf`;
 }
 
+export function buildRiesgoViajeFilename(opts: {
+  numeroGeneracion: string;
+  origen: string;
+  destino: string;
+  generadoEn?: Date;
+}): string {
+  const partes = [
+    opts.numeroGeneracion,
+    timestampCompacto(opts.generadoEn ?? new Date()),
+    slug(opts.origen),
+    slug(opts.destino),
+  ].filter((p): p is string => Boolean(p));
+  return `${partes.join("_")}.pdf`;
+}
+
 /** El nombre para "Guardar como" es el último segmento del path en Storage. */
 export function filenameDesdeStoragePath(path: string): string {
   return path.split("/").pop() || path;

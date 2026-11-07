@@ -85,6 +85,15 @@ export default async function HomePage() {
           <div className="module-title">Buscar Material</div>
           <div className="module-sub">Rastreá un equipo o material instalado — N° de serie, etiqueta YPF o descripción del remito</div>
         </Link>
+        <Link href="/riesgo-viaje/nueva" className="module-card">
+          <div className="module-ico">
+            <ModuleIcon name="riesgo-viaje" />
+          </div>
+          <div className="module-title">Riesgo de Viaje</div>
+          <div className="module-sub">
+            Evaluación de Riesgo del Viaje antes de salir — vehículo, conductor, ruta y los 8 criterios de siempre
+          </div>
+        </Link>
         <Link href="/bajas/historial" className="module-card">
           <div className="module-ico">
             <ModuleIcon name="bajas" />
