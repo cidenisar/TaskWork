@@ -9,8 +9,9 @@ import { renderRiesgoViajePdf } from "@/lib/pdf/render";
 import { buildRiesgoViajeFilename } from "@/lib/pdf/filename";
 import { obtenerDestinatariosAutoEnvio } from "@/lib/email/destinatarios-auto-envio";
 import { enviarPdfPorEmail } from "@/lib/email/enviar-pdf";
-import { geocodificarDireccion, obtenerRutaReal } from "@/lib/riesgo-viaje/ruta";
+import { geocodificarDireccion, obtenerRutaReal, obtenerPronosticoDiario } from "@/lib/riesgo-viaje/ruta";
 import { generarMapaEstaticoTrayecto } from "@/lib/riesgo-viaje/mapa-estatico";
+import { descripcionClima } from "@/lib/riesgo-viaje/autocompletar";
 import type { NivelRiesgoViaje } from "@/lib/database.types";
 
 export interface CrearEvaluacionRiesgoViajeResult {
@@ -133,6 +134,7 @@ export async function crearEvaluacionRiesgoViajeAction(formData: FormData): Prom
   // públicos gratuitos) — si alguno falla, el PDF sale igual sin esos datos.
   let distanciaKm: number | null = null;
   let mapaBuffer: Buffer | null = null;
+  let climaDescripcion: string | null = null;
   const [coordsOrigen, coordsDestino] = await Promise.all([geocodificarDireccion(origen), geocodificarDireccion(destino)]);
   if (coordsOrigen && coordsDestino) {
     const ruta = await obtenerRutaReal(coordsOrigen, coordsDestino);
@@ -140,6 +142,13 @@ export async function crearEvaluacionRiesgoViajeAction(formData: FormData): Prom
       distanciaKm = Math.round(ruta.distanciaKm);
       mapaBuffer = await generarMapaEstaticoTrayecto(coordsOrigen, coordsDestino, ruta.geometria);
     }
+    // Pronóstico real del destino para la fecha del viaje — el dato de origen detrás del valor de punto del criterio C, para mostrar qué se usó.
+    const fechaISO = new Date(fechaHora).toISOString().slice(0, 10);
+    const clima = await obtenerPronosticoDiario(coordsDestino, fechaISO);
+    if (clima) climaDescripcion = descripcionClima(clima.weathercode, clima.vientoMaxKmh, clima.tempMaxC, clima.tempMinC);
+  }
+  if (climaDescripcion) {
+    await supabase.from("evaluaciones_riesgo_viaje").update({ clima_descripcion: climaDescripcion }).eq("id", evaluacionId);
   }
 
   const pdfBuffer = await renderRiesgoViajePdf({
@@ -159,6 +168,7 @@ export async function crearEvaluacionRiesgoViajeAction(formData: FormData): Prom
     mensaje,
     distanciaKm,
     mapaBuffer,
+    climaDescripcion,
     logoBuffer,
     appName: "TaskWork",
     realizoNombre: profile.nombreCompleto,

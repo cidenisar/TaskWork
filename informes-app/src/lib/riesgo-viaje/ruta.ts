@@ -69,16 +69,30 @@ export async function obtenerRutaReal(origen: Coords, destino: Coords): Promise<
   }
 }
 
-export async function obtenerPronosticoDiario(coords: Coords, fechaISO: string): Promise<{ weathercode: number; vientoMaxKmh: number } | null> {
+export interface PronosticoDiario {
+  weathercode: number;
+  vientoMaxKmh: number;
+  tempMaxC: number | null;
+  tempMinC: number | null;
+}
+
+export async function obtenerPronosticoDiario(coords: Coords, fechaISO: string): Promise<PronosticoDiario | null> {
   try {
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${coords.lat}&longitude=${coords.lon}&daily=weathercode,windspeed_10m_max&timezone=America%2FArgentina%2FBuenos_Aires&start_date=${fechaISO}&end_date=${fechaISO}`;
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${coords.lat}&longitude=${coords.lon}&daily=weathercode,windspeed_10m_max,temperature_2m_max,temperature_2m_min&timezone=America%2FArgentina%2FBuenos_Aires&start_date=${fechaISO}&end_date=${fechaISO}`;
     const res = await fetch(url);
     if (!res.ok) return null;
     const data = await res.json();
     const weathercode = data?.daily?.weathercode?.[0];
     const vientoMaxKmh = data?.daily?.windspeed_10m_max?.[0];
     if (typeof weathercode !== "number" || typeof vientoMaxKmh !== "number") return null;
-    return { weathercode, vientoMaxKmh };
+    const tempMaxC = data?.daily?.temperature_2m_max?.[0];
+    const tempMinC = data?.daily?.temperature_2m_min?.[0];
+    return {
+      weathercode,
+      vientoMaxKmh,
+      tempMaxC: typeof tempMaxC === "number" ? tempMaxC : null,
+      tempMinC: typeof tempMinC === "number" ? tempMinC : null,
+    };
   } catch {
     return null;
   }

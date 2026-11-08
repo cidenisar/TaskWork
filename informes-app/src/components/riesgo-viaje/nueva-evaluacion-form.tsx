@@ -55,6 +55,7 @@ export function NuevaEvaluacionRiesgoViajeForm({
   const [iniciando, setIniciando] = useState(false);
   const [autocompletando, setAutocompletando] = useState(false);
   const [avisosAutocompletar, setAvisosAutocompletar] = useState<string[]>([]);
+  const [climaDescripcion, setClimaDescripcion] = useState<string | null>(null);
   const [rutaPreview, setRutaPreview] = useState<{
     distanciaKm: number;
     origen: { lat: number; lon: number };
@@ -106,6 +107,7 @@ export function NuevaEvaluacionRiesgoViajeForm({
         personasPorVehiculo: data.criterioPersonasVehiculo != null ? String(data.criterioPersonasVehiculo) : prev.personasPorVehiculo,
       }));
       setAvisosAutocompletar(data.avisos ?? []);
+      setClimaDescripcion(data.climaDescripcion ?? null);
       setRutaPreview(
         data.distanciaKm != null && data.origenCoords && data.destinoCoords
           ? { distanciaKm: data.distanciaKm, origen: data.origenCoords, destino: data.destinoCoords, geometria: data.geometria ?? [] }
@@ -188,6 +190,7 @@ export function NuevaEvaluacionRiesgoViajeForm({
     setCriterios(valorInicial());
     setAvisosAutocompletar([]);
     setRutaPreview(null);
+    setClimaDescripcion(null);
     setResultado(null);
     setViajeIniciado(false);
   }
@@ -381,6 +384,7 @@ export function NuevaEvaluacionRiesgoViajeForm({
                 </option>
               ))}
             </select>
+            {key === "clima" && climaDescripcion && <div className="hint">Pronóstico para el destino: {climaDescripcion}</div>}
           </div>
         ))}
 

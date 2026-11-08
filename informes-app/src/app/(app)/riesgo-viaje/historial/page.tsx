@@ -10,7 +10,7 @@ export default async function HistorialRiesgoViajePage() {
   const { data: evaluaciones } = await supabase
     .from("evaluaciones_riesgo_viaje")
     .select(
-      "id, numero_generacion, vehiculo_id, conductor_nombre, fecha_hora, origen, destino, punto_medio, total, nivel_riesgo, mensaje_riesgo, estado_viaje, pdf_url, created_by",
+      "id, numero_generacion, vehiculo_id, conductor_nombre, fecha_hora, origen, destino, punto_medio, total, nivel_riesgo, mensaje_riesgo, estado_viaje, pdf_url, created_by, clima_descripcion",
     )
     .order("fecha_hora", { ascending: false });
 
@@ -34,6 +34,7 @@ export default async function HistorialRiesgoViajePage() {
     estadoViaje: e.estado_viaje,
     pdfDisponible: !!e.pdf_url,
     esPropia: e.created_by === profile.id,
+    climaDescripcion: e.clima_descripcion,
   }));
 
   const esAdmin = profile.rol === "admin" || profile.rol === "supervisor" || profile.rol === "superusuario";

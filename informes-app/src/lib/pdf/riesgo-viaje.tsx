@@ -26,6 +26,8 @@ export interface RiesgoViajePdfProps {
   distanciaKm: number | null;
   /** Captura del mapa con el trayecto (servicio público, best-effort) — null si no se pudo generar, el PDF sale igual sin esta sección. */
   mapaBuffer: Buffer | null;
+  /** Pronóstico real del destino para la fecha del viaje — el dato de origen detrás del valor de punto del criterio C, null si no se pudo obtener. */
+  climaDescripcion: string | null;
   logoBuffer: Buffer | null;
   appName: string;
   realizoNombre: string;
@@ -54,6 +56,7 @@ export function RiesgoViajePdf(props: RiesgoViajePdfProps) {
     mensaje,
     distanciaKm,
     mapaBuffer,
+    climaDescripcion,
     logoBuffer,
     appName,
     realizoNombre,
@@ -83,6 +86,7 @@ export function RiesgoViajePdf(props: RiesgoViajePdfProps) {
           <KeyValueRow k="Origen:" v={origen} />
           <KeyValueRow k="Destino:" v={destino} />
           {distanciaKm != null && <KeyValueRow k="Distancia:" v={`${distanciaKm} km`} />}
+          {climaDescripcion && <KeyValueRow k="Pronóstico:" v={climaDescripcion} />}
           {puntoMedio && <KeyValueRow k="Punto medio:" v={puntoMedio} />}
           <KeyValueRow k="Fecha y hora:" v={fechaLabel} last />
         </View>

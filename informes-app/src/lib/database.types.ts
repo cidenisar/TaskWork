@@ -221,6 +221,8 @@ export type EvaluacionRiesgoViajeRow = {
   total: number;
   nivel_riesgo: NivelRiesgoViaje;
   mensaje_riesgo: string;
+  /** Pronóstico real (texto legible) del destino para la fecha del viaje — el dato de origen detrás del valor de punto del criterio C. */
+  clima_descripcion: string | null;
   estado_viaje: EstadoViaje;
   iniciado_at: string | null;
   punto_medio_at: string | null;

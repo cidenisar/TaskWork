@@ -22,6 +22,8 @@ export interface EvaluacionRiesgoViajeRow {
   pdfDisponible: boolean;
   /** Si la cargó el usuario logueado — determina si puede avanzar el estado del viaje (Admin/Supervisor siempre puede). */
   esPropia: boolean;
+  /** Pronóstico real del destino para la fecha del viaje — null si no se pudo obtener al momento de crearla. */
+  climaDescripcion: string | null;
 }
 
 const SIGUIENTE_ACCION: Record<EstadoViaje, { accion: "iniciar" | "marcar_punto_medio" | "finalizar"; label: string } | null> = {
@@ -120,6 +122,7 @@ export function HistorialRiesgoViaje({ evaluaciones: inicial, esAdmin }: { evalu
                       <div className="hist-meta">
                         {e.numeroGeneracion} · {e.vehiculoPatente} · {e.conductorNombre} · {fmtFechaHora(e.fechaHora)}
                       </div>
+                      {e.climaDescripcion && <div className="hist-meta">Pronóstico usado: {e.climaDescripcion}</div>}
                       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 4 }}>
                         <RiesgoBadge nivel={e.nivelRiesgo} total={e.total} />
                         <EstadoViajeBadge estado={e.estadoViaje} />

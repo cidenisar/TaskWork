@@ -39,6 +39,7 @@ const props: RiesgoViajePdfProps = {
   mensaje: "Puede realizar el viaje",
   distanciaKm: 345,
   mapaBuffer: null,
+  climaDescripcion: "Despejado · 8°C a 22°C · viento hasta 18 km/h",
   logoBuffer: null,
   appName: "TaskWork",
   realizoNombre: "Enzo Bonnardel",

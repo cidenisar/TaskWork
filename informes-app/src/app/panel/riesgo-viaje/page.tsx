@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { EvolucionRiesgoViaje, type EvaluacionEvolucionRow } from "@/components/panel/riesgo-viaje/evolucion-riesgo-viaje";
+import { RiesgoViajePanel, type EvaluacionPanelRow } from "@/components/panel/riesgo-viaje/riesgo-viaje-panel";
 
 export default async function PanelRiesgoViajePage() {
   const supabase = await createClient();
@@ -7,7 +7,7 @@ export default async function PanelRiesgoViajePage() {
   // RLS (evaluaciones_riesgo_viaje_select_stats) ya limita esto a Admin/Supervisor.
   const { data: evaluaciones } = await supabase
     .from("evaluaciones_riesgo_viaje")
-    .select("id, vehiculo_id, conductor_nombre, fecha_hora, origen, destino, total, nivel_riesgo, estado_viaje, pdf_url")
+    .select("id, vehiculo_id, conductor_nombre, fecha_hora, origen, destino, total, nivel_riesgo, estado_viaje, pdf_url, clima_descripcion")
     .order("fecha_hora", { ascending: true });
 
   const vehiculoIds = [...new Set((evaluaciones ?? []).map((e) => e.vehiculo_id))];
@@ -15,7 +15,7 @@ export default async function PanelRiesgoViajePage() {
     vehiculoIds.length > 0 ? await supabase.from("catalogo_vehiculos").select("id, patente").in("id", vehiculoIds) : { data: [] };
   const patentePorVehiculo = new Map((vehiculosData ?? []).map((v) => [v.id, v.patente]));
 
-  const filas: EvaluacionEvolucionRow[] = (evaluaciones ?? []).map((e) => ({
+  const filas: EvaluacionPanelRow[] = (evaluaciones ?? []).map((e) => ({
     id: e.id,
     vehiculoPatente: patentePorVehiculo.get(e.vehiculo_id) ?? "—",
     conductorNombre: e.conductor_nombre,
@@ -26,7 +26,8 @@ export default async function PanelRiesgoViajePage() {
     nivelRiesgo: e.nivel_riesgo,
     estadoViaje: e.estado_viaje,
     pdfDisponible: !!e.pdf_url,
+    climaDescripcion: e.clima_descripcion,
   }));
 
-  return <EvolucionRiesgoViaje evaluaciones={filas} />;
+  return <RiesgoViajePanel evaluaciones={filas} />;
 }

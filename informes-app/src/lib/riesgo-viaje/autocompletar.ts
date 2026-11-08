@@ -57,3 +57,43 @@ export function mapClimaAValor(weathercode: number, vientoMaxKmh: number): numbe
   if (vientoMaxKmh >= 50) return 2;
   return 1; // Soleado / Nublado
 }
+
+const WEATHERCODE_LABEL: Record<number, string> = {
+  0: "Despejado",
+  1: "Mayormente despejado",
+  2: "Parcialmente nublado",
+  3: "Nublado",
+  45: "Niebla",
+  48: "Niebla con escarcha",
+  51: "Llovizna débil",
+  53: "Llovizna moderada",
+  55: "Llovizna intensa",
+  56: "Llovizna helada débil",
+  57: "Llovizna helada intensa",
+  61: "Lluvia débil",
+  63: "Lluvia moderada",
+  65: "Lluvia intensa",
+  66: "Lluvia helada débil",
+  67: "Lluvia helada intensa",
+  71: "Nieve débil",
+  73: "Nieve moderada",
+  75: "Nieve intensa",
+  77: "Granizo fino",
+  80: "Chubascos débiles",
+  81: "Chubascos moderados",
+  82: "Chubascos intensos",
+  85: "Chubascos de nieve débiles",
+  86: "Chubascos de nieve intensos",
+  95: "Tormenta eléctrica",
+  96: "Tormenta con granizo débil",
+  99: "Tormenta con granizo intenso",
+};
+
+/** Texto legible del pronóstico — el dato de origen detrás del valor de punto de mapClimaAValor, para mostrar qué se usó realmente al evaluar. */
+export function descripcionClima(weathercode: number, vientoMaxKmh: number, tempMaxC: number | null, tempMinC: number | null): string {
+  const condicion = WEATHERCODE_LABEL[weathercode] ?? "Condición no identificada";
+  const partes = [condicion];
+  if (tempMinC != null && tempMaxC != null) partes.push(`${Math.round(tempMinC)}°C a ${Math.round(tempMaxC)}°C`);
+  partes.push(`viento hasta ${Math.round(vientoMaxKmh)} km/h`);
+  return partes.join(" · ");
+}

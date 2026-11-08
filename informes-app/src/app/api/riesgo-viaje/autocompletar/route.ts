@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireProfile } from "@/lib/auth";
-import { mapDistanciaAValor, mapTiempoViajeAValor, mapClimaAValor, mapPersonasPorVehiculoAValor } from "@/lib/riesgo-viaje/autocompletar";
+import { mapDistanciaAValor, mapTiempoViajeAValor, mapClimaAValor, mapPersonasPorVehiculoAValor, descripcionClima } from "@/lib/riesgo-viaje/autocompletar";
 import { geocodificarDireccion, obtenerRutaReal, obtenerPronosticoDiario } from "@/lib/riesgo-viaje/ruta";
 
 /**
@@ -31,6 +31,7 @@ export async function POST(req: NextRequest) {
   let criterioDistancia: number | null = null;
   let criterioTiempoViaje: number | null = null;
   let criterioClima: number | null = null;
+  let climaDescripcion: string | null = null;
   let distanciaKm: number | null = null;
   let origenCoords: { lat: number; lon: number } | null = null;
   let destinoCoords: { lat: number; lon: number } | null = null;
@@ -60,6 +61,7 @@ export async function POST(req: NextRequest) {
       const clima = await obtenerPronosticoDiario(coordsDestino, fechaISO);
       if (clima) {
         criterioClima = mapClimaAValor(clima.weathercode, clima.vientoMaxKmh);
+        climaDescripcion = descripcionClima(clima.weathercode, clima.vientoMaxKmh, clima.tempMaxC, clima.tempMinC);
       } else {
         avisos.push("Sin pronóstico disponible para esa fecha todavía — completá Condición Climática a mano más cerca del viaje.");
       }
@@ -73,6 +75,7 @@ export async function POST(req: NextRequest) {
     criterioDistancia,
     criterioTiempoViaje,
     criterioClima,
+    climaDescripcion,
     criterioPersonasVehiculo,
     origenCoords,
     destinoCoords,
