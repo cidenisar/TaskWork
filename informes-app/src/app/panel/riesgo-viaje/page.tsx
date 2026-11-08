@@ -7,7 +7,7 @@ export default async function PanelRiesgoViajePage() {
   // RLS (evaluaciones_riesgo_viaje_select_stats) ya limita esto a Admin/Supervisor.
   const { data: evaluaciones } = await supabase
     .from("evaluaciones_riesgo_viaje")
-    .select("id, vehiculo_id, conductor_nombre, fecha_hora, origen, destino, total, nivel_riesgo, estado_viaje")
+    .select("id, vehiculo_id, conductor_nombre, fecha_hora, origen, destino, total, nivel_riesgo, estado_viaje, pdf_url")
     .order("fecha_hora", { ascending: true });
 
   const vehiculoIds = [...new Set((evaluaciones ?? []).map((e) => e.vehiculo_id))];
@@ -25,6 +25,7 @@ export default async function PanelRiesgoViajePage() {
     total: e.total,
     nivelRiesgo: e.nivel_riesgo,
     estadoViaje: e.estado_viaje,
+    pdfDisponible: !!e.pdf_url,
   }));
 
   return <EvolucionRiesgoViaje evaluaciones={filas} />;

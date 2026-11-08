@@ -3,6 +3,8 @@
 import { useMemo, useState } from "react";
 import { BarList } from "@/components/estadisticas/bar-list";
 import { RiesgoBadge, EstadoViajeBadge } from "@/components/riesgo-viaje/badges";
+import { obtenerUrlPdfRiesgoViajeAction } from "@/app/(app)/riesgo-viaje/actions";
+import { Icon } from "@/components/icon";
 import type { EstadoViaje, NivelRiesgoViaje } from "@/lib/database.types";
 
 export interface EvaluacionEvolucionRow {
@@ -15,6 +17,7 @@ export interface EvaluacionEvolucionRow {
   total: number;
   nivelRiesgo: NivelRiesgoViaje;
   estadoViaje: EstadoViaje;
+  pdfDisponible: boolean;
 }
 
 function fmtFechaCorta(fechaHora: string) {
@@ -31,6 +34,8 @@ function fmtFechaCorta(fechaHora: string) {
 export function EvolucionRiesgoViaje({ evaluaciones }: { evaluaciones: EvaluacionEvolucionRow[] }) {
   const [vehiculoFiltro, setVehiculoFiltro] = useState("");
   const [conductorFiltro, setConductorFiltro] = useState("");
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const vehiculos = useMemo(() => [...new Set(evaluaciones.map((e) => e.vehiculoPatente))].sort(), [evaluaciones]);
   const conductores = useMemo(() => [...new Set(evaluaciones.map((e) => e.conductorNombre))].sort(), [evaluaciones]);
@@ -62,6 +67,18 @@ export function EvolucionRiesgoViaje({ evaluaciones }: { evaluaciones: Evaluacio
     [filtradas],
   );
 
+  async function verPdf(id: string) {
+    setBusyId(id);
+    setNotice(null);
+    const res = await obtenerUrlPdfRiesgoViajeAction(id);
+    setBusyId(null);
+    if (!res.url) {
+      setNotice(res.error || "No se pudo abrir el PDF.");
+      return;
+    }
+    window.open(res.url, "_blank", "noopener,noreferrer");
+  }
+
   return (
     <div>
       <div className="page-heading">
@@ -83,6 +100,12 @@ export function EvolucionRiesgoViaje({ evaluaciones }: { evaluaciones: Evaluacio
             {kpis.bajo}
           </div>
           <div className="kpi-label">Riesgo bajo</div>
+        </div>
+        <div className="kpi-card">
+          <div className="kpi-value" style={{ color: "var(--warn)" }}>
+            {kpis.medio}
+          </div>
+          <div className="kpi-label">Riesgo medio</div>
         </div>
         <div className="kpi-card">
           <div className="kpi-value" style={{ color: "var(--accent-2)" }}>
@@ -122,11 +145,20 @@ export function EvolucionRiesgoViaje({ evaluaciones }: { evaluaciones: Evaluacio
 
       <div className="card">
         <div className="section-label">Evolución del puntaje</div>
-        <BarList items={barItems} />
+        <div className="hint" style={{ margin: "-4px 0 10px" }}>
+          Un puntaje por viaje, ordenados del más viejo (izquierda) al más reciente (derecha) — sirve para ver de un vistazo si el
+          riesgo de una ruta o un vehículo viene subiendo o bajando con el tiempo, no solo el número de hoy.
+        </div>
+        {filtradas.length === 0 ? <div className="empty-note">No hay evaluaciones con estos filtros.</div> : <BarList items={barItems} />}
       </div>
 
       <div className="card">
         <div className="section-label">Detalle</div>
+        {notice && (
+          <div className="hint" style={{ color: "var(--warn)" }}>
+            {notice}
+          </div>
+        )}
         {filtradas.length === 0 ? (
           <div className="empty-note">No hay evaluaciones con estos filtros.</div>
         ) : (
@@ -148,6 +180,17 @@ export function EvolucionRiesgoViaje({ evaluaciones }: { evaluaciones: Evaluacio
                         <EstadoViajeBadge estado={e.estadoViaje} />
                       </div>
                     </div>
+                  </div>
+                  <div className="hist-actions">
+                    <button
+                      type="button"
+                      className="icon-btn"
+                      title={e.pdfDisponible ? "Ver PDF" : "Sin PDF disponible"}
+                      disabled={!e.pdfDisponible || busyId === e.id}
+                      onClick={() => verPdf(e.id)}
+                    >
+                      {busyId === e.id ? "…" : <Icon name="eye" size={15} />}
+                    </button>
                   </div>
                 </div>
               ))}

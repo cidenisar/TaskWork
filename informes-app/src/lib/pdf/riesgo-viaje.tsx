@@ -108,7 +108,8 @@ export function RiesgoViajePdf(props: RiesgoViajePdfProps) {
         {mapaBuffer && (
           <>
             <Text style={commonStyles.sectionTitle}>Trayecto</Text>
-            <Image src={mapaBuffer} style={{ width: 260, marginBottom: 6 }} />
+            <Image src={mapaBuffer} style={{ width: 260, marginBottom: 2 }} />
+            <Text style={{ fontSize: 6.5, color: "#888", marginBottom: 6 }}>© OpenStreetMap contributors</Text>
           </>
         )}
 

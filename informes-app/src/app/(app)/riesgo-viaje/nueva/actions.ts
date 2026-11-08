@@ -9,7 +9,8 @@ import { renderRiesgoViajePdf } from "@/lib/pdf/render";
 import { buildRiesgoViajeFilename } from "@/lib/pdf/filename";
 import { obtenerDestinatariosAutoEnvio } from "@/lib/email/destinatarios-auto-envio";
 import { enviarPdfPorEmail } from "@/lib/email/enviar-pdf";
-import { geocodificarDireccion, obtenerRutaReal, obtenerImagenMapaRuta } from "@/lib/riesgo-viaje/ruta";
+import { geocodificarDireccion, obtenerRutaReal } from "@/lib/riesgo-viaje/ruta";
+import { generarMapaEstaticoTrayecto } from "@/lib/riesgo-viaje/mapa-estatico";
 import type { NivelRiesgoViaje } from "@/lib/database.types";
 
 export interface CrearEvaluacionRiesgoViajeResult {
@@ -137,7 +138,7 @@ export async function crearEvaluacionRiesgoViajeAction(formData: FormData): Prom
     const ruta = await obtenerRutaReal(coordsOrigen, coordsDestino);
     if (ruta) {
       distanciaKm = Math.round(ruta.distanciaKm);
-      mapaBuffer = await obtenerImagenMapaRuta(coordsOrigen, coordsDestino, ruta.geometria);
+      mapaBuffer = await generarMapaEstaticoTrayecto(coordsOrigen, coordsDestino, ruta.geometria);
     }
   }
 
