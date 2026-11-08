@@ -176,6 +176,7 @@ export async function crearEvaluacionRiesgoViajeAction(formData: FormData): Prom
         texto: `Se cargó una evaluación de riesgo del viaje de "${origen}" a "${destino}" (${numeroGeneracion}). Resultado: ${mensaje} (total: ${total}). Se adjunta el PDF.`,
         pdfBuffer,
         filename: pdfFilename,
+        diagnostico: { supabase, userId: profile.id, contexto: "email-evaluacion-riesgo-viaje" },
       });
     }
   }
