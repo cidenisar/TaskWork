@@ -9,6 +9,7 @@ import { renderRiesgoViajePdf } from "@/lib/pdf/render";
 import { buildRiesgoViajeFilename } from "@/lib/pdf/filename";
 import { obtenerDestinatariosAutoEnvio } from "@/lib/email/destinatarios-auto-envio";
 import { enviarPdfPorEmail } from "@/lib/email/enviar-pdf";
+import { geocodificarDireccion, obtenerRutaReal, obtenerImagenMapaRuta } from "@/lib/riesgo-viaje/ruta";
 import type { NivelRiesgoViaje } from "@/lib/database.types";
 
 export interface CrearEvaluacionRiesgoViajeResult {
@@ -127,6 +128,19 @@ export async function crearEvaluacionRiesgoViajeAction(formData: FormData): Prom
     }
   }
 
+  // Geocoding + ruteo + captura del mapa son todos best-effort (servicios
+  // públicos gratuitos) — si alguno falla, el PDF sale igual sin esos datos.
+  let distanciaKm: number | null = null;
+  let mapaBuffer: Buffer | null = null;
+  const [coordsOrigen, coordsDestino] = await Promise.all([geocodificarDireccion(origen), geocodificarDireccion(destino)]);
+  if (coordsOrigen && coordsDestino) {
+    const ruta = await obtenerRutaReal(coordsOrigen, coordsDestino);
+    if (ruta) {
+      distanciaKm = Math.round(ruta.distanciaKm);
+      mapaBuffer = await obtenerImagenMapaRuta(coordsOrigen, coordsDestino, ruta.geometria);
+    }
+  }
+
   const pdfBuffer = await renderRiesgoViajePdf({
     numeroGeneracion,
     conductorNombre,
@@ -142,6 +156,8 @@ export async function crearEvaluacionRiesgoViajeAction(formData: FormData): Prom
     total,
     nivel,
     mensaje,
+    distanciaKm,
+    mapaBuffer,
     logoBuffer,
     appName: "TaskWork",
     realizoNombre: profile.nombreCompleto,

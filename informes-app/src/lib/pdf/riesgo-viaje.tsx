@@ -1,4 +1,4 @@
-import { Document, Page, Text, View } from "@react-pdf/renderer";
+import { Document, Page, Text, View, Image } from "@react-pdf/renderer";
 import { commonStyles, KeyValueRow, PdfHeader, PdfFooter, formatFechaArg, GREEN, RED } from "./common";
 import { CRITERIOS_RIESGO_VIAJE, type CriterioKey } from "@/lib/riesgo-viaje/criterios";
 import type { NivelRiesgoViaje } from "@/lib/database.types";
@@ -22,6 +22,10 @@ export interface RiesgoViajePdfProps {
   total: number;
   nivel: NivelRiesgoViaje;
   mensaje: string;
+  /** Distancia real de la ruta en km, si se pudo calcular — null si no (igual se puede generar el PDF). */
+  distanciaKm: number | null;
+  /** Captura del mapa con el trayecto (servicio público, best-effort) — null si no se pudo generar, el PDF sale igual sin esta sección. */
+  mapaBuffer: Buffer | null;
   logoBuffer: Buffer | null;
   appName: string;
   realizoNombre: string;
@@ -48,6 +52,8 @@ export function RiesgoViajePdf(props: RiesgoViajePdfProps) {
     total,
     nivel,
     mensaje,
+    distanciaKm,
+    mapaBuffer,
     logoBuffer,
     appName,
     realizoNombre,
@@ -76,6 +82,7 @@ export function RiesgoViajePdf(props: RiesgoViajePdfProps) {
           <KeyValueRow k="Empresa:" v={empresa} />
           <KeyValueRow k="Origen:" v={origen} />
           <KeyValueRow k="Destino:" v={destino} />
+          {distanciaKm != null && <KeyValueRow k="Distancia:" v={`${distanciaKm} km`} />}
           {puntoMedio && <KeyValueRow k="Punto medio:" v={puntoMedio} />}
           <KeyValueRow k="Fecha y hora:" v={fechaLabel} last />
         </View>
@@ -97,6 +104,13 @@ export function RiesgoViajePdf(props: RiesgoViajePdfProps) {
             Total: {total} — {mensaje}
           </Text>
         </View>
+
+        {mapaBuffer && (
+          <>
+            <Text style={commonStyles.sectionTitle}>Trayecto</Text>
+            <Image src={mapaBuffer} style={{ width: 260, marginBottom: 6 }} />
+          </>
+        )}
 
         <PdfFooter realizo={realizoNombre.toUpperCase()} documentoLinea={documentoLinea} />
       </Page>

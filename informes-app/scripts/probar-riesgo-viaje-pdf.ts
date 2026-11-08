@@ -37,6 +37,8 @@ const props: RiesgoViajePdfProps = {
   total: 18,
   nivel: "bajo",
   mensaje: "Puede realizar el viaje",
+  distanciaKm: 345,
+  mapaBuffer: null,
   logoBuffer: null,
   appName: "TaskWork",
   realizoNombre: "Enzo Bonnardel",

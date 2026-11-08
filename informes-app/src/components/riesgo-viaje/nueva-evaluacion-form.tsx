@@ -8,6 +8,7 @@ import { ErrorNote, SuccessNote } from "@/components/notes";
 import { Icon } from "@/components/icon";
 import { AutocompleteInput } from "@/components/ui/autocomplete-input";
 import { RiesgoBadge } from "./badges";
+import { RutaMapa } from "./ruta-mapa";
 import { CRITERIOS_RIESGO_VIAJE, DISTANCIA_SUGIERE_PUNTO_MEDIO, type CriterioKey } from "@/lib/riesgo-viaje/criterios";
 import type { NivelRiesgoViaje } from "@/lib/database.types";
 
@@ -54,6 +55,12 @@ export function NuevaEvaluacionRiesgoViajeForm({
   const [iniciando, setIniciando] = useState(false);
   const [autocompletando, setAutocompletando] = useState(false);
   const [avisosAutocompletar, setAvisosAutocompletar] = useState<string[]>([]);
+  const [rutaPreview, setRutaPreview] = useState<{
+    distanciaKm: number;
+    origen: { lat: number; lon: number };
+    destino: { lat: number; lon: number };
+    geometria: [number, number][];
+  } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [resultado, setResultado] = useState<{ evaluacionId: string; total: number; nivel: NivelRiesgoViaje; mensaje: string } | null>(null);
   const [viajeIniciado, setViajeIniciado] = useState(false);
@@ -99,6 +106,11 @@ export function NuevaEvaluacionRiesgoViajeForm({
         personasPorVehiculo: data.criterioPersonasVehiculo != null ? String(data.criterioPersonasVehiculo) : prev.personasPorVehiculo,
       }));
       setAvisosAutocompletar(data.avisos ?? []);
+      setRutaPreview(
+        data.distanciaKm != null && data.origenCoords && data.destinoCoords
+          ? { distanciaKm: data.distanciaKm, origen: data.origenCoords, destino: data.destinoCoords, geometria: data.geometria ?? [] }
+          : null,
+      );
     } catch {
       setAvisosAutocompletar(["No se pudo contactar el servicio de ruta — completá los criterios a mano."]);
     } finally {
@@ -175,6 +187,7 @@ export function NuevaEvaluacionRiesgoViajeForm({
     setPuntoMedio("");
     setCriterios(valorInicial());
     setAvisosAutocompletar([]);
+    setRutaPreview(null);
     setResultado(null);
     setViajeIniciado(false);
   }
@@ -309,6 +322,14 @@ export function NuevaEvaluacionRiesgoViajeForm({
               {a}
             </div>
           ))}
+          {rutaPreview && (
+            <div style={{ marginTop: 8 }}>
+              <div className="hint" style={{ fontWeight: 600 }}>
+                Distancia estimada: {rutaPreview.distanciaKm} km
+              </div>
+              <RutaMapa origen={rutaPreview.origen} destino={rutaPreview.destino} geometria={rutaPreview.geometria} />
+            </div>
+          )}
         </div>
 
         {sugierePuntoMedio && (
