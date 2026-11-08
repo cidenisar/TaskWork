@@ -52,6 +52,8 @@ export function NuevaEvaluacionRiesgoViajeForm({
 
   const [submitting, setSubmitting] = useState(false);
   const [iniciando, setIniciando] = useState(false);
+  const [autocompletando, setAutocompletando] = useState(false);
+  const [avisosAutocompletar, setAvisosAutocompletar] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [resultado, setResultado] = useState<{ evaluacionId: string; total: number; nivel: NivelRiesgoViaje; mensaje: string } | null>(null);
   const [viajeIniciado, setViajeIniciado] = useState(false);
@@ -71,6 +73,37 @@ export function NuevaEvaluacionRiesgoViajeForm({
   }
   function removeAcompanante(i: number) {
     setAcompanantes(acompanantes.filter((_, idx) => idx !== i));
+  }
+
+  async function autocompletarConRuta() {
+    if (!origen.trim() || !destino.trim()) return;
+    setAutocompletando(true);
+    setAvisosAutocompletar([]);
+    setError(null);
+    try {
+      const res = await fetch("/api/riesgo-viaje/autocompletar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ origen: origen.trim(), destino: destino.trim(), fechaHora, totalPersonas: 1 + acompanantes.length }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setAvisosAutocompletar([data.error || "No se pudo completar con datos de la ruta."]);
+        return;
+      }
+      setCriterios((prev) => ({
+        ...prev,
+        distancia: data.criterioDistancia != null ? String(data.criterioDistancia) : prev.distancia,
+        tiempoViaje: data.criterioTiempoViaje != null ? String(data.criterioTiempoViaje) : prev.tiempoViaje,
+        clima: data.criterioClima != null ? String(data.criterioClima) : prev.clima,
+        personasPorVehiculo: data.criterioPersonasVehiculo != null ? String(data.criterioPersonasVehiculo) : prev.personasPorVehiculo,
+      }));
+      setAvisosAutocompletar(data.avisos ?? []);
+    } catch {
+      setAvisosAutocompletar(["No se pudo contactar el servicio de ruta — completá los criterios a mano."]);
+    } finally {
+      setAutocompletando(false);
+    }
   }
 
   async function guardar() {
@@ -141,6 +174,7 @@ export function NuevaEvaluacionRiesgoViajeForm({
     setDestino("");
     setPuntoMedio("");
     setCriterios(valorInicial());
+    setAvisosAutocompletar([]);
     setResultado(null);
     setViajeIniciado(false);
   }
@@ -256,6 +290,25 @@ export function NuevaEvaluacionRiesgoViajeForm({
             </label>
             <input type="text" placeholder="Ej: Malargüe" value={destino} onChange={(e) => setDestino(e.target.value)} disabled={submitting} />
           </div>
+        </div>
+
+        <div className="field">
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={autocompletarConRuta}
+            disabled={!origen.trim() || !destino.trim() || autocompletando || submitting}
+          >
+            <Icon name="map" size={13} /> {autocompletando ? "Completando..." : "Autocompletar con la ruta"}
+          </button>
+          <div className="hint">
+            Completa Distancia, Tiempo de Viaje, Clima y Personas por Vehículo con datos reales de la ruta — revisalos igual, quedan editables.
+          </div>
+          {avisosAutocompletar.map((a, i) => (
+            <div className="hint" style={{ color: "var(--warn)" }} key={i}>
+              {a}
+            </div>
+          ))}
         </div>
 
         {sugierePuntoMedio && (
