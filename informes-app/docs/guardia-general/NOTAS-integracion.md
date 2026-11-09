@@ -77,3 +77,30 @@ Decisiones de la sección 4 ya confirmadas por Ivan: **1)** cerrar período y ed
 **Para ver que corre:** `npm test` desde `informes-app/` (42/42 verdes). `npm run typecheck` y `npm run lint` también limpios con estos archivos.
 
 **No toqué nada más** — ni tablas, ni rutas, ni el resto de la app. Antes de seguir a la Fase 2 (datos + servidor + permisos, con los roles ya confirmados), aviso y muestro esto.
+
+## 7. Fase 2 — hecha (9/11/2026)
+
+Datos + servidor + permisos (HANDOFF §11 y §5), con las dos decisiones de Ivan ya aplicadas en el esquema: cerrar período y editar parámetros = **admin + supervisor** (`is_admin_or_supervisor()`, igual que el resto de "oficina"), y numeración de eventos **correlativa sin huecos** (contador transaccional, ver abajo). Sin pantallas todavía — eso es la Fase 3/4.
+
+**Migración** `supabase/migrations/20261109010000_guardia_general_nucleo_datos.sql`, aplicada al proyecto real (`oyhmoeqplifvbdktdwbm` "Informes"):
+
+- `guardia_persona` (+ `_hist`) — quién hace qué guardia, no altera `profiles`. "Guardia general" y "técnico de área" **no son un `rol` nuevo**: son filas de esta tabla (`area = 'General'` vs. `'Infraestructura'/'Datos'/'Enlaces'`); sin fila = sin guardia. `profiles.rol` sigue con sus 4 valores de siempre.
+- `guardia_config` — parámetros de negocio, **singleton** (mismo patrón que `config_general`, no una tabla clave/valor genérica — el HANDOFF sugería la genérica, pero esta app ya tiene su propia convención y la reusé). Con `_hist` para el valor anterior (`audit_log` no lo guarda).
+- `guardia_feriado` (+ `_hist`), `guardia_cronograma_semana` (+ `_hist`), `guardia_cambio`, `guardia_asuncion` — el resto del modelo de §7 y §10, con RLS desde el día uno.
+- `guardia_contador` + función `guardia_crear_evento(...)` — la numeración correlativa **sin huecos** que pidió Ivan: no es una `SEQUENCE` de Postgres (esa sí deja huecos si la transacción se revierte), es una tabla contador **sin ninguna policy** (ningún cliente la toca directo) más una función `SECURITY DEFINER` que incrementa el contador, crea el evento, la primera participación y la primera novedad, todo en una sola transacción — si algo falla, no sube el número.
+- `guardia_evento`, `guardia_participacion`, `guardia_novedad`, `guardia_correccion`, `guardia_periodo_cierre` — el circuito del evento (§5). `version` entero en evento y participación (bloqueo optimista, §12.4: "dos personas editando lo mismo"). `idempotencia_key` único en participación y novedad (§12.3: un pedido repetido por mala señal de celular no duplica la fila).
+
+**Permisos**, `src/lib/guardia/permisos.ts` + `permisos.test.ts` — helpers puros (`puedeRegistrarLlamada`, `puedeActivarGuardiaTecnica`, `puedeCerrarEvento`, `puedeCorregir`, `puedeCerrarPeriodo`, `puedeEditarParametros`, `puedeGestionarCronograma`, etc.), con el test por rol que pide el encargo: qué NO puede hacer un técnico de área, qué NO puede hacer la guardia general (nada de "oficina", aunque sea quien registró la llamada), que admin/supervisor/superusuario pueden todo lo de oficina. Esto es defensa en profundidad — RLS en la base es la que realmente bloquea, estos helpers son para que la UI de la Fase 3/4 no muestre botones que el servidor igual va a rechazar.
+
+**Reloj de servidor**, `src/lib/guardia/reloj.ts` — `horaGuardiaIso()` convierte el UTC real del servidor a hora de pared de Argentina (America/Argentina/Buenos_Aires, parámetro pendiente de confirmar si hace falta otra zona — HANDOFF §16.6). Ninguna acción recibe una hora del cliente: inicio y fin de cada participación siempre los pone el servidor.
+
+**Server actions del circuito del evento** (§5), con verificación de rol en el servidor en cada una (nunca se confía en lo que manda el cliente):
+
+- `src/app/(app)/guardia/nuevo/actions.ts` → `crearEventoAction` — única puerta de entrada, llama a `guardia_crear_evento()`.
+- `src/app/(app)/guardia/actions.ts` → `activarGuardiaTecnicaAction` (resuelve quién está de guardia AHORA por área con `guardiaDe()`, no activa nada en un área sin nadie asignado y lo avisa en vez de romper), `aceptarActivacionAction`, `noContestaAction` (cierra la fila original como `no_contesto` y abre una nueva para la persona siguiente), `agregarNovedadAction` (con `idempotenciaKey` opcional), `terminarParticipacionAction`, `cerrarEventoAction` (cierra las participaciones que quedaron abiertas y el evento, con un novedad final "Evento cerrado.").
+
+**Para ver que corre:** `npm test` (52/52 verdes), `npm run typecheck` y `npm run lint` limpios, `next build` sin errores. Sin páginas nuevas todavía — por eso no aparecen rutas nuevas en el build; `/guardia/nuevo` y `/guardia` hoy solo tienen `actions.ts`, la pantalla es la Fase 4.
+
+**Deliberadamente NO armado en esta fase** (queda para cuando se construya su pantalla, Fase 3/4/5/6, no antes): `guardia_notificacion` (outbox de avisos), server actions de cronograma (generar/editar/regenerar), cambios de guardia (crear/aceptar/rechazar/anular), asunción semanal, edición de parámetros, marcar feriados desde oficina, cierre de período, liquidación/CSV, reporte de fallas específico de este módulo.
+
+**No toqué nada fuera de este módulo.** Antes de seguir a la Fase 3 (pantallas de oficina: Personas, Parámetros, Feriados/Calendario, Cronograma, bajo `/panel/guardia/*`), aviso y muestro esto.

@@ -14,6 +14,11 @@ export interface ArchivoAEliminar {
   path: string | null;
 }
 
+/** Solo las tablas cuya fila tiene `id: string` — esta función siempre borra por ese campo. Algunas tablas (ej. guardia_persona, con PK propia; guardia_config, singleton) no aplican. */
+type TablaConIdString = {
+  [K in keyof Database["public"]["Tables"]]: Database["public"]["Tables"][K]["Row"] extends { id: string } ? K : never;
+}[keyof Database["public"]["Tables"]];
+
 /**
  * Borra una fila (sus hijas caen en cascada por FK — ver migraciones de
  * cada módulo) y limpia los archivos de storage que tenía asociados.
@@ -28,7 +33,7 @@ export interface ArchivoAEliminar {
 export async function eliminarRegistroConArchivos(
   service: SupabaseClient<Database>,
   profile: Profile,
-  tabla: keyof Database["public"]["Tables"],
+  tabla: TablaConIdString,
   id: string,
   archivos: ArchivoAEliminar[],
   descripcionAuditoria: string,

@@ -943,6 +943,106 @@ export type ClientErrorRow = {
   created_at: string;
 }
 
+export type AreaGuardiaDb = "General" | "Infraestructura" | "Datos" | "Enlaces";
+
+export type GuardiaPersonaRow = {
+  usuario_id: string;
+  area: AreaGuardiaDb;
+  orden: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type GuardiaConfigRow = {
+  id: 1;
+  entrada_min: number;
+  salida_activacion_min: number;
+  madrugada_hasta_min: number;
+  tope_media_min: number;
+  valor_media: number;
+  valor_entera: number;
+  cambio_min: number;
+  periodo_desde: string;
+  periodo_hasta: string;
+  updated_at: string;
+};
+
+export type GuardiaCronogramaSemanaRow = {
+  semana_inicio: string;
+  area: AreaGuardiaDb;
+  usuario_id: string | null;
+};
+
+export type EstadoCambioGuardiaDb = "pendiente" | "aceptado" | "rechazado" | "anulado";
+export type TipoCambioGuardia = "CUBRE" | "DEVUELVE";
+
+export type GuardiaCambioRow = {
+  id: string;
+  par_id: string;
+  tipo: TipoCambioGuardia;
+  area: AreaGuardiaDb;
+  persona_id: string;
+  original_id: string;
+  desde: string;
+  hasta: string;
+  motivo: string | null;
+  estado: EstadoCambioGuardiaDb;
+  registrado_por: string;
+  registrado_at: string;
+  respondido_at: string | null;
+};
+
+export type EstadoEventoGuardia = "abierto" | "cerrado";
+export type RolParticipacionGuardia = "GUARDIA_GENERAL" | "INFRAESTRUCTURA" | "DATOS" | "ENLACES";
+export type ModalidadParticipacionGuardia = "REMOTO" | "CAMPO";
+export type PedidoParticipacionGuardia = "REVISAR" | "ASISTIR";
+export type EstadoParticipacionGuardia = "en_curso" | "terminada" | "no_contesto";
+export type ScadaGuardia = "SIN_NOVEDAD" | "CON_NOVEDAD";
+export type TipoAlarmaGuardia = "Grupo electrógeno" | "Router" | "UPS" | "Otro";
+export type TicketTipoGuardia = "Incidencia" | "Ticket" | "Tarea de cambio";
+
+export type GuardiaEventoRow = {
+  id: string;
+  numero: number;
+  estado: EstadoEventoGuardia;
+  origen: "LLAMADA" | "MAIL";
+  tipo_alarma: TipoAlarmaGuardia;
+  sitio: string;
+  descripcion: string;
+  ticket_tipo: TicketTipoGuardia;
+  ticket_numero: string | null;
+  scada: ScadaGuardia | null;
+  creado_por: string;
+  creado_at: string;
+  cerrado_at: string | null;
+  version: number;
+};
+
+export type GuardiaParticipacionRow = {
+  id: string;
+  evento_id: string;
+  usuario_id: string;
+  rol: RolParticipacionGuardia;
+  modalidad: ModalidadParticipacionGuardia | null;
+  pedido: PedidoParticipacionGuardia | null;
+  inicio_at: string;
+  acepto_at: string | null;
+  fin_at: string | null;
+  estado: EstadoParticipacionGuardia;
+  idempotencia_key: string | null;
+  version: number;
+};
+
+export type GuardiaNovedadRow = {
+  id: string;
+  evento_id: string;
+  at: string;
+  texto: string;
+  /** null = la escribió el sistema, no una persona. */
+  por: string | null;
+  idempotencia_key: string | null;
+};
+
 export interface Database {
   public: {
     Tables: {
@@ -1266,9 +1366,53 @@ export interface Database {
         Partial<MantenimientoChecklistRespuestaRow> & Pick<MantenimientoChecklistRespuestaRow, "mantenimiento_id" | "item_id" | "estado">,
         Partial<MantenimientoChecklistRespuestaRow>
       >;
+      guardia_persona: Tbl<
+        GuardiaPersonaRow,
+        Partial<GuardiaPersonaRow> & Pick<GuardiaPersonaRow, "usuario_id" | "area">,
+        Partial<GuardiaPersonaRow>
+      >;
+      guardia_config: Tbl<GuardiaConfigRow, Partial<GuardiaConfigRow> & Pick<GuardiaConfigRow, "id">, Partial<GuardiaConfigRow>>;
+      guardia_cronograma_semana: Tbl<
+        GuardiaCronogramaSemanaRow,
+        Partial<GuardiaCronogramaSemanaRow> & Pick<GuardiaCronogramaSemanaRow, "semana_inicio" | "area">,
+        Partial<GuardiaCronogramaSemanaRow>
+      >;
+      guardia_cambio: Tbl<
+        GuardiaCambioRow,
+        Partial<GuardiaCambioRow> & Pick<GuardiaCambioRow, "tipo" | "area" | "persona_id" | "original_id" | "desde" | "hasta" | "registrado_por">,
+        Partial<GuardiaCambioRow>
+      >;
+      guardia_evento: Tbl<
+        GuardiaEventoRow,
+        Partial<GuardiaEventoRow> &
+          Pick<GuardiaEventoRow, "numero" | "tipo_alarma" | "sitio" | "descripcion" | "ticket_tipo" | "creado_por">,
+        Partial<GuardiaEventoRow>
+      >;
+      guardia_participacion: Tbl<
+        GuardiaParticipacionRow,
+        Partial<GuardiaParticipacionRow> & Pick<GuardiaParticipacionRow, "evento_id" | "usuario_id" | "rol" | "inicio_at">,
+        Partial<GuardiaParticipacionRow>
+      >;
+      guardia_novedad: Tbl<
+        GuardiaNovedadRow,
+        Partial<GuardiaNovedadRow> & Pick<GuardiaNovedadRow, "evento_id" | "texto">,
+        Partial<GuardiaNovedadRow>
+      >;
     };
     Views: Record<string, never>;
-    Functions: Record<string, never>;
+    Functions: {
+      /** Única puerta de entrada para registrar una llamada — valida guardia general, numera y crea evento+participación+novedad en una sola transacción (ver la migración). */
+      guardia_crear_evento: {
+        Args: {
+          p_tipo_alarma: TipoAlarmaGuardia;
+          p_sitio: string;
+          p_descripcion: string;
+          p_ticket_tipo: TicketTipoGuardia;
+          p_ticket_numero: string | null;
+        };
+        Returns: GuardiaEventoRow;
+      };
+    };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;
   };
