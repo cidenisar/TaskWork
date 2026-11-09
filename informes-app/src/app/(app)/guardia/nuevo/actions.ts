@@ -54,6 +54,7 @@ export async function crearEventoAction(formData: FormData): Promise<CrearEvento
     };
   }
 
+  revalidatePath("/guardia");
   revalidatePath("/guardia/historial");
   revalidatePath("/panel/guardia");
   return { success: true, eventoId: evento.id, numero: evento.numero };

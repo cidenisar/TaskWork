@@ -146,6 +146,13 @@ const NAV_CONFIG: Record<string, ModuleConfig> = {
     brand: "Ayuda",
     tabs: [],
   },
+  guardia: {
+    brand: "Guardia General",
+    tabs: [
+      { href: "/guardia", label: "Mi guardia" },
+      { href: "/guardia/historial", label: "Historial" },
+    ],
+  },
 };
 
 function moduleKeyFor(pathname: string): string | null {

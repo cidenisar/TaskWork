@@ -5,7 +5,8 @@ import { createClient } from "@/lib/supabase/server";
 import { requireProfile } from "@/lib/auth";
 import { horaGuardiaIso } from "@/lib/guardia/reloj";
 import { guardiaDe, type AreaGuardia } from "@/lib/guardia/cronograma";
-import { cargarCronograma, cargarCambiosAceptados, cargarParametros } from "@/lib/guardia/datos";
+import { cargarCronograma, cargarCambiosAceptados, cargarParametros, cargarAreaDe } from "@/lib/guardia/datos";
+import { esGuardiaGeneral } from "@/lib/guardia/permisos";
 import type { RolParticipacionGuardia, ModalidadParticipacionGuardia, PedidoParticipacionGuardia } from "@/lib/database.types";
 
 export interface AccionResult {
@@ -105,7 +106,7 @@ export async function activarGuardiaTecnicaAction(
     });
   }
 
-  revalidatePath("/guardia/historial");
+  revalidatePath("/guardia/evento/[id]", "page");
   revalidatePath("/panel/guardia");
   return { success: true, sinAsignar: sinAsignar.length > 0 ? sinAsignar : undefined };
 }
@@ -140,7 +141,7 @@ export async function aceptarActivacionAction(
     por: profile.id,
   });
 
-  revalidatePath("/guardia/historial");
+  revalidatePath("/guardia/evento/[id]", "page");
   return { success: true };
 }
 
@@ -192,7 +193,7 @@ export async function noContestaAction(participacionId: string, nuevoUsuarioId: 
     por: profile.id,
   });
 
-  revalidatePath("/guardia/historial");
+  revalidatePath("/guardia/evento/[id]", "page");
   return { success: true };
 }
 
@@ -210,7 +211,7 @@ export async function agregarNovedadAction(eventoId: string, texto: string, idem
   });
   if (error && !esViolacionDeUnicidad(error)) return { success: false, error: error.message };
 
-  revalidatePath("/guardia/historial");
+  revalidatePath("/guardia/evento/[id]", "page");
   return { success: true };
 }
 
@@ -239,7 +240,7 @@ export async function terminarParticipacionAction(participacionId: string): Prom
     .eq("version", participacion.version);
   if (error) return { success: false, error: error.message };
 
-  revalidatePath("/guardia/historial");
+  revalidatePath("/guardia/evento/[id]", "page");
   return { success: true };
 }
 
@@ -279,7 +280,59 @@ export async function cerrarEventoAction(eventoId: string): Promise<AccionResult
 
   await supabase.from("guardia_novedad").insert({ evento_id: eventoId, texto: "Evento cerrado.", por: profile.id });
 
+  revalidatePath("/guardia/evento/[id]", "page");
   revalidatePath("/guardia/historial");
   revalidatePath("/panel/guardia");
+  return { success: true };
+}
+
+/**
+ * Responder un cambio de guardia pendiente (HANDOFF §7.5 — "Asumo la
+ * guardia" / "No puedo") — solo quien tiene que cubrir, y solo mientras
+ * esté `pendiente` (RLS lo exige igual, esto es nomás el mensaje legible).
+ * Aceptado: rige desde ahora. Rechazado: sigue el cronograma de siempre.
+ */
+export async function responderCambioAction(cambioId: string, respuesta: "aceptado" | "rechazado"): Promise<AccionResult> {
+  const profile = await requireProfile();
+  const supabase = await createClient();
+
+  const { data: cambio, error: errSelect } = await supabase.from("guardia_cambio").select("persona_id, estado").eq("id", cambioId).single();
+  if (errSelect || !cambio) return { success: false, error: "No se encontró el cambio." };
+  if (cambio.persona_id !== profile.id) return { success: false, error: "Este cambio no es tuyo." };
+  if (cambio.estado !== "pendiente") return { success: true }; // ya fue respondido — idempotente
+
+  const { error } = await supabase
+    .from("guardia_cambio")
+    .update({ estado: respuesta, respondido_at: new Date().toISOString() })
+    .eq("id", cambioId)
+    .eq("estado", "pendiente");
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath("/guardia");
+  revalidatePath("/panel/guardia/cronograma");
+  return { success: true };
+}
+
+/**
+ * Marcar "hoy" como feriado desde el celular (HANDOFF §10) — la guardia
+ * general, o la oficina (que ya tiene su propio botón en Calendario). El
+ * contexto de rol/área se arma ACÁ, leyendo `guardia_persona` en este
+ * mismo pedido — nunca confiando en lo que mande el cliente.
+ */
+export async function marcarFeriadoHoyAction(nombre: string): Promise<AccionResult> {
+  const profile = await requireProfile();
+  const supabase = await createClient();
+
+  const area = await cargarAreaDe(supabase, profile.id);
+  if (!esGuardiaGeneral({ rol: profile.rol, area })) return { success: false, error: "Solo la guardia general puede marcar un feriado desde el celular." };
+
+  const fecha = horaGuardiaIso().slice(0, 10);
+  const { error } = await supabase.from("guardia_feriado").insert({ fecha, nombre: nombre.trim() || "Feriado", origen: "MANUAL", marcado_por: profile.id });
+  if (error) return { success: false, error: error.message };
+
+  await supabase.from("guardia_feriado_hist").insert({ fecha, accion: "marcado", quien: profile.id });
+
+  revalidatePath("/guardia");
+  revalidatePath("/panel/guardia/calendario");
   return { success: true };
 }

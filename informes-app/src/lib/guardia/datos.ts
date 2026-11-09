@@ -61,4 +61,10 @@ export async function cargarParametros(supabase: Client): Promise<ParametrosGuar
   };
 }
 
+/** El área de guardia de ESTE usuario (null = no hace ninguna) — para armar su `ContextoGuardia` en cada Server Action, nunca confiando en lo que mande el cliente. */
+export async function cargarAreaDe(supabase: Client, usuarioId: string): Promise<AreaGuardia | null> {
+  const { data } = await supabase.from("guardia_persona").select("area").eq("usuario_id", usuarioId).maybeSingle();
+  return (data?.area as AreaGuardia | undefined) ?? null;
+}
+
 export { AREAS_GUARDIA };

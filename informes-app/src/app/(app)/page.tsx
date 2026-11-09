@@ -2,7 +2,10 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { requireProfile } from "@/lib/auth";
+import { createClient } from "@/lib/supabase/server";
 import { puedeGestionarBajas, puedeGestionarDeposito, puedeVerPanel } from "@/lib/types";
+import { cargarAreaDe } from "@/lib/guardia/datos";
+import { esOficina } from "@/lib/guardia/permisos";
 import { ModuleIcon } from "@/components/module-icon";
 import { Icon } from "@/components/icon";
 
@@ -30,6 +33,13 @@ export default async function HomePage() {
   const panelLocked = !puedeVerPanel(profile.rol);
   const bajasLocked = !puedeGestionarBajas(profile.rol);
   const depositoLocked = !puedeGestionarDeposito(profile.rol);
+
+  // El módulo no se muestra "con candado" como Bajas/Depósito — a quien no hace ninguna
+  // guardia ni es oficina no le aplica para nada, así que directamente no aparece (mismo
+  // criterio que Estadísticas/Configuración, que un técnico ni ve en el Panel).
+  const supabase = await createClient();
+  const areaGuardia = await cargarAreaDe(supabase, profile.id);
+  const muestraGuardia = areaGuardia !== null || esOficina(profile.rol);
 
   return (
     <div>
@@ -108,6 +118,17 @@ export default async function HomePage() {
             Material o equipo (nuevo o usado-funcional) que vuelve al depósito — con comprobante de constancia
           </div>
         </Link>
+        {muestraGuardia && (
+          <Link href="/guardia" className="module-card">
+            <div className="module-ico">
+              <Icon name="bell" size={22} />
+            </div>
+            <div className="module-title">Guardia General</div>
+            <div className="module-sub">
+              {areaGuardia ? `Tu guardia de ${areaGuardia} — eventos, novedades y cambios` : "Eventos de guardia de las cuatro áreas"}
+            </div>
+          </Link>
+        )}
         <Link href="/panel" className="module-card">
           <div className="module-ico">
             <ModuleIcon name="panel" />
