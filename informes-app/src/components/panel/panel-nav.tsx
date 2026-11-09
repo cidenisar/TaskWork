@@ -9,16 +9,22 @@ const ITEMS: { href: string; label: string; icon: IconName }[] = [
   { href: "/panel/mantenimientos", label: "Mantenimientos", icon: "wrench" },
   { href: "/panel/vehiculos", label: "Vehículos", icon: "truck" },
   { href: "/panel/planos-qr", label: "Planos y QR", icon: "document" },
+  { href: "/panel/materiales", label: "Buscar Material", icon: "search" },
   { href: "/panel/riesgo-viaje", label: "Riesgo de Viaje", icon: "warning" },
+];
+
+/** Solo Admin/Supervisor/Superusuario — un técnico con acceso limitado al Panel no entra acá (ver puedeVerPanel). */
+const ITEMS_ADMIN_SUPERVISOR: { href: string; label: string; icon: IconName }[] = [
   { href: "/estadisticas", label: "Estadísticas", icon: "chart" },
   { href: "/configuracion", label: "Configuración", icon: "settings" },
 ];
 
-export function PanelNav() {
+export function PanelNav({ esAdminOSupervisor }: { esAdminOSupervisor: boolean }) {
   const pathname = usePathname();
+  const items = esAdminOSupervisor ? [...ITEMS, ...ITEMS_ADMIN_SUPERVISOR] : ITEMS;
   return (
     <nav className="panel-nav">
-      {ITEMS.map((item) => (
+      {items.map((item) => (
         <Link key={item.href} href={item.href} className={`panel-nav-item${pathname === item.href ? " active" : ""}`}>
           <span className="panel-nav-dot" />
           <Icon name={item.icon} size={14} />

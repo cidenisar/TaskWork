@@ -34,6 +34,8 @@ export function VencimientosTab({
           patente: v.patente,
           vencimientoTarjetaVerde: v.vencimientoTarjetaVerde,
           vencimientoRto: v.vencimientoRto,
+          vencimientoMatafuego: v.vencimientoMatafuego,
+          vencimientoBotiquin: v.vencimientoBotiquin,
           kilometrajeActual: v.kilometrajeActual,
         })),
         services.map((s) => ({

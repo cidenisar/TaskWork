@@ -11,6 +11,9 @@ export interface VehiculoItem {
   marcaModelo: string | null;
   vencimientoTarjetaVerde: string | null;
   vencimientoRto: string | null;
+  /** Se actualizan desde el control periódico del técnico (celu), no desde esta pestaña. */
+  vencimientoMatafuego: string | null;
+  vencimientoBotiquin: string | null;
   kilometrajeActual: number | null;
   /** Estado general (rayones/roturas) y foto cargados al dar de alta con el flujo de fotos — null si se agregó por el alta manual de acá abajo. */
   estadoAlta?: string | null;
@@ -69,6 +72,8 @@ export function VehiculosTab({
         marcaModelo: marcaModelo.trim() || null,
         vencimientoTarjetaVerde: vencTarjeta || null,
         vencimientoRto: vencRto || null,
+        vencimientoMatafuego: null,
+        vencimientoBotiquin: null,
         kilometrajeActual: km ? Number(km) : null,
       },
     ]);

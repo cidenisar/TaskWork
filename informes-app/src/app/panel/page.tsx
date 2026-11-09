@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { getPanelOverview } from "@/lib/panel/overview";
 import { filtrarSitios, agruparPor, localidadKey, type FiltrosJerarquia } from "@/lib/panel/jerarquia";
@@ -73,8 +74,12 @@ interface PanelSearchParams {
  */
 export default async function PanelPage({ searchParams }: { searchParams: Promise<PanelSearchParams> }) {
   const sp = await searchParams;
+  const profile = await requireProfile();
   const supabase = await createClient();
-  const [overview, puntosCrudos] = await Promise.all([getPanelOverview(supabase), getPuntosMapa(supabase)]);
+  const [overview, puntosCrudos] = await Promise.all([
+    getPanelOverview(supabase, profile.rol !== "tecnico"),
+    getPuntosMapa(supabase),
+  ]);
   const { kpis, equipoPorModulo, sitios, vencimientos } = overview;
 
   const filtros: FiltrosJerarquia = { region: sp.region, provincia: sp.provincia, localidad: sp.localidad, sitio: sp.sitio };

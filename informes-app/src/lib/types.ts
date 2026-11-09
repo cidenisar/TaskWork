@@ -38,9 +38,14 @@ export function puedeGestionarDeposito(rol: Rol): boolean {
   return rol === "admin" || rol === "supervisor" || rol === "superusuario";
 }
 
-/** El Panel de Supervisión (vista general de sitios/equipamiento/vencimientos) es la misma audiencia que Estadísticas. */
+/**
+ * El Panel de Supervisión también lo puede abrir un técnico, pero limitado:
+ * ve Vista general, Mantenimientos, Vehículos, Planos y QR, Buscar Material y
+ * Riesgo de Viaje — nunca Estadísticas ni Configuración (ver PanelNav y el
+ * gate de cada una, que siguen siendo Admin/Supervisor-only aparte de esto).
+ */
 export function puedeVerPanel(rol: Rol): boolean {
-  return rol === "admin" || rol === "supervisor" || rol === "superusuario";
+  return rol === "tecnico" || rol === "admin" || rol === "supervisor" || rol === "superusuario";
 }
 
 /**

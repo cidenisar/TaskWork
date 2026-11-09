@@ -10,7 +10,7 @@ export default async function PanelVehiculosPage() {
     supabase
       .from("catalogo_vehiculos")
       .select(
-        "id, patente, marca_modelo, vencimiento_tarjeta_verde, vencimiento_rto, kilometraje_actual, estado_alta, tiene_danios_alta, fotos_exterior_urls, fotos_interior_urls",
+        "id, patente, marca_modelo, vencimiento_tarjeta_verde, vencimiento_rto, vencimiento_matafuego, vencimiento_botiquin, kilometraje_actual, estado_alta, tiene_danios_alta, fotos_exterior_urls, fotos_interior_urls",
       )
       .order("patente"),
     supabase
@@ -51,6 +51,8 @@ export default async function PanelVehiculosPage() {
         marcaModelo: v.marca_modelo,
         vencimientoTarjetaVerde: v.vencimiento_tarjeta_verde,
         vencimientoRto: v.vencimiento_rto,
+        vencimientoMatafuego: v.vencimiento_matafuego,
+        vencimientoBotiquin: v.vencimiento_botiquin,
         kilometrajeActual: v.kilometraje_actual,
         estadoAlta: v.estado_alta,
         tieneDaniosAlta: v.tiene_danios_alta,

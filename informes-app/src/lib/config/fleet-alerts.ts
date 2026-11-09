@@ -20,6 +20,8 @@ export interface VehiculoParaAlerta {
   patente: string;
   vencimientoTarjetaVerde: string | null;
   vencimientoRto: string | null;
+  vencimientoMatafuego: string | null;
+  vencimientoBotiquin: string | null;
   kilometrajeActual: number | null;
 }
 
@@ -111,6 +113,26 @@ export function computeFleetAlerts(
         patente: v.patente,
         urgencia: rtoEstado,
         mensaje: `RTO ${rtoEstado === "danger" ? "vencida" : "próxima a vencer"} (${v.vencimientoRto})`,
+      });
+    }
+
+    const matafuegoEstado = estadoVencimiento(v.vencimientoMatafuego);
+    if (matafuegoEstado === "warn" || matafuegoEstado === "danger") {
+      alertas.push({
+        id: `${v.id}-matafuego`,
+        patente: v.patente,
+        urgencia: matafuegoEstado,
+        mensaje: `Matafuego ${matafuegoEstado === "danger" ? "vencido" : "próximo a vencer"} (${v.vencimientoMatafuego})`,
+      });
+    }
+
+    const botiquinEstado = estadoVencimiento(v.vencimientoBotiquin);
+    if (botiquinEstado === "warn" || botiquinEstado === "danger") {
+      alertas.push({
+        id: `${v.id}-botiquin`,
+        patente: v.patente,
+        urgencia: botiquinEstado,
+        mensaje: `Botiquín ${botiquinEstado === "danger" ? "vencido" : "próximo a vencer"} (${v.vencimientoBotiquin})`,
       });
     }
 

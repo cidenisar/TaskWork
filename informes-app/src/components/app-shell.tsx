@@ -130,6 +130,13 @@ const NAV_CONFIG: Record<string, ModuleConfig> = {
       { href: "/riesgo-viaje/historial", label: "Historial" },
     ],
   },
+  "control-vehiculo": {
+    brand: "Control de Vehículo",
+    tabs: [
+      { href: "/control-vehiculo/nuevo", label: "Nuevo Control" },
+      { href: "/control-vehiculo/historial", label: "Historial" },
+    ],
+  },
   estadisticas: {
     brand: "Estadísticas",
     tabs: [{ href: "/estadisticas", label: "Resumen" }],

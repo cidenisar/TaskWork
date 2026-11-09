@@ -123,7 +123,7 @@ export function masReciente(a: string | null, b: string | null | undefined): str
  * ni la ficha de Sitio (que sí muestran el detalle fila por fila) — es el
  * resumen ejecutivo.
  */
-export async function getPanelOverview(supabase: Supabase): Promise<PanelOverview> {
+export async function getPanelOverview(supabase: Supabase, incluirVencimientosPersonal = true): Promise<PanelOverview> {
   const hoy = new Date();
 
   const [
@@ -290,7 +290,8 @@ export async function getPanelOverview(supabase: Supabase): Promise<PanelOvervie
   // "vencido", es un dato que todavía no se completó). No se puede repartir
   // por zona/sitio: ni técnicos ni vehículos están atados a una Ubicación.
   const vencimientos: PanelVencimiento[] = [];
-  for (const p of profilesRes.data ?? []) {
+  // Un técnico con acceso limitado al Panel no ve el vencimiento de DNI/licencia de sus compañeros — sí el resto (vehículos).
+  for (const p of incluirVencimientosPersonal ? (profilesRes.data ?? []) : []) {
     if (!p.activo) continue;
     if (p.dni_vencimiento) {
       const dias = diasRestantes(p.dni_vencimiento, hoy);

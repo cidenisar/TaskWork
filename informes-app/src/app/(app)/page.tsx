@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { requireProfile } from "@/lib/auth";
-import { puedeVerEstadisticas, puedeGestionarBajas, puedeGestionarDeposito, puedeVerPanel } from "@/lib/types";
+import { puedeGestionarBajas, puedeGestionarDeposito, puedeVerPanel } from "@/lib/types";
 import { ModuleIcon } from "@/components/module-icon";
 import { Icon } from "@/components/icon";
 
@@ -17,15 +17,16 @@ export default async function HomePage() {
   // En notebook/PC, Admin y Supervisor arrancan directo en el Panel de Supervisión (para eso lo usan) — en el
   // celular (el técnico en el campo) se queda en este menú de módulos, que es mobile-first. Si volvió acá a
   // propósito desde el Panel (el link "Volver a la app" de su sidebar), no lo rebota de nuevo — si no, "Volver a
-  // la app" nunca llegaría a ningún lado.
-  if (puedeVerPanel(profile.rol)) {
+  // la app" nunca llegaría a ningún lado. Un técnico ahora también puede ENTRAR al Panel (limitado), pero sigue
+  // arrancando acá siempre, sea PC o celular — el Panel no reemplaza este menú para él, que es donde carga todo
+  // lo suyo (informes, rendiciones, control de vehículo, etc.), cosas que el Panel limitado no tiene.
+  if (profile.rol !== "tecnico" && puedeVerPanel(profile.rol)) {
     const encabezados = await headers();
     const userAgent = encabezados.get("user-agent") ?? "";
     const vieneDelPanel = (encabezados.get("referer") ?? "").includes("/panel");
     if (!esMobile(userAgent) && !vieneDelPanel) redirect("/panel");
   }
 
-  const statsLocked = !puedeVerEstadisticas(profile.rol);
   const panelLocked = !puedeVerPanel(profile.rol);
   const bajasLocked = !puedeGestionarBajas(profile.rol);
   const depositoLocked = !puedeGestionarDeposito(profile.rol);
@@ -62,28 +63,12 @@ export default async function HomePage() {
             Tableros eléctricos, racks de comunicaciones y demás equipamiento de un sitio — elegí qué vas a relevar
           </div>
         </Link>
-        <Link href="/ubicaciones" className="module-card">
-          <div className="module-ico">
-            <ModuleIcon name="ubicaciones" />
-          </div>
-          <div className="module-title">Sitios</div>
-          <div className="module-sub">
-            Navegá Región → Provincia → Sitio y mirá todo lo cargado en cada lugar — informes, rendiciones, tableros, racks y equipos
-          </div>
-        </Link>
         <Link href="/escanear-qr" className="module-card">
           <div className="module-ico">
             <ModuleIcon name="escanear" />
           </div>
           <div className="module-title">Escanear QR</div>
           <div className="module-sub">Apuntá la cámara al QR de un tablero o sala y abrí su plano al toque</div>
-        </Link>
-        <Link href="/materiales/buscar" className="module-card">
-          <div className="module-ico">
-            <ModuleIcon name="buscar" />
-          </div>
-          <div className="module-title">Buscar Material</div>
-          <div className="module-sub">Rastreá un equipo o material instalado — N° de serie, etiqueta YPF o descripción del remito</div>
         </Link>
         <Link href="/riesgo-viaje/nueva" className="module-card">
           <div className="module-ico">
@@ -93,6 +78,13 @@ export default async function HomePage() {
           <div className="module-sub">
             Evaluación de Riesgo del Viaje antes de salir — vehículo, conductor, ruta y los 8 criterios de siempre
           </div>
+        </Link>
+        <Link href="/control-vehiculo/nuevo" className="module-card">
+          <div className="module-ico">
+            <ModuleIcon name="control-vehiculo" />
+          </div>
+          <div className="module-title">Control de Vehículo</div>
+          <div className="module-sub">Control periódico — fotos del vehículo, kilometraje, y si el matafuego y el botiquín están al día</div>
         </Link>
         <Link href="/bajas/historial" className="module-card">
           <div className="module-ico">
@@ -124,15 +116,6 @@ export default async function HomePage() {
             Panel de Supervisión {panelLocked && <span className="lock"><Icon name="lock" size={12} /></span>}
           </div>
           <div className="module-sub">Vista general de sitios, equipamiento y vencimientos — pensado para pantalla grande</div>
-        </Link>
-        <Link href="/estadisticas" className="module-card">
-          <div className="module-ico">
-            <ModuleIcon name="estadisticas" />
-          </div>
-          <div className="module-title">
-            Estadísticas {statsLocked && <span className="lock"><Icon name="lock" size={12} /></span>}
-          </div>
-          <div className="module-sub">Vista general de informes, gastos y actividad del equipo</div>
         </Link>
       </div>
     </div>

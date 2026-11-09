@@ -166,6 +166,9 @@ export type CatalogoVehiculoRow = {
   foto_tarjeta_verde_url: string | null;
   vencimiento_rto: string | null;
   foto_rto_url: string | null;
+  /** Mismo criterio que vencimiento_tarjeta_verde/vencimiento_rto, pero actualizados desde el control periódico del técnico (sin foto). */
+  vencimiento_matafuego: string | null;
+  vencimiento_botiquin: string | null;
   /** Estado general (rayones/roturas) relevado con fotos al dar de alta el vehículo — null si se cargó por el alta manual o nunca se completó. */
   estado_alta: string | null;
   tiene_danios_alta: boolean | null;
@@ -188,6 +191,8 @@ export type VehiculoServiceRow = {
   pdf_generado_at: string | null;
   /** Galería de fotos del exterior tomadas EN este control — pasa a ser la referencia ("baseline") contra la que se compara el próximo control (ver comparar-estado). */
   fotos_exterior_urls: string[] | null;
+  /** Fotos del interior — solo las carga el control del técnico desde el celu (el control admin del Panel nunca pidió interior). */
+  fotos_interior_urls: string[] | null;
   estado_general: string | null;
   tiene_danios: boolean | null;
   /** Lo que la IA detectó de nuevo/distinto respecto del control anterior (o del alta, si es el primer control) — null si no hay nada nuevo o no hay referencia contra qué comparar. */

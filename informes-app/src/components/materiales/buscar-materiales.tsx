@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Icon } from "@/components/icon";
 import { Spinner } from "@/components/spinner";
-import { buscarMaterialesAction } from "@/app/(app)/materiales/buscar/actions";
+import { buscarMaterialesAction } from "@/app/panel/materiales/actions";
 import { obtenerUrlPdfInformeAction } from "@/app/(app)/informe-tecnico/historial/actions";
 import type { ResultadoBusquedaMateriales } from "@/lib/materiales/buscar";
 

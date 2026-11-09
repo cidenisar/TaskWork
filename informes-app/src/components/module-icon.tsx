@@ -193,6 +193,15 @@ export const ICON_PATHS: Record<string, React.ReactNode> = {
       <path d="M12 4v2M12 9v2M12 14v2M12 19v2" />
     </>
   ),
+  "control-vehiculo": (
+    <>
+      <path d="M4 15.5v-3l1.6-3.2A2 2 0 0 1 7.4 8h9.2a2 2 0 0 1 1.8 1.3l1.6 3.2v3" />
+      <path d="M4 15.5h16" />
+      <circle cx="7.5" cy="16.3" r="1.7" />
+      <circle cx="16.5" cy="16.3" r="1.7" />
+      <path d="m9 11.2 2 2 4-4" />
+    </>
+  ),
   "datos-prueba": (
     <>
       <path d="M5 7h14M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />

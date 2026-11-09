@@ -121,6 +121,8 @@ export function FlotaVehiculos({
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                       <VencBadge label="Tarjeta Verde" fecha={v.vencimientoTarjetaVerde} />
                       <VencBadge label="RTO" fecha={v.vencimientoRto} />
+                      <VencBadge label="Matafuego" fecha={v.vencimientoMatafuego} />
+                      <VencBadge label="Botiquín" fecha={v.vencimientoBotiquin} />
                       {proximoService.estado ? (
                         <span className={`venc-badge ${proximoService.estado}`}>
                           <StatusDot tone={proximoService.estado} /> Service: {proximoService.mensaje}

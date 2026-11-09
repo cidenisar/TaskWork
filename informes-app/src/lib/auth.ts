@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import type { Profile } from "@/lib/types";
+import { puedeVerPanel, type Profile } from "@/lib/types";
 
 /**
  * Devuelve el perfil (con rol) del usuario autenticado, o null si no hay sesión.
@@ -64,6 +64,13 @@ export async function requireAdmin(): Promise<Profile> {
 export async function requireAdminOrSupervisor(): Promise<Profile> {
   const profile = await requireProfile();
   if (profile.rol !== "admin" && profile.rol !== "supervisor" && profile.rol !== "superusuario") redirect("/");
+  return profile;
+}
+
+/** Redirige a "/" si el rol no puede abrir el Panel de Supervisión (admin/supervisor/superusuario, o técnico con acceso limitado — ver puedeVerPanel). */
+export async function requirePanelAccess(): Promise<Profile> {
+  const profile = await requireProfile();
+  if (!puedeVerPanel(profile.rol)) redirect("/");
   return profile;
 }
 
