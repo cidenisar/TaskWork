@@ -1,7 +1,9 @@
+import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { RiesgoViajePanel, type EvaluacionPanelRow } from "@/components/panel/riesgo-viaje/riesgo-viaje-panel";
 
 export default async function PanelRiesgoViajePage() {
+  const profile = await requireProfile();
   const supabase = await createClient();
 
   // RLS (evaluaciones_riesgo_viaje_select_stats) ya limita esto a Admin/Supervisor.
@@ -42,5 +44,5 @@ export default async function PanelRiesgoViajePage() {
     },
   }));
 
-  return <RiesgoViajePanel evaluaciones={filas} />;
+  return <RiesgoViajePanel evaluaciones={filas} esSuperusuario={profile.rol === "superusuario"} />;
 }

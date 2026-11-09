@@ -1,9 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
-import { requireProfile } from "@/lib/auth";
+import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
+import { requireProfile, requireSuperusuario } from "@/lib/auth";
 import { filenameDesdeStoragePath } from "@/lib/pdf/filename";
+import { eliminarRegistroConArchivos, type EliminarResult } from "@/lib/admin/eliminar-registro";
 import type { EstadoViaje } from "@/lib/database.types";
 
 export interface ActualizarEstadoViajeResult {
@@ -95,4 +96,30 @@ export async function actualizarEstadoViajeAction(
   revalidatePath("/riesgo-viaje/historial");
   revalidatePath("/panel/riesgo-viaje");
   return { success: true };
+}
+
+/** Solo Superusuario — mismo gate que el resto de los "Eliminar" de la app. Borra la evaluación (sus acompañantes caen en cascada por FK) y el PDF del storage. */
+export async function eliminarEvaluacionRiesgoViajeAction(evaluacionId: string): Promise<EliminarResult> {
+  const profile = await requireSuperusuario();
+  const service = createServiceRoleClient();
+
+  const { data: evaluacion } = await service
+    .from("evaluaciones_riesgo_viaje")
+    .select("pdf_url, numero_generacion, origen, destino")
+    .eq("id", evaluacionId)
+    .single();
+
+  const resultado = await eliminarRegistroConArchivos(
+    service,
+    profile,
+    "evaluaciones_riesgo_viaje",
+    evaluacionId,
+    [{ bucket: "informes-pdf", path: evaluacion?.pdf_url ?? null }],
+    `Eliminó la evaluación de riesgo de viaje ${evaluacion?.numero_generacion ?? evaluacionId} (${evaluacion?.origen ?? "?"} → ${evaluacion?.destino ?? "?"})`,
+  );
+  if (resultado.success) {
+    revalidatePath("/riesgo-viaje/historial");
+    revalidatePath("/panel/riesgo-viaje");
+  }
+  return resultado;
 }

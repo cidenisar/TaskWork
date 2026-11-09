@@ -1,9 +1,10 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { BarList } from "@/components/estadisticas/bar-list";
 import { RiesgoBadge, EstadoViajeBadge } from "@/components/riesgo-viaje/badges";
-import { obtenerUrlPdfRiesgoViajeAction } from "@/app/(app)/riesgo-viaje/actions";
+import { obtenerUrlPdfRiesgoViajeAction, eliminarEvaluacionRiesgoViajeAction } from "@/app/(app)/riesgo-viaje/actions";
 import { Icon } from "@/components/icon";
 import { CRITERIOS_RIESGO_VIAJE, type CriterioKey } from "@/lib/riesgo-viaje/criterios";
 import type { EstadoViaje, NivelRiesgoViaje } from "@/lib/database.types";
@@ -39,7 +40,21 @@ function horasDesde(fechaIso: string): number {
   return (Date.now() - new Date(fechaIso).getTime()) / 3_600_000;
 }
 
-function Fila({ e, busyId, onVerPdf, horasColgado }: { e: EvaluacionPanelRow; busyId: string | null; onVerPdf: (id: string) => void; horasColgado?: number }) {
+function Fila({
+  e,
+  busyId,
+  onVerPdf,
+  onEliminar,
+  esSuperusuario,
+  horasColgado,
+}: {
+  e: EvaluacionPanelRow;
+  busyId: string | null;
+  onVerPdf: (id: string) => void;
+  onEliminar: (id: string) => void;
+  esSuperusuario: boolean;
+  horasColgado?: number;
+}) {
   return (
     <div className="hist-item">
       <div className="info">
@@ -72,6 +87,17 @@ function Fila({ e, busyId, onVerPdf, horasColgado }: { e: EvaluacionPanelRow; bu
         >
           {busyId === e.id ? "…" : <Icon name="eye" size={15} />}
         </button>
+        {esSuperusuario && (
+          <button
+            type="button"
+            className="icon-btn icon-btn-danger"
+            title="Borrar evaluación"
+            disabled={busyId === e.id}
+            onClick={() => onEliminar(e.id)}
+          >
+            <Icon name="trash" size={15} />
+          </button>
+        )}
       </div>
     </div>
   );
@@ -82,9 +108,17 @@ function Fila({ e, busyId, onVerPdf, horasColgado }: { e: EvaluacionPanelRow; bu
  * el riesgo (vehículo/conductor/criterio), aviso de viajes colgados, y el
  * detalle separado en "Activos" y "Finalizados".
  */
-export function RiesgoViajePanel({ evaluaciones }: { evaluaciones: EvaluacionPanelRow[] }) {
+export function RiesgoViajePanel({
+  evaluaciones: evaluacionesIniciales,
+  esSuperusuario,
+}: {
+  evaluaciones: EvaluacionPanelRow[];
+  esSuperusuario: boolean;
+}) {
+  const [evaluaciones, setEvaluaciones] = useState(evaluacionesIniciales);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [finalizadosAbierto, setFinalizadosAbierto] = useState(false);
 
   const kpis = useMemo(() => {
     const total = evaluaciones.length;
@@ -164,11 +198,31 @@ export function RiesgoViajePanel({ evaluaciones }: { evaluaciones: EvaluacionPan
     window.open(res.url, "_blank", "noopener,noreferrer");
   }
 
+  async function eliminar(id: string) {
+    const e = evaluaciones.find((ev) => ev.id === id);
+    if (!window.confirm(`¿Borrar definitivamente la evaluación "${e?.origen ?? ""} → ${e?.destino ?? ""}"? Esto no se puede deshacer.`)) return;
+    setBusyId(id);
+    setNotice(null);
+    const res = await eliminarEvaluacionRiesgoViajeAction(id);
+    setBusyId(null);
+    if (!res.success) {
+      setNotice(res.error || "No se pudo borrar la evaluación.");
+      return;
+    }
+    setEvaluaciones((prev) => prev.filter((ev) => ev.id !== id));
+  }
+
   return (
     <div>
       <div className="page-heading">
         <h1>Evaluación de Riesgo de Viaje</h1>
         <p>Viajes activos y evaluaciones cargadas, con el resultado de cada una</p>
+      </div>
+
+      <div style={{ marginBottom: 16 }}>
+        <Link href="/panel/riesgo-viaje/nueva" className="btn btn-primary btn-sm">
+          + Nueva evaluación
+        </Link>
       </div>
 
       <div className="kpi-grid">
@@ -217,11 +271,62 @@ export function RiesgoViajePanel({ evaluaciones }: { evaluaciones: EvaluacionPan
           </div>
           <div className="list-grid">
             {colgados.map(({ e, horas }) => (
-              <Fila key={e.id} e={e} busyId={busyId} onVerPdf={verPdf} horasColgado={horas} />
+              <Fila key={e.id} e={e} busyId={busyId} onVerPdf={verPdf} onEliminar={eliminar} esSuperusuario={esSuperusuario} horasColgado={horas} />
             ))}
           </div>
         </div>
       )}
+
+      <div className="card">
+        <div className="section-label">Viajes activos ({activos.length})</div>
+        {activos.length === 0 ? (
+          <div className="empty-note">No hay viajes en curso ahora mismo.</div>
+        ) : (
+          <div className="list-grid">
+            {activos.map((e) => (
+              <Fila key={e.id} e={e} busyId={busyId} onVerPdf={verPdf} onEliminar={eliminar} esSuperusuario={esSuperusuario} />
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="card">
+        <button
+          type="button"
+          onClick={() => setFinalizadosAbierto((v) => !v)}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            width: "100%",
+            background: "none",
+            border: "none",
+            padding: 0,
+            marginBottom: finalizadosAbierto ? 14 : 0,
+            cursor: "pointer",
+            color: "inherit",
+          }}
+        >
+          <span className="section-label" style={{ margin: 0 }}>
+            Viajes finalizados ({finalizados.length})
+          </span>
+          <Icon
+            name="chevron-right"
+            size={14}
+            style={{ transform: finalizadosAbierto ? "rotate(90deg)" : "none", transition: "transform 0.15s ease" }}
+          />
+        </button>
+        {finalizadosAbierto &&
+          (finalizados.length === 0 ? (
+            <div className="empty-note">Todavía no hay viajes finalizados.</div>
+          ) : (
+            <div className="list-grid">
+              {finalizados.map((e) => (
+                <Fila key={e.id} e={e} busyId={busyId} onVerPdf={verPdf} onEliminar={eliminar} esSuperusuario={esSuperusuario} />
+              ))}
+            </div>
+          ))}
+      </div>
 
       {(rankingVehiculos.length > 0 || rankingConductores.length > 0 || rankingCriterios.length > 0) && (
         <div className="card">
@@ -250,32 +355,6 @@ export function RiesgoViajePanel({ evaluaciones }: { evaluaciones: EvaluacionPan
           <BarList items={rankingCriterios} />
         </div>
       )}
-
-      <div className="card">
-        <div className="section-label">Viajes activos ({activos.length})</div>
-        {activos.length === 0 ? (
-          <div className="empty-note">No hay viajes en curso ahora mismo.</div>
-        ) : (
-          <div className="list-grid">
-            {activos.map((e) => (
-              <Fila key={e.id} e={e} busyId={busyId} onVerPdf={verPdf} />
-            ))}
-          </div>
-        )}
-      </div>
-
-      <div className="card">
-        <div className="section-label">Viajes finalizados ({finalizados.length})</div>
-        {finalizados.length === 0 ? (
-          <div className="empty-note">Todavía no hay viajes finalizados.</div>
-        ) : (
-          <div className="list-grid">
-            {finalizados.map((e) => (
-              <Fila key={e.id} e={e} busyId={busyId} onVerPdf={verPdf} />
-            ))}
-          </div>
-        )}
-      </div>
     </div>
   );
 }
