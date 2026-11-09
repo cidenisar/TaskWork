@@ -59,4 +59,21 @@ Cada fase termina con tests verdes y mostrándote exactamente lo que vas a ver a
 
 ---
 
-**No sigo a la Fase 1 hasta que apruebes esto** (o me corrijas algo de las secciones 2–4). Si querés, puedo arrancar ya con la Fase 1 (núcleo + tests, cero pantallas) mientras pensás las 3 preguntas de la sección 4 — no dependen de esas respuestas.
+## 6. Fase 1 — hecha (9/11/2026)
+
+Decisiones de la sección 4 ya confirmadas por Ivan: **1)** cerrar período y editar parámetros = admin **+ supervisor** (no solo admin — ajusta el default propuesto); **2)** numeración de eventos **correlativa sin huecos** (se implementa en la Fase 2, es una pieza de base de datos — un contador transaccional, no hay nada "puro" que testear sin tabla); **3)** el interruptor de tema claro/oscuro se construye **para toda la app**, no solo para Guardia (queda anotado para la Fase 3/4, toca `AppShell`/`PanelLayout`, no es parte del núcleo).
+
+**Qué se armó**, sin UI, sin tablas — solo lógica pura y sus tests:
+
+- `src/lib/guardia/motor.ts` — el motor de activaciones portado del `.mjs` de referencia, en TypeScript, con el resultado en **centésimas enteras** (50/100) en vez de "medias" (1/2), como pide el HANDOFF §6.
+- `src/lib/guardia/motor.test.ts` — los 22 tests originales portados (adaptando los números esperados a centésimas) **+ 1 test nuevo** con el caso de aceptación A completo (los 9 eventos reales de septiembre 2026): **42 total entre los dos archivos, los 42 en verde.**
+- `src/lib/guardia/cronograma.ts` — `diaGuardia`, `inicioSemana`, `finSemana`, `semanasDelAnio`, `listaArea` (con orden de rotación editable, §16.7), `guardiaSemana`, `cambioVigente`, `guardiaDe`, `generarProgramacion`, `regenerarDesde`. A diferencia del prototipo (que muta un estado global), estas son funciones **puras**: reciben el cronograma actual y devuelven uno nuevo, nunca mutan — más fácil de testear y de razonar desde un server action.
+- `src/lib/guardia/cronograma.test.ts` — 19 tests de los escenarios de §7.1–7.6: el miércoles antes/después de las 10:00, un cambio aceptado que gana sobre el cronograma, uno pendiente que NO rige, el último cambio que se superpone gana, generar programación anual sin pisar lo cargado, 2027 continuando la rotación de 2026, "Todas" las áreas, regenerar desde la semana que viene sin tocar el pasado, área sin gente que no rompe.
+
+**Hallazgo al portar, no al leer:** la primera versión de `absoluto()` tenía un bug de desestructuración (un corrimiento de índice que hacía que CADA fecha se interpretara mal) — lo encontré porque 21 de los 22 tests fallaron apenas los corrí. Si hubiera "portado y confiado" sin corporizar los tests, el motor hubiera quedado roto en silencio. Por eso el orden del encargo (núcleo + tests ANTES de cualquier pantalla) importa en la práctica, no solo en la teoría.
+
+**Dependencia nueva, como corresponde avisar:** agregué `tsx` (devDependency) para poder correr tests en TypeScript con `node --test` sin compilar — esta app no tenía ningún test ni test runner hasta ahora. Cero dependencias en producción (`tsx` no entra al build de Next, solo lo usa `npm test`). Quedó un script `npm test` en `package.json`.
+
+**Para ver que corre:** `npm test` desde `informes-app/` (42/42 verdes). `npm run typecheck` y `npm run lint` también limpios con estos archivos.
+
+**No toqué nada más** — ni tablas, ni rutas, ni el resto de la app. Antes de seguir a la Fase 2 (datos + servidor + permisos, con los roles ya confirmados), aviso y muestro esto.
