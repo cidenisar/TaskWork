@@ -21,13 +21,91 @@ export interface VehiculoOpcion {
 // request de la plataforma — se suben de a pocas por vez, en tandas.
 const FOTOS_POR_TANDA = 3;
 
+/** Foto de una etiqueta (matafuego/botiquín) + "Leer con IA" que completa la fecha — siempre queda editable, nunca se guarda a ciegas. */
+function EtiquetaVencimiento({
+  label,
+  foto,
+  setFoto,
+  vencimiento,
+  setVencimiento,
+  leyendo,
+  nota,
+  onLeer,
+  disabled,
+}: {
+  label: string;
+  foto: File | null;
+  setFoto: (f: File | null) => void;
+  vencimiento: string;
+  setVencimiento: (v: string) => void;
+  leyendo: boolean;
+  nota: string | null;
+  onLeer: () => void;
+  disabled: boolean;
+}) {
+  const cameraRef = useRef<HTMLInputElement>(null);
+  return (
+    <div className="field" style={{ marginBottom: 0 }}>
+      <label>{label}</label>
+      <input
+        ref={cameraRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        style={{ display: "none" }}
+        onChange={(e) => {
+          const file = e.target.files?.[0] ?? null;
+          e.target.value = "";
+          if (file) setFoto(file);
+        }}
+      />
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 6 }}>
+        <button type="button" className="ai-btn" onClick={() => cameraRef.current?.click()} disabled={disabled}>
+          <Icon name="camera" size={13} /> {foto ? "Cambiar foto" : "Foto de la etiqueta"}
+        </button>
+        {foto && (
+          <button type="button" className="ai-btn" onClick={onLeer} disabled={disabled || leyendo}>
+            {leyendo ? <Spinner size={14} /> : <Icon name="ai" size={13} />} {leyendo ? "Leyendo..." : "Leer con IA"}
+          </button>
+        )}
+      </div>
+      {foto && (
+        <div className="chip-row" style={{ marginTop: 0, marginBottom: 6 }}>
+          <span className="chip">
+            Foto cargada
+            <button type="button" onClick={() => setFoto(null)} disabled={leyendo || disabled} aria-label="Quitar foto">
+              <Icon name="x" size={11} />
+            </button>
+          </span>
+        </div>
+      )}
+      <input type="date" value={vencimiento} onChange={(e) => setVencimiento(e.target.value)} disabled={disabled} />
+      {nota && (
+        <div className="ai-note" style={{ marginTop: 6 }}>
+          <span>{nota}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function NuevaControlVehiculoForm({ vehiculos }: { vehiculos: VehiculoOpcion[] }) {
   const router = useRouter();
 
   const [vehiculoId, setVehiculoId] = useState("");
   const [km, setKm] = useState("");
+  const [leyendoKm, setLeyendoKm] = useState(false);
+  const [notaKm, setNotaKm] = useState<string | null>(null);
+
   const [vencimientoMatafuego, setVencimientoMatafuego] = useState("");
+  const [fotoMatafuego, setFotoMatafuego] = useState<File | null>(null);
+  const [leyendoMatafuego, setLeyendoMatafuego] = useState(false);
+  const [notaMatafuego, setNotaMatafuego] = useState<string | null>(null);
+
   const [vencimientoBotiquin, setVencimientoBotiquin] = useState("");
+  const [fotoBotiquin, setFotoBotiquin] = useState<File | null>(null);
+  const [leyendoBotiquin, setLeyendoBotiquin] = useState(false);
+  const [notaBotiquin, setNotaBotiquin] = useState<string | null>(null);
 
   const [fotosExterior, setFotosExterior] = useState<File[]>([]);
   const exteriorCameraRef = useRef<HTMLInputElement>(null);
@@ -93,6 +171,72 @@ export function NuevaControlVehiculoForm({ vehiculos }: { vehiculos: VehiculoOpc
       reportarErrorCliente(err instanceof Error ? err.message : "Error comparando estado de vehículo con IA", "comparar-estado-vehiculo");
     } finally {
       setComparando(false);
+    }
+  }
+
+  async function leerKilometraje() {
+    if (fotosInterior.length === 0) {
+      setNotaKm("Sacá primero una foto del tablero/odómetro.");
+      return;
+    }
+    setLeyendoKm(true);
+    setNotaKm(null);
+    try {
+      const fd = new FormData();
+      for (const f of fotosInterior) {
+        const jpeg = await resizeImageToJpeg(f);
+        fd.append("fotos", jpeg, "interior.jpg");
+      }
+      const res = await fetch("/api/vehiculos/leer-tablero", { method: "POST", body: fd });
+      const data = await res.json();
+      if (!res.ok) {
+        setNotaKm(data.error || "No se pudo leer la foto.");
+        return;
+      }
+      if (data.kilometraje != null) setKm(String(data.kilometraje));
+      setNotaKm(
+        data.kilometraje != null
+          ? "Listo — revisá el kilometraje antes de guardar."
+          : "No se pudo leer el kilometraje con certeza — completalo a mano.",
+      );
+    } catch (err) {
+      setNotaKm("No se pudo leer la foto.");
+      reportarErrorCliente(err instanceof Error ? err.message : "Error leyendo kilometraje de vehículo con IA", "leer-tablero-control-vehiculo");
+    } finally {
+      setLeyendoKm(false);
+    }
+  }
+
+  async function leerVencimientoEtiqueta(
+    tipo: "matafuego" | "botiquin",
+    foto: File | null,
+    setFecha: (v: string) => void,
+    setNota: (v: string | null) => void,
+    setLeyendo: (v: boolean) => void,
+  ) {
+    if (!foto) return;
+    setLeyendo(true);
+    setNota(null);
+    try {
+      const fd = new FormData();
+      fd.append("tipo", tipo);
+      fd.append("foto", await resizeImageToJpeg(foto), `${tipo}.jpg`);
+      const res = await fetch("/api/vehiculos/leer-vencimiento-seguridad", { method: "POST", body: fd });
+      const data = await res.json();
+      if (!res.ok) {
+        setNota(data.error || "No se pudo leer la foto.");
+        return;
+      }
+      if (data.fecha) setFecha(data.fecha);
+      setNota(data.fecha ? "Listo — revisá la fecha antes de guardar." : "No se pudo leer la fecha con certeza — completala a mano.");
+    } catch (err) {
+      setNota("No se pudo leer la foto.");
+      reportarErrorCliente(
+        err instanceof Error ? err.message : `Error leyendo vencimiento de ${tipo} con IA`,
+        "leer-vencimiento-seguridad-vehiculo",
+      );
+    } finally {
+      setLeyendo(false);
     }
   }
 
@@ -311,7 +455,7 @@ export function NuevaControlVehiculoForm({ vehiculos }: { vehiculos: VehiculoOpc
           <Icon name="camera" size={14} /> Fotos del interior <span className="opt">(opcional)</span>
         </div>
         <div className="hint" style={{ margin: "-2px 0 10px" }}>
-          Tapizado, parabrisas desde adentro — igual que en el alta.
+          Tapizado, parabrisas desde adentro, y el tablero/odómetro si querés que la IA te lea el kilometraje.
         </div>
         <input
           ref={interiorCameraRef}
@@ -354,6 +498,11 @@ export function NuevaControlVehiculoForm({ vehiculos }: { vehiculos: VehiculoOpc
           >
             <Icon name="upload" size={13} /> Subir foto
           </button>
+          {fotosInterior.length > 0 && (
+            <button type="button" className="ai-btn" onClick={() => void leerKilometraje()} disabled={submitting || leyendoKm}>
+              {leyendoKm ? <Spinner size={14} /> : <Icon name="ai" size={13} />} {leyendoKm ? "Leyendo..." : "Leer kilometraje con IA"}
+            </button>
+          )}
         </div>
         {fotosInterior.length > 0 && (
           <div className="chip-row" style={{ marginTop: 0, marginBottom: 8 }}>
@@ -372,22 +521,42 @@ export function NuevaControlVehiculoForm({ vehiculos }: { vehiculos: VehiculoOpc
             ))}
           </div>
         )}
+        {notaKm && (
+          <div className="ai-note">
+            <span>{notaKm}</span>
+          </div>
+        )}
       </div>
 
       <div className="card">
         <div className="section-label">Seguridad del vehículo</div>
         <div className="hint" style={{ margin: "-2px 0 10px" }}>
-          Si tienen fecha de vencimiento visible, cargala — si no sabés o no la tiene, dejalo en blanco.
+          Sacale una foto a la etiqueta de vencimiento de cada uno y la IA te completa la fecha — revisala antes de guardar. Si no sabés
+          o no la tiene, dejalo en blanco.
         </div>
         <div className="grid2">
-          <div className="field" style={{ marginBottom: 0 }}>
-            <label>Matafuego vence</label>
-            <input type="date" value={vencimientoMatafuego} onChange={(e) => setVencimientoMatafuego(e.target.value)} disabled={submitting} />
-          </div>
-          <div className="field" style={{ marginBottom: 0 }}>
-            <label>Botiquín vence</label>
-            <input type="date" value={vencimientoBotiquin} onChange={(e) => setVencimientoBotiquin(e.target.value)} disabled={submitting} />
-          </div>
+          <EtiquetaVencimiento
+            label="Matafuego"
+            foto={fotoMatafuego}
+            setFoto={setFotoMatafuego}
+            vencimiento={vencimientoMatafuego}
+            setVencimiento={setVencimientoMatafuego}
+            leyendo={leyendoMatafuego}
+            nota={notaMatafuego}
+            onLeer={() => void leerVencimientoEtiqueta("matafuego", fotoMatafuego, setVencimientoMatafuego, setNotaMatafuego, setLeyendoMatafuego)}
+            disabled={submitting}
+          />
+          <EtiquetaVencimiento
+            label="Botiquín"
+            foto={fotoBotiquin}
+            setFoto={setFotoBotiquin}
+            vencimiento={vencimientoBotiquin}
+            setVencimiento={setVencimientoBotiquin}
+            leyendo={leyendoBotiquin}
+            nota={notaBotiquin}
+            onLeer={() => void leerVencimientoEtiqueta("botiquin", fotoBotiquin, setVencimientoBotiquin, setNotaBotiquin, setLeyendoBotiquin)}
+            disabled={submitting}
+          />
         </div>
       </div>
 
