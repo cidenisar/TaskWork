@@ -1,0 +1,1179 @@
+<!doctype html>
+<html lang="es" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Guardia General – Prototipo</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+:root{
+  --bg:#EEF0F3;--surface:#FFFFFF;--surface2:#F6F7F9;--line:#C4C9D0;--line2:#E4E7EB;
+  --text:#1B1F24;--muted:#555C66;--input-line:#6B727C;
+  --accent:#1F5FBF;--accent-ink:#FFFFFF;--accent-soft:#E3ECFA;--accent-soft-ink:#174A94;
+  --crit:#B3261E;--crit-ink:#FFFFFF;--crit-soft:#FBE9E7;--crit-soft-ink:#8C1D18;
+  --chip:#E4E7EB;--chip-ink:#343A42;--ok-soft:#E1F3E6;--ok-ink:#17602B;--warn-soft:#FFF3D6;--warn-ink:#6B4A00;
+  --nav:#1B1F24;--nav-ink:#C9CFD6;--nav-active:#2E353D;
+  box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#14171B;--surface:#1E2228;--surface2:#252A31;--line:#3A414A;--line2:#2E343C;
+    --text:#E8EAED;--muted:#A7AEB8;--input-line:#7A828D;
+    --accent:#5B93E8;--accent-ink:#0B1526;--accent-soft:#1F3557;--accent-soft-ink:#B9D2F7;
+    --crit:#E5736C;--crit-ink:#2A0705;--crit-soft:#3A1B19;--crit-soft-ink:#F5B5B0;
+    --chip:#2E343C;--chip-ink:#D5D9DF;--ok-soft:#183524;--ok-ink:#9AD7AE;--warn-soft:#3A2F10;--warn-ink:#F2D88F;
+    --nav:#0E1114;--nav-ink:#B9C0CA;--nav-active:#232830;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#14171B;--surface:#1E2228;--surface2:#252A31;--line:#3A414A;--line2:#2E343C;
+  --text:#E8EAED;--muted:#A7AEB8;--input-line:#7A828D;
+  --accent:#5B93E8;--accent-ink:#0B1526;--accent-soft:#1F3557;--accent-soft-ink:#B9D2F7;
+  --crit:#E5736C;--crit-ink:#2A0705;--crit-soft:#3A1B19;--crit-soft-ink:#F5B5B0;
+  --chip:#2E343C;--chip-ink:#D5D9DF;--ok-soft:#183524;--ok-ink:#9AD7AE;--warn-soft:#3A2F10;--warn-ink:#F2D88F;
+  --nav:#0E1114;--nav-ink:#B9C0CA;--nav-active:#232830;
+}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.4 'IBM Plex Sans',system-ui,sans-serif}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.mono{font-family:'IBM Plex Mono',ui-monospace,monospace}
+.muted{color:var(--muted)} .sm{font-size:13px} .fw{font-weight:600}
+.row{display:flex;align-items:center;gap:8px} .between{justify-content:space-between} .wrap{flex-wrap:wrap} .gap12{gap:12px} .gap6{gap:6px}
+.grow{flex:1;min-width:0} .mt{margin-top:8px} .pad{padding:14px 16px} .block{width:100%}
+.h1{font-size:26px;font-weight:600} .h2{font-size:16px;font-weight:600}
+.bar{display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px;padding:10px 16px;background:var(--surface);border-bottom:1px solid var(--line)}
+.brand{font-weight:600;font-size:18px}
+.tag{margin-left:8px;font-size:12px;font-weight:500;padding:2px 8px;border-radius:999px;background:var(--warn-soft);color:var(--warn-ink)}
+.grp{display:flex;align-items:center;gap:8px} .lbl{font-size:13px;color:var(--muted)}
+.seg{display:inline-flex;border:1px solid var(--input-line);border-radius:8px;overflow:hidden}
+.seg button{min-height:36px;padding:0 12px;border:0;background:var(--surface);cursor:pointer;font-size:14px}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);font-weight:600}
+.btn{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 16px;border:1px solid var(--accent);border-radius:8px;background:var(--surface);color:var(--accent);font-weight:600;font-size:14px;cursor:pointer;text-decoration:none;text-align:center}
+.btn.pri{background:var(--accent);color:var(--accent-ink)}
+.btn.sm{min-height:36px;padding:0 12px}
+.btn:disabled,.tog:disabled{opacity:.5;cursor:not-allowed}
+.linkbtn{align-self:flex-start;min-height:40px;padding:0;border:0;background:none;color:var(--accent);font-weight:500;cursor:pointer}
+.iconbtn{width:36px;height:36px;padding:0;display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--line);border-radius:6px;background:var(--surface);cursor:pointer;color:var(--chip-ink)}
+.inp{height:44px;padding:0 12px;border:1px solid var(--input-line);border-radius:8px;background:var(--surface);color:var(--text);min-width:0}
+.inp.sm{height:34px;padding:0 8px;font-size:14px}
+textarea.inp{height:auto;padding:10px 12px;resize:none;display:block;width:100%}
+.fld{display:flex;flex-direction:column;gap:4px;font-size:12px;font-weight:500;color:var(--muted)}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:8px}
+.badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px;font-weight:600;white-space:nowrap}
+.crit{background:var(--crit);color:var(--crit-ink)} .acc{background:var(--accent);color:var(--accent-ink)}
+.chipb{background:var(--chip);color:var(--chip-ink);border:1px solid var(--line)}
+.soft{background:var(--accent-soft);color:var(--accent-soft-ink)} .critsoft{background:var(--crit-soft);color:var(--crit-soft-ink)}
+.warn{background:var(--warn-soft);color:var(--warn-ink)} .okb{background:var(--ok-soft);color:var(--ok-ink)}
+.chip{display:inline-block;padding:3px 10px;border-radius:999px;font-size:13px;background:var(--chip);color:var(--chip-ink)}
+.chip.soft{background:var(--accent-soft);color:var(--accent-soft-ink)} .chip.critsoft{background:var(--crit-soft);color:var(--crit-soft-ink)}
+.tog{min-height:48px;padding:0 4px;border:1px solid var(--input-line);border-radius:8px;background:var(--surface);cursor:pointer;font-size:14px;font-weight:500}
+.tog.on{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600}
+.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.guia{margin:12px 16px 0;padding:10px 16px;background:var(--surface);border:1px solid var(--line);border-radius:8px;font-size:14px}
+.guia summary{cursor:pointer;font-weight:600}
+.guia ol{margin:8px 0 0;padding-left:20px}
+.panels{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start;padding:16px}
+.phonewrap{flex:0 0 390px;max-width:100%} .officewrap{flex:1 1 640px;min-width:0}
+.v-movil .officewrap,.v-oficina .phonewrap{display:none}
+.phone{width:390px;max-width:100%;height:800px;display:flex;flex-direction:column;border:1px solid var(--line);border-radius:20px;overflow:hidden;background:var(--bg)}
+.ph-head{height:52px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 16px;background:var(--surface);border-bottom:1px solid var(--line);font-weight:600}
+.asbar{flex:none;display:flex;align-items:center;flex-wrap:wrap;gap:4px 8px;padding:8px 16px;background:var(--warn-soft);color:var(--warn-ink);font-size:13px}
+.asbar select{max-width:190px}
+.scroll{flex:1;overflow:auto;padding:16px;display:flex;flex-direction:column;gap:12px}
+.ph-nav{height:56px;flex:none;display:grid;grid-template-columns:1fr 1fr;background:var(--surface);border-top:1px solid var(--line)}
+.ph-nav button{border:0;border-top:3px solid transparent;background:transparent;font-size:14px;color:var(--muted);cursor:pointer}
+.ph-nav button[aria-current="page"]{border-top-color:var(--accent);color:var(--accent);font-weight:600}
+.ev{display:block;width:100%;text-align:left;padding:14px 16px;border:1px solid var(--line);border-radius:8px;background:var(--surface);cursor:pointer}
+.warnbox{border-color:var(--crit)}
+.list>div{padding:12px 16px;border-top:1px solid var(--line2)} .list>div:first-child{border-top:0}
+.office{display:flex;min-height:800px;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--bg)}
+.side{width:190px;flex:none;background:var(--nav);padding:16px 10px;display:flex;flex-direction:column;gap:4px}
+.side .t{padding:4px 10px 16px;color:#FFFFFF;font-weight:600}
+.side button{display:flex;justify-content:space-between;text-align:left;padding:10px 12px;border:0;border-radius:6px;background:transparent;color:var(--nav-ink);cursor:pointer;font-size:14px}
+.side button[aria-current="page"]{background:var(--nav-active);color:#FFFFFF;font-weight:600}
+.side .who{margin-top:auto;padding:10px;font-size:13px;color:var(--nav-ink)}
+.main{flex:1;min-width:0;padding:20px;display:flex;flex-direction:column;gap:14px;overflow:auto}
+.scrollx{overflow-x:auto}
+table.tb{width:100%;border-collapse:collapse;font-size:14px}
+.tb th{text-align:left;font-size:12px;color:var(--muted);font-weight:600;padding:8px 12px;background:var(--surface2);border-bottom:1px solid var(--line);white-space:nowrap}
+.tb td{padding:10px 12px;border-bottom:1px solid var(--line2);vertical-align:middle}
+.tb tr[data-act]{cursor:pointer} .tb tr.sel td{background:var(--accent-soft)}
+.tb .detail td{background:var(--surface2)}
+.pill{padding:4px 10px;border-radius:999px;font-size:13px;font-weight:600}
+.two{display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap} .two>.card{flex:1 1 320px;min-width:0}
+.prm{display:grid;grid-template-columns:minmax(0,1fr) 130px;gap:12px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line2);font-size:14px}
+#toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);max-width:min(92vw,520px);padding:12px 16px;border-radius:8px;background:var(--text);color:var(--bg);font-size:14px;opacity:0;pointer-events:none;transition:opacity .2s;z-index:10}
+#toast.show{opacity:1}
+@media (max-width:760px){.office{flex-direction:column}.side{width:auto;flex-direction:row;flex-wrap:wrap}.side .who{display:none}}
+
+.calg{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px;min-width:820px}
+.calh{font-size:12px;font-weight:600;color:var(--muted);padding:4px 6px}
+.cd{display:block;width:100%;min-height:122px;padding:6px;text-align:left;border:1px solid var(--line2);border-radius:6px;background:var(--surface);cursor:pointer;overflow:hidden}
+.cd.vac{background:transparent;border-color:transparent;cursor:default}
+.cd.wk{background:var(--surface2)} .cd.fer{background:var(--crit-soft);border-color:var(--crit)}
+.cd.hoy{outline:2px solid var(--accent);outline-offset:-1px} .cd.selx{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft)}
+.cd .n{font-weight:600;font-size:14px} .cl{font-size:11px;line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--chip-ink)}
+.cd .badge{font-size:11px;padding:1px 6px;white-space:normal;margin-top:2px}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="top"></div>
+  <details class="guia" open>
+    <summary>Circuito de la guardia, paso a paso</summary>
+    <ol>
+      <li>Tocá «Simular llamada de operación central»: suena el teléfono de la guardia general (quien está de guardia esta semana según el cronograma).</li>
+      <li>Registrá la llamada: tipo de alarma, sitio y lo que comenta operación central. Queda marcada la hora y se arma el texto para avisar en el grupo.</li>
+      <li>Revisá en el SCADA y registrá «Sin novedad» o «Hay novedad». Cada paso tiene su botón «Compartir» para el grupo.</li>
+      <li>Si es complicado, activá la guardia técnica (infraestructura, datos o enlaces) para revisar o para asistir al sitio. El aviso le llega a quien está de guardia en ese momento.</li>
+      <li>Cambiá «Ver como» al técnico: le llegó el aviso. Elegí «Voy remoto» o «Voy al sitio». Avanzá el reloj, cargá novedades, tocá «Terminó» y cerrá el evento.</li>
+      <li>En la oficina, <b>Personas</b> marca quién hace guardia general y quién técnica (cada una con su cronograma), <b>Calendario</b> muestra el mes día por día y los feriados nacionales de Argentina, que se marcan ahí.</li>
+      <li>En la oficina mirás Eventos y Liquidación. En Cronograma generás el año y registrás un cambio de guardia: le llega el aviso a quien la cubre, que toca «Asumo la guardia» (cambiá «Ver como» a esa persona). Lo mismo pasa cada miércoles con la guardia nueva, general y técnicas.</li>
+    </ol>
+  </details>
+  <div class="panels">
+    <section class="phonewrap" id="phone" aria-label="Aplicación móvil"></section>
+    <section class="officewrap" id="office" aria-label="Aplicación de oficina"></section>
+  </div>
+  <div id="toast" role="status" aria-live="polite"></div>
+</div>
+<script>
+'use strict';
+var VERSION = 'proto-1';
+
+/* ================= Núcleo de cálculo (el mismo motor probado) ================= */
+var MIN_DIA = 1440;
+var DIAS = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+function absoluto(iso){
+  var m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(iso);
+  if(!m) throw new Error('Fecha inválida: ' + iso);
+  return Date.UTC(+m[1], +m[2]-1, +m[3]) / 86400000 * MIN_DIA + (+m[4])*60 + (+m[5]);
+}
+function fechaDeDia(d){ return new Date(d*86400000).toISOString().slice(0,10); }
+function diaDeFecha(f){ var p = f.slice(0,10).split('-').map(Number); return Date.UTC(p[0], p[1]-1, p[2]) / 86400000; }
+function isoDeAbs(a){
+  var dia = Math.floor(a / MIN_DIA), m = a - dia*MIN_DIA;
+  return fechaDeDia(dia) + 'T' + pad(Math.floor(m/60)) + ':' + pad(m%60);
+}
+function esNoLaborable(dia, fer){
+  var s = new Date(dia*86400000).getUTCDay();
+  return s === 0 || s === 6 || fer.has(fechaDeDia(dia));
+}
+function clasificar(iniIso, fer, p){
+  var ini = absoluto(iniIso), dia = Math.floor(ini/MIN_DIA), m = ini - dia*MIN_DIA;
+  return (!esNoLaborable(dia, fer) && m >= p.entradaMin && m < p.salidaActivacionMin) ? 'dedicacion_funcional' : 'activacion';
+}
+function calcular(iniIso, finIso, fer, p){
+  var ini = absoluto(iniIso), fin = absoluto(finIso), tipo = clasificar(iniIso, fer, p), out = {};
+  if(fin <= ini || tipo === 'dedicacion_funcional') return {tipo: tipo, minutosPorDia: out};
+  var diaIni = Math.floor(ini/MIN_DIA), minIni = ini - diaIni*MIN_DIA;
+  for(var dia = diaIni; dia*MIN_DIA < fin; dia++){
+    var desde = Math.max(ini, dia*MIN_DIA), hasta = Math.min(fin, (dia+1)*MIN_DIA), c;
+    if(esNoLaborable(dia, fer)) c = hasta - desde;
+    else if(dia === diaIni && minIni >= p.salidaActivacionMin) c = hasta - desde;
+    else c = Math.max(0, Math.min(hasta, dia*MIN_DIA + p.madrugadaHastaMin) - desde);
+    if(c > 0) out[fechaDeDia(dia)] = c;
+  }
+  return {tipo: tipo, minutosPorDia: out};
+}
+function valorDia(min, p){ if(min <= 0) return 0; return min <= p.topeMediaMin ? p.valorMedia : p.valorEntera; }
+
+/* ================= Utilidades ================= */
+function $(s, r){ return (r || document).querySelector(s); }
+function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+function pad(n){ return String(n).padStart(2,'0'); }
+function hhmm(iso){ return iso.slice(11,16); }
+function fecha(f){ var d = new Date(diaDeFecha(f)*86400000); return DIAS[d.getUTCDay()] + ' ' + f.slice(8,10) + '/' + f.slice(5,7); }
+function fmtF(f){ return f.slice(8,10) + '/' + f.slice(5,7) + '/' + f.slice(0,4); }
+function fmtMin(m){ return Math.floor(m/60) + ':' + pad(m%60); }
+function fmtNum(n){ return '#' + String(n).padStart(4,'0'); }
+function fmtVal(v){ var x = v/100; return (Math.abs(x*10 - Math.round(x*10)) < 1e-9 ? x.toFixed(1) : x.toFixed(2)).replace('.',','); }
+function hm(min){ return pad(Math.floor(min/60)) + ':' + pad(min%60); }
+function parseHM(s){ var m = /^(\d{1,2}):(\d{2})$/.exec(String(s).trim()); if(!m) return null; var h = +m[1], mi = +m[2]; if(h > 23 || mi > 59) return null; return h*60 + mi; }
+function parseVal(s){ var x = parseFloat(String(s).replace(',','.')); return isNaN(x) || x < 0 ? null : Math.round(x*100); }
+function toggle(arr, v){ var i = arr.indexOf(v); if(i >= 0) arr.splice(i,1); else arr.push(v); }
+function ferSet(){ return new Set(S.feriados.map(function(f){ return f.fecha; })); }
+function tipoDiaLabel(f){ var fer = ferSet(); var dia = diaDeFecha(f); if(fer.has(f)) return 'Feriado'; var s = new Date(dia*86400000).getUTCDay(); return (s === 0 || s === 6) ? 'Fin de semana' : 'Día hábil'; }
+function persona(id){ return S.personas.filter(function(p){ return p.id === id; })[0]; }
+function evento(id){ return S.eventos.filter(function(e){ return e.id === id; })[0]; }
+function bTipo(t){ return t === 'activacion' ? '<span class="badge acc">Activación</span>' : '<span class="badge chipb">Dedicación funcional</span>'; }
+function motivo(iso){
+  var fer = ferSet(), p = S.params, dia = Math.floor(absoluto(iso)/MIN_DIA), m = absoluto(iso) - dia*MIN_DIA;
+  if(esNoLaborable(dia, fer)) return 'activación: es fin de semana o feriado';
+  if(m < p.entradaMin) return 'activación: el llamado entró antes de las ' + hm(p.entradaMin);
+  if(m >= p.salidaActivacionMin) return 'activación: el llamado entró desde las ' + hm(p.salidaActivacionMin);
+  return 'dedicación funcional: el llamado entró en horario de trabajo, no suma activación aunque se extienda';
+}
+
+var NOG = 'Sin guardia';
+var FERIADOS_AR = {
+  2026:[['01-01','Año Nuevo'],['02-16','Carnaval'],['02-17','Carnaval'],['03-24','Día de la Memoria por la Verdad y la Justicia'],['04-02','Día del Veterano y de los Caídos en Malvinas'],['04-03','Viernes Santo'],['05-01','Día del Trabajador'],['05-25','Revolución de Mayo'],['06-15','Paso a la Inmortalidad de Güemes (trasladado del 17/06)'],['06-20','Paso a la Inmortalidad de Belgrano'],['07-09','Día de la Independencia'],['08-17','Paso a la Inmortalidad de San Martín'],['10-12','Respeto a la Diversidad Cultural'],['11-23','Día de la Soberanía Nacional (trasladado del 20/11)'],['12-08','Inmaculada Concepción de María'],['12-25','Navidad']],
+  2027:[['01-01','Año Nuevo'],['02-08','Carnaval'],['02-09','Carnaval'],['03-24','Día de la Memoria por la Verdad y la Justicia'],['03-26','Viernes Santo'],['04-02','Día del Veterano y de los Caídos en Malvinas'],['05-01','Día del Trabajador'],['05-25','Revolución de Mayo'],['06-20','Paso a la Inmortalidad de Belgrano'],['06-21','Paso a la Inmortalidad de Güemes (trasladado del 17/06)'],['07-09','Día de la Independencia'],['08-16','Paso a la Inmortalidad de San Martín (trasladado del 17/08)'],['10-11','Respeto a la Diversidad Cultural (trasladado del 12/10)'],['11-20','Día de la Soberanía Nacional (traslado a confirmar)'],['12-08','Inmaculada Concepción de María'],['12-25','Navidad']]
+};
+/* ---- Guardia semanal: de miércoles a martes, con cronograma anual y cambios de guardia ---- */
+var AREAS_G = ['General','Infraestructura','Datos','Enlaces'];
+function diaGuardia(iso){ return Math.floor((absoluto(iso) - S.params.cambioMin) / MIN_DIA); }
+function inicioSemana(iso){
+  var dia = diaGuardia(iso), dow = new Date(dia*86400000).getUTCDay();
+  return fechaDeDia(dia - ((dow - 3 + 7) % 7));
+}
+function finSemana(ws){ return fechaDeDia(diaDeFecha(ws) + 6); }
+function semanaLabel(ws){ return S.params.cambioMin ? fecha(ws) + ' ' + hm(S.params.cambioMin) + ' → ' + fecha(fechaDeDia(diaDeFecha(ws) + 7)) + ' ' + hm(S.params.cambioMin) : fecha(ws) + ' → ' + fecha(finSemana(ws)); }
+function semanasDelAnio(anio){
+  var ini = Date.UTC(anio, 0, 1) / 86400000, fin = Date.UTC(anio, 11, 31) / 86400000;
+  var dow = new Date(ini*86400000).getUTCDay(), out = [];
+  for(var d = ini - ((dow - 3 + 7) % 7); d <= fin; d += 7) out.push(fechaDeDia(d));
+  return out;
+}
+function listaArea(personas, area){ return personas.filter(function(p){ return p.area === area; }).map(function(p){ return p.id; }); }
+function guardiaSemana(area, ws){ var c = S.cronograma[ws]; return (c && c[area]) || null; }
+function cambioVigente(area, f){
+  for(var i = S.cambios.length - 1; i >= 0; i--){ var c = S.cambios[i]; if(c.estado === 'aceptado' && c.area === area && c.desde <= f && f <= c.hasta) return c; }
+  return null;
+}
+function guardiaDe(area, iso){
+  var c = cambioVigente(area, fechaDeDia(diaGuardia(iso)));
+  return c ? c.persona : guardiaSemana(area, inicioSemana(iso));
+}
+function nombreDe(id){ var p = persona(id); return p ? p.nombre : 'sin asignar'; }
+function fdm(f){ return f.slice(8,10) + '/' + f.slice(5,7); }
+function deGuardiaTexto(){
+  return 'De guardia ahora: ' + AREAS_G.map(function(a){ return a + ' ' + nombreDe(guardiaDe(a, S.clock)); }).join(' · ');
+}
+function sembrarCronograma(st, anio, ancla){
+  AREAS_G.forEach(function(a){
+    var lista = listaArea(st.personas, a), n = lista.length;
+    if(!n) return;
+    semanasDelAnio(anio).forEach(function(ws){
+      var k = Math.round((diaDeFecha(ws) - diaDeFecha(ancla)) / 7);
+      var c = st.cronograma[ws] || (st.cronograma[ws] = {});
+      c[a] = lista[((k % n) + n) % n];
+    });
+  });
+}
+function generarProgramacion(anio, area, pisar){
+  var areas = area === 'Todas' ? AREAS_G : [area], nuevos = 0;
+  areas.forEach(function(a){
+    var lista = listaArea(S.personas, a), prev = null;
+    if(!lista.length) return;
+    semanasDelAnio(anio).forEach(function(ws){
+      var c = S.cronograma[ws] || (S.cronograma[ws] = {});
+      if(c[a] && !pisar){ prev = c[a]; return; }
+      if(prev === null){ var pc = S.cronograma[fechaDeDia(diaDeFecha(ws) - 7)]; prev = (pc && pc[a]) || null; }
+      var sig = lista[prev === null ? 0 : (lista.indexOf(prev) + 1) % lista.length];
+      c[a] = sig; prev = sig; nuevos++;
+    });
+  });
+  return nuevos;
+}
+
+/* ================= Estado ================= */
+function nuevoForm(){ return {tipoAlarma:'Grupo electrógeno', sitio:'', desc:'', tkTipo:'Incidencia', tkNum:'', guardias:[]}; }
+function estadoInicial(){
+  var personas = [
+    {id:'A', nombre:'Técnico A', area:'General'},
+    {id:'B', nombre:'Técnico B', area:'Infraestructura'},
+    {id:'C', nombre:'Técnico C', area:'Infraestructura'},
+    {id:'D', nombre:'Técnico D', area:'Datos'},
+    {id:'E', nombre:'Técnico E', area:'Enlaces'},
+    {id:'F', nombre:'Técnico F', area:'Datos'},
+    {id:'G', nombre:'Técnico G', area:'Enlaces'},
+    {id:'H', nombre:'Técnico H', area:'General'},
+    {id:'I', nombre:'Técnico I', area:'General'},
+    {id:'J', nombre:'Técnico J', area:NOG},
+    {id:'K', nombre:'Técnico K', area:NOG}
+  ];
+  var n = 0;
+  function mk(o, parts){
+    n++;
+    var inis = parts.map(function(p){ return p[3]; }).sort(), fins = parts.map(function(p){ return p[4]; }).sort();
+    var ini = inis[0], fin = fins[fins.length-1];
+    var gs = []; parts.forEach(function(p){ if(p[1] !== 'Guardia general' && gs.indexOf(p[1]) < 0) gs.push(p[1]); });
+    return {id:'e'+n, num:n, estado:'cerrado', origen:'manual', tipoAlarma:o[0], sitio:o[1], desc:o[2], tkTipo:o[3], tkNum:o[4],
+      guardias:gs, creadoAt:ini, cambios:[],
+      parts:parts.map(function(p){ return {personaId:p[0], rol:p[1], mod:p[2], inicio:p[3], fin:p[4], acepto:p[3]}; }),
+      novedades:[{at:ini, texto:'Alarma recibida del centro de operaciones.', por:'Sistema'}, {at:fin, texto:'Evento cerrado.', por:'Técnico A'}]};
+  }
+  var G = 'Guardia general';
+  var eventos = [
+    mk(['Router','[Sitio 1]','Sin enlace','Incidencia','INC [número]'], [['A',G,'remoto','2026-09-12T08:00','2026-09-12T10:00'],['E','Enlaces','remoto','2026-09-12T08:10','2026-09-12T09:50']]),
+    mk(['UPS','[Sitio 2]','Batería baja','Ticket','TKT [número]'], [['A',G,'remoto','2026-09-12T12:00','2026-09-12T13:30'],['D','Datos','remoto','2026-09-12T12:10','2026-09-12T13:30']]),
+    mk(['Grupo electrógeno','[Sitio 3]','Falla de arranque','Incidencia','INC [número]'], [['A',G,'remoto','2026-09-12T20:00','2026-09-12T21:30'],['B','Infraestructura','campo','2026-09-12T20:12','2026-09-12T21:30']]),
+    mk(['Otro','[Sitio 4]','Alarma de temperatura en sala','Incidencia','INC [número]'], [['A',G,'remoto','2026-09-13T10:00','2026-09-13T12:00'],['D','Datos','remoto','2026-09-13T10:15','2026-09-13T12:00']]),
+    mk(['Router','[Sitio 5]','Revisión de equipo','Tarea de cambio','CHG [número]'], [['A',G,'remoto','2026-09-14T07:45','2026-09-14T08:05'],['E','Enlaces','remoto','2026-09-14T07:50','2026-09-14T09:00']]),
+    mk(['Grupo electrógeno','[Sitio 3]','Falla de carga','Incidencia','INC [número]'], [['A',G,'remoto','2026-09-15T19:30','2026-09-15T22:00'],['B','Infraestructura','remoto','2026-09-15T19:42','2026-09-15T22:00'],['C','Infraestructura','campo','2026-09-15T20:10','2026-09-15T22:00']]),
+    mk(['Otro','[Sitio 6]','Alarma de temperatura','Incidencia','INC [número]'], [['A',G,'remoto','2026-09-16T05:00','2026-09-16T05:30'],['D','Datos','remoto','2026-09-16T05:10','2026-09-16T10:00']]),
+    mk(['UPS','[Sitio 2]','Batería baja','Ticket','TKT [número]'], [['A',G,'remoto','2026-09-17T15:00','2026-09-17T15:10'],['D','Datos','remoto','2026-09-17T15:00','2026-09-17T20:00']]),
+    mk(['Grupo electrógeno','[Sitio 3]','Falla de arranque','Incidencia','INC [número]'], [['A',G,'remoto','2026-09-18T23:00','2026-09-18T23:30'],['B','Infraestructura','campo','2026-09-18T23:10','2026-09-19T03:00']])
+  ];
+  var st = {
+    view:'ambas', theme:'light', clock:'2026-09-22T19:30', last:'general',
+    params:{entradaMin:450, salidaActivacionMin:1020, madrugadaHastaMin:450, topeMediaMin:270, valorMedia:50, valorEntera:100,
+      periodoDesde:'2026-09-01', periodoHasta:'2026-09-30', cambioMin:600},
+    cronograma:{}, cambios:[], asumio:{},
+    feriados:[], personas:personas, eventos:eventos, notifs:[], seq:{ev:eventos.length, notif:0, mail:0}, cierre:null,
+    mov:{persona:'A', screen:'lista', eventoId:null, tab:'guardia', act:[], wa:null, waIdx:null, pedido:'revisar', key:''},
+    form:nuevoForm(),
+    of:{screen:'eventos', q:'', guardia:'Todas', tipo:'Todos', sel:null, expand:'A', csv:false, cg:{anio:2026, mes:'09', area:'Infraestructura', panel:null}, cal:{anio:2026, mes:'09', dia:null}},
+    draft:null, logParams:[], fallas:[]
+  };
+  sembrarCronograma(st, 2026, '2026-09-16');
+  return st;
+}
+var S = estadoInicial();
+
+/* ================= Reporte de fallas (criterio fijo de todas las apps) ================= */
+function aparato(){
+  var ua = navigator.userAgent || '', os = 'SO desconocido', br = 'Navegador desconocido';
+  if(/Windows/.test(ua)) os = 'Windows'; else if(/Android/.test(ua)) os = 'Android'; else if(/iPhone|iPad/.test(ua)) os = 'iOS'; else if(/Mac OS X/.test(ua)) os = 'macOS'; else if(/Linux/.test(ua)) os = 'Linux';
+  if(/Edg\//.test(ua)) br = 'Edge'; else if(/Firefox\//.test(ua)) br = 'Firefox'; else if(/Chrome\//.test(ua)) br = 'Chrome'; else if(/Safari\//.test(ua)) br = 'Safari';
+  return os + ' · ' + br + ' · ' + window.innerWidth + '×' + window.innerHeight;
+}
+function pantallaActual(){
+  if(S.last === 'oficina') return 'Oficina · ' + S.of.screen;
+  if(S.last === 'movil') return 'Móvil · ' + (S.mov.tab === 'horas' ? 'mis horas' : S.mov.screen);
+  return 'General';
+}
+function registrarFalla(cod, err, ctx){
+  var p = persona(S.mov.persona);
+  S.fallas.unshift({n:S.fallas.length + 1, cuando:new Date().toLocaleString('es-AR'), cod:cod, msg:String((err && err.message) || err),
+    ctx:ctx || '', pantalla:pantallaActual(), usuario:p ? p.nombre + ' (' + p.area + ')' : '', aparato:aparato(), version:VERSION});
+}
+window.addEventListener('error', function(e){ registrarFalla('APP-02', e.error || e.message, 'global'); try{ render(); }catch(x){} });
+window.addEventListener('unhandledrejection', function(e){ registrarFalla('APP-03', e.reason, 'promesa'); });
+
+/* ================= Reglas del circuito ================= */
+function novedad(ev, texto, pid){ ev.novedades.push({at:S.clock, texto:texto, por:pid ? persona(pid).nombre : 'Sistema'}); }
+function crearEv(o){
+  S.seq.ev++;
+  var ev = {id:'e'+S.seq.ev, num:S.seq.ev, estado:'pendiente', origen:o.origen, tipoAlarma:o.tipoAlarma, sitio:o.sitio, desc:o.desc,
+    tkTipo:o.tkTipo, tkNum:o.tkNum, guardias:[], novedades:[], cambios:[], parts:[], creadoAt:S.clock};
+  S.eventos.push(ev); return ev;
+}
+function activar(ev, areas, porId, pedido){
+  var idxs = [];
+  areas.forEach(function(a){
+    if(ev.guardias.indexOf(a) >= 0) return;
+    var pid = guardiaDe(a, S.clock);
+    ev.guardias.push(a);
+    ev.parts.push({personaId:pid, rol:a, mod:null, inicio:S.clock, fin:null, acepto:null});
+    S.seq.notif++;
+    S.notifs.push({id:S.seq.notif, personaId:pid, eventoId:ev.id, at:S.clock, estado:'nueva', pedido:pedido});
+    novedad(ev, 'Se activa la guardia de ' + a + ' (' + persona(pid).nombre + ') para ' + (pedido === 'asistir' ? 'asistir al sitio' : 'revisar') + '.', porId);
+    idxs.push(ev.novedades.length - 1);
+  });
+  return idxs;
+}
+function tipoEvento(ev){
+  if(!ev.parts.length) return 'pendiente';
+  var fer = ferSet();
+  var vivas = ev.parts.filter(function(p){ return !p.sinRespuesta; });
+  if(!vivas.length) return 'dedicacion_funcional';
+  return vivas.some(function(p){ return clasificar(p.inicio, fer, S.params) === 'activacion'; }) ? 'activacion' : 'dedicacion_funcional';
+}
+function cerradoFecha(f){ return !!(S.cierre && f >= S.cierre.desde && f <= S.cierre.hasta); }
+function liquidacion(desde, hasta){
+  var fer = ferSet(), res = {};
+  S.personas.forEach(function(p){ res[p.id] = {persona:p, dias:{}, totalVal:0, totalMin:0, diasAct:0}; });
+  S.eventos.forEach(function(ev){
+    ev.parts.forEach(function(pt){
+      if(pt.sinRespuesta) return;
+      var r = calcular(pt.inicio, pt.fin || S.clock, fer, S.params);
+      Object.keys(r.minutosPorDia).forEach(function(f){
+        if(f < desde || f > hasta) return;
+        var d = res[pt.personaId].dias[f] || (res[pt.personaId].dias[f] = {min:0, ev:0, enCurso:false});
+        d.min += r.minutosPorDia[f]; d.ev += 1; if(!pt.fin) d.enCurso = true;
+      });
+    });
+  });
+  Object.keys(res).forEach(function(id){
+    var r = res[id];
+    Object.keys(r.dias).forEach(function(f){
+      var d = r.dias[f]; d.val = valorDia(d.min, S.params); d.tipoDia = tipoDiaLabel(f);
+      r.totalVal += d.val; r.totalMin += d.min; r.diasAct++;
+    });
+  });
+  return res;
+}
+function resultado(){ return S.cierre ? S.cierre.res : liquidacion(S.params.periodoDesde, S.params.periodoHasta); }
+function textoWA(ev, idxs){
+  var L = ['*' + ev.tipoAlarma + ' – ' + (ev.sitio || '[sitio]') + '*'];
+  if(!idxs){
+    L.push(ev.desc);
+    if(ev.tkNum) L.push(ev.tkTipo + ': ' + ev.tkNum);
+    if(ev.guardias.length) L.push('Guardia activada: ' + ev.guardias.join(', '));
+  }
+  L.push('');
+  (idxs || ev.novedades.map(function(n, i){ return i; })).forEach(function(i){
+    var n = ev.novedades[i]; if(n) L.push(hhmm(n.at) + ' ' + n.texto);
+  });
+  return L.join('\n');
+}
+function csvDe(res, desde, hasta){
+  var L = ['Persona;Guardia;Fecha;Tipo de día;Eventos;Horas de activación;Resultado del día'];
+  S.personas.forEach(function(p){
+    var r = res[p.id];
+    Object.keys(r.dias).sort().forEach(function(f){ var d = r.dias[f]; L.push([p.nombre, p.area, fmtF(f), d.tipoDia, d.ev, fmtMin(d.min), fmtVal(d.val)].join(';')); });
+    L.push([p.nombre, p.area, 'TOTAL', '', '', fmtMin(r.totalMin), fmtVal(r.totalVal)].join(';'));
+  });
+  return L.join('\n');
+}
+function copiar(texto){
+  function fb(){
+    var ta = document.createElement('textarea'); ta.value = texto; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select(); var ok = false;
+    try{ ok = document.execCommand('copy'); }catch(e){}
+    document.body.removeChild(ta);
+    toast(ok ? 'Copiado.' : 'No se pudo copiar: seleccioná el texto y copialo a mano.');
+  }
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(texto).then(function(){ toast('Copiado.'); }, fb);
+  } else fb();
+}
+var toastT = null;
+function toast(msg){ var t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(function(){ t.classList.remove('show'); }, 4200); }
+
+/* ================= Acciones ================= */
+var ACTS = {
+  view:function(d){ S.view = d.v; },
+  theme:function(d){ S.theme = d.v; },
+  avanzar:function(d){ S.clock = isoDeAbs(absoluto(S.clock) + (+d.min)); },
+  reiniciar:function(){ var f = S.fallas; S = estadoInicial(); S.fallas = f; toast('Demo reiniciada.'); },
+  movTab:function(d){ S.mov.tab = d.tab; S.mov.screen = 'lista'; },
+  movVolver:function(){ S.mov.screen = 'lista'; S.mov.wa = null; S.mov.waIdx = null; },
+  abrirEvento:function(d){ S.mov.eventoId = d.id; S.mov.screen = 'detalle'; S.mov.act = []; S.mov.wa = null; S.mov.waIdx = null; S.mov.tab = 'guardia'; },
+  nuevoEvento:function(){ S.form = nuevoForm(); S.mov.screen = 'nuevo'; },
+  setTk:function(d){ S.form.tkTipo = d.v; },
+  crearEvento:function(){
+    var f = S.form;
+    if(!f.desc.trim()){ toast('Escribí qué comentó operación central.'); return false; }
+    var ev = crearEv({origen:'llamada', tipoAlarma:f.tipoAlarma, sitio:f.sitio.trim(), desc:f.desc.trim(), tkTipo:f.tkTipo, tkNum:f.tkNum.trim()});
+    ev.estado = 'abierto';
+    ev.parts.push({personaId:S.mov.persona, rol:'Guardia general', mod:'remoto', inicio:S.clock, fin:null, acepto:S.clock});
+    novedad(ev, 'Llamada de operación central: ' + ev.tipoAlarma + ' – ' + ev.desc + '. Atiende ' + persona(S.mov.persona).nombre + '.', S.mov.persona);
+    S.mov.eventoId = ev.id; S.mov.screen = 'detalle'; S.mov.act = []; S.mov.pedido = 'revisar'; S.form = nuevoForm();
+    S.mov.wa = ev.id; S.mov.waIdx = [0];
+    toast('Llamada registrada: quedó la hora ' + hhmm(S.clock) + '. Avisá en el grupo con el texto de abajo.');
+  },
+  aceptar:function(d){
+    var n = S.notifs.filter(function(x){ return x.id === +d.n; })[0], ev = evento(n.eventoId);
+    var pt = ev.parts.filter(function(p){ return p.personaId === n.personaId; })[0];
+    pt.mod = d.m; pt.acepto = S.clock; n.estado = 'aceptada';
+    novedad(ev, persona(n.personaId).nombre + ' acepta (' + (d.m === 'remoto' ? 'remoto' : 'va al sitio') + ').', n.personaId);
+    S.mov.eventoId = ev.id; S.mov.screen = 'detalle';
+  },
+  toggleAct:function(d){ toggle(S.mov.act, d.a); },
+  noContesta:function(d){ S.mov.nc = S.mov.nc === d.i ? null : d.i; },
+  llamarOtro:function(d){
+    var ev = evento(d.id), i = +d.i, pt = ev.parts[i], sel = $('#nc-sel');
+    if(!sel || !sel.value){ toast('Elegí a quién llamar.'); return false; }
+    var n0 = S.notifs.filter(function(n){ return !n.tipo && n.eventoId === ev.id && n.personaId === pt.personaId && n.estado === 'nueva'; })[0], pedido = (n0 && n0.pedido) || 'revisar';
+    if(n0) n0.estado = 'vencida';
+    pt.sinRespuesta = S.clock; pt.fin = S.clock;
+    var pid = sel.value;
+    ev.parts.push({personaId:pid, rol:pt.rol, mod:null, inicio:S.clock, fin:null, acepto:null});
+    S.seq.notif++; S.notifs.push({id:S.seq.notif, personaId:pid, eventoId:ev.id, at:S.clock, estado:'nueva', pedido:pedido});
+    novedad(ev, persona(pt.personaId).nombre + ' no contesta. Se activa a ' + persona(pid).nombre + ' (' + pt.rol + ') para ' + (pedido === 'asistir' ? 'asistir al sitio' : 'revisar') + '.', S.mov.persona);
+    S.mov.nc = null; S.mov.wa = ev.id; S.mov.waIdx = [ev.novedades.length - 1];
+    toast('Se avisó a ' + persona(pid).nombre + '. Avisá en el grupo con el texto de abajo.');
+  },
+  setPedido:function(d){ S.mov.pedido = d.v; },
+  scada:function(d){
+    var ev = evento(d.id);
+    if(ev.scada === d.v){ toast('Ya está registrado.'); return false; }
+    ev.scada = d.v;
+    novedad(ev, d.v === 'sin_novedad' ? 'Revisado en el SCADA: sin novedad.' : 'Revisado en el SCADA: hay novedad, se evalúa activar la guardia técnica.', S.mov.persona);
+    S.mov.wa = ev.id; S.mov.waIdx = [ev.novedades.length - 1];
+  },
+  activar:function(d){
+    var ev = evento(d.id), faltan = S.mov.act.filter(function(a){ return !guardiaDe(a, S.clock); });
+    if(faltan.length){ toast('No hay nadie asignado en ' + faltan.join(', ') + ' para este momento. Cargalo en el Cronograma.'); return false; }
+    var idxs = activar(ev, S.mov.act.slice(), S.mov.persona, S.mov.pedido);
+    S.mov.act = [];
+    if(idxs.length){ S.mov.wa = ev.id; S.mov.waIdx = idxs; }
+    toast('Guardia activada: le llegó el aviso al técnico. Avisá también en el grupo.');
+  },
+  terminar:function(d){
+    var ev = evento(d.id), pt = ev.parts[+d.i];
+    if(absoluto(S.clock) <= absoluto(pt.inicio)){ toast('El reloj de la demo es anterior al llamado. Adelantalo para poder terminar.'); return false; }
+    pt.fin = S.clock; novedad(ev, persona(pt.personaId).nombre + ' terminó.', pt.personaId);
+  },
+  addNovedad:function(d){
+    var el = $('#nov-txt'), t = el ? el.value.trim() : '';
+    if(!t){ toast('Escribí la novedad.'); return false; }
+    novedad(evento(d.id), t, S.mov.persona);
+  },
+  cerrarEvento:function(d){
+    var ev = evento(d.id);
+    var bad = ev.parts.some(function(p){ return !p.fin && absoluto(S.clock) <= absoluto(p.inicio); });
+    if(bad){ toast('El reloj de la demo es anterior al llamado de alguien. Adelantalo para cerrar.'); return false; }
+    ev.parts.forEach(function(p){ if(!p.fin) p.fin = S.clock; });
+    ev.estado = 'cerrado'; novedad(ev, 'Evento cerrado.', S.mov.persona);
+    toast('Evento cerrado. Ya está en la oficina y en la liquidación.');
+  },
+  waToggle:function(d){
+    if(S.mov.wa === d.id && S.mov.waIdx == null) S.mov.wa = null;
+    else { S.mov.wa = d.id; S.mov.waIdx = null; }
+  },
+  waNov:function(d){ S.mov.wa = d.id; S.mov.waIdx = [+d.i]; },
+  copiarWA:function(){ copiar($('#wa-txt').value); return false; },
+  toggleFeriadoHoy:function(){
+    var f = S.clock.slice(0,10), i = -1;
+    S.feriados.forEach(function(x, k){ if(x.fecha === f) i = k; });
+    if(i >= 0){ S.feriados.splice(i,1); toast('Feriado quitado.'); }
+    else { S.feriados.push({fecha:f, nombre:'Marcado por la guardia general', por:persona(S.mov.persona).nombre}); toast('Hoy quedó marcado como feriado: cuenta de 0 a 24.'); }
+  },
+  ofNav:function(d){ S.of.screen = d.s; S.of.sel = null; if(d.s === 'cal'){ S.of.cal.anio = +S.clock.slice(0,4); S.of.cal.mes = S.clock.slice(5,7); S.of.cal.dia = null; } if(d.s === 'param') S.draft = draftFromParams(); },
+  ofSel:function(d){ S.of.sel = S.of.sel === d.id ? null : d.id; },
+  guardarHoras:function(d){
+    var ev = evento(d.id), i = +d.i, pt = ev.parts[i];
+    var ini = $('#ini-' + d.id + '-' + i).value, finEl = $('#fin-' + d.id + '-' + i), fin = finEl ? finEl.value : null;
+    if(!ini || (finEl && !fin)){ toast('Completá las dos horas.'); return false; }
+    if(fin && absoluto(fin) <= absoluto(ini)){ toast('El fin tiene que ser posterior al inicio.'); return false; }
+    var cambios = 0, nom = persona(pt.personaId).nombre;
+    if(ini !== pt.inicio){ ev.cambios.push({at:S.clock, por:'Superusuario', txt:nom + ': inicio ' + pt.inicio.replace('T',' ') + ' → ' + ini.replace('T',' ')}); pt.inicio = ini; cambios++; }
+    if(fin && fin !== pt.fin){ ev.cambios.push({at:S.clock, por:'Superusuario', txt:nom + ': fin ' + pt.fin.replace('T',' ') + ' → ' + fin.replace('T',' ')}); pt.fin = fin; cambios++; }
+    toast(cambios ? 'Corrección guardada, con quién y cuándo. La liquidación se recalcula sola.' : 'No hubo cambios.');
+  },
+  expandir:function(d){ S.of.expand = S.of.expand === d.p ? null : d.p; },
+  csvToggle:function(){ S.of.csv = !S.of.csv; },
+  cerrarPeriodo:function(){
+    if(S.eventos.some(function(e){ return e.estado !== 'cerrado'; })){ toast('Hay eventos abiertos. Cerralos antes de cerrar el período.'); return false; }
+    S.cierre = {at:S.clock, desde:S.params.periodoDesde, hasta:S.params.periodoHasta, params:JSON.parse(JSON.stringify(S.params)), res:JSON.parse(JSON.stringify(liquidacion(S.params.periodoDesde, S.params.periodoHasta)))};
+    toast('Período cerrado. Si cambiás un parámetro, este período no se mueve.');
+  },
+  reabrir:function(){ S.cierre = null; toast('Período reabierto (solo para la demo).'); },
+  guardarParams:function(){
+    var d = S.draft, p = S.params, n = {};
+    n.entradaMin = parseHM(d.entrada); n.salidaActivacionMin = parseHM(d.salida); n.madrugadaHastaMin = parseHM(d.madrugada); n.topeMediaMin = parseHM(d.corte);
+    n.valorMedia = parseVal(d.vMedia); n.valorEntera = parseVal(d.vEntera); n.cambioMin = parseHM(d.cambio);
+    if(Object.keys(n).some(function(k){ return n[k] === null; })){ toast('Revisá los valores: horas como HH:MM y valores como 0,5.'); return false; }
+    if(n.entradaMin >= n.salidaActivacionMin){ toast('La hora de entrada tiene que ser anterior a la de salida.'); return false; }
+    if(n.topeMediaMin <= 0){ toast('El corte de media activación tiene que ser mayor que cero.'); return false; }
+    if(d.desde > d.hasta){ toast('El período tiene que terminar después de empezar.'); return false; }
+    var etiq = {entradaMin:'Desde esta hora, un llamado en día hábil es dedicación funcional', salidaActivacionMin:'Desde esta hora, un llamado en día hábil es activación',
+      madrugadaHastaMin:'Una activación de madrugada cuenta hasta las', topeMediaMin:'Horas por día hasta las que suma media activación'};
+    var cambios = 0;
+    function reg(nom, antes, despues){ S.logParams.unshift({at:S.clock, quien:'Superusuario', par:nom, antes:antes, despues:despues}); cambios++; }
+    ['entradaMin','salidaActivacionMin','madrugadaHastaMin','topeMediaMin'].forEach(function(k){ if(n[k] !== p[k]){ reg(etiq[k], hm(p[k]), hm(n[k])); p[k] = n[k]; } });
+    if(n.valorMedia !== p.valorMedia){ reg('Valor de una media activación', fmtVal(p.valorMedia), fmtVal(n.valorMedia)); p.valorMedia = n.valorMedia; }
+    if(n.valorEntera !== p.valorEntera){ reg('Valor de una activación entera', fmtVal(p.valorEntera), fmtVal(n.valorEntera)); p.valorEntera = n.valorEntera; }
+    if(n.cambioMin !== p.cambioMin){ reg('El cambio de guardia es el miércoles a las', hm(p.cambioMin), hm(n.cambioMin)); p.cambioMin = n.cambioMin; }
+    if(!S.cierre){
+      if(d.desde !== p.periodoDesde){ reg('Período de liquidación (desde)', fmtF(p.periodoDesde), fmtF(d.desde)); p.periodoDesde = d.desde; }
+      if(d.hasta !== p.periodoHasta){ reg('Período de liquidación (hasta)', fmtF(p.periodoHasta), fmtF(d.hasta)); p.periodoHasta = d.hasta; }
+    }
+    toast(cambios ? (S.cierre ? 'Guardado. El período cerrado no cambia: los valores rigen de ahora en adelante.' : 'Cambios guardados y registrados en el historial.') : 'No hubo cambios.');
+  },
+  addFeriado:function(){
+    var f = $('#fer-f').value, n = ($('#fer-n').value || '').trim();
+    if(!f){ toast('Elegí la fecha del feriado.'); return false; }
+    if(S.feriados.some(function(x){ return x.fecha === f; })){ toast('Ese día ya está marcado.'); return false; }
+    S.feriados.push({fecha:f, nombre:n || '[nombre del feriado]', por:'Superusuario'});
+    S.logParams.unshift({at:S.clock, quien:'Superusuario', par:'Feriado agregado', antes:'—', despues:fmtF(f)});
+    toast('Feriado marcado: ese día cuenta de 0 a 24 como activación.');
+  },
+  quitarFeriado:function(d){
+    S.feriados = S.feriados.filter(function(x){ return x.fecha !== d.f; });
+    S.logParams.unshift({at:S.clock, quien:'Superusuario', par:'Feriado quitado', antes:fmtF(d.f), despues:'—'});
+  },
+  fallaPrueba:function(){ var x = null; x.romperAPropósito(); },
+  vaciarFallas:function(){ S.fallas = []; }
+};
+Object.assign(ACTS, {
+  simularLlamada:function(){
+    var ej = [['Grupo electrógeno','Falla de arranque'], ['UPS','Batería baja'], ['Router','Sin enlace']];
+    var x = ej[S.seq.mail % ej.length]; S.seq.mail++;
+    var gid = guardiaDe('General', S.clock) || 'A';
+    S.mov.persona = gid; S.mov.tab = 'guardia'; S.mov.wa = null; S.mov.waIdx = null; S.mov.act = [];
+    S.form = nuevoForm(); S.form.tipoAlarma = x[0]; S.form.desc = x[1]; S.form.sitio = '[Sitio ' + (S.seq.mail + 6) + ']'; S.form.tkNum = 'INC [número]';
+    S.mov.screen = 'nuevo';
+    if(S.view === 'oficina') S.view = 'ambas';
+    toast('Suena el teléfono de la guardia general (' + persona(gid).nombre + '). Registrá la llamada.');
+  },
+  calMes:function(d){ var t = (+S.of.cal.anio)*12 + (+S.of.cal.mes - 1) + (+d.n); S.of.cal.anio = Math.floor(t/12); S.of.cal.mes = pad((t % 12) + 1); S.of.cal.dia = null; },
+  calDia:function(d){ S.of.cal.dia = S.of.cal.dia === d.f ? null : d.f; },
+  calMarcar:function(d){
+    if(feriadoMarcado(d.f)) return;
+    S.feriados.push({fecha:d.f, nombre:natFer(d.f) || 'Marcado por la oficina', por:'Superusuario'});
+    S.logParams.unshift({at:S.clock, quien:'Superusuario', par:'Feriado agregado', antes:'—', despues:fmtF(d.f)});
+    toast('Feriado marcado: ese día cuenta de 0 a 24 como activación.');
+  },
+  calQuitar:function(d){
+    S.feriados = S.feriados.filter(function(x){ return x.fecha !== d.f; });
+    S.logParams.unshift({at:S.clock, quien:'Superusuario', par:'Feriado quitado', antes:fmtF(d.f), despues:'—'});
+  },
+  cargarFeriados:function(){
+    var y = +S.of.cal.anio, l = FERIADOS_AR[y], n = 0;
+    if(!l){ toast('No tengo el calendario nacional de ' + y + '.'); return false; }
+    l.forEach(function(x){ var f = y + '-' + x[0]; if(!feriadoMarcado(f)){ S.feriados.push({fecha:f, nombre:x[1], por:'Calendario nacional'}); n++; } });
+    S.logParams.unshift({at:S.clock, quien:'Superusuario', par:'Feriados nacionales ' + y + ' marcados', antes:'—', despues:n + ' días'});
+    toast(n ? 'Se marcaron ' + n + ' feriados nacionales de ' + y + '.' : 'Ya estaban todos marcados.');
+  },
+  asumirCambio:function(d){
+    var n = S.notifs.filter(function(x){ return x.id === +d.n; })[0];
+    S.cambios.forEach(function(c){ if(c.par === n.par){ c.estado = 'aceptado'; c.aceptoAt = S.clock; } });
+    n.estado = 'aceptada';
+    S.logParams.unshift({at:S.clock, quien:nombreDe(n.personaId), par:'Asume la guardia · ' + n.area, antes:nombreDe(n.original) + ' · ' + fdm(n.desde) + (n.hasta !== n.desde ? '–' + fdm(n.hasta) : ''), despues:nombreDe(n.personaId)});
+    toast('Asumiste la guardia de ' + n.area + '. Los avisos de esos días te llegan a vos.');
+  },
+  rechazarCambio:function(d){
+    var n = S.notifs.filter(function(x){ return x.id === +d.n; })[0];
+    S.cambios.forEach(function(c){ if(c.par === n.par){ c.estado = 'rechazado'; } });
+    n.estado = 'rechazada';
+    S.logParams.unshift({at:S.clock, quien:nombreDe(n.personaId), par:'No puede asumir la guardia · ' + n.area, antes:nombreDe(n.original) + ' · ' + fdm(n.desde), despues:'sigue ' + nombreDe(n.original)});
+    toast('Avisado: el cambio no se hizo y la guardia sigue como estaba en el cronograma.');
+  },
+  asumirSemana:function(d){
+    S.asumio[d.k] = {persona:d.p, at:S.clock};
+    S.logParams.unshift({at:S.clock, quien:nombreDe(d.p), par:'Asume la guardia · ' + d.a, antes:'—', despues:'semana ' + fdm(d.w)});
+    toast('Listo: quedó registrado que asumiste la guardia de ' + d.a + '.');
+  },
+  cgPanel:function(d){ S.of.cg.panel = S.of.cg.panel === d.p ? null : d.p; },
+  generarProg:function(){
+    var anio = +$('#gp-anio').value, area = $('#gp-area').value, pisar = $('#gp-sobre').checked;
+    var n = generarProgramacion(anio, area, pisar);
+    S.logParams.unshift({at:S.clock, quien:'Superusuario', par:'Programación generada', antes:'—', despues:anio + ' · ' + area + ' (' + n + ' turnos)'});
+    S.of.cg.anio = anio; S.of.cg.mes = 'todo'; S.of.cg.panel = null;
+    toast(n ? 'Programación generada: ' + n + ' turnos nuevos.' : 'No había nada para completar: ese año ya estaba cargado.');
+  },
+  cambiarGuardia:function(){
+    var a = S.of.cg.area, de = $('#cg-de').value, cub = $('#cg-cubre').value, mot = ($('#cg-mot').value || '').trim();
+    var d1 = $('#cg-d1').value, h1 = $('#cg-h1').value, d2 = $('#cg-d2').value, h2 = $('#cg-h2').value;
+    if(!d1 || !h1){ toast('Elegí desde y hasta qué día se cubre.'); return false; }
+    if(h1 < d1){ toast('El «hasta» no puede ser anterior al «desde».'); return false; }
+    if(de === cub){ toast('Elegí a otra persona para que cubra.'); return false; }
+    if(!!d2 !== !!h2){ toast('Para la devolución completá las dos fechas, o dejalas vacías.'); return false; }
+    if(d2 && h2 < d2){ toast('En la devolución, el «hasta» no puede ser anterior al «desde».'); return false; }
+    if(d2 && d2 <= h1){ toast('La devolución tiene que ser después del turno que se cubre.'); return false; }
+    var par = (S.seq.cambio = (S.seq.cambio || 0) + 1);
+    S.cambios.push({par:par, tipo:'cubre', area:a, desde:d1, hasta:h1, persona:cub, original:de, motivo:mot, por:'Superusuario', at:S.clock, estado:'pendiente'});
+    if(d2) S.cambios.push({par:par, tipo:'devuelve', area:a, desde:d2, hasta:h2, persona:de, original:cub, motivo:mot, por:'Superusuario', at:S.clock, estado:'pendiente'});
+    S.seq.notif++; S.notifs.push({id:S.seq.notif, tipo:'guardia', par:par, personaId:cub, area:a, desde:d1, hasta:h1, devD:d2 || null, devH:h2 || null, original:de, motivo:mot, at:S.clock, estado:'nueva'});
+    var rango = function(x, y){ return fdm(x) + (y !== x ? '–' + fdm(y) : ''); };
+    S.logParams.unshift({at:S.clock, quien:'Superusuario', par:'Cambio de guardia · ' + a, antes:nombreDe(de) + ' · ' + rango(d1, h1), despues:nombreDe(cub) + (d2 ? ' (devuelve ' + rango(d2, h2) + ')' : '')});
+    S.of.cg.panel = null;
+    toast('Se le avisó a ' + nombreDe(cub) + '. Rige cuando toque «Asumo la guardia»; hasta entonces sigue ' + nombreDe(de) + '.');
+  },
+  anularCambio:function(d){
+    var par = +d.par, quitados = S.cambios.filter(function(c){ return c.par === par; });
+    S.cambios = S.cambios.filter(function(c){ return c.par !== par; });
+    S.notifs = S.notifs.filter(function(n){ return !(n.tipo === 'guardia' && n.par === par && n.estado === 'nueva'); });
+    if(quitados.length) S.logParams.unshift({at:S.clock, quien:'Superusuario', par:'Cambio de guardia anulado · ' + quitados[0].area, antes:nombreDe(quitados[0].persona) + ' · ' + fdm(quitados[0].desde), despues:'vuelve el cronograma'});
+    toast('Cambio anulado: vuelve a regir el cronograma.');
+  }
+});
+function draftFromParams(){
+  var p = S.params;
+  return {entrada:hm(p.entradaMin), salida:hm(p.salidaActivacionMin), madrugada:hm(p.madrugadaHastaMin), corte:hm(p.topeMediaMin),
+    vMedia:fmtVal(p.valorMedia), vEntera:fmtVal(p.valorEntera), desde:p.periodoDesde, hasta:p.periodoHasta,
+    cambio:hm(p.cambioMin)};
+}
+
+/* ================= Vistas: barra superior ================= */
+function seg(act, opts, cur){
+  return '<span class="seg">' + opts.map(function(o){ return '<button data-act="' + act + '" data-v="' + o[0] + '" aria-pressed="' + (o[0] === cur) + '">' + o[1] + '</button>'; }).join('') + '</span>';
+}
+function renderTop(){
+  var presets = [['2026-09-22T10:00','Martes 22/09 10:00 · en horario de trabajo'], ['2026-09-22T16:45','Martes 22/09 16:45 · saliendo del trabajo'], ['2026-09-22T19:30','Martes 22/09 19:30 · después de las 17:00'],
+    ['2026-09-23T05:00','Miércoles 23/09 05:00 · madrugada'], ['2026-09-23T07:45','Miércoles 23/09 07:45 · entrando a trabajar'], ['2026-09-23T10:00','Miércoles 23/09 10:00 · cambia la guardia'], ['2026-09-26T10:00','Sábado 26/09 10:00 · fin de semana']];
+  $('#top').innerHTML =
+    '<div class="bar"><div class="brand">Guardia General<span class="tag">Prototipo · datos de ejemplo</span></div>' +
+    '<div class="grp"><span class="lbl">Ver</span>' + seg('view', [['movil','Móvil'],['oficina','Oficina'],['ambas','Ambas']], S.view) + '</div>' +
+    '<div class="grp"><span class="lbl">Tema</span>' + seg('theme', [['light','Claro'],['dark','Oscuro']], S.theme) + '</div></div>' +
+    '<div class="bar">' +
+    '<label class="lbl" for="clk">Reloj de la demo (hora del servidor)</label>' +
+    '<input id="clk" class="inp sm" type="datetime-local" value="' + S.clock + '" data-set="clock">' +
+    '<span class="sm fw">' + fecha(S.clock) + ' · ' + tipoDiaLabel(S.clock.slice(0,10)) + '</span>' +
+    '<span class="sm muted">Guardia: ' + semanaLabel(inicioSemana(S.clock)) + '</span>' +
+    '<select class="inp sm" data-set="preset" aria-label="Ir a un momento"><option value="">Ir a…</option>' + presets.map(function(x){ return '<option value="' + x[0] + '">' + x[1] + '</option>'; }).join('') + '</select>' +
+    '<button class="btn sm" data-act="avanzar" data-min="30">+30 min</button><button class="btn sm" data-act="avanzar" data-min="60">+1 h</button><button class="btn sm" data-act="avanzar" data-min="240">+4 h</button>' +
+    '<button class="btn sm pri" data-act="simularLlamada">Simular llamada de operación central</button>' +
+    '<button class="btn sm" data-act="reiniciar">Reiniciar demo</button></div>';
+}
+
+/* ================= Vistas: móvil ================= */
+function cardEv(e){
+  var st = e.estado === 'abierto' ? '<span class="badge crit">Crítica</span>' : '<span class="badge chipb">Cerrado</span>';
+  var first = e.parts.length ? hhmm(e.parts[0].inicio) : hhmm(e.creadoAt), chips = '';
+  e.guardias.forEach(function(g){ chips += '<span class="chip soft">' + g + '</span>'; });
+  if(e.estado === 'abierto' && !e.guardias.length){
+    chips += e.scada === 'sin_novedad' ? '<span class="chip soft">Sin novedad en el SCADA</span>' : e.scada === 'con_novedad' ? '<span class="chip critsoft">Hay novedad</span>' : '<span class="chip critsoft">Falta revisar en el SCADA</span>';
+  }
+  chips += '<span class="chip">' + e.parts.length + (e.parts.length === 1 ? ' persona' : ' personas') + '</span>';
+  return '<button class="ev" data-act="abrirEvento" data-id="' + e.id + '"><div class="row between">' + st +
+    '<span class="mono muted sm">' + fmtNum(e.num) + ' · ' + (e.estado === 'cerrado' ? fecha(e.creadoAt) + ' ' : 'desde ') + first + '</span></div>' +
+    '<div class="fw mt">' + esc(e.tipoAlarma) + ' – ' + esc(e.desc) + '</div><div class="muted sm">' + esc(e.sitio || '[sitio]') + '</div>' +
+    '<div class="row wrap gap6 mt">' + chips + '</div></button>';
+}
+function phoneLista(per){
+  var gen = per.area === 'General', h = '';
+  S.notifs.filter(function(n){ return n.tipo === 'guardia' && n.personaId === per.id && n.estado === 'nueva'; }).forEach(function(n){
+    var rg = function(x, y){ return fecha(x) + (y !== x ? ' al ' + fecha(y) : ''); };
+    h += '<div class="card pad warnbox" role="alert"><span class="badge critsoft">Te piden asumir la guardia</span><div class="fw mt">Guardia de ' + n.area + ' · ' + rg(n.desde, n.hasta) + '</div>' +
+      '<div class="muted sm">Lo pide ' + esc(nombreDe(n.original)) + (n.motivo ? ' · ' + esc(n.motivo) : '') + '</div>' +
+      (n.devD ? '<div class="sm mt">' + esc(nombreDe(n.original)) + ' te devuelve la guardia ' + rg(n.devD, n.devH) + '.</div>' : '') +
+      '<div class="row mt"><button class="btn pri grow" data-act="asumirCambio" data-n="' + n.id + '">Asumo la guardia</button><button class="btn grow" data-act="rechazarCambio" data-n="' + n.id + '">No puedo</button></div></div>';
+  });
+  AREAS_G.forEach(function(a){
+    var ws = inicioSemana(S.clock), k = ws + '|' + a;
+    if(guardiaDe(a, S.clock) === per.id && !cambioVigente(a, fechaDeDia(diaGuardia(S.clock))) && !S.asumio[k]){
+      h += '<div class="card pad warnbox" role="alert"><span class="badge critsoft">Asumís la guardia</span><div class="fw mt">Guardia de ' + a + '</div>' +
+        '<div class="muted sm">' + semanaLabel(ws) + ' · desde el ' + fecha(ws) + ' ' + hm(S.params.cambioMin) + '</div>' +
+        '<button class="btn pri block mt" data-act="asumirSemana" data-k="' + k + '" data-p="' + per.id + '" data-a="' + a + '" data-w="' + ws + '">Asumo la guardia</button></div>';
+    }
+  });
+  S.notifs.filter(function(n){ return !n.tipo && n.personaId === per.id && n.estado === 'nueva'; }).forEach(function(n){
+    var ev = evento(n.eventoId);
+    h += '<div class="card pad warnbox" role="alert"><span class="badge critsoft">Te activaron</span><div class="fw mt">' + esc(ev.tipoAlarma) + ' – ' + esc(ev.desc) + '</div>' +
+      '<div class="muted sm">' + esc(ev.sitio || '[sitio]') + ' · llamado ' + hhmm(n.at) + '</div><div class="sm fw mt">Te piden: ' + (n.pedido === 'asistir' ? 'asistir al sitio' : 'revisar') + '</div>' +
+      '<div class="row mt"><button class="btn pri grow" data-act="aceptar" data-n="' + n.id + '" data-m="remoto">Voy remoto</button><button class="btn grow" data-act="aceptar" data-n="' + n.id + '" data-m="campo">Voy al sitio</button></div></div>';
+  });
+  if(gen){
+    var f = S.clock.slice(0,10), es = S.feriados.some(function(x){ return x.fecha === f; });
+    h += '<div class="card pad row between"><div><div class="sm muted">Hoy en la demo · ' + fecha(S.clock) + '</div><div class="fw">' + tipoDiaLabel(f) + '</div></div>' +
+      '<button class="btn sm" data-act="toggleFeriadoHoy">' + (es ? 'Quitar feriado' : 'Marcar feriado') + '</button></div>';
+  }
+  var evs = S.eventos.filter(function(e){ return gen || e.parts.some(function(p){ return p.personaId === per.id; }); });
+  var ord = {pendiente:0, abierto:1, cerrado:2};
+  evs.sort(function(a,b){ return ord[a.estado] - ord[b.estado] || b.num - a.num; });
+  var abiertos = evs.filter(function(e){ return e.estado !== 'cerrado'; }), cerr = evs.filter(function(e){ return e.estado === 'cerrado'; }).slice(0,3);
+  if(gen) h += '<div class="card pad sm">' + esc(deGuardiaTexto()) + '</div>';
+  h += '<div class="row between"><div class="h2">Eventos abiertos</div><div class="muted sm">' + fecha(S.clock) + '</div></div>';
+  if(!abiertos.length) h += '<div class="card pad muted">No hay eventos abiertos.</div>';
+  abiertos.forEach(function(e){ h += cardEv(e); });
+  if(cerr.length){ h += '<div class="h2">Cerrados recientes</div>'; cerr.forEach(function(e){ h += cardEv(e); }); }
+  if(gen) h += '<div style="margin-top:auto"><button class="btn pri block" style="min-height:52px;font-size:16px" data-act="nuevoEvento">Registrar llamada de operación central</button></div>';
+  return h;
+}
+function phoneNuevo(per){
+  var f = S.form, tipos = ['Grupo electrógeno','Router','UPS','Otro'], tks = ['Incidencia','Ticket','Tarea de cambio'];
+  return '<button class="linkbtn" data-act="movVolver">Cancelar</button>' +
+    '<div class="card pad"><div class="sm muted">Llamada de operación central a la guardia general</div><div class="mono fw" style="font-size:18px">' + hhmm(S.clock) + '</div>' +
+    '<div class="sm muted">La hora la pone el servidor al registrar. Solo la oficina puede corregirla, y queda registrado. Atiende ' + esc(per.nombre) + '.</div></div>' +
+    '<label class="fld" style="font-size:14px;color:var(--text)">Tipo de alarma<select class="inp" data-set="form.tipoAlarma">' + tipos.map(function(t){ return '<option' + (t === f.tipoAlarma ? ' selected' : '') + '>' + t + '</option>'; }).join('') + '</select></label>' +
+    '<label class="fld" style="font-size:14px;color:var(--text)">Sitio o equipo<input class="inp" data-set="form.sitio" data-quiet="1" value="' + esc(f.sitio) + '" placeholder="[Nombre del sitio]"></label>' +
+    '<label class="fld" style="font-size:14px;color:var(--text)">Qué comentó operación central<textarea class="inp" rows="3" data-set="form.desc" data-quiet="1" placeholder="Tipo de alarma y lo que se sabe hasta ahora">' + esc(f.desc) + '</textarea><span class="sm muted" style="font-weight:400">Este texto es el que se comparte por WhatsApp.</span></label>' +
+    '<div><div class="fw sm" style="margin-bottom:6px">Incidencia, ticket o tarea de cambio (si ya lo tenés)</div><div class="grid3">' + tks.map(function(t){ return '<button class="tog' + (t === f.tkTipo ? ' on' : '') + '" aria-pressed="' + (t === f.tkTipo) + '" data-act="setTk" data-v="' + t + '">' + t + '</button>'; }).join('') + '</div>' +
+    '<input class="inp block mt" aria-label="Número en el sistema de tickets" data-set="form.tkNum" data-quiet="1" value="' + esc(f.tkNum) + '" placeholder="Número del sistema de tickets"></div>' +
+    '<div class="sm muted">Después de registrar la llamada: avisás en el grupo, revisás en el SCADA y, si es complicado, activás la guardia técnica.</div>' +
+    '<button class="btn pri block" style="min-height:52px;font-size:16px" data-act="crearEvento">Registrar llamada</button>';
+}
+function phoneDetalle(per){
+  var ev = evento(S.mov.eventoId), gen = per.area === 'General', fer = ferSet(), p = S.params;
+  var mine = ev.parts.filter(function(x){ return x.personaId === per.id; })[0];
+  var est = ev.estado === 'abierto' ? '<span class="badge crit">Crítica · abierto</span>' : '<span class="badge chipb">Cerrado</span>';
+  var h = '<button class="linkbtn" data-act="movVolver">Volver</button>';
+  h += '<div class="card pad"><div class="row gap6 wrap">' + est + (mine ? bTipo(clasificar(mine.inicio, fer, p)) : '') + '</div>' +
+    '<div class="h2 mt">' + esc(ev.tipoAlarma) + ' – ' + esc(ev.desc) + '</div>' +
+    '<div class="muted sm">' + esc(ev.sitio || '[sitio]') + ' · ' + esc(ev.tkTipo) + ' ' + esc(ev.tkNum || '[número]') + '</div>' +
+    '<div class="mono sm mt">' + fmtNum(ev.num) + ' · llamada ' + fecha(ev.creadoAt) + ' ' + hhmm(ev.creadoAt) + '</div>' +
+    (mine ? '<div class="sm muted mt">Para vos se cuenta como ' + motivo(mine.inicio) + '.</div>' : '') + '</div>';
+  h += '<div class="h2">Quién atiende</div><div class="card list">' + ev.parts.map(function(x, i){
+    var pe = persona(x.personaId), t = clasificar(x.inicio, fer, p);
+    var puede = !x.fin && ev.estado === 'abierto' && (x.personaId === per.id || gen);
+    var como = x.sinRespuesta ? 'no contestó' : x.rol === 'Guardia general' ? 'atendió la llamada' : (x.mod ? (x.mod === 'remoto' ? 'remoto' : 'en el sitio') : 'sin confirmar');
+    var nc = gen && ev.estado === 'abierto' && x.rol !== 'Guardia general' && !x.acepto && !x.fin && !x.sinRespuesta;
+    var wapp = gen && ev.estado === 'abierto' && x.rol !== 'Guardia general' && !x.fin && !x.sinRespuesta, waLink = '';
+    if(wapp){
+      var tel = pe.tel ? String(pe.tel).replace(/\D/g, '') : '';
+      var nt = S.notifs.filter(function(n){ return !n.tipo && n.eventoId === ev.id && n.personaId === pe.id; })[0], pd = nt && nt.pedido === 'asistir' ? 'asistir al sitio' : 'revisar';
+      var mj = 'Te activaron en la guardia de ' + x.rol + ': ' + ev.tipoAlarma + ' – ' + ev.desc + ' (' + (ev.sitio || '[sitio]') + '). Te piden: ' + pd + '. Abrí la app para aceptar.';
+      waLink = tel.length >= 10 ? '<a class="btn sm" target="_blank" rel="noopener" href="https://wa.me/' + tel + '?text=' + encodeURIComponent(mj) + '" title="Abre WhatsApp con el chat de ' + esc(pe.nombre) + ' y el mensaje escrito">WhatsApp</a>' : '<span class="sm muted" style="align-self:center">Sin teléfono</span>';
+    }
+    var cands = nc && S.mov.nc === String(i) ? S.personas.filter(function(q){ return q.area === x.rol && !ev.parts.some(function(y){ return y.personaId === q.id; }); }) : [];
+    return '<div class="row"><div class="grow"><div class="fw">' + esc(pe.nombre) + '</div><div class="sm muted">' + esc(x.rol) + ' · ' + como + '</div>' +
+      '<div class="mono sm">' + hhmm(x.inicio) + ' – ' + (x.fin ? hhmm(x.fin) : 'en curso') + '</div><div class="mt">' + bTipo(t) + '</div></div>' +
+      '<div class="row gap6" style="flex:none">' + (wapp ? waLink : '') +
+      (puede && !nc ? '<button class="btn sm" data-act="terminar" data-id="' + ev.id + '" data-i="' + i + '">Terminó</button>' : '') +
+      (nc ? '<button class="btn sm" data-act="noContesta" data-i="' + i + '">No contesta</button>' : '') + '</div></div>' +
+      (nc && S.mov.nc === String(i) ? '<div class="card pad" style="margin-top:8px"><div class="sm">' + esc(pe.nombre) + ' no contestó. Llamá a otro de ' + esc(x.rol) + ':</div>' +
+        (cands.length ? '<div class="row mt"><select id="nc-sel" class="inp sm grow">' + cands.map(function(q){ return '<option value="' + q.id + '">' + esc(q.nombre) + '</option>'; }).join('') + '</select>' +
+          '<button class="btn pri sm" data-act="llamarOtro" data-id="' + ev.id + '" data-i="' + i + '">Llamar a otro</button></div>' : '<div class="sm muted mt">No hay otra persona cargada en ' + esc(x.rol) + '. Cargala en Personas.</div>') +
+        '<div class="sm muted mt">Lo de ' + esc(pe.nombre) + ' no cuenta como activación porque no atendió.</div></div>' : '');
+  }).join('') + '</div>';
+  if(gen && ev.estado === 'abierto'){
+    var sc = ev.scada, areas = ['Infraestructura','Datos','Enlaces'];
+    h += '<div class="h2">Revisión en el SCADA</div><div class="card pad"><div class="sm muted">Revisá la alarma en el SCADA y registrá lo que encontraste.</div>' +
+      '<div class="row mt"><button class="tog grow' + (sc === 'sin_novedad' ? ' on' : '') + '" aria-pressed="' + (sc === 'sin_novedad') + '" data-act="scada" data-id="' + ev.id + '" data-v="sin_novedad">Sin novedad</button>' +
+      '<button class="tog grow' + (sc === 'con_novedad' ? ' on' : '') + '" aria-pressed="' + (sc === 'con_novedad') + '" data-act="scada" data-id="' + ev.id + '" data-v="con_novedad">Hay novedad</button></div>' +
+      (sc === 'sin_novedad' ? '<div class="sm muted mt">Sin novedad: avisá en el grupo y cerrá el evento.</div>' : sc === 'con_novedad' ? '<div class="sm muted mt">Hay novedad: decidí abajo si activás la guardia técnica.</div>' : '') + '</div>';
+    h += '<div class="h2">Activar guardia técnica</div><div class="card pad"><div class="fw sm" style="margin-bottom:6px">Para qué</div><div class="row">' +
+      [['revisar','Revisar'],['asistir','Asistir al sitio']].map(function(x){
+        var on = S.mov.pedido === x[0];
+        return '<button class="tog grow' + (on ? ' on' : '') + '" aria-pressed="' + on + '" data-act="setPedido" data-v="' + x[0] + '">' + x[1] + '</button>';
+      }).join('') + '</div><div class="fw sm" style="margin:10px 0 6px">Qué guardia</div><div class="grid3">' + areas.map(function(a){
+        var ya = ev.guardias.indexOf(a) >= 0, on = S.mov.act.indexOf(a) >= 0;
+        return '<button class="tog' + (on ? ' on' : '') + '" aria-pressed="' + on + '"' + (ya ? ' disabled' : '') + ' data-act="toggleAct" data-a="' + a + '">' + a + (ya ? '<br><span class="sm">activada</span>' : '') + '</button>';
+      }).join('') + '</div><div class="sm muted mt">' + esc(deGuardiaTexto()) + '</div>' +
+      '<button class="btn pri block mt" data-act="activar" data-id="' + ev.id + '"' + (S.mov.act.length ? '' : ' disabled') + '>Activar y avisar</button></div>';
+  }
+  h += '<div class="h2">Novedades</div><div class="card list">' + ev.novedades.map(function(n, i){
+    return '<div class="row" style="align-items:flex-start"><span class="mono sm muted" style="width:44px;flex:none">' + hhmm(n.at) + '</span><span class="sm grow">' + esc(n.texto) + '</span>' +
+      '<button class="btn sm" style="flex:none" data-act="waNov" data-id="' + ev.id + '" data-i="' + i + '" aria-label="Compartir esta novedad en el grupo">Compartir</button></div>';
+  }).join('');
+  if(ev.estado === 'abierto' && (gen || mine)) h += '<div class="row"><input id="nov-txt" class="inp grow" aria-label="Nueva novedad" placeholder="Escribir novedad"><button class="btn pri" data-act="addNovedad" data-id="' + ev.id + '">Agregar</button></div>';
+  h += '</div>';
+  if(S.mov.wa === ev.id){
+    var idxs = S.mov.waIdx, txt = textoWA(ev, idxs);
+    h += '<div class="card pad"><div class="fw sm">' + (idxs ? 'Aviso para el grupo «Novedades de guardia»' : 'Resumen completo para el grupo «Novedades de guardia»') + '</div><textarea id="wa-txt" class="inp mt" readonly rows="8">' + esc(txt) + '</textarea>' +
+      '<div class="row mt"><button class="btn pri grow" data-act="copiarWA">Copiar</button><a class="btn grow" target="_blank" rel="noopener" href="https://wa.me/?text=' + encodeURIComponent(txt) + '">Abrir en WhatsApp</a></div>' +
+      '<div class="sm muted mt">En la app real este botón abre WhatsApp con el texto ya escrito. El grupo sigue siendo el mismo, y la app no puede saber si el mensaje se mandó.</div></div>';
+  }
+  h += '<div class="row"><button class="btn grow" data-act="waToggle" data-id="' + ev.id + '">Compartir resumen completo</button>' +
+    (gen && ev.estado === 'abierto' ? '<button class="btn pri grow" data-act="cerrarEvento" data-id="' + ev.id + '">Cerrar evento</button>' : '') + '</div>';
+  return h;
+}
+function phoneHoras(per){
+  var res = resultado(), r = res[per.id], desde = S.cierre ? S.cierre.desde : S.params.periodoDesde, hasta = S.cierre ? S.cierre.hasta : S.params.periodoHasta;
+  var dias = Object.keys(r.dias).sort();
+  var h = '<div class="card pad"><div class="sm muted">Período</div><div class="fw">' + fmtF(desde) + ' al ' + fmtF(hasta) + '</div><div class="mt">' +
+    (S.cierre ? '<span class="badge okb">Cerrado</span>' : '<span class="badge soft">Abierto</span>') + '</div></div>';
+  h += '<div class="card list">' + (dias.length ? dias.map(function(f){
+    var d = r.dias[f];
+    return '<div class="row between"><div><div class="fw">' + fecha(f) + '</div><div class="sm muted">' + d.tipoDia + ' · ' + d.ev + (d.ev === 1 ? ' evento' : ' eventos') + (d.enCurso ? ' · en curso' : '') + '</div></div>' +
+      '<div style="text-align:right"><div class="mono">' + fmtMin(d.min) + ' hs</div><div class="badge ' + (d.val >= S.params.valorEntera ? 'acc' : 'soft') + '">' + (d.val >= S.params.valorEntera ? 'Entera' : 'Media') + ' · ' + fmtVal(d.val) + '</div></div></div>';
+  }).join('') : '<div class="muted">Sin activaciones en este período.</div>') + '</div>';
+  h += '<div class="card pad row between"><div class="fw">Total del período</div><div class="mono fw" style="font-size:18px">' + fmtVal(r.totalVal) + '</div></div>';
+  h += '<div class="sm muted">Cada día se evalúa por separado: hasta ' + fmtMin(S.params.topeMediaMin) + ' hs suma media activación y por encima, una entera. La dedicación funcional no suma acá.</div>';
+  return h;
+}
+function renderPhone(){
+  var per = persona(S.mov.persona), body = '', title = 'Guardia General';
+  var key = S.mov.tab + '|' + S.mov.screen + '|' + S.mov.eventoId + '|' + S.mov.persona;
+  var old = $('#phone .scroll'), st = (old && S.mov.key === key) ? old.scrollTop : 0;
+  S.mov.key = key;
+  if(S.mov.tab === 'horas'){ title = 'Mis horas'; body = phoneHoras(per); }
+  else if(S.mov.screen === 'nuevo'){ title = 'Nuevo evento'; body = phoneNuevo(per); }
+  else if(S.mov.screen === 'detalle'){ title = 'Detalle del evento'; body = phoneDetalle(per); }
+  else body = phoneLista(per);
+  var nav = (S.mov.screen === 'lista' || S.mov.tab === 'horas') ? '<nav class="ph-nav" aria-label="Móvil">' +
+    '<button data-act="movTab" data-tab="guardia"' + (S.mov.tab === 'guardia' ? ' aria-current="page"' : '') + '>Guardia</button>' +
+    '<button data-act="movTab" data-tab="horas"' + (S.mov.tab === 'horas' ? ' aria-current="page"' : '') + '>Mis horas</button></nav>' : '';
+  $('#phone').innerHTML = '<div class="phone"><div class="ph-head"><span>' + title + '</span><span class="muted" style="font-weight:400;font-size:13px">' + esc(per.nombre) + ' · ' + esc(per.area) + '</span></div>' +
+    '<div class="asbar"><label for="asu">Ver como</label><select id="asu" class="inp sm" data-set="mov.persona">' +
+    S.personas.map(function(x){ return '<option value="' + x.id + '"' + (x.id === per.id ? ' selected' : '') + '>' + esc(x.nombre) + ' · ' + esc(x.area) + '</option>'; }).join('') +
+    '</select><span>(en la app real es el login)</span></div><div class="scroll">' + body + '</div>' + nav + '</div>';
+  var nw = $('#phone .scroll'); if(nw) nw.scrollTop = st;
+}
+
+/* ================= Vistas: oficina ================= */
+var EYE = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>';
+var CHV_UP = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 15l-6-6-6 6"></path></svg>';
+var CHV_DN = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg>';
+var TRASH = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"></path><path d="M8 6V4h8v2"></path><path d="M19 6l-1 14H6L5 6"></path></svg>';
+
+function filtrados(){
+  var q = S.of.q.trim().toLowerCase();
+  return S.eventos.filter(function(ev){
+    if(S.of.guardia !== 'Todas' && ev.guardias.indexOf(S.of.guardia) < 0) return false;
+    if(S.of.tipo !== 'Todos' && tipoEvento(ev) !== S.of.tipo) return false;
+    if(q){
+      var hay = [ev.tipoAlarma, ev.sitio, ev.desc, ev.tkNum, ev.tkTipo].concat(ev.parts.map(function(p){ return persona(p.personaId).nombre; }), ev.novedades.map(function(n){ return n.texto; })).join(' ').toLowerCase();
+      if(hay.indexOf(q) < 0) return false;
+    }
+    return true;
+  }).sort(function(a,b){ return b.creadoAt.localeCompare(a.creadoAt) || b.num - a.num; });
+}
+function tablaEventos(list){
+  if(!list.length) return '<div class="pad muted">No hay eventos con esos filtros.</div>';
+  return '<table class="tb"><thead><tr><th>Fecha y horario</th><th>Personas</th><th>Tipo</th><th>Descripción</th><th>Ticket</th><th>Ver</th></tr></thead><tbody>' + list.map(function(ev){
+    var t = tipoEvento(ev), ini = ev.parts.length ? ev.parts.map(function(p){ return p.inicio; }).sort()[0] : ev.creadoAt;
+    var abierta = ev.parts.some(function(p){ return !p.fin; }), fins = ev.parts.filter(function(p){ return p.fin; }).map(function(p){ return p.fin; }).sort(), fin = fins[fins.length-1];
+    var rango = ev.estado === 'pendiente' ? 'sin atender' : hhmm(ini) + '–' + (abierta ? 'en curso' : hhmm(fin) + (fin.slice(0,10) > ini.slice(0,10) ? ' (+1)' : ''));
+    var nombres = ev.parts.map(function(p){ return persona(p.personaId).nombre; }).join(', ');
+    return '<tr data-act="ofSel" data-id="' + ev.id + '" class="' + (S.of.sel === ev.id ? 'sel' : '') + '"><td><div class="fw">' + fecha(ini) + '</div><div class="mono sm muted">' + rango + '</div></td>' +
+      '<td><div>' + ev.parts.length + (ev.parts.length === 1 ? ' técnico' : ' técnicos') + '</div><div class="sm muted">' + esc(nombres || '—') + '</div></td>' +
+      '<td>' + (t === 'pendiente' ? '<span class="badge warn">Sin atender</span>' : bTipo(t)) + (ev.estado === 'abierto' ? '<div class="sm muted" style="margin-top:4px">abierto</div>' : '') + '</td>' +
+      '<td><div>' + esc(ev.tipoAlarma) + ' – ' + esc(ev.desc) + '</div><div class="sm muted">' + esc(ev.guardias.join(', ') || 'sin guardia activada') + '</div></td>' +
+      '<td class="mono sm">' + esc(ev.tkNum || '—') + '</td>' +
+      '<td><button class="iconbtn" aria-label="Ver detalle" title="Ver detalle" data-act="ofSel" data-id="' + ev.id + '">' + EYE + '</button></td></tr>';
+  }).join('') + '</tbody></table>';
+}
+function ofDetalle(ev){
+  var fer = ferSet(), p = S.params;
+  var rows = ev.parts.map(function(x, i){
+    var r = x.sinRespuesta ? {tipo:'dedicacion_funcional', minutosPorDia:{}} : calcular(x.inicio, x.fin || S.clock, fer, p), mins = Object.keys(r.minutosPorDia).reduce(function(a,k){ return a + r.minutosPorDia[k]; }, 0);
+    var lock = cerradoFecha(x.inicio.slice(0,10));
+    return '<tr><td class="fw">' + esc(persona(x.personaId).nombre) + '</td><td>' + esc(x.rol) + '<div class="sm muted">' + (x.mod ? (x.mod === 'remoto' ? 'remoto' : 'en el sitio') : 'sin confirmar') + '</div></td>' +
+      '<td><input class="inp sm" type="datetime-local" id="ini-' + ev.id + '-' + i + '" value="' + x.inicio + '"' + (lock ? ' disabled' : '') + ' aria-label="Inicio de ' + esc(persona(x.personaId).nombre) + '"></td>' +
+      '<td>' + (x.fin ? '<input class="inp sm" type="datetime-local" id="fin-' + ev.id + '-' + i + '" value="' + x.fin + '"' + (lock ? ' disabled' : '') + ' aria-label="Fin de ' + esc(persona(x.personaId).nombre) + '">' : '<span class="muted">en curso</span>') + '</td>' +
+      '<td>' + (x.sinRespuesta ? '<span class="badge warn">No contestó</span>' : bTipo(r.tipo)) + '</td><td class="mono">' + fmtMin(mins) + '</td>' +
+      '<td>' + (lock ? '<span class="sm muted">Período cerrado</span>' : '<button class="btn sm" data-act="guardarHoras" data-id="' + ev.id + '" data-i="' + i + '">Guardar corrección</button>') + '</td></tr>';
+  }).join('');
+  return '<div class="card pad"><div class="row between wrap"><div class="h2">' + fmtNum(ev.num) + ' · ' + esc(ev.tipoAlarma) + ' – ' + esc(ev.desc) + '</div><span class="sm muted">' + esc(ev.sitio || '[sitio]') + ' · ' + esc(ev.tkTipo) + ' ' + esc(ev.tkNum || '[número]') + '</span></div>' +
+    '<div class="scrollx mt"><table class="tb"><thead><tr><th>Persona</th><th>Guardia</th><th>Llamado (inicio)</th><th>Fin</th><th>Tipo</th><th>Horas de activación</th><th></th></tr></thead><tbody>' + (rows || '<tr><td colspan="7" class="muted">Todavía nadie atendió esta alarma.</td></tr>') + '</tbody></table></div>' +
+    '<div class="sm muted mt">Cambiar una hora recalcula la liquidación. Cada corrección queda registrada con quién y cuándo, con el valor anterior.</div>' +
+    '<div class="two mt"><div class="card pad"><div class="fw sm">Novedades</div>' + ev.novedades.map(function(n){ return '<div class="sm" style="margin-top:6px"><span class="mono muted">' + hhmm(n.at) + '</span> ' + esc(n.texto) + '</div>'; }).join('') + '</div>' +
+    '<div class="card pad"><div class="fw sm">Correcciones de horario</div>' + (ev.cambios.length ? ev.cambios.map(function(c){ return '<div class="sm" style="margin-top:6px"><span class="mono muted">' + fecha(c.at) + ' ' + hhmm(c.at) + '</span> ' + esc(c.por) + ' · ' + esc(c.txt) + '</div>'; }).join('') : '<div class="sm muted" style="margin-top:6px">Sin correcciones.</div>') + '</div></div></div>';
+}
+function ofEventos(){
+  var list = filtrados();
+  var gs = ['Todas','Infraestructura','Datos','Enlaces'], ts = [['Todos','Todos'],['activacion','Activación'],['dedicacion_funcional','Dedicación funcional']];
+  return '<div class="row between wrap"><div class="h1">Eventos</div><div class="muted sm">Lo que se carga en el móvil aparece acá al instante.</div></div>' +
+    '<div class="card pad row wrap gap12" style="align-items:flex-end"><label class="fld grow" style="min-width:200px">Buscar<input class="inp" data-set="of.q" data-quiet="1" data-table="1" value="' + esc(S.of.q) + '" placeholder="Descripción, técnico, sitio o ticket"></label>' +
+    '<label class="fld">Guardia<select class="inp" data-set="of.guardia">' + gs.map(function(g){ return '<option' + (g === S.of.guardia ? ' selected' : '') + '>' + g + '</option>'; }).join('') + '</select></label>' +
+    '<label class="fld">Tipo<select class="inp" data-set="of.tipo">' + ts.map(function(t){ return '<option value="' + t[0] + '"' + (t[0] === S.of.tipo ? ' selected' : '') + '>' + t[1] + '</option>'; }).join('') + '</select></label></div>' +
+    '<div class="card"><div class="scrollx" id="tbl">' + tablaEventos(list) + '</div><div class="pad sm muted" id="tblpie" style="border-top:1px solid var(--line2)">Mostrando ' + list.length + ' de ' + S.eventos.length + ' eventos</div></div>' +
+    (S.of.sel && evento(S.of.sel) ? ofDetalle(evento(S.of.sel)) : '');
+}
+function ofLiq(){
+  var cerr = !!S.cierre, res = resultado(), desde = cerr ? S.cierre.desde : S.params.periodoDesde, hasta = cerr ? S.cierre.hasta : S.params.periodoHasta;
+  var total = 0; S.personas.forEach(function(p){ total += res[p.id].totalVal; });
+  var rows = S.personas.map(function(pe){
+    var r = res[pe.id], open = S.of.expand === pe.id, dias = Object.keys(r.dias).sort();
+    var det = '';
+    if(open) det = '<tr class="detail"><td colspan="6"><div class="scrollx"><table class="tb"><thead><tr><th>Fecha</th><th>Tipo de día</th><th>Eventos</th><th>Horas de activación</th><th>Resultado del día</th></tr></thead><tbody>' +
+      (dias.length ? dias.map(function(f){ var d = r.dias[f]; return '<tr><td>' + fecha(f) + '</td><td>' + d.tipoDia + '</td><td class="mono">' + d.ev + '</td><td class="mono">' + fmtMin(d.min) + (d.enCurso ? ' <span class="sm muted">(en curso)</span>' : '') + '</td><td><span class="badge ' + (d.val >= S.params.valorEntera ? 'acc' : 'soft') + '">' + (d.val >= S.params.valorEntera ? 'Entera' : 'Media') + ' · ' + fmtVal(d.val) + '</span></td></tr>'; }).join('') : '<tr><td colspan="5" class="muted">Sin activaciones en este período.</td></tr>') +
+      '</tbody></table></div></td></tr>';
+    return '<tr><td class="fw">' + esc(pe.nombre) + '</td><td>' + esc(pe.area) + '</td><td class="mono">' + r.diasAct + '</td><td class="mono">' + fmtMin(r.totalMin) + '</td><td class="mono fw">' + fmtVal(r.totalVal) + '</td>' +
+      '<td><button class="iconbtn" data-act="expandir" data-p="' + pe.id + '" aria-label="' + (open ? 'Ocultar' : 'Ver') + ' detalle de ' + esc(pe.nombre) + '" title="' + (open ? 'Ocultar' : 'Ver') + ' detalle">' + (open ? CHV_UP : CHV_DN) + '</button></td></tr>' + det;
+  }).join('');
+  return '<div class="row between wrap"><div class="row"><div class="h1">Liquidación</div><span class="pill ' + (cerr ? 'okb' : 'soft') + '">' + (cerr ? 'Período cerrado' : 'Período abierto') + '</span></div>' +
+    '<div class="row"><button class="btn" data-act="csvToggle">' + (S.of.csv ? 'Ocultar tabla para Excel' : 'Ver tabla para Excel') + '</button>' +
+    (cerr ? '<button class="btn" data-act="reabrir">Reabrir (solo demo)</button>' : '<button class="btn pri" data-act="cerrarPeriodo">Cerrar período</button>') + '</div></div>' +
+    '<div class="card pad row wrap gap12"><span class="sm muted">Período</span><span class="fw">' + fmtF(desde) + ' al ' + fmtF(hasta) + '</span>' +
+    (cerr ? '<span class="sm muted">Cerrado con los valores de ese momento. Cambiar un parámetro no lo mueve.</span>' : '<button class="linkbtn" style="margin-left:auto;min-height:32px" data-act="ofNav" data-s="param">Cambiar fechas en Parámetros</button>') + '</div>' +
+    '<div class="card"><div class="scrollx"><table class="tb"><thead><tr><th>Persona</th><th>Guardia</th><th>Días con activación</th><th>Horas de activación</th><th>Activaciones</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
+    '<div class="pad row between" style="border-top:1px solid var(--line)"><div class="fw">Total del período</div><div class="mono fw" style="font-size:16px">' + fmtVal(total) + ' activaciones</div></div></div>' +
+    (S.of.csv ? '<div class="card pad"><div class="fw sm">Tabla lista para pegar en Excel (separada por punto y coma)</div><textarea class="inp mt mono" id="csv-txt" readonly rows="10" style="font-size:12px">' + esc(csvDe(res, desde, hasta)) + '</textarea></div>' : '') +
+    '<div class="sm muted">Cada día se evalúa por separado: hasta ' + fmtMin(S.params.topeMediaMin) + ' hs suma media activación y por encima, una entera. Las horas de dedicación funcional no entran en esta suma. Un evento que cruza la medianoche se parte entre los dos días.</div>';
+}
+function ofParam(){
+  if(!S.draft) S.draft = draftFromParams();
+  var d = S.draft, lockP = !!S.cierre;
+  function tm(k, txt){ return '<label class="prm"><span>' + txt + '</span><input class="inp sm mono" type="time" data-set="draft.' + k + '" data-quiet="1" value="' + d[k] + '"></label>'; }
+  var fer = S.feriados.slice().sort(function(a,b){ return a.fecha.localeCompare(b.fecha); });
+  return '<div class="h1">Parámetros</div><div class="two">' +
+    '<div class="card pad"><div class="h2">Horarios y valores de la activación</div>' +
+    tm('entrada','Desde esta hora, un llamado en día hábil es dedicación funcional') + tm('salida','Desde esta hora, un llamado en día hábil es activación') + tm('madrugada','Una activación de madrugada cuenta hasta las') + tm('cambio','El cambio de guardia es el miércoles a las') +
+    '<label class="prm"><span>Horas por día hasta las que suma media activación</span><input class="inp sm mono" data-set="draft.corte" data-quiet="1" value="' + esc(d.corte) + '" aria-describedby="hcorte"></label>' +
+    '<div class="prm"><span>Valor de una media activación y de una entera</span><div class="row gap6"><input class="inp sm mono" style="width:60px;text-align:center" aria-label="Valor de una media activación" data-set="draft.vMedia" data-quiet="1" value="' + esc(d.vMedia) + '"><input class="inp sm mono" style="width:60px;text-align:center" aria-label="Valor de una activación entera" data-set="draft.vEntera" data-quiet="1" value="' + esc(d.vEntera) + '"></div></div>' +
+    '<label class="prm"><span>Período de liquidación: desde</span><input class="inp sm" type="date" data-set="draft.desde" data-quiet="1" value="' + d.desde + '"' + (lockP ? ' disabled' : '') + '></label>' +
+    '<label class="prm"><span>Período de liquidación: hasta</span><input class="inp sm" type="date" data-set="draft.hasta" data-quiet="1" value="' + d.hasta + '"' + (lockP ? ' disabled' : '') + '></label>' +
+    '<div class="row between" style="margin-top:12px;align-items:flex-start"><div class="sm muted" id="hcorte">Un cambio vale de ahí en adelante. Los períodos cerrados no se modifican.' + (lockP ? ' Hay un período cerrado: sus fechas no se pueden cambiar hasta reabrirlo.' : '') + '</div><button class="btn pri" data-act="guardarParams">Guardar cambios</button></div></div>' +
+    '<div class="card pad"><div class="h2">Feriados</div><div class="sm muted">Los marca la guardia general (también desde el móvil). Un feriado cuenta las 24 hs como activación.</div>' +
+    '<div class="row mt"><input id="fer-f" class="inp sm grow" type="date" aria-label="Fecha del feriado"><input id="fer-n" class="inp sm grow" aria-label="Nombre del feriado" placeholder="Nombre (opcional)"><button class="btn sm pri" data-act="addFeriado">Marcar</button></div>' +
+    '<div class="card mt list">' + (fer.length ? fer.map(function(x){ return '<div class="row between"><div><div class="fw sm">' + fecha(x.fecha) + ' · ' + esc(x.nombre) + '</div><div class="sm muted">Lo marcó ' + esc(x.por) + '</div></div><button class="iconbtn" aria-label="Quitar feriado" title="Quitar feriado" data-act="quitarFeriado" data-f="' + x.fecha + '">' + TRASH + '</button></div>'; }).join('') : '<div class="sm muted">No hay feriados marcados.</div>') + '</div></div></div>' +
+    '<div class="card"><div class="pad h2" style="border-bottom:1px solid var(--line)">Historial de cambios</div><div class="scrollx"><table class="tb"><thead><tr><th>Fecha</th><th>Quién</th><th>Parámetro</th><th>Antes</th><th>Después</th></tr></thead><tbody>' +
+    (S.logParams.length ? S.logParams.map(function(l){ return '<tr><td class="mono sm">' + fecha(l.at) + ' ' + hhmm(l.at) + '</td><td>' + esc(l.quien) + '</td><td>' + esc(l.par) + '</td><td class="mono">' + esc(l.antes) + '</td><td class="mono">' + esc(l.despues) + '</td></tr>'; }).join('') : '<tr><td colspan="5" class="muted">Todavía no hay cambios. Guardá uno y aparece acá.</td></tr>') + '</tbody></table></div></div>';
+}
+function ofFallas(){
+  return '<div class="row between wrap"><div class="h1">Reporte de fallas</div><div class="row"><button class="btn" data-act="fallaPrueba">Generar falla de prueba</button><button class="btn" data-act="vaciarFallas">Vaciar</button></div></div>' +
+    '<div class="sm muted">Toda app lleva este registro desde el principio. En este prototipo vive en este navegador; en la app real llega al servidor y se ven las fallas de todos.</div>' +
+    '<div class="card"><div class="scrollx"><table class="tb"><thead><tr><th>Código</th><th>Cuándo</th><th>Pantalla</th><th>Quién</th><th>Aparato</th><th>Versión</th><th>Detalle</th></tr></thead><tbody>' +
+    (S.fallas.length ? S.fallas.map(function(f){ return '<tr><td class="mono fw">' + esc(f.cod) + '</td><td class="sm">' + esc(f.cuando) + '</td><td>' + esc(f.pantalla) + '</td><td>' + esc(f.usuario) + '</td><td class="sm">' + esc(f.aparato) + '</td><td class="mono sm">' + esc(f.version) + '</td><td class="sm">' + esc(f.msg) + '</td></tr>'; }).join('') : '<tr><td colspan="7" class="muted">Sin fallas registradas. Probá «Generar falla de prueba» para ver que el registro anda.</td></tr>') + '</tbody></table></div></div>';
+}
+var CHV_L = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"></path></svg>';
+var CHV_R = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18l6-6-6-6"></path></svg>';
+var MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+var ABR = {General:'Gen', Infraestructura:'Inf', Datos:'Dat', Enlaces:'Enl'};
+function natFer(f){ var l = FERIADOS_AR[f.slice(0,4)]; if(!l) return null; for(var i = 0; i < l.length; i++) if(l[i][0] === f.slice(5)) return l[i][1]; return null; }
+function feriadoMarcado(f){ return S.feriados.some(function(x){ return x.fecha === f; }); }
+function ofPersonas(){
+  var opts = [NOG].concat(AREAS_G), ws0 = inicioSemana(S.clock);
+  function etiqueta(a){ return a === NOG ? 'Sin guardia' : a === 'General' ? 'Guardia general' : 'Guardia técnica · ' + a; }
+  function proxima(pe){
+    if(pe.area === NOG) return '—';
+    var ks = Object.keys(S.cronograma).sort();
+    for(var i = 0; i < ks.length; i++){ if(ks[i] >= ws0 && S.cronograma[ks[i]][pe.area] === pe.id) return semanaLabel(ks[i]) + (ks[i] === ws0 ? ' (ahora)' : ''); }
+    return 'sin turnos cargados';
+  }
+  var rows = S.personas.map(function(pe){
+    return '<tr><td class="fw">' + esc(pe.nombre) + '</td><td><input class="inp sm mono" style="width:170px" aria-label="Teléfono de WhatsApp de ' + esc(pe.nombre) + '" placeholder="+54 9 11 …" data-tel="' + pe.id + '" value="' + esc(pe.tel || '') + '"></td><td><select class="inp sm" aria-label="Guardia de ' + esc(pe.nombre) + '" data-pers="' + pe.id + '">' +
+      opts.map(function(a){ return '<option value="' + a + '"' + (a === pe.area ? ' selected' : '') + '>' + etiqueta(a) + '</option>'; }).join('') + '</select></td><td class="sm">' + proxima(pe) + '</td></tr>';
+  }).join('');
+  var res = AREAS_G.map(function(a){ return '<div class="card pad grow"><div class="sm muted">' + etiqueta(a) + '</div><div class="h1">' + listaArea(S.personas, a).length + '</div><div class="sm muted">' + esc(listaArea(S.personas, a).map(nombreDe).join(', ') || 'nadie') + '</div></div>'; }).join('');
+  return '<div class="h1">Personas de guardia</div>' +
+    '<div class="sm muted">Acá se marca quién hace la guardia general y quién la técnica (infraestructura, datos o enlaces). Una persona hace una sola. El teléfono de WhatsApp es el de cada uno (el que usa la app): con él, la guardia general abre el chat de esa persona con el aviso ya escrito. En la app real esta lista sale de los usuarios de la app de informes. Cada guardia tiene su propio cronograma anual con sus personas.</div>' +
+    '<div class="row wrap gap12" style="align-items:stretch">' + res + '</div>' +
+    '<div class="card"><div class="scrollx"><table class="tb"><thead><tr><th>Persona</th><th>Teléfono de WhatsApp</th><th>Guardia que cumple</th><th>Próxima guardia</th></tr></thead><tbody>' + rows + '</tbody></table></div></div>' +
+    '<div class="sm muted">Al cambiar a alguien, el cronograma se rehace desde la semana que viene con las personas de cada guardia. Lo ya pasado y la semana en curso no se tocan, salvo que la persona de esta semana ya no esté en esa guardia.</div>';
+}
+function ofCal(){
+  var c = S.of.cal, y = +c.anio, m = +c.mes, hoyF = S.clock.slice(0,10), anios = [2026, 2027, 2028];
+  var first = Date.UTC(y, m - 1, 1) / 86400000, dim = new Date(Date.UTC(y, m, 0)).getUTCDate(), lead = (new Date(first*86400000).getUTCDay() + 6) % 7;
+  var DS = ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'], cells = DS.map(function(x){ return '<div class="calh">' + x + '</div>'; }).join('');
+  for(var i = 0; i < lead; i++) cells += '<div class="cd vac"></div>';
+  for(var d = 1; d <= dim; d++){
+    var f = y + '-' + pad(m) + '-' + pad(d), dow = new Date((first + d - 1)*86400000).getUTCDay(), mk = feriadoMarcado(f), nat = natFer(f);
+    var cls = 'cd' + (mk ? ' fer' : '') + ((dow === 0 || dow === 6) ? ' wk' : '') + (f === hoyF ? ' hoy' : '') + (c.dia === f ? ' selx' : '');
+    var lines = AREAS_G.map(function(a){
+      var pid = guardiaDe(a, f + 'T' + hm(S.params.cambioMin)), cv = cambioVigente(a, f);
+      var ant = guardiaDe(a, fechaDeDia(diaDeFecha(f) - 1) + 'T' + hm(S.params.cambioMin)), camb = S.params.cambioMin && ant !== pid;
+      return '<div class="cl">' + ABR[a] + ' ' + esc(nombreDe(pid)) + (camb ? ' · desde ' + hm(S.params.cambioMin) : '') + (cv ? ' ↔' : '') + '</div>';
+    }).join('');
+    var tag = mk ? '<span class="badge crit">Feriado</span>' : nat ? '<span class="badge warn">Feriado nacional sin marcar</span>' : '';
+    cells += '<button class="' + cls + '" data-act="calDia" data-f="' + f + '" aria-label="' + fecha(f) + (mk ? ', feriado' : '') + '"><div class="n">' + d + '</div>' + tag + lines + '</button>';
+  }
+  var det = '';
+  if(c.dia){
+    var f2 = c.dia, mk2 = feriadoMarcado(f2), nat2 = natFer(f2), nom2 = (S.feriados.filter(function(x){ return x.fecha === f2; })[0] || {}).nombre;
+    det = '<div class="card pad"><div class="row between wrap"><div><div class="h2">' + fecha(f2) + ' · ' + tipoDiaLabel(f2) + '</div>' +
+      (mk2 ? '<div class="sm">Feriado: ' + esc(nom2) + '</div>' : nat2 ? '<div class="sm">Es feriado nacional (' + esc(nat2) + ') pero todavía no está marcado: hoy cuenta como día hábil.</div>' : '') + '</div>' +
+      (mk2 ? '<button class="btn sm" data-act="calQuitar" data-f="' + f2 + '">Quitar feriado</button>' : '<button class="btn sm pri" data-act="calMarcar" data-f="' + f2 + '">Marcar como feriado</button>') + '</div>' +
+      '<div class="mt">' + AREAS_G.map(function(a){
+        var pid = guardiaDe(a, f2 + 'T' + hm(S.params.cambioMin)), cv = cambioVigente(a, f2);
+        return '<div class="sm" style="margin-top:4px"><span class="fw">' + a + '</span> · ' + esc(nombreDe(pid)) + (cv ? ' <span class="badge okb">Cambio: cubre ' + esc(nombreDe(cv.persona)) + ' por ' + esc(nombreDe(cv.original)) + '</span>' : '') + '</div>';
+      }).join('') + '</div></div>';
+  }
+  var lista = FERIADOS_AR[y], fl = '';
+  if(lista){
+    var pend = lista.filter(function(x){ return !feriadoMarcado(y + '-' + x[0]); }).length;
+    fl = '<div class="card"><div class="pad row between wrap" style="border-bottom:1px solid var(--line)"><div><div class="h2">Feriados nacionales de Argentina ' + y + '</div><div class="sm muted">' + (y > 2026 ? 'Calendario según la ley, a confirmar por decreto. ' : '') + 'Los días no laborables con fines turísticos y los puentes que decida el Gobierno se marcan a mano en el calendario.</div></div>' +
+      '<button class="btn pri" data-act="cargarFeriados"' + (pend ? '' : ' disabled') + '>' + (pend ? 'Marcar los ' + pend + ' sin marcar' : 'Todos marcados') + '</button></div>' +
+      '<div class="scrollx"><table class="tb"><thead><tr><th>Fecha</th><th>Feriado</th><th>Estado</th></tr></thead><tbody>' + lista.map(function(x){
+        var ff = y + '-' + x[0], mk3 = feriadoMarcado(ff);
+        return '<tr><td class="fw" style="white-space:nowrap">' + fecha(ff) + '</td><td>' + esc(x[1]) + '</td><td>' + (mk3 ? '<span class="badge crit">Marcado</span>' : '<span class="badge warn">Sin marcar</span> <button class="linkbtn" style="min-height:28px;display:inline" data-act="calMarcar" data-f="' + ff + '">Marcar</button>') + '</td></tr>';
+      }).join('') + '</tbody></table></div></div>';
+  } else fl = '<div class="card pad sm muted">No tengo cargado el calendario nacional de ' + y + '. Los feriados de ese año se marcan a mano.</div>';
+  return '<div class="row between wrap"><div class="h1">Calendario de guardia</div><div class="row">' +
+    '<button class="iconbtn" aria-label="Mes anterior" title="Mes anterior" data-act="calMes" data-n="-1">' + CHV_L + '</button>' +
+    '<select class="inp sm" aria-label="Mes" data-set="of.cal.mes">' + MESES.map(function(n, k){ return '<option value="' + pad(k + 1) + '"' + (pad(k + 1) === c.mes ? ' selected' : '') + '>' + n + '</option>'; }).join('') + '</select>' +
+    '<select class="inp sm" aria-label="Año" data-set="of.cal.anio">' + anios.map(function(a){ return '<option' + (a === y ? ' selected' : '') + '>' + a + '</option>'; }).join('') + '</select>' +
+    '<button class="iconbtn" aria-label="Mes siguiente" title="Mes siguiente" data-act="calMes" data-n="1">' + CHV_R + '</button></div></div>' +
+    '<div class="sm muted">Cada día muestra quién está de guardia en cada una (Gen = general, Inf = infraestructura, Dat = datos, Enl = enlaces). ↔ marca un cambio de guardia que ya fue aceptado. Los feriados marcados cuentan las 24 hs como activación.</div>' +
+    '<div class="card pad"><div class="scrollx"><div class="calg">' + cells + '</div></div></div>' + det + fl;
+}
+function regenerarDesde(area){
+  var lista = listaArea(S.personas, area), desde = inicioSemana(S.clock);
+  Object.keys(S.cronograma).sort().forEach(function(ws){
+    if(ws < desde) return;
+    var c = S.cronograma[ws];
+    if(ws === desde && c[area] && lista.indexOf(c[area]) >= 0) return;
+    if(!lista.length){ delete c[area]; return; }
+    var pc = S.cronograma[fechaDeDia(diaDeFecha(ws) - 7)], prev = pc && pc[area], i = prev ? lista.indexOf(prev) : -1;
+    c[area] = lista[i < 0 ? 0 : (i + 1) % lista.length];
+  });
+}
+function ofCrono(){
+  var cg = S.of.cg, anio = +cg.anio, hoy = inicioSemana(S.clock), anios = [2026, 2027, 2028];
+  var MES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  var semanas = semanasDelAnio(anio).filter(function(ws){ return cg.mes === 'todo' || ws.slice(5,7) === cg.mes; });
+  var filas = semanas.map(function(ws){
+    var fin = finSemana(ws);
+    var celdas = AREAS_G.map(function(a){
+      var cur = guardiaSemana(a, ws), cands = S.personas.filter(function(p){ return p.area === a; });
+      var cb = S.cambios.filter(function(c){ return c.area === a && c.desde <= fin && c.hasta >= ws; });
+      return '<td><select class="inp sm" style="min-width:140px" aria-label="' + a + ' · ' + semanaLabel(ws) + '" data-crono="' + ws + '|' + a + '"><option value=""' + (cur ? '' : ' selected') + '>Sin asignar</option>' +
+        cands.map(function(p){ return '<option value="' + p.id + '"' + (p.id === cur ? ' selected' : '') + '>' + esc(p.nombre) + '</option>'; }).join('') + '</select>' +
+        cb.map(function(c){ return '<div class="sm" style="margin-top:4px"><span class="badge ' + (c.estado === 'aceptado' ? 'okb' : 'warn') + '">' + (c.estado === 'aceptado' ? 'Cambio' : c.estado === 'rechazado' ? 'No aceptado' : 'Pendiente') + '</span> ' + esc(nombreDe(c.persona)) + ' cubre ' + fdm(c.desde) + (c.hasta !== c.desde ? '–' + fdm(c.hasta) : '') + '</div>'; }).join('') + '</td>';
+    }).join('');
+    return '<tr' + (ws === hoy ? ' class="sel"' : '') + '><td class="fw" style="white-space:nowrap">' + semanaLabel(ws) + (ws === hoy ? ' <span class="badge acc">ahora</span>' : '') + '</td>' + celdas + '</tr>';
+  }).join('');
+  var panel = '';
+  if(cg.panel === 'generar'){
+    panel = '<div class="card pad"><div class="h2">Generar programación</div><div class="sm muted">Arma la rotación de todo el año siguiendo el orden de la lista de cada área, a partir de quien quedó de guardia la semana anterior. No pisa lo que ya está cargado, salvo que lo marques.</div>' +
+      '<div class="row wrap gap12 mt" style="align-items:flex-end"><label class="fld">Año<select id="gp-anio" class="inp sm">' + anios.map(function(y){ return '<option' + (y === anio ? ' selected' : '') + '>' + y + '</option>'; }).join('') + '</select></label>' +
+      '<label class="fld">Área<select id="gp-area" class="inp sm"><option>Todas</option>' + AREAS_G.map(function(a){ return '<option>' + a + '</option>'; }).join('') + '</select></label>' +
+      '<label class="row sm" style="min-height:34px"><input type="checkbox" id="gp-sobre"> Pisar lo ya cargado</label>' +
+      '<button class="btn sm pri" data-act="generarProg">Generar</button></div></div>';
+  } else if(cg.panel === 'cambio'){
+    var cands2 = S.personas.filter(function(p){ return p.area === cg.area; }), hoyF = S.clock.slice(0,10);
+    var sel = function(id, idx){ return '<select id="' + id + '" class="inp sm">' + cands2.map(function(p, i){ return '<option value="' + p.id + '"' + (i === idx ? ' selected' : '') + '>' + esc(p.nombre) + '</option>'; }).join('') + '</select>'; };
+    panel = '<div class="card pad"><div class="h2">Cambio de guardia</div><div class="sm muted">Si alguien no puede hacer su guardia, se le avisa a quien la va a cubrir y tiene que apretar «Asumo la guardia»: recién ahí rige, aunque el cronograma diga otra cosa. Si cargás la devolución, el que no pudo cubre más adelante el turno del otro: es un intercambio de posición.</div>' +
+      '<div class="row wrap gap12 mt" style="align-items:flex-end"><label class="fld">Área<select class="inp sm" data-set="of.cg.area">' + AREAS_G.map(function(a){ return '<option' + (a === cg.area ? ' selected' : '') + '>' + a + '</option>'; }).join('') + '</select></label>' +
+      '<label class="fld">No puede' + sel('cg-de', 0) + '</label><label class="fld">Lo cubre' + sel('cg-cubre', 1) + '</label>' +
+      '<label class="fld">Desde<input id="cg-d1" type="date" class="inp sm" value="' + hoyF + '"></label><label class="fld">Hasta<input id="cg-h1" type="date" class="inp sm" value="' + hoyF + '"></label></div>' +
+      '<div class="fw sm mt">Devolución (opcional): cuándo cubre el que no pudo</div>' +
+      '<div class="row wrap gap12 mt" style="align-items:flex-end"><label class="fld">Desde<input id="cg-d2" type="date" class="inp sm"></label><label class="fld">Hasta<input id="cg-h2" type="date" class="inp sm"></label>' +
+      '<label class="fld grow" style="min-width:160px">Motivo<input id="cg-mot" class="inp sm" placeholder="Licencia, enfermedad, otro"></label>' +
+      '<button class="btn sm pri" data-act="cambiarGuardia">Registrar y avisar</button></div></div>';
+  }
+  var cambios = '<div class="card"><div class="pad h2" style="border-bottom:1px solid var(--line)">Cambios de guardia registrados</div><div class="scrollx"><table class="tb"><thead><tr><th>Registrado</th><th>Área</th><th>No puede</th><th>Lo cubre</th><th>Días</th><th>Estado</th><th>Motivo</th><th>Anular</th></tr></thead><tbody>' +
+    (S.cambios.length ? S.cambios.slice().reverse().map(function(c){
+      return '<tr><td class="mono sm">' + fecha(c.at) + ' ' + hhmm(c.at) + '<div class="muted">' + esc(c.por) + '</div></td><td>' + c.area + '</td><td>' + esc(nombreDe(c.original)) + '</td><td>' + esc(nombreDe(c.persona)) + '</td>' +
+        '<td class="mono">' + fdm(c.desde) + (c.hasta !== c.desde ? '–' + fdm(c.hasta) : '') + '</td><td>' + (c.estado === 'aceptado' ? '<span class="badge okb">Asumió</span>' : c.estado === 'rechazado' ? '<span class="badge critsoft">No puede</span>' : '<span class="badge warn">Esperando respuesta</span>') + '</td><td>' + esc(c.motivo || '—') + (c.tipo === 'devuelve' ? ' <span class="badge soft">devolución</span>' : '') + '</td>' +
+        '<td><button class="iconbtn" aria-label="Anular cambio" title="Anular cambio" data-act="anularCambio" data-par="' + c.par + '">' + TRASH + '</button></td></tr>';
+    }).join('') : '<tr><td colspan="8" class="muted">Todavía no hay cambios. Registrá uno y aparece acá.</td></tr>') + '</tbody></table></div></div>';
+  return '<div class="row between wrap"><div class="h1">Cronograma de guardia</div><div class="row"><button class="btn" data-act="cgPanel" data-p="generar">Generar programación</button><button class="btn pri" data-act="cgPanel" data-p="cambio">Cambio de guardia</button></div></div>' +
+    '<div class="sm muted">La guardia va de miércoles a martes. Cada semana tiene su técnico por área, y el aviso le llega al que está de guardia en el momento del llamado. Lo mismo vale para la guardia general.</div>' +
+    '<div class="card pad row wrap gap12" style="align-items:flex-end"><label class="fld">Año<select class="inp sm" data-set="of.cg.anio">' + anios.map(function(y){ return '<option' + (y === anio ? ' selected' : '') + '>' + y + '</option>'; }).join('') + '</select></label>' +
+    '<label class="fld">Mes<select class="inp sm" data-set="of.cg.mes"><option value="todo"' + (cg.mes === 'todo' ? ' selected' : '') + '>Todo el año</option>' + MES.map(function(m, i){ var v = pad(i + 1); return '<option value="' + v + '"' + (cg.mes === v ? ' selected' : '') + '>' + m + '</option>'; }).join('') + '</select></label>' +
+    '<span class="sm muted">Mostrando ' + semanas.length + ' semanas</span></div>' + panel +
+    '<div class="card"><div class="scrollx"><table class="tb"><thead><tr><th>Semana (miércoles a martes)</th>' + AREAS_G.map(function(a){ return '<th>' + a + '</th>'; }).join('') + '</tr></thead><tbody>' + filas + '</tbody></table></div></div>' + cambios +
+    '<div class="sm muted">Un cambio de guardia vale solo para esos días y no mueve lo ya avisado. Cada cambio queda registrado, con quién lo cargó y cuándo.</div>';
+}
+function renderOffice(){
+  var scr = S.of.screen, body = scr === 'liq' ? ofLiq() : scr === 'crono' ? ofCrono() : scr === 'cal' ? ofCal() : scr === 'pers' ? ofPersonas() : scr === 'param' ? ofParam() : scr === 'fallas' ? ofFallas() : ofEventos();
+  var abiertos = S.eventos.filter(function(e){ return e.estado !== 'cerrado'; }).length;
+  function nb(id, txt, extra){ return '<button data-act="ofNav" data-s="' + id + '"' + (scr === id ? ' aria-current="page"' : '') + '><span>' + txt + '</span>' + (extra || '') + '</button>'; }
+  $('#office').innerHTML = '<div class="office"><nav class="side" aria-label="Oficina"><div class="t">Guardia General</div>' +
+    nb('eventos', 'Eventos', abiertos ? '<span class="badge crit">' + abiertos + '</span>' : '') + nb('liq', 'Liquidación') + nb('crono', 'Cronograma') + nb('cal', 'Calendario') + nb('pers', 'Personas') + nb('param', 'Parámetros') +
+    nb('fallas', 'Reporte de fallas', S.fallas.length ? '<span class="badge warn">' + S.fallas.length + '</span>' : '') + '<div class="who">Administrador / supervisor · oficina</div></nav><div class="main">' + body + '</div></div>';
+}
+
+/* ================= Render y eventos ================= */
+function render(){
+  document.documentElement.setAttribute('data-theme', S.theme);
+  $('#app').className = 'v-' + S.view;
+  renderTop(); renderPhone(); renderOffice();
+}
+function setPath(path, val){
+  var parts = path.split('.'), o = S;
+  for(var i = 0; i < parts.length - 1; i++) o = o[parts[i]];
+  o[parts[parts.length-1]] = val;
+}
+document.addEventListener('click', function(e){
+  var el = e.target.closest('[data-act]'); if(!el) return;
+  S.last = el.closest('#phone') ? 'movil' : el.closest('#office') ? 'oficina' : 'general';
+  var name = el.getAttribute('data-act'), ds = el.dataset, r;
+  try{
+    if(!ACTS[name]) return;
+    r = ACTS[name](ds, el);
+  }catch(err){
+    registrarFalla('APP-01', err, name);
+    toast('Algo falló, pero no es culpa tuya y no se perdió lo que cargaste. Código APP-01.');
+  }
+  if(r !== false) render();
+});
+document.addEventListener('input', function(e){
+  var el = e.target; if(!el.dataset || !el.dataset.set || !el.dataset.quiet) return;
+  setPath(el.dataset.set, el.value);
+  if(el.dataset.table){ var list = filtrados(); $('#tbl').innerHTML = tablaEventos(list); $('#tblpie').textContent = 'Mostrando ' + list.length + ' de ' + S.eventos.length + ' eventos'; }
+});
+document.addEventListener('change', function(e){
+  var el = e.target;
+  if(el.dataset && el.dataset.tel){
+    S.last = 'oficina';
+    var q = persona(el.dataset.tel), dg = el.value.replace(/\D/g, '');
+    if(dg && dg.length < 10){ toast('El teléfono tiene que llevar código de país y de área, por ejemplo +54 9 11 5555 5555.'); return; }
+    q.tel = dg ? '+' + dg : '';
+    toast(dg ? 'Teléfono guardado.' : 'Teléfono borrado.');
+    render(); return;
+  }
+  if(el.dataset && el.dataset.pers){
+    S.last = 'oficina';
+    var pe = persona(el.dataset.pers), vieja = pe.area, nueva = el.value;
+    pe.area = nueva;
+    S.logParams.unshift({at:S.clock, quien:'Superusuario', par:'Guardia de ' + pe.nombre, antes:vieja, despues:nueva});
+    [vieja, nueva].forEach(function(a){ if(a !== NOG) regenerarDesde(a); });
+    toast('Listo. El cronograma se rehizo desde la semana que viene con las personas de cada guardia.');
+    render(); return;
+  }
+  if(el.dataset && el.dataset.crono){
+    S.last = 'oficina';
+    var pp = el.dataset.crono.split('|'), ws = pp[0], area = pp[1], antes = guardiaSemana(area, ws);
+    if(!S.cronograma[ws]) S.cronograma[ws] = {};
+    S.cronograma[ws][area] = el.value;
+    S.logParams.unshift({at:S.clock, quien:'Superusuario', par:'Guardia de ' + area + ' · ' + semanaLabel(ws), antes:nombreDe(antes), despues:nombreDe(el.value)});
+    toast('Cronograma actualizado. Queda en el historial.');
+    render(); return;
+  }
+  if(!el.dataset || !el.dataset.set) return;
+  var path = el.dataset.set;
+  S.last = el.closest('#phone') ? 'movil' : el.closest('#office') ? 'oficina' : 'general';
+  try{
+    if(path === 'clock'){ if(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(el.value)) S.clock = el.value; }
+    else if(path === 'preset'){ if(el.value) S.clock = el.value; }
+    else if(path === 'mov.persona'){ S.mov.persona = el.value; S.mov.screen = 'lista'; S.mov.tab = 'guardia'; S.mov.wa = null; }
+    else setPath(path, el.value);
+  }catch(err){ registrarFalla('APP-01', err, 'cambio ' + path); }
+  if(!el.dataset.quiet) render();
+});
+render();
+</script>
+</body>
+</html>
