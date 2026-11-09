@@ -74,6 +74,15 @@
   font-size: 13px;
   font-weight: 600;
 }
+/* El interruptor de tema (ThemeToggle) reusa esta clase sobre un <button>, no un <Link> — sin este reset se le ve el fondo/borde por defecto del navegador. */
+button.panel-nav-item {
+  width: 100%;
+  background: none;
+  border: none;
+  text-align: left;
+  font-family: var(--font);
+  cursor: pointer;
+}
 .panel-nav-item:hover {
   background: var(--panel-2);
   color: var(--text);

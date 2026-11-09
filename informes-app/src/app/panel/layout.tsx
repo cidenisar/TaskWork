@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requirePanelAccess } from "@/lib/auth";
 import { Icon } from "@/components/icon";
 import { PanelNav } from "@/components/panel/panel-nav";
+import { ThemeToggle } from "@/components/theme-toggle";
 import "./panel.css";
 
 /**
@@ -29,6 +30,7 @@ export default async function PanelLayout({ children }: LayoutProps<"/panel">) {
         </div>
         <PanelNav esAdminOSupervisor={profile.rol !== "tecnico"} />
         <div className="panel-sidebar-footer">
+          <ThemeToggle className="panel-nav-item" />
           <Link href="/" className="panel-nav-item">
             <Icon name="arrow-left" size={14} /> Volver a la app
           </Link>

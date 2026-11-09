@@ -216,6 +216,35 @@ const PATHS: Record<string, React.ReactNode> = {
       <path d="M10 11v6M14 11v6" />
     </>
   ),
+  sun: (
+    <>
+      <circle cx="12" cy="12" r="4.2" />
+      <path d="M12 2.5v3M12 18.5v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2.5 12h3M18.5 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1" />
+    </>
+  ),
+  moon: <path d="M20 14.5A8.5 8.5 0 1 1 9.5 4 6.8 6.8 0 0 0 20 14.5Z" />,
+  users: (
+    <>
+      <circle cx="9" cy="8.5" r="3.2" />
+      <path d="M3 19.5c0-3.3 2.7-5.5 6-5.5s6 2.2 6 5.5" />
+      <path d="M16 9a3 3 0 1 0-1-5.8" />
+      <path d="M21 19.5c0-2.6-1.7-4.6-4-5.3" />
+    </>
+  ),
+  clock: (
+    <>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M12 7.5V12l3.2 2" />
+    </>
+  ),
+  shuffle: (
+    <>
+      <path d="M4 6h3.5l6 6 6-6H17" />
+      <path d="m17 3 3 3-3 3" />
+      <path d="M4 18h3.5l6-6" />
+      <path d="m17 21 3-3-3-3" />
+    </>
+  ),
 };
 
 export type IconName = keyof typeof PATHS;

@@ -967,6 +967,53 @@ export type GuardiaConfigRow = {
   updated_at: string;
 };
 
+export type GuardiaPersonaHistRow = {
+  id: string;
+  usuario_id: string;
+  area_antes: AreaGuardiaDb | null;
+  area_despues: AreaGuardiaDb | null;
+  quien: string | null;
+  cuando: string;
+};
+
+export type GuardiaConfigHistRow = {
+  id: string;
+  campo: string;
+  antes: string | null;
+  despues: string | null;
+  quien: string | null;
+  cuando: string;
+};
+
+export type OrigenFeriadoGuardia = "NACIONAL" | "MANUAL";
+
+export type GuardiaFeriadoRow = {
+  fecha: string;
+  nombre: string;
+  origen: OrigenFeriadoGuardia;
+  marcado_por: string | null;
+  marcado_at: string;
+};
+
+export type GuardiaFeriadoHistRow = {
+  id: string;
+  fecha: string;
+  accion: "marcado" | "desmarcado";
+  quien: string | null;
+  cuando: string;
+};
+
+export type GuardiaCronogramaHistRow = {
+  id: string;
+  semana_inicio: string;
+  area: AreaGuardiaDb;
+  antes: string | null;
+  despues: string | null;
+  motivo: string;
+  quien: string | null;
+  cuando: string;
+};
+
 export type GuardiaCronogramaSemanaRow = {
   semana_inicio: string;
   area: AreaGuardiaDb;
@@ -1372,6 +1419,31 @@ export interface Database {
         Partial<GuardiaPersonaRow>
       >;
       guardia_config: Tbl<GuardiaConfigRow, Partial<GuardiaConfigRow> & Pick<GuardiaConfigRow, "id">, Partial<GuardiaConfigRow>>;
+      guardia_persona_hist: Tbl<
+        GuardiaPersonaHistRow,
+        Partial<GuardiaPersonaHistRow> & Pick<GuardiaPersonaHistRow, "usuario_id">,
+        Partial<GuardiaPersonaHistRow>
+      >;
+      guardia_config_hist: Tbl<
+        GuardiaConfigHistRow,
+        Partial<GuardiaConfigHistRow> & Pick<GuardiaConfigHistRow, "campo">,
+        Partial<GuardiaConfigHistRow>
+      >;
+      guardia_feriado: Tbl<
+        GuardiaFeriadoRow,
+        Partial<GuardiaFeriadoRow> & Pick<GuardiaFeriadoRow, "fecha" | "nombre" | "origen">,
+        Partial<GuardiaFeriadoRow>
+      >;
+      guardia_feriado_hist: Tbl<
+        GuardiaFeriadoHistRow,
+        Partial<GuardiaFeriadoHistRow> & Pick<GuardiaFeriadoHistRow, "fecha" | "accion">,
+        Partial<GuardiaFeriadoHistRow>
+      >;
+      guardia_cronograma_hist: Tbl<
+        GuardiaCronogramaHistRow,
+        Partial<GuardiaCronogramaHistRow> & Pick<GuardiaCronogramaHistRow, "semana_inicio" | "area" | "motivo">,
+        Partial<GuardiaCronogramaHistRow>
+      >;
       guardia_cronograma_semana: Tbl<
         GuardiaCronogramaSemanaRow,
         Partial<GuardiaCronogramaSemanaRow> & Pick<GuardiaCronogramaSemanaRow, "semana_inicio" | "area">,

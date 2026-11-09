@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { ClientErrorReporter } from "@/components/client-error-reporter";
+import { SCRIPT_TEMA_INICIAL } from "@/components/theme-toggle";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -29,6 +30,10 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="es" className={`${inter.variable}`}>
+      <head>
+        {/* Antes del primer render: evita el parpadeo del tema oscuro por defecto si el usuario había elegido claro. */}
+        <script dangerouslySetInnerHTML={{ __html: SCRIPT_TEMA_INICIAL }} />
+      </head>
       <body>
         <ClientErrorReporter />
         {children}

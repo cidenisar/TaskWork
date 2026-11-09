@@ -4,7 +4,8 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireProfile } from "@/lib/auth";
 import { horaGuardiaIso } from "@/lib/guardia/reloj";
-import { guardiaDe, type AreaGuardia, type Cronograma, type CambioGuardia } from "@/lib/guardia/cronograma";
+import { guardiaDe, type AreaGuardia } from "@/lib/guardia/cronograma";
+import { cargarCronograma, cargarCambiosAceptados, cargarParametros } from "@/lib/guardia/datos";
 import type { RolParticipacionGuardia, ModalidadParticipacionGuardia, PedidoParticipacionGuardia } from "@/lib/database.types";
 
 export interface AccionResult {
@@ -31,28 +32,12 @@ function esViolacionDeUnicidad(error: { code?: string } | null): boolean {
 }
 
 async function cargarCronogramaYCambios(supabase: Awaited<ReturnType<typeof createClient>>) {
-  const [{ data: configRow }, { data: cronogramaRows }, { data: cambiosRows }] = await Promise.all([
-    supabase.from("guardia_config").select("cambio_min").eq("id", 1).single(),
-    supabase.from("guardia_cronograma_semana").select("semana_inicio, area, usuario_id"),
-    supabase
-      .from("guardia_cambio")
-      .select("id, area, persona_id, original_id, desde, hasta, estado")
-      .eq("estado", "aceptado"),
+  const [cronograma, cambios, parametros] = await Promise.all([
+    cargarCronograma(supabase),
+    cargarCambiosAceptados(supabase),
+    cargarParametros(supabase),
   ]);
-  const cronograma: Cronograma = {};
-  for (const r of cronogramaRows ?? []) {
-    (cronograma[r.semana_inicio] ??= {})[r.area as AreaGuardia] = r.usuario_id;
-  }
-  const cambios: CambioGuardia[] = (cambiosRows ?? []).map((c) => ({
-    id: c.id,
-    area: c.area as AreaGuardia,
-    persona: c.persona_id,
-    original: c.original_id,
-    desde: c.desde,
-    hasta: c.hasta,
-    estado: "aceptado",
-  }));
-  return { cronograma, cambios, cambioMin: configRow?.cambio_min ?? 600 };
+  return { cronograma, cambios, cambioMin: parametros.cambioMin };
 }
 
 export interface ActivarGuardiaTecnicaResult extends AccionResult {

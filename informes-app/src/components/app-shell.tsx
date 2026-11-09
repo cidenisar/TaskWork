@@ -6,6 +6,7 @@ import type { Profile } from "@/lib/types";
 import { ROL_LABEL, puedeVerConfiguracion } from "@/lib/types";
 import { signOutAction } from "@/app/login/actions";
 import { Icon } from "@/components/icon";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 interface NavTab {
   href: string;
@@ -216,6 +217,7 @@ export function AppShell({ profile, children }: { profile: Profile; children: Re
           <span className="role-pill">{ROL_LABEL[profile.rol]}</span>
         </div>
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          <ThemeToggle />
           <Link href="/ayuda" className="signout" style={{ textDecoration: "none" }}>
             <Icon name="lightbulb" size={13} /> Ayuda
           </Link>

@@ -13,8 +13,9 @@ const ITEMS: { href: string; label: string; icon: IconName }[] = [
   { href: "/panel/riesgo-viaje", label: "Riesgo de Viaje", icon: "warning" },
 ];
 
-/** Solo Admin/Supervisor/Superusuario — un técnico con acceso limitado al Panel no entra acá (ver puedeVerPanel). */
+/** Solo Admin/Supervisor/Superusuario — un técnico con acceso limitado al Panel no entra acá (ver puedeVerPanel). Guardia General vive acá y no en Configuración porque Configuración excluye a Supervisor y HANDOFF le da estas pantallas también a Supervisor. */
 const ITEMS_ADMIN_SUPERVISOR: { href: string; label: string; icon: IconName }[] = [
+  { href: "/panel/guardia", label: "Guardia General", icon: "bell" },
   { href: "/estadisticas", label: "Estadísticas", icon: "chart" },
   { href: "/configuracion", label: "Configuración", icon: "settings" },
 ];

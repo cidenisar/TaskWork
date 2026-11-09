@@ -10,6 +10,7 @@ import {
   guardiaDe,
   generarProgramacion,
   regenerarDesde,
+  celdasCambiadas,
   type Cronograma,
   type CambioGuardia,
   type PersonaGuardia,
@@ -193,4 +194,26 @@ test("regenerarDesde: no muta el cronograma original", () => {
 
 test("guardiaSemana: devuelve null si la semana no tiene nada cargado", () => {
   assert.equal(guardiaSemana({}, "General", "2026-09-16"), null);
+});
+
+test("celdasCambiadas: solo lista las semanas de esa área donde antes y después difieren", () => {
+  const antes: Cronograma = {
+    "2026-09-09": { General: "A", Datos: "X" },
+    "2026-09-16": { General: "B" },
+  };
+  const despues: Cronograma = {
+    "2026-09-09": { General: "A", Datos: "Y" }, // Datos cambió, pero no nos interesa (filtramos por General)
+    "2026-09-16": { General: "C" },
+    "2026-09-23": { General: "A" }, // semana nueva que antes no existía
+  };
+  const cambios = celdasCambiadas(antes, despues, "General");
+  assert.deepEqual(cambios, [
+    { semanaInicio: "2026-09-16", antes: "B", despues: "C" },
+    { semanaInicio: "2026-09-23", antes: null, despues: "A" },
+  ]);
+});
+
+test("celdasCambiadas: ninguna diferencia da lista vacía", () => {
+  const cronograma: Cronograma = { "2026-09-09": { General: "A" } };
+  assert.deepEqual(celdasCambiadas(cronograma, structuredClone(cronograma), "General"), []);
 });

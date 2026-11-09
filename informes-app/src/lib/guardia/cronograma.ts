@@ -204,3 +204,19 @@ export function regenerarDesde(
   }
   return nuevo;
 }
+
+/** Celdas de `area` donde `antes` y `despues` difieren — para que el server action solo escriba (y deje historial de) lo que realmente cambió, no el cronograma entero. */
+export function celdasCambiadas(
+  antes: Cronograma,
+  despues: Cronograma,
+  area: AreaGuardia,
+): { semanaInicio: string; antes: string | null; despues: string | null }[] {
+  const claves = new Set([...Object.keys(antes), ...Object.keys(despues)]);
+  const cambios: { semanaInicio: string; antes: string | null; despues: string | null }[] = [];
+  for (const semanaInicio of claves) {
+    const a = antes[semanaInicio]?.[area] ?? null;
+    const d = despues[semanaInicio]?.[area] ?? null;
+    if (a !== d) cambios.push({ semanaInicio, antes: a, despues: d });
+  }
+  return cambios.sort((x, y) => x.semanaInicio.localeCompare(y.semanaInicio));
+}
