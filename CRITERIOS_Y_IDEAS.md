@@ -1822,3 +1822,66 @@ versión que estaba instalada — subirlo de versión dentro del mismo major
 pero conviene correr esta auditoría como parte del checklist de cualquier
 sesión de "mantenimiento" o antes de un deploy grande, no solo cuando el
 usuario pide una auditoría explícita.
+
+## 28. Abrirle una pantalla admin-only a un rol nuevo: el riesgo no es que explote, es que mienta en silencio
+
+**Contexto:** `informes-app` — el usuario pidió que un técnico pudiera
+entrar al Panel de Supervisión (antes exclusivo de Admin/Supervisor), pero
+limitado a ciertas secciones. La tentación es tratarlo como un cambio de
+UI (sacar el gate de la capa de ruta, ocultar algunos ítems de nav) — el
+trabajo real está una capa más abajo.
+
+**1. Cada tabla/bucket que esa pantalla consulta tiene su propia RLS,
+pensada para la audiencia ORIGINAL — y una policy "own-row OR
+is_admin_or_supervisor()" no le avisa a nadie cuando el nuevo rol no
+matchea ninguna de las dos mitades.** La consulta no tira error: devuelve
+menos filas (o cero) y la pantalla renderiza igual, con KPIs o historiales
+incompletos — mucho peor que un 403, porque nadie se entera. Antes de
+destrabar una pantalla para un rol nuevo, hay que listar command por
+command (`select tablename, cmd, qual from pg_policies ...`) cada tabla
+que esa pantalla toca (y cada bucket de storage que firma URLs) y
+clasificarla en una de tres categorías: ya abierta a cualquier
+autenticado (no hace falta tocar nada), scoped a "propio" (el rol nuevo va
+a ver solo lo suyo — aceptable si esa sección es igual de parcial para
+cualquiera, raro si se vende como vista "general"), o exclusiva del rol
+viejo (hay que decidir explícitamente si se abre o se deja así, nunca
+dejar que quede así "por accidente").
+
+**2. Cuando la pantalla mezcla datos operativos (ok de mostrar a más
+gente) con datos personales de terceros (DNI, licencia, sueldo, lo que
+sea) en el MISMO cuadro o el mismo array, no alcanza con destrabar la
+pantalla entera — hay que separar esa porción puntual.** Acá la "Vista
+general" traía, en un solo array `vencimientos`, el vencimiento de
+Tarjeta Verde/RTO de los vehículos (dato operativo, está bien que lo vea
+cualquiera) mezclado con el vencimiento de DNI/licencia de CADA empleado
+por nombre y apellido (dato personal de terceros). La función que arma
+ese array ganó un parámetro (`incluirVencimientosPersonal`) para que el
+caller decida, en vez de que la función-de-datos conozca roles — así
+sigue sirviendo igual a quien sí debe ver todo.
+
+**3. Un bucket de storage con policy admin-only para INSERT, al abrirse a
+un rol nuevo, nunca debe ganar un INSERT abierto a cualquier path —
+reusar el patrón de carpeta propia (`(storage.foldername(name))[1] =
+auth.uid()`) que ya usan los demás buckets "de usuario" de la app
+(`informe-fotos`, `comprobantes`, `informes-pdf`).** El rol nuevo sube
+bajo su propia carpeta, nunca puede pisar un path que ya usa el rol viejo
+(que sigue usando paths sin ese prefijo, ej. `{vehiculoId}/tarjeta-
+verde.jpg`) — ambos conviven en el mismo bucket sin que ninguno pueda
+tocar los archivos del otro. El SELECT del bucket, en cambio, conviene
+abrirlo a cualquier autenticado si el contenido no es sensible (fotos de
+un vehículo de la flota, no de una persona): si se deja scoped a "propia
+carpeta" en SELECT también, una funcionalidad que compara "contra el
+último conocido" (sea quien sea que lo haya cargado) deja de encontrar la
+referencia ajena y degrada en silencio — mismo síntoma que el punto 1.
+
+**4. Una redirección automática a la pantalla nueva ("en PC arrancá
+directo en el Panel") NO debe extenderse al rol nuevo solo porque ahora
+también puede entrar — hay que preguntarse si esa pantalla es un
+SUPERSET de lo que el rol ya tenía, o una vista aparte y más chica.** Acá
+el Panel limitado no tiene ni de cerca todo lo que un técnico carga desde
+el menú mobile (informes, rendiciones, control de vehículo, etc.) —
+auto-redirigirlo ahí en vez de a su menú de siempre lo habría dejado sin
+poder llegar a su propio trabajo diario desde una notebook. La regla: el
+auto-redirect a una pantalla "de más jerarquía" solo aplica a los roles
+para los que esa pantalla ya era un reemplazo completo de su pantalla de
+inicio, no a uno que la suma como una sección más.
