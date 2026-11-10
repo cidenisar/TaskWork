@@ -296,6 +296,16 @@ set local request.jwt.claims to '{"sub":"<uuid-real>","role":"authenticated"}';
 rollback;
 ```
 
+**Una policy de RLS que hace `exists(select 1 from LA_MISMA_TABLA where ...)` para resolver "¿tengo yo un rol especial sobre OTRA fila de esta tabla?" (ej. "¿soy yo la guardia general de este evento, para poder ver/tocar la fila de otro participante?") revienta con `infinite recursion detected in policy for relation "x"` (código `42P17`), siempre, sin importar si la lógica terminaría en la práctica.** Postgres no hace evaluación de punto fijo: para planear la subquery sobre esa misma tabla tiene que expandir la policy de ESA tabla otra vez, lo que vuelve a traer la subquery, sin fin — el error sale en tiempo de planeo, no de ejecución, así que ni corto-circuita por el resto del `OR` ni importa qué fila sea. Pasó en Guardia General (`guardia_participacion_select/insert/update` comprobando "¿soy GUARDIA_GENERAL de este evento?" contra `guardia_participacion` misma) y, por tabla referenciada en cascada, rompió TODA lectura de `guardia_evento` y `guardia_novedad` también (sus policies hacen `exists(...)` contra `guardia_participacion`, que a su vez no podía resolverse a sí misma). Arreglo: nunca autorreferenciar la tabla dentro de su propia policy — mover ese chequeo a una función `security definer` (mismo patrón que `is_admin_or_supervisor()`), que bypasea RLS al consultar y no dispara la policy de nuevo:
+```sql
+create or replace function public.es_x_de_fila(p_fila_id uuid, p_usuario_id uuid)
+returns boolean language sql security definer set search_path = public stable as $$
+  select exists (select 1 from public.esa_tabla t where t.fila_id = p_fila_id and t.usuario_id = p_usuario_id and t.rol = 'ROL_ESPECIAL');
+$$;
+-- y en la policy: ... or public.es_x_de_fila(fila_id, (select auth.uid())) ...
+```
+**Este bug puede quedar invisible durante meses si los tests del proyecto son lógica de permisos en JS puro (`esGuardiaGeneral()`, etc.) y nunca pegan contra RLS real contra Postgres** — acá pasó justo eso: 54 tests pasando, pero el circuito entero estaba roto desde que se creó la tabla, hasta la primera prueba de punta a punta real. Una tabla con una policy que se referencia a sí misma (directa o indirectamente, vía otra tabla cuya policy la referencia a ella) es una señal para revisar esto ANTES de que aparezca en producción, no después.
+
 ## 4. Arquitectura cliente/servidor y secretos
 
 **Dos apps que se avisan entre sí: secreto compartido, nunca en el
