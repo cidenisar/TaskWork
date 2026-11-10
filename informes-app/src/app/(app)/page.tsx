@@ -14,6 +14,19 @@ function esMobile(userAgent: string): boolean {
   return /Mobi|Android|iPhone|iPad|iPod/i.test(userAgent);
 }
 
+/** Hora y fecha de Argentina, no del servidor (Vercel corre en UTC): si no, a las 22 hs diría "Buen día". */
+const ZONA = "America/Argentina/Buenos_Aires";
+function saludo(): string {
+  const hora = Number(new Intl.DateTimeFormat("es-AR", { hour: "numeric", hourCycle: "h23", timeZone: ZONA }).format(new Date()));
+  if (hora >= 5 && hora < 13) return "Buen día";
+  if (hora >= 13 && hora < 20) return "Buenas tardes";
+  return "Buenas noches";
+}
+function fechaDeHoy(): string {
+  const f = new Intl.DateTimeFormat("es-AR", { weekday: "long", day: "numeric", month: "long", timeZone: ZONA }).format(new Date());
+  return f.charAt(0).toUpperCase() + f.slice(1);
+}
+
 export default async function HomePage() {
   const profile = await requireProfile();
 
@@ -43,9 +56,12 @@ export default async function HomePage() {
 
   return (
     <div>
-      <div className="page-heading">
-        <h1>¿Qué querés hacer?</h1>
-        <p>Elegí un módulo para empezar</p>
+      <div className="page-heading mz-saludo">
+        <p className="mz-saludo-fecha">{fechaDeHoy()}</p>
+        <h1>
+          {saludo()}, {profile.nombreCompleto.split(" ")[0] || profile.nombreCompleto}
+        </h1>
+        <p>¿Qué querés hacer hoy? Elegí un módulo para empezar.</p>
       </div>
       <div className="module-grid">
         <Link href="/informe-tecnico/nuevo" className="module-card">

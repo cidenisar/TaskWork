@@ -237,6 +237,13 @@ const PATHS: Record<string, React.ReactNode> = {
       <path d="M12 7.5V12l3.2 2" />
     </>
   ),
+  home: (
+    <>
+      <path d="M5 10.5V20h14v-9.5" />
+      <path d="M3 12 12 4l9 8" />
+      <path d="M10 20v-5.5h4V20" />
+    </>
+  ),
   shuffle: (
     <>
       <path d="M4 6h3.5l6 6 6-6H17" />

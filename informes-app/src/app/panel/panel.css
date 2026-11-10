@@ -315,3 +315,34 @@ button.panel-nav-item {
     padding: 18px 16px 50px;
   }
 }
+
+/* Imagen "Mezcla" (10/11/2026): la barra lateral pasó a ser la banda azul de
+   arriba (`.mz-header`, en wireframe-ui.css). Estas reglas pisan las de la
+   barra lateral de más arriba para los ítems que ahora viven en esa banda —
+   van con `.mz-header` adelante porque esta hoja se carga después. */
+.panel-shell {
+  display: block;
+}
+.mz-header .panel-nav {
+  flex-direction: row;
+  padding-left: 0;
+}
+.mz-header .panel-nav-item {
+  padding: 0 12px;
+  border-radius: 8px;
+  color: rgba(255, 255, 255, 0.84);
+  font-size: 13.5px;
+  white-space: nowrap;
+}
+.mz-header .panel-nav-item:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+.mz-header .panel-nav-item.active {
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+}
+.panel-main {
+  max-width: 1600px;
+  margin: 0 auto;
+}
