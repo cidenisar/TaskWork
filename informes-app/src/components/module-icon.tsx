@@ -202,6 +202,12 @@ export const ICON_PATHS: Record<string, React.ReactNode> = {
       <path d="m9 11.2 2 2 4-4" />
     </>
   ),
+  materiales: (
+    <>
+      <rect x="3.5" y="10" width="9" height="9" rx="1.2" />
+      <rect x="11.5" y="4.5" width="9" height="9" rx="1.2" />
+    </>
+  ),
   "datos-prueba": (
     <>
       <path d="M5 7h14M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />

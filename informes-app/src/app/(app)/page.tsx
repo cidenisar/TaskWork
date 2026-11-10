@@ -118,6 +118,15 @@ export default async function HomePage() {
             Material o equipo (nuevo o usado-funcional) que vuelve al depósito — con comprobante de constancia
           </div>
         </Link>
+        <Link href="/panel/materiales?tab=alta" className="module-card">
+          <div className="module-ico">
+            <ModuleIcon name="materiales" />
+          </div>
+          <div className="module-title">Materiales</div>
+          <div className="module-sub">
+            Dá de alta lo que sacás de depósito apenas lo tenés en la mano (con fotos), buscá dónde quedó algo, o devolvé lo que no usaste
+          </div>
+        </Link>
         {muestraGuardia && (
           <Link href="/guardia" className="module-card">
             <div className="module-ico">

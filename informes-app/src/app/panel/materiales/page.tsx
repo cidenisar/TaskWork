@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { MaterialesTabs } from "@/components/materiales/materiales-tabs";
@@ -27,7 +28,9 @@ export default async function PanelMaterialesPage() {
           </p>
         </div>
       </div>
-      <MaterialesTabs ubicaciones={ubicaciones} provincias={(provinciasRes.data ?? []).map((p) => p.nombre)} recursoAlturaConfig={recursoAlturaConfig} />
+      <Suspense>
+        <MaterialesTabs ubicaciones={ubicaciones} provincias={(provinciasRes.data ?? []).map((p) => p.nombre)} recursoAlturaConfig={recursoAlturaConfig} />
+      </Suspense>
     </div>
   );
 }
