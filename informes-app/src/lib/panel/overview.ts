@@ -2,6 +2,10 @@ import type { createClient } from "@/lib/supabase/server";
 import { fetchTodasLasUbicaciones } from "@/lib/ubicaciones/fetch-todas";
 import { labelUbicacion, labelSitioFino } from "@/components/ubicaciones/types";
 import { computarItemsMantenimiento, type PanelMantenimientoItem } from "./mantenimientos";
+import { AREAS_GUARDIA, guardiaDe, type AreaGuardia } from "@/lib/guardia/cronograma";
+import { cargarCronograma, cargarCambiosAceptados, cargarParametros } from "@/lib/guardia/datos";
+import { horaGuardiaIso } from "@/lib/guardia/reloj";
+import type { EstadoViaje } from "@/lib/database.types";
 
 type Supabase = Awaited<ReturnType<typeof createClient>>;
 
@@ -79,12 +83,45 @@ export interface PanelVencimiento {
   urgencia: UrgenciaVencimiento;
 }
 
+/** Fila resumida de un ítem de mantenimiento no "al día" — para la lista nueva de Vista General (ver PanelMantenimientoItem para el detalle completo que usa el Plan). */
+export interface PanelMantenimientoPendienteItem {
+  tipoEquipoLabel: string;
+  texto: string;
+  categoriaLabel: string;
+  ubicacionLabel: string;
+  urgencia: PanelMantenimientoItem["urgencia"];
+  mensaje: string;
+}
+
+/** Evaluación de Riesgo de Viaje con el viaje ya en curso (estado_viaje "iniciado" o "en_punto_medio") — ver evaluaciones_riesgo_viaje. */
+export interface PanelViajeActivo {
+  id: string;
+  conductorNombre: string;
+  patente: string;
+  origen: string;
+  destino: string;
+  fechaHora: string;
+  estado: EstadoViaje;
+}
+
+/** Quién está de guardia AHORA en cada área (General/Infraestructura/Datos/Enlaces) — ver guardiaDe en lib/guardia/cronograma.ts. null = sin asignar. */
+export interface PanelGuardiaAhora {
+  area: AreaGuardia;
+  nombre: string | null;
+}
+
 export interface PanelOverview {
   kpis: PanelKpis;
   equipoPorModulo: PanelEquipoPorModulo[];
   sitios: PanelSitioResumen[];
   vencimientos: PanelVencimiento[];
+  mantenimientoPendiente: PanelMantenimientoPendienteItem[];
+  viajesActivos: PanelViajeActivo[];
+  guardiaAhora: PanelGuardiaAhora[];
 }
+
+/** Tope de filas en la lista nueva de mantenimiento pendiente — mismo criterio que MAX_VENCIMIENTOS: es un resumen, el Plan de Mantenimiento completo tiene su propia pantalla. */
+const MAX_MANTENIMIENTO_PENDIENTE = 10;
 
 /** Ventana para considerar un vencimiento "próximo" (además de los ya vencidos, que siempre se muestran). */
 const VENTANA_VENCIMIENTOS_DIAS = 60;
@@ -146,6 +183,10 @@ export async function getPanelOverview(supabase: Supabase, incluirVencimientosPe
     rendicionesGastosRes,
     entregasDepositoRes,
     bajasEquipamientoRes,
+    viajesActivosRes,
+    cronogramaGuardia,
+    cambiosGuardia,
+    parametrosGuardia,
   ] = await Promise.all([
     fetchTodasLasUbicaciones(supabase),
     supabase.from("tableros").select("id, ubicacion_id"),
@@ -159,13 +200,21 @@ export async function getPanelOverview(supabase: Supabase, incluirVencimientosPe
     supabase.from("equipos").select("ubicacion_id, cantidad, consumo_promedio_w").eq("estado", "activo"),
     supabase.from("equipo_relevamientos").select("ubicacion_id, fecha"),
     supabase.from("salas").select("ubicacion_id, created_at").eq("estado", "activo"),
-    supabase.from("profiles").select("nombre_completo, rol, activo, dni_vencimiento, licencia_conducir_vencimiento"),
-    supabase.from("catalogo_vehiculos").select("patente, vencimiento_tarjeta_verde, vencimiento_rto"),
+    supabase.from("profiles").select("id, nombre_completo, rol, activo, dni_vencimiento, licencia_conducir_vencimiento"),
+    supabase.from("catalogo_vehiculos").select("id, patente, vencimiento_tarjeta_verde, vencimiento_rto"),
     computarItemsMantenimiento(supabase),
     supabase.from("informes_tecnicos").select("id", { count: "exact", head: true }),
     supabase.from("rendiciones_gastos").select("id", { count: "exact", head: true }),
     supabase.from("entregas_deposito").select("id", { count: "exact", head: true }),
     supabase.from("bajas_equipamiento").select("id", { count: "exact", head: true }),
+    supabase
+      .from("evaluaciones_riesgo_viaje")
+      .select("id, vehiculo_id, conductor_nombre, origen, destino, fecha_hora, estado_viaje")
+      .in("estado_viaje", ["iniciado", "en_punto_medio"])
+      .order("fecha_hora", { ascending: false }),
+    cargarCronograma(supabase),
+    cargarCambiosAceptados(supabase),
+    cargarParametros(supabase),
   ]);
 
   const ubicacionPorId = new Map(ubicaciones.map((u) => [u.id, u]));
@@ -350,6 +399,42 @@ export async function getPanelOverview(supabase: Supabase, incluirVencimientosPe
     reprogramados: itemsMantenimiento.filter((i) => i.motivoLabel != null).length,
   };
 
+  // Mantenimiento pendiente: todo lo que no está "al día" (vencido, próximo
+  // o nunca hecho) — mismo agrupamiento que ya usan kpis.mantenimiento
+  // (porHacer = proximo+nunca) y ORDEN_URGENCIA de computarItemsMantenimiento
+  // (vencido primero), reusado sin reescribir el cálculo.
+  const mantenimientoPendiente: PanelMantenimientoPendienteItem[] = itemsMantenimiento
+    .filter((i) => i.urgencia !== "ok")
+    .slice(0, MAX_MANTENIMIENTO_PENDIENTE)
+    .map((i) => ({
+      tipoEquipoLabel: i.tipoEquipoLabel,
+      texto: i.texto,
+      categoriaLabel: i.categoriaLabel,
+      ubicacionLabel: i.ubicacionLabel,
+      urgencia: i.urgencia,
+      mensaje: i.mensaje,
+    }));
+
+  // Riesgo de Viaje activos: viajes con estado_viaje "iniciado" o "en_punto_medio" (ya filtrado en la query).
+  const vehiculoPorId = new Map((vehiculosRes.data ?? []).map((v) => [v.id, v]));
+  const viajesActivos: PanelViajeActivo[] = (viajesActivosRes.data ?? []).map((v) => ({
+    id: v.id,
+    conductorNombre: v.conductor_nombre,
+    patente: vehiculoPorId.get(v.vehiculo_id)?.patente ?? "—",
+    origen: v.origen,
+    destino: v.destino,
+    fechaHora: v.fecha_hora,
+    estado: v.estado_viaje as EstadoViaje,
+  }));
+
+  // Guardia General: quién está de guardia AHORA en cada área — reusa guardiaDe (mismo cálculo que /guardia y /panel/guardia/cronograma), nunca se recalcula de cero.
+  const nombrePorUsuario = new Map((profilesRes.data ?? []).map((p) => [p.id, p.nombre_completo]));
+  const ahoraIso = horaGuardiaIso();
+  const guardiaAhora: PanelGuardiaAhora[] = AREAS_GUARDIA.map((area) => {
+    const usuarioId = guardiaDe(cronogramaGuardia, cambiosGuardia, area, ahoraIso, parametrosGuardia.cambioMin);
+    return { area, nombre: usuarioId ? nombrePorUsuario.get(usuarioId) ?? null : null };
+  });
+
   return {
     kpis: {
       totalSitios: sitios.length,
@@ -362,5 +447,8 @@ export async function getPanelOverview(supabase: Supabase, incluirVencimientosPe
     equipoPorModulo,
     sitios,
     vencimientos: vencimientosRelevantes.slice(0, MAX_VENCIMIENTOS),
+    mantenimientoPendiente,
+    viajesActivos,
+    guardiaAhora,
   };
 }

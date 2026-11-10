@@ -192,6 +192,14 @@ button.panel-nav-item {
   align-items: start;
 }
 
+.panel-grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 18px;
+  align-items: start;
+  margin-top: 18px;
+}
+
 .panel-card-title {
   display: flex;
   align-items: center;
@@ -245,6 +253,9 @@ button.panel-nav-item {
 
 @media (max-width: 1100px) {
   .panel-grid-2 {
+    grid-template-columns: 1fr;
+  }
+  .panel-grid-3 {
     grid-template-columns: 1fr;
   }
 }

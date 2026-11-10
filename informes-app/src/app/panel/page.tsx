@@ -10,9 +10,15 @@ import { SitioDetalleCard } from "@/components/panel/sitio-detalle-card";
 import { MapaRelevamientosCard } from "@/components/panel/mapa-relevamientos-card";
 import type { PuntoMapaRelevamiento } from "@/components/panel/mapa-relevamientos-inner";
 import { getPuntosMapa } from "@/lib/panel/mapa";
+import { EstadoViajeBadge } from "@/components/riesgo-viaje/badges";
 
 function fmtHoy(): string {
   return new Date().toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+}
+
+function fmtFechaHora(fechaHora: string): string {
+  const d = new Date(fechaHora);
+  return `${d.toLocaleDateString("es-AR")} ${d.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}`;
 }
 
 /** A dónde lleva cada renglón de "Equipamiento relevado" — su propio historial. */
@@ -80,7 +86,7 @@ export default async function PanelPage({ searchParams }: { searchParams: Promis
     getPanelOverview(supabase, profile.rol !== "tecnico"),
     getPuntosMapa(supabase),
   ]);
-  const { kpis, equipoPorModulo, sitios, vencimientos } = overview;
+  const { kpis, equipoPorModulo, sitios, vencimientos, mantenimientoPendiente, viajesActivos, guardiaAhora } = overview;
 
   const filtros: FiltrosJerarquia = { region: sp.region, provincia: sp.provincia, localidad: sp.localidad, sitio: sp.sitio };
   const filtrados = filtrarSitios(sitios, filtros);
@@ -213,6 +219,87 @@ export default async function PanelPage({ searchParams }: { searchParams: Promis
                 ))}
               </div>
             )}
+          </div>
+        </div>
+      </div>
+
+      <div className="panel-grid-3">
+        <div className="card">
+          <div className="panel-card-title">
+            <h2>Mantenimiento pendiente</h2>
+            <Link href="/panel/mantenimientos" className="panel-card-count">
+              ver Plan completo →
+            </Link>
+          </div>
+          {mantenimientoPendiente.length === 0 ? (
+            <div className="empty-note">No hay nada vencido ni próximo a vencer.</div>
+          ) : (
+            <div>
+              {mantenimientoPendiente.map((m, i) => (
+                <div className="panel-venc-row" key={i}>
+                  <div className="panel-venc-info">
+                    <div className="panel-venc-nombre">{m.texto}</div>
+                    <div className="panel-venc-tipo">
+                      {m.tipoEquipoLabel} · {m.categoriaLabel} · {m.ubicacionLabel}
+                    </div>
+                  </div>
+                  <div className="panel-venc-dias">
+                    <span className={`venc-badge ${m.urgencia === "vencido" ? "danger" : "warn"}`}>{m.mensaje}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="card">
+          <div className="panel-card-title">
+            <h2>Riesgo de Viaje — en curso</h2>
+            <Link href="/panel/riesgo-viaje/nueva" className="btn btn-primary btn-sm">
+              + Nueva evaluación
+            </Link>
+          </div>
+          {viajesActivos.length === 0 ? (
+            <div className="empty-note">No hay viajes en curso en este momento.</div>
+          ) : (
+            <div>
+              {viajesActivos.map((v) => (
+                <div className="panel-venc-row" key={v.id}>
+                  <div className="panel-venc-info">
+                    <div className="panel-venc-nombre">
+                      {v.conductorNombre} · {v.patente}
+                    </div>
+                    <div className="panel-venc-tipo">
+                      {v.origen} → {v.destino} · {fmtFechaHora(v.fechaHora)}
+                    </div>
+                  </div>
+                  <div className="panel-venc-dias">
+                    <EstadoViajeBadge estado={v.estado} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="card">
+          <div className="panel-card-title">
+            <h2>Guardia ahora</h2>
+            <Link href="/panel/guardia/cronograma" className="panel-card-count">
+              ver cronograma →
+            </Link>
+          </div>
+          <div>
+            {guardiaAhora.map((g) => (
+              <div className="panel-venc-row" key={g.area}>
+                <div className="panel-venc-info">
+                  <div className="panel-venc-nombre">{g.area}</div>
+                </div>
+                <div className="panel-venc-dias">
+                  {g.nombre ? <span className="venc-badge ok">{g.nombre}</span> : <span className="venc-badge warn">Sin asignar</span>}
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       </div>
