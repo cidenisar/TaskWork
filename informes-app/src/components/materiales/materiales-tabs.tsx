@@ -3,10 +3,11 @@
 import { useState } from "react";
 import { BuscarMateriales } from "./buscar-materiales";
 import { AltaMaterialForm } from "./alta-material-form";
+import { MaterialesPendientes } from "./materiales-pendientes";
 import type { Ubicacion } from "@/components/ubicaciones/types";
 import type { ConfigRecursoAltura } from "@/lib/equipos/recurso-altura";
 
-type Tab = "buscar" | "alta";
+type Tab = "buscar" | "alta" | "devolver";
 
 /**
  * Pestañas del módulo Materiales (ver dilema de materiales, CRITERIOS_Y_IDEAS.md
@@ -33,12 +34,13 @@ export function MaterialesTabs({
         <button type="button" className={`btn btn-sm ${tab === "alta" ? "btn-primary" : "btn-secondary"}`} onClick={() => setTab("alta")}>
           Alta
         </button>
+        <button type="button" className={`btn btn-sm ${tab === "devolver" ? "btn-primary" : "btn-secondary"}`} onClick={() => setTab("devolver")}>
+          Devolver
+        </button>
       </div>
-      {tab === "buscar" ? (
-        <BuscarMateriales />
-      ) : (
-        <AltaMaterialForm ubicaciones={ubicaciones} provincias={provincias} recursoAlturaConfig={recursoAlturaConfig} />
-      )}
+      {tab === "buscar" && <BuscarMateriales />}
+      {tab === "alta" && <AltaMaterialForm ubicaciones={ubicaciones} provincias={provincias} recursoAlturaConfig={recursoAlturaConfig} />}
+      {tab === "devolver" && <MaterialesPendientes />}
     </div>
   );
 }
