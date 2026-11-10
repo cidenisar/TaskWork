@@ -24,24 +24,20 @@ interface SpeechRecognitionLike {
   stop(): void;
 }
 
-export function Step1General({
-  form,
-  onChange,
-  catalogos,
-  logoUrl,
-}: {
-  form: InformeFormState;
-  onChange: (patch: Partial<InformeFormState>) => void;
-  catalogos: CatalogosInforme;
-  logoUrl: string | null;
-}) {
+/**
+ * Dictado por voz + "Mejorar con IA" para un campo de texto largo —
+ * independiente por campo (cada `useDictadoIA` tiene su propio estado), para
+ * poder usarlo en más de un textarea del mismo wizard (Descripción del
+ * Trabajo y Tareas Pendientes).
+ */
+function useDictadoIA(value: string, onChange: (v: string) => void, modo: "descripcion" | "lista_tareas" = "descripcion") {
   const [aiBusy, setAiBusy] = useState(false);
   const [aiNote, setAiNote] = useState<React.ReactNode>(null);
   const [dictating, setDictating] = useState(false);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
 
   async function mejorarConIA() {
-    const texto = form.descripcionTrabajo.trim();
+    const texto = value.trim();
     if (!texto) return;
     setAiBusy(true);
     setAiNote(null);
@@ -49,7 +45,7 @@ export function Step1General({
       const res = await fetch("/api/ai/mejorar-texto", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ texto }),
+        body: JSON.stringify({ texto, modo }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -59,7 +55,7 @@ export function Step1General({
           </>,
         );
       } else {
-        onChange({ descripcionTrabajo: data.mejorado });
+        onChange(data.mejorado);
         setAiNote(
           <>
             <Icon name="lightbulb" size={13} /> Texto corregido con IA. Revisalo antes de continuar.
@@ -92,7 +88,7 @@ export function Step1General({
       setAiNote(
         <>
           <Icon name="warning" size={13} /> Este navegador/dispositivo no soporta dictado por voz, o no se otorgó
-          permiso de micrófono. Podés escribir la descripción directamente.
+          permiso de micrófono. Podés escribir directamente.
         </>,
       );
       return;
@@ -107,9 +103,7 @@ export function Step1General({
         for (let i = e.resultIndex; i < e.results.length; i++) {
           text += e.results[i][0].transcript;
         }
-        onChange({
-          descripcionTrabajo: (form.descripcionTrabajo.trim() ? form.descripcionTrabajo.trim() + " " : "") + text.trim(),
-        });
+        onChange((value.trim() ? value.trim() + " " : "") + text.trim());
       };
       recognition.onerror = () => setDictating(false);
       recognition.onend = () => setDictating(false);
@@ -124,6 +118,45 @@ export function Step1General({
       );
     }
   }
+
+  return { aiBusy, aiNote, dictating, mejorarConIA, toggleDictation };
+}
+
+/** Botones "Dictar"/"Mejorar con IA" + nota de resultado, para un campo manejado por useDictadoIA. */
+function DictadoIAControles({ ia }: { ia: ReturnType<typeof useDictadoIA> }) {
+  return (
+    <>
+      <div style={{ display: "flex", gap: 8 }}>
+        <button type="button" className={ia.dictating ? "ai-btn ai-btn-live" : "ai-btn"} onClick={ia.toggleDictation}>
+          {ia.dictating ? (
+            <>
+              <StatusDot tone="danger" /> Escuchando...
+            </>
+          ) : (
+            <>
+              <Icon name="mic" size={13} /> Dictar
+            </>
+          )}
+        </button>
+        <button type="button" className="ai-btn" disabled={ia.aiBusy} onClick={ia.mejorarConIA}>
+          <Icon name="sparkles" size={13} /> {ia.aiBusy ? "Mejorando..." : "Mejorar con IA"}
+        </button>
+      </div>
+    </>
+  );
+}
+
+export function Step1General({
+  form,
+  onChange,
+  catalogos,
+}: {
+  form: InformeFormState;
+  onChange: (patch: Partial<InformeFormState>) => void;
+  catalogos: CatalogosInforme;
+}) {
+  const descripcionIA = useDictadoIA(form.descripcionTrabajo, (v) => onChange({ descripcionTrabajo: v }));
+  const tareasIA = useDictadoIA(form.tareasPendientes, (v) => onChange({ tareasPendientes: v }), "lista_tareas");
 
   return (
     <div className="card">
@@ -253,62 +286,37 @@ export function Step1General({
       <div className="field">
         <div className="field-label-row">
           <label>Descripción del Trabajo</label>
-          <div style={{ display: "flex", gap: 8 }}>
-            <button type="button" className={dictating ? "ai-btn ai-btn-live" : "ai-btn"} onClick={toggleDictation}>
-              {dictating ? (
-                <>
-                  <StatusDot tone="danger" /> Escuchando...
-                </>
-              ) : (
-                <>
-                  <Icon name="mic" size={13} /> Dictar
-                </>
-              )}
-            </button>
-            <button type="button" className="ai-btn" disabled={aiBusy} onClick={mejorarConIA}>
-              <Icon name="sparkles" size={13} /> {aiBusy ? "Mejorando..." : "Mejorar con IA"}
-            </button>
-          </div>
+          <DictadoIAControles ia={descripcionIA} />
         </div>
         <textarea
           placeholder="Describe el trabajo realizado..."
           value={form.descripcionTrabajo}
           onChange={(e) => onChange({ descripcionTrabajo: e.target.value })}
         />
-        {aiNote && (
+        {descripcionIA.aiNote && (
           <div className="ai-note">
-            <span>{aiNote}</span>
+            <span>{descripcionIA.aiNote}</span>
           </div>
         )}
       </div>
       <div className="field">
-        <label>
-          Tareas Pendientes <span className="opt">(opcional)</span>
-        </label>
+        <div className="field-label-row">
+          <label>
+            Tareas Pendientes <span className="opt">(opcional)</span>
+          </label>
+          <DictadoIAControles ia={tareasIA} />
+        </div>
         <textarea
           placeholder={"Una tarea por línea, ej:\nConexionado de cables en unidad exterior\nOrden y limpieza en sala de energía"}
           value={form.tareasPendientes}
           onChange={(e) => onChange({ tareasPendientes: e.target.value })}
         />
-        <div className="hint">Se listan en el PDF como viñetas, una por línea.</div>
-      </div>
-      <div className="field">
-        <label>Logo de la Empresa</label>
-        <div className="logo-upload">
-          <div className="logo-preview">
-            {logoUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={logoUrl} alt="Logo de la empresa" />
-            ) : (
-              <Icon name="building" size={22} />
-            )}
+        {tareasIA.aiNote && (
+          <div className="ai-note">
+            <span>{tareasIA.aiNote}</span>
           </div>
-          <span className="hint" style={{ marginTop: 0 }}>
-            {logoUrl
-              ? "Se usa el logo configurado en Configuración → Datos de la Empresa. Aparecerá en la cabecera de este PDF automáticamente."
-              : "Todavía no hay un logo cargado. Un Administrador puede subirlo en Configuración → Datos de la Empresa."}
-          </span>
-        </div>
+        )}
+        <div className="hint">Se listan en el PDF como viñetas, una por línea.</div>
       </div>
     </div>
   );

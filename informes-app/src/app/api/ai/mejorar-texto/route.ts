@@ -15,7 +15,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "No autenticado." }, { status: 401 });
   }
 
-  const { texto } = (await request.json().catch(() => ({}))) as { texto?: string };
+  const { texto, modo } = (await request.json().catch(() => ({}))) as { texto?: string; modo?: "descripcion" | "lista_tareas" };
   if (!texto || !texto.trim()) {
     return NextResponse.json({ error: "No hay texto para mejorar." }, { status: 400 });
   }
@@ -43,10 +43,17 @@ export async function POST(request: Request) {
       max_tokens: 2048,
       output_config: { effort: "low" },
       system:
-        "Corregís ortografía y gramática de descripciones de trabajos técnicos de campo (informes técnicos) " +
-        "y subís el tono a uno profesional. Nunca inventes ni agregues información que no esté en el texto " +
-        "original — solo reescribís lo que ya está. Respondé únicamente con el texto corregido, sin comillas, " +
-        "sin explicaciones ni comentarios adicionales.",
+        modo === "lista_tareas"
+          ? "Corregís ortografía y gramática de una lista de tareas pendientes de un informe técnico de campo, " +
+            "una por línea, y subís el tono a uno profesional. Mantenés EXACTAMENTE una línea por tarea, en el " +
+            "mismo orden, sin fusionar líneas en un párrafo ni agregar numeración o viñetas propias (el PDF ya " +
+            "las agrega). Nunca inventes ni agregues tareas que no estén en el texto original — solo reescribís " +
+            "lo que ya está. Respondé únicamente con la lista corregida, sin comillas, sin explicaciones ni " +
+            "comentarios adicionales."
+          : "Corregís ortografía y gramática de descripciones de trabajos técnicos de campo (informes técnicos) " +
+            "y subís el tono a uno profesional. Nunca inventes ni agregues información que no esté en el texto " +
+            "original — solo reescribís lo que ya está. Respondé únicamente con el texto corregido, sin comillas, " +
+            "sin explicaciones ni comentarios adicionales.",
       messages: [{ role: "user", content: texto }],
     });
 

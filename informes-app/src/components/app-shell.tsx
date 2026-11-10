@@ -226,14 +226,14 @@ export function AppShell({ profile, children }: { profile: Profile; children: Re
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
           <ThemeToggle />
           <Link href="/ayuda" className="signout" style={{ textDecoration: "none" }}>
-            <Icon name="lightbulb" size={13} /> Ayuda
+            <Icon name="help" size={13} /> Ayuda
           </Link>
           <Link href="/cuenta" className="signout" style={{ textDecoration: "none" }}>
-            Mi cuenta
+            <Icon name="user" size={13} /> Mi cuenta
           </Link>
           <form action={signOutAction}>
             <button type="submit" className="signout">
-              Cerrar sesión
+              <Icon name="log-out" size={13} /> Cerrar sesión
             </button>
           </form>
         </div>

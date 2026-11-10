@@ -464,6 +464,35 @@ textarea {
   color: var(--accent);
 }
 
+/* FilterableSelect (src/components/ui/filterable-select.tsx) — mismo panel
+   que AutocompleteInput de arriba, con la lupa como prefijo dentro del
+   campo para que se note que se puede escribir a filtrar, no solo clickear. */
+.filterable-select-input {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--field-bg);
+  border: 1.5px solid var(--field-border);
+  border-radius: var(--radius);
+  padding: 0 13px;
+  color: var(--text-faint);
+}
+.filterable-select-input:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+.filterable-select-input input {
+  border: none;
+  background: none;
+  padding: 11px 0;
+  box-shadow: none !important;
+  color: var(--text);
+}
+.filterable-select-input input:focus {
+  border: none;
+  box-shadow: none;
+}
+
 .section-label {
   font-size: 12px;
   font-weight: 700;
@@ -1126,6 +1155,13 @@ textarea {
   text-align: center;
   font-size: 24px;
   margin-bottom: 6px;
+}
+.login-logo {
+  display: block;
+  max-width: 180px;
+  max-height: 72px;
+  margin: 0 auto 14px;
+  object-fit: contain;
 }
 .login-sub {
   text-align: center;

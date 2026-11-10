@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { Icon } from "@/components/icon";
+import { FilterableSelect } from "@/components/ui/filterable-select";
 import type { Ubicacion } from "./types";
 
 export interface GpsCapturado {
@@ -325,15 +326,16 @@ export function UbicacionFields({
           <label>
             Sitio {requerido ? <span className="req">*</span> : <span className="opt">(opcional)</span>}
           </label>
-          <select value={sitioEl} onChange={(e) => elegirSitio(e.target.value)} disabled={disabled}>
-            <option value="">Seleccionar sitio...</option>
-            {sitiosDeLaProvincia.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-            <option value="__new">+ Crear sitio nuevo...</option>
-          </select>
+          <FilterableSelect
+            value={sitioEl}
+            onChange={elegirSitio}
+            placeholder="Buscar o elegir sitio..."
+            disabled={disabled}
+            options={[
+              ...sitiosDeLaProvincia.map((s) => ({ value: s, label: s })),
+              { value: "__new", label: "+ Crear sitio nuevo..." },
+            ]}
+          />
         </div>
       )}
       {sitioEl && sitioEl !== "__new" && plantasDelSitio.length > 1 && (

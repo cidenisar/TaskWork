@@ -33,7 +33,6 @@ export function EditarInformeTecnicoWizard({
   initialTecnicos,
   initialVehiculos,
   catalogos,
-  logoUrl,
 }: {
   informeId: string;
   numeroGeneracion: string;
@@ -42,7 +41,6 @@ export function EditarInformeTecnicoWizard({
   initialTecnicos: Tecnico[];
   initialVehiculos: Vehiculo[];
   catalogos: CatalogosInforme;
-  logoUrl: string | null;
 }) {
   const router = useRouter();
   const [step, setStep] = useState(1);
@@ -121,7 +119,7 @@ export function EditarInformeTecnicoWizard({
       </div>
       <Stepper steps={STEPS} current={step} />
 
-      {step === 1 && <Step1General form={form} onChange={patchForm} catalogos={catalogos} logoUrl={logoUrl} />}
+      {step === 1 && <Step1General form={form} onChange={patchForm} catalogos={catalogos} />}
       {step === 2 && (
         <Step2Equipo
           tecnicos={tecnicos}

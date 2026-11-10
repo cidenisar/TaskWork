@@ -107,14 +107,6 @@ export function HistorialInformes({ informes: informesIniciales, esSuperusuario 
         <p>El registro queda para siempre y se puede buscar; el PDF y las fotos son temporales</p>
       </div>
 
-      <div className="banner">
-        <Icon name="bell" size={14} /> El <b>registro</b> (título, cliente, fecha, técnicos, N° de generación) se guarda para siempre y no ocupa
-        casi lugar — es lo que te permite buscar cualquier informe viejo. El <b>PDF y las fotos</b> sí pesan, y se
-        conservan solo hasta que los descargues o hasta el umbral configurado en Configuración — después se liberan
-        del servidor. Un informe &quot;solo registro&quot; sigue apareciendo acá, solo que ya no tiene el archivo
-        para volver a descargar.
-      </div>
-
       <div className="card">
         <div className="hint" style={{ margin: "0 0 8px" }}>
           <Icon name="search" size={13} /> Búsqueda en lenguaje natural — ej. &quot;el informe de aire acondicionado en YPF de agosto&quot;

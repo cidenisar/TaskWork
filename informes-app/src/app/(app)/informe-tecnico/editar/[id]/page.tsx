@@ -30,7 +30,6 @@ export default async function EditarInformePage({ params }: { params: Promise<{ 
     tecnicosRes,
     torresRes,
     vehiculosCatRes,
-    configRes,
   ] = await Promise.all([
     supabase.from("informe_tecnicos_asignados").select("tecnico_nombre, torre, es_tecnico_seguridad").eq("informe_id", id),
     supabase.from("informe_vehiculos").select("patente, marca_modelo").eq("informe_id", id),
@@ -42,7 +41,6 @@ export default async function EditarInformePage({ params }: { params: Promise<{ 
     supabase.from("profiles").select("nombre_completo, torre").eq("activo", true).order("nombre_completo"),
     supabase.from("catalogo_torres").select("nombre").order("nombre"),
     supabase.from("catalogo_vehiculos").select("patente, marca_modelo").order("patente"),
-    supabase.from("config_general").select("logo_empresa_url").eq("id", 1).single(),
   ]);
 
   // Si el informe ya tiene una Ubicación estructurada (ubicacion_id), se
@@ -96,7 +94,6 @@ export default async function EditarInformePage({ params }: { params: Promise<{ 
           vehiculos: (vehiculosCatRes.data ?? []).map((v) => ({ patente: v.patente, marcaModelo: v.marca_modelo })),
           recursoAlturaConfig: [], // editar un informe no toca materiales (ver wizard-editar.tsx) — no hace falta cargarlo acá
         }}
-        logoUrl={configRes.data?.logo_empresa_url ?? null}
       />
     </div>
   );

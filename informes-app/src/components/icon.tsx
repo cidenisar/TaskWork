@@ -245,6 +245,26 @@ const PATHS: Record<string, React.ReactNode> = {
       <path d="m17 21 3-3-3-3" />
     </>
   ),
+  help: (
+    <>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M9.5 9.3a2.5 2.5 0 1 1 3.8 2.1c-.7.45-1.3.9-1.3 1.8v.3" />
+      <circle cx="12" cy="17" r="0.6" fill="currentColor" stroke="none" />
+    </>
+  ),
+  user: (
+    <>
+      <circle cx="12" cy="8.5" r="3.5" />
+      <path d="M5 20.5c0-3.6 2.9-6 7-6s7 2.4 7 6" />
+    </>
+  ),
+  "log-out": (
+    <>
+      <path d="M9 4H6A1.5 1.5 0 0 0 4.5 5.5v13A1.5 1.5 0 0 0 6 20h3" />
+      <path d="m16 16 4-4-4-4" />
+      <path d="M20 12H9" />
+    </>
+  ),
 };
 
 export type IconName = keyof typeof PATHS;

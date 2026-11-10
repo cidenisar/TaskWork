@@ -72,14 +72,6 @@ export function HistorialRendiciones({
         <p>El registro queda para siempre y se puede buscar; el PDF es temporal</p>
       </div>
 
-      <div className="banner">
-        <Icon name="bell" size={14} /> Una rendición <b>abierta</b> (▶) todavía admite agregar o quitar gastos — segui cargándolos cuando
-        quieras hasta hacer el cierre. Una vez <b>cerrada</b> ya no se puede modificar: el{" "}
-        <b>registro</b> (motivo, fecha, técnicos, N° de generación, total y saldo) se guarda para siempre, el{" "}
-        <b>PDF</b> se conserva solo hasta que lo descargues o hasta el umbral configurado en Configuración, y el
-        Excel siempre se puede volver a generar mientras el registro exista.
-      </div>
-
       <div className="card">
         <div className="hint" style={{ margin: "0 0 8px" }}>
           <Icon name="search" size={13} /> Búsqueda en lenguaje natural — ej. &quot;el viaje a YPF de agosto&quot;

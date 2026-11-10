@@ -28,12 +28,10 @@ const STEPS: WizardStep[] = [
 export function InformeTecnicoWizard({
   catalogos,
   catalogoHallazgos,
-  logoUrl,
   emails,
 }: {
   catalogos: CatalogosInforme;
   catalogoHallazgos: { id: string; texto: string }[];
-  logoUrl: string | null;
   emails: EmailDestinatario[];
 }) {
   const router = useRouter();
@@ -198,7 +196,7 @@ export function InformeTecnicoWizard({
     <div>
       <Stepper steps={STEPS} current={step} />
 
-      {step === 1 && <Step1General form={form} onChange={patchForm} catalogos={catalogos} logoUrl={logoUrl} />}
+      {step === 1 && <Step1General form={form} onChange={patchForm} catalogos={catalogos} />}
       {step === 2 && (
         <Step2Equipo
           tecnicos={tecnicos}

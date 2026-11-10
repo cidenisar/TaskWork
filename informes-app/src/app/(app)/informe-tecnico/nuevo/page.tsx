@@ -16,7 +16,6 @@ export default async function NuevoInformePage() {
     tecnicosRes,
     torresRes,
     vehiculosRes,
-    configRes,
     emailsRes,
     hallazgosRes,
     recursoAlturaRes,
@@ -31,7 +30,6 @@ export default async function NuevoInformePage() {
     supabase.from("profiles").select("nombre_completo, torre").eq("activo", true).order("nombre_completo"),
     supabase.from("catalogo_torres").select("nombre").order("nombre"),
     supabase.from("catalogo_vehiculos").select("patente, marca_modelo").order("patente"),
-    supabase.from("config_general").select("logo_empresa_url").eq("id", 1).single(),
     supabase.from("config_emails_envio").select("email, activo").eq("activo", true).order("email"),
     supabase.from("catalogo_inspeccion_ia").select("id, texto").eq("modulo", "informe_tecnico").order("orden"),
     supabase.from("catalogo_recurso_altura").select("tipo_montaje, recurso_fijo"),
@@ -53,7 +51,6 @@ export default async function NuevoInformePage() {
           recursoAlturaConfig,
         }}
         catalogoHallazgos={hallazgosRes.data ?? []}
-        logoUrl={configRes.data?.logo_empresa_url ?? null}
         emails={emailsRes.data ?? []}
       />
     </div>
