@@ -7,10 +7,8 @@ import { JerarquiaBreadcrumb } from "@/components/panel/jerarquia-breadcrumb";
 import { JerarquiaNodos } from "@/components/panel/jerarquia-nodos";
 import { JerarquiaSitioPicker } from "@/components/panel/jerarquia-sitio-picker";
 import { SitioDetalleCard } from "@/components/panel/sitio-detalle-card";
-import { MapaRelevamientosCard } from "@/components/panel/mapa-relevamientos-card";
-import type { PuntoMapaRelevamiento } from "@/components/panel/mapa-relevamientos-inner";
-import { getPuntosMapa } from "@/lib/panel/mapa";
 import { EstadoViajeBadge } from "@/components/riesgo-viaje/badges";
+import { getNovedadesGuardiaHoy } from "@/lib/panel/novedades-guardia";
 
 function fmtHoy(): string {
   return new Date().toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
@@ -19,6 +17,10 @@ function fmtHoy(): string {
 function fmtFechaHora(fechaHora: string): string {
   const d = new Date(fechaHora);
   return `${d.toLocaleDateString("es-AR")} ${d.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}`;
+}
+
+function fmtHora(fechaHora: string): string {
+  return new Date(fechaHora).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
 }
 
 /** A dónde lleva cada renglón de "Equipamiento relevado" — su propio historial. */
@@ -82,23 +84,14 @@ export default async function PanelPage({ searchParams }: { searchParams: Promis
   const sp = await searchParams;
   const profile = await requireProfile();
   const supabase = await createClient();
-  const [overview, puntosCrudos] = await Promise.all([
+  const [overview, novedadesGuardia] = await Promise.all([
     getPanelOverview(supabase, profile.rol !== "tecnico"),
-    getPuntosMapa(supabase),
+    getNovedadesGuardiaHoy(supabase),
   ]);
   const { kpis, equipoPorModulo, sitios, vencimientos, mantenimientoPendiente, viajesActivos, guardiaAhora } = overview;
 
   const filtros: FiltrosJerarquia = { region: sp.region, provincia: sp.provincia, localidad: sp.localidad, sitio: sp.sitio };
   const filtrados = filtrarSitios(sitios, filtros);
-
-  // Cada unidad física (un tablero, un rack, una sala puntual, etc.) no sabe por sí sola el estado de mantenimiento
-  // ni el nombre del sitio al que pertenece — eso sale del resumen por sitio que ya calculó getPanelOverview.
-  const sitioPorId = new Map(sitios.map((s) => [s.id, s]));
-  const puntosMapa: PuntoMapaRelevamiento[] = puntosCrudos.flatMap((p) => {
-    const sitio = sitioPorId.get(p.ubicacionId);
-    if (!sitio) return [];
-    return [{ ...p, nombreSitio: sitio.nombreFino, urgencia: sitio.masUrgente?.urgencia ?? null }];
-  });
 
   let contenido: React.ReactNode;
   if (filtros.sitio) {
@@ -258,6 +251,34 @@ export default async function PanelPage({ searchParams }: { searchParams: Promis
         </div>
       </div>
 
+      <div className="card" style={{ marginTop: 18 }}>
+        <div className="panel-card-title">
+          <h2>Novedades de guardia — hoy</h2>
+          <span className="panel-card-count">
+            {novedadesGuardia.length} novedad{novedadesGuardia.length === 1 ? "" : "es"}
+          </span>
+        </div>
+        {novedadesGuardia.length === 0 ? (
+          <div className="empty-note">Sin novedades de guardia hoy, en ninguna de las cuatro áreas.</div>
+        ) : (
+          <div>
+            {novedadesGuardia.map((n) => (
+              <Link href={`/guardia/evento/${n.eventoId}`} className="panel-venc-row panel-venc-row-link" key={n.id}>
+                <div className="panel-venc-info">
+                  <div className="panel-venc-nombre">{n.texto}</div>
+                  <div className="panel-venc-tipo">
+                    Evento #{n.eventoNumero} · {n.tipoAlarma} · {n.sitio}
+                  </div>
+                </div>
+                <div className="panel-venc-dias">
+                  <span className={`venc-badge ${n.estadoEvento === "abierto" ? "warn" : "ok"}`}>{fmtHora(n.at)}</span>
+                </div>
+              </Link>
+            ))}
+          </div>
+        )}
+      </div>
+
       <div className="panel-grid-2">
         <div className="card">
           <div className="panel-card-title">
@@ -303,8 +324,6 @@ export default async function PanelPage({ searchParams }: { searchParams: Promis
           </div>
         </div>
       </div>
-
-      <MapaRelevamientosCard puntos={puntosMapa} totalSitios={kpis.totalSitios} />
     </div>
   );
 }

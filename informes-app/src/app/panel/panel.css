@@ -242,6 +242,16 @@ button.panel-nav-item {
   border-bottom: none;
   padding-bottom: 0;
 }
+.panel-venc-row-link {
+  text-decoration: none;
+  color: inherit;
+  margin: 0 -5px;
+  padding: 8px 5px;
+  border-radius: 6px;
+}
+.panel-venc-row-link:hover {
+  background: var(--panel-2);
+}
 .panel-venc-info {
   min-width: 0;
 }
