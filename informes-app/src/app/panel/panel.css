@@ -190,14 +190,22 @@ button.panel-nav-item {
   grid-template-columns: 1.3fr 1fr;
   gap: 18px;
   align-items: start;
+  margin-top: 18px;
 }
 
+/* Tres cards iguales (Riesgo de Viaje / Guardia / Mantenimiento) — a diferencia de .panel-grid-2,
+   que tiene contenido muy distinto por columna (jerarquía vs. lista), estas tres comparten el
+   mismo tipo de fila (panel-venc-row) y se ven mejor con la misma altura — de ahí `stretch` en
+   vez de `start`: sin eso, la de menos filas quedaba mucho más baja que las otras dos. */
 .panel-grid-3 {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 18px;
-  align-items: start;
-  margin-top: 18px;
+  align-items: stretch;
+}
+.panel-grid-3 > .card {
+  display: flex;
+  flex-direction: column;
 }
 
 .panel-card-title {

@@ -80,7 +80,7 @@ function iconoMarcador(modulo: ModuloMapa, color: string): L.DivIcon {
  * estado de mantenimiento del SITIO completo (el ítem más urgente), no de
  * esa unidad puntual.
  */
-export default function MapaRelevamientosInner({ puntos }: { puntos: PuntoMapaRelevamiento[] }) {
+export default function MapaRelevamientosInner({ puntos, height = 420 }: { puntos: PuntoMapaRelevamiento[]; height?: number | string }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const capaMarcadoresRef = useRef<L.MarkerClusterGroup | null>(null);
@@ -227,7 +227,7 @@ export default function MapaRelevamientosInner({ puntos }: { puntos: PuntoMapaRe
           ))}
         </div>
       )}
-      <div ref={containerRef} style={{ height: 420, borderRadius: "var(--radius)", overflow: "hidden" }} />
+      <div ref={containerRef} style={{ height, borderRadius: "var(--radius)", overflow: "hidden" }} />
       <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginTop: 8, fontSize: 11.5, color: "var(--text-faint)" }}>
         <span>
           <span style={{ display: "inline-block", width: 9, height: 9, borderRadius: "50%", background: "#35c46a", marginRight: 4 }} />

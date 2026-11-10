@@ -6,6 +6,7 @@ import { Icon, type IconName } from "@/components/icon";
 
 const ITEMS: { href: string; label: string; icon: IconName }[] = [
   { href: "/panel", label: "Vista general", icon: "building" },
+  { href: "/panel/mapa", label: "Mapa", icon: "map" },
   { href: "/panel/mantenimientos", label: "Mantenimientos", icon: "wrench" },
   { href: "/panel/vehiculos", label: "Vehículos", icon: "truck" },
   { href: "/panel/planos-qr", label: "Planos y QR", icon: "document" },

@@ -40,8 +40,8 @@ export function puedeGestionarDeposito(rol: Rol): boolean {
 
 /**
  * El Panel de Supervisión también lo puede abrir un técnico, pero limitado:
- * ve Vista general, Mantenimientos, Vehículos, Planos y QR, Materiales y
- * Riesgo de Viaje — nunca Estadísticas ni Configuración (ver PanelNav y el
+ * ve Vista general, Mapa, Mantenimientos, Vehículos, Planos y QR, Materiales
+ * y Riesgo de Viaje — nunca Estadísticas ni Configuración (ver PanelNav y el
  * gate de cada una, que siguen siendo Admin/Supervisor-only aparte de esto).
  */
 export function puedeVerPanel(rol: Rol): boolean {

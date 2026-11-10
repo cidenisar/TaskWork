@@ -177,81 +177,7 @@ export default async function PanelPage({ searchParams }: { searchParams: Promis
         </div>
       </div>
 
-      <div className="panel-grid-2">
-        <div className="card">
-          <div className="panel-card-title">
-            <h2>Sitios por zona</h2>
-            <span className="panel-card-count">
-              {kpis.totalSitios} sitio{kpis.totalSitios === 1 ? "" : "s"}
-              {kpis.consumoTotalW != null && ` · ${Math.round(kpis.consumoTotalW).toLocaleString("es-AR")} W estimados en total`}
-            </span>
-          </div>
-          <div className="hint" style={{ margin: "-4px 0 10px" }}>
-            El consumo es lo que la IA estimó al identificar marca/modelo de cada equipo, no una medición real — los equipos sin
-            marca/modelo reconocido no suman al total.
-          </div>
-          <JerarquiaBreadcrumb filtros={filtros} />
-          {contenido}
-        </div>
-
-        <div>
-          <div className="card">
-            <div className="panel-card-title">
-              <h2>Vencimientos de flota</h2>
-              <span className="panel-card-count">próximos {"≤"} 60 días o vencidos</span>
-            </div>
-            {vencimientos.length === 0 ? (
-              <div className="empty-note">No hay vencimientos próximos ni vencidos cargados.</div>
-            ) : (
-              <div>
-                {vencimientos.map((v, i) => (
-                  <div className="panel-venc-row" key={`${v.tipo}-${v.nombre}-${i}`}>
-                    <div className="panel-venc-info">
-                      <div className="panel-venc-nombre">{v.nombre}</div>
-                      <div className="panel-venc-tipo">{v.tipo}</div>
-                    </div>
-                    <div className="panel-venc-dias">
-                      <span className={`venc-badge ${v.urgencia === "vencido" ? "danger" : "warn"}`}>
-                        {v.urgencia === "vencido" ? `Vencido hace ${Math.abs(v.diasRestantes)}d` : `Vence en ${v.diasRestantes}d`}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
       <div className="panel-grid-3">
-        <div className="card">
-          <div className="panel-card-title">
-            <h2>Mantenimiento pendiente</h2>
-            <Link href="/panel/mantenimientos" className="panel-card-count">
-              ver Plan completo →
-            </Link>
-          </div>
-          {mantenimientoPendiente.length === 0 ? (
-            <div className="empty-note">No hay nada vencido ni próximo a vencer.</div>
-          ) : (
-            <div>
-              {mantenimientoPendiente.map((m, i) => (
-                <div className="panel-venc-row" key={i}>
-                  <div className="panel-venc-info">
-                    <div className="panel-venc-nombre">{m.texto}</div>
-                    <div className="panel-venc-tipo">
-                      {m.tipoEquipoLabel} · {m.categoriaLabel} · {m.ubicacionLabel}
-                    </div>
-                  </div>
-                  <div className="panel-venc-dias">
-                    <span className={`venc-badge ${m.urgencia === "vencido" ? "danger" : "warn"}`}>{m.mensaje}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
         <div className="card">
           <div className="panel-card-title">
             <h2>Riesgo de Viaje — en curso</h2>
@@ -300,6 +226,80 @@ export default async function PanelPage({ searchParams }: { searchParams: Promis
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+
+        <div className="card">
+          <div className="panel-card-title">
+            <h2>Mantenimiento pendiente</h2>
+            <Link href="/panel/mantenimientos" className="panel-card-count">
+              ver Plan completo →
+            </Link>
+          </div>
+          {mantenimientoPendiente.length === 0 ? (
+            <div className="empty-note">No hay nada vencido ni próximo a vencer.</div>
+          ) : (
+            <div>
+              {mantenimientoPendiente.map((m, i) => (
+                <div className="panel-venc-row" key={i}>
+                  <div className="panel-venc-info">
+                    <div className="panel-venc-nombre">{m.texto}</div>
+                    <div className="panel-venc-tipo">
+                      {m.tipoEquipoLabel} · {m.categoriaLabel} · {m.ubicacionLabel}
+                    </div>
+                  </div>
+                  <div className="panel-venc-dias">
+                    <span className={`venc-badge ${m.urgencia === "vencido" ? "danger" : "warn"}`}>{m.mensaje}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="panel-grid-2">
+        <div className="card">
+          <div className="panel-card-title">
+            <h2>Sitios por zona</h2>
+            <span className="panel-card-count">
+              {kpis.totalSitios} sitio{kpis.totalSitios === 1 ? "" : "s"}
+              {kpis.consumoTotalW != null && ` · ${Math.round(kpis.consumoTotalW).toLocaleString("es-AR")} W estimados en total`}
+            </span>
+          </div>
+          <div className="hint" style={{ margin: "-4px 0 10px" }}>
+            El consumo es lo que la IA estimó al identificar marca/modelo de cada equipo, no una medición real — los equipos sin
+            marca/modelo reconocido no suman al total.
+          </div>
+          <JerarquiaBreadcrumb filtros={filtros} />
+          {contenido}
+        </div>
+
+        <div>
+          <div className="card">
+            <div className="panel-card-title">
+              <h2>Vencimientos de flota</h2>
+              <span className="panel-card-count">próximos {"≤"} 60 días o vencidos</span>
+            </div>
+            {vencimientos.length === 0 ? (
+              <div className="empty-note">No hay vencimientos próximos ni vencidos cargados.</div>
+            ) : (
+              <div>
+                {vencimientos.map((v, i) => (
+                  <div className="panel-venc-row" key={`${v.tipo}-${v.nombre}-${i}`}>
+                    <div className="panel-venc-info">
+                      <div className="panel-venc-nombre">{v.nombre}</div>
+                      <div className="panel-venc-tipo">{v.tipo}</div>
+                    </div>
+                    <div className="panel-venc-dias">
+                      <span className={`venc-badge ${v.urgencia === "vencido" ? "danger" : "warn"}`}>
+                        {v.urgencia === "vencido" ? `Vencido hace ${Math.abs(v.diasRestantes)}d` : `Vence en ${v.diasRestantes}d`}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>
