@@ -13,6 +13,7 @@ interface ConfigGuardia {
   cambio_min: number;
   periodo_desde: string;
   periodo_hasta: string;
+  grupo_whatsapp_nombre: string;
 }
 
 type Campo = keyof ConfigGuardia;
@@ -110,6 +111,22 @@ export function ParametrosGuardiaCard({ config, historial }: { config: ConfigGua
     guardar(campo, valor);
   }
 
+  function commitTexto(campo: "grupo_whatsapp_nombre") {
+    const texto = edit[campo];
+    setEdit((prev) => {
+      const next = { ...prev };
+      delete next[campo];
+      return next;
+    });
+    if (texto === undefined) return;
+    if (!texto.trim()) {
+      setError("Falta el nombre del grupo.");
+      return;
+    }
+    if (texto.trim() === valores[campo]) return;
+    guardar(campo, texto.trim());
+  }
+
   return (
     <>
       <div className="card">
@@ -183,6 +200,24 @@ export function ParametrosGuardiaCard({ config, historial }: { config: ConfigGua
               disabled={busyCampo === "periodo_hasta"}
             />
           </div>
+        </div>
+      </div>
+
+      <div className="card" style={{ marginTop: 16 }}>
+        <div className="section-label">WhatsApp</div>
+        <p className="empty-note">
+          Un link de WhatsApp no puede abrir un grupo directamente — esto es solo el nombre que se muestra en pantalla para recordar
+          a quién avisar manualmente al compartir una novedad.
+        </p>
+        <div className="field" style={{ marginTop: 10, maxWidth: 320 }}>
+          <label>Grupo de novedades</label>
+          <input
+            type="text"
+            value={edit.grupo_whatsapp_nombre ?? valores.grupo_whatsapp_nombre}
+            onChange={(e) => setEdit((prev) => ({ ...prev, grupo_whatsapp_nombre: e.target.value }))}
+            onBlur={() => commitTexto("grupo_whatsapp_nombre")}
+            disabled={busyCampo === "grupo_whatsapp_nombre"}
+          />
         </div>
       </div>
 

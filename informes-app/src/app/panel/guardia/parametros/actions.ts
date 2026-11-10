@@ -23,6 +23,7 @@ const ETIQUETA: Record<CampoParametro, string> = {
   cambio_min: "Hora de cambio de guardia",
   periodo_desde: "Inicio del período de liquidación",
   periodo_hasta: "Fin del período de liquidación",
+  grupo_whatsapp_nombre: "Grupo de WhatsApp de novedades",
 };
 
 /**
@@ -47,6 +48,9 @@ export async function guardarParametroGuardiaAction(campo: CampoParametro, valor
   if (CAMPOS_CENTESIMAS.includes(campo)) {
     const n = valorNuevo as number;
     if (!Number.isInteger(n) || n <= 0) return { success: false, error: "Tiene que ser un número entero mayor que cero." };
+  }
+  if (campo === "grupo_whatsapp_nombre" && !(valorNuevo as string).trim()) {
+    return { success: false, error: "Falta el nombre del grupo." };
   }
 
   const supabase = await createClient();

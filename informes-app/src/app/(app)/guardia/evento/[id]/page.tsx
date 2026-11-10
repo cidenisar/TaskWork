@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { cargarPersonas } from "@/lib/guardia/datos";
+import { cargarPersonas, cargarGrupoWhatsappNombre } from "@/lib/guardia/datos";
 import { AREAS_GUARDIA, type AreaGuardia } from "@/lib/guardia/cronograma";
 import { EventoGuardiaDetalle, type EventoDetalle, type ParticipacionFila, type NovedadFila } from "@/components/guardia/evento-detalle";
 import type { RolParticipacionGuardia } from "@/lib/database.types";
@@ -18,10 +18,10 @@ export default async function EventoGuardiaPage({ params }: PageProps<"/guardia/
   const profile = await requireProfile();
   const supabase = await createClient();
 
-  const [{ data: evento }, { data: participacionesRows }, { data: novedadesRows }, personasTodas] = await Promise.all([
+  const [{ data: evento }, { data: participacionesRows }, { data: novedadesRows }, personasTodas, grupoWhatsapp] = await Promise.all([
     supabase
       .from("guardia_evento")
-      .select("id, numero, estado, tipo_alarma, sitio, descripcion, ticket_tipo, ticket_numero, creado_at, cerrado_at")
+      .select("id, numero, estado, tipo_alarma, sitio, descripcion, ticket_tipo, ticket_numero, scada, creado_at, cerrado_at")
       .eq("id", id)
       .maybeSingle(),
     supabase
@@ -31,18 +31,21 @@ export default async function EventoGuardiaPage({ params }: PageProps<"/guardia/
       .order("inicio_at", { ascending: true }),
     supabase.from("guardia_novedad").select("id, at, texto, por").eq("evento_id", id).order("at", { ascending: true }),
     cargarPersonas(supabase),
+    cargarGrupoWhatsappNombre(supabase),
   ]);
 
   if (!evento) notFound();
 
   const usuarioIds = [...new Set([...(participacionesRows ?? []).map((p) => p.usuario_id), ...(novedadesRows ?? []).map((n) => n.por).filter((x): x is string => x !== null)])];
-  const { data: perfiles } = usuarioIds.length > 0 ? await supabase.from("profiles").select("id, nombre_completo").in("id", usuarioIds) : { data: [] };
+  const { data: perfiles } = usuarioIds.length > 0 ? await supabase.from("profiles").select("id, nombre_completo, telefono").in("id", usuarioIds) : { data: [] };
   const nombrePorId = new Map((perfiles ?? []).map((p) => [p.id, p.nombre_completo]));
+  const telefonoPorId = new Map((perfiles ?? []).map((p) => [p.id, p.telefono]));
 
   const participaciones: ParticipacionFila[] = (participacionesRows ?? []).map((p) => ({
     id: p.id,
     usuarioId: p.usuario_id,
     nombre: nombrePorId.get(p.usuario_id) ?? "—",
+    telefono: telefonoPorId.get(p.usuario_id) ?? null,
     area: AREA_POR_ROL[p.rol as RolParticipacionGuardia],
     modalidad: p.modalidad,
     pedido: p.pedido,
@@ -87,6 +90,7 @@ export default async function EventoGuardiaPage({ params }: PageProps<"/guardia/
     descripcion: evento.descripcion,
     ticketTipo: evento.ticket_tipo,
     ticketNumero: evento.ticket_numero,
+    scada: evento.scada,
     creadoAt: evento.creado_at,
     cerradoAt: evento.cerrado_at,
   };
@@ -106,6 +110,7 @@ export default async function EventoGuardiaPage({ params }: PageProps<"/guardia/
         miUsuarioId={profile.id}
         soyGuardiaGeneralDeEste={soyGuardiaGeneralDeEste}
         personasPorArea={personasPorArea}
+        grupoWhatsapp={grupoWhatsapp}
       />
     </div>
   );

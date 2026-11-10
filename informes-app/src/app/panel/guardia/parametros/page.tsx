@@ -7,7 +7,7 @@ export default async function ParametrosGuardiaPage() {
     supabase
       .from("guardia_config")
       .select(
-        "entrada_min, salida_activacion_min, madrugada_hasta_min, tope_media_min, valor_media, valor_entera, cambio_min, periodo_desde, periodo_hasta",
+        "entrada_min, salida_activacion_min, madrugada_hasta_min, tope_media_min, valor_media, valor_entera, cambio_min, periodo_desde, periodo_hasta, grupo_whatsapp_nombre",
       )
       .eq("id", 1)
       .single(),
@@ -37,6 +37,7 @@ export default async function ParametrosGuardiaPage() {
             cambio_min: 600,
             periodo_desde: "",
             periodo_hasta: "",
+            grupo_whatsapp_nombre: "Novedades Guardia TI Cuyo",
           }
         }
         historial={(hist ?? []).map((h) => ({

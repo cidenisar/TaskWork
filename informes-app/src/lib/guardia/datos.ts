@@ -67,4 +67,10 @@ export async function cargarAreaDe(supabase: Client, usuarioId: string): Promise
   return (data?.area as AreaGuardia | undefined) ?? null;
 }
 
+/** Nombre del grupo de WhatsApp al que se avisan las novedades — solo para mostrarlo en pantalla (un link wa.me no puede apuntar a un grupo), ver Parámetros. */
+export async function cargarGrupoWhatsappNombre(supabase: Client): Promise<string> {
+  const { data } = await supabase.from("guardia_config").select("grupo_whatsapp_nombre").eq("id", 1).single();
+  return data?.grupo_whatsapp_nombre ?? "Novedades Guardia TI Cuyo";
+}
+
 export { AREAS_GUARDIA };

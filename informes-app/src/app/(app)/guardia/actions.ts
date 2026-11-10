@@ -8,7 +8,7 @@ import { guardiaDe, type AreaGuardia } from "@/lib/guardia/cronograma";
 import { cargarCronograma, cargarCambiosAceptados, cargarParametros, cargarAreaDe } from "@/lib/guardia/datos";
 import { esGuardiaGeneral } from "@/lib/guardia/permisos";
 import { notificar } from "@/lib/guardia/notificar";
-import type { RolParticipacionGuardia, ModalidadParticipacionGuardia, PedidoParticipacionGuardia } from "@/lib/database.types";
+import type { RolParticipacionGuardia, ModalidadParticipacionGuardia, PedidoParticipacionGuardia, ScadaGuardia } from "@/lib/database.types";
 
 export interface AccionResult {
   success: boolean;
@@ -250,9 +250,48 @@ export async function terminarParticipacionAction(participacionId: string): Prom
   return { success: true };
 }
 
-/** Cerrar el evento (HANDOFF §5, paso 8) — solo la guardia general (RLS). A quien no haya terminado se le pone fin = ahora. */
-export async function cerrarEventoAction(eventoId: string): Promise<AccionResult> {
+/**
+ * Revisión en SCADA (HANDOFF §5, paso 4 — ajustado: no es un botón binario,
+ * la guardia general escribe qué vio y eso queda como novedad). NO cierra
+ * el evento: el cierre siempre es una acción manual aparte
+ * (`cerrarEventoAction`), aunque el SCADA haya salido sin novedad.
+ */
+export async function revisarScadaAction(eventoId: string, resultado: ScadaGuardia, detalle: string): Promise<AccionResult> {
   const profile = await requireProfile();
+  if (resultado === "CON_NOVEDAD" && !detalle.trim()) return { success: false, error: "Contá qué encontraste en el SCADA." };
+  const supabase = await createClient();
+
+  const { data: evento, error: errSelect } = await supabase.from("guardia_evento").select("id, version").eq("id", eventoId).single();
+  if (errSelect || !evento) return { success: false, error: "No se encontró el evento." };
+
+  const { error } = await supabase
+    .from("guardia_evento")
+    .update({ scada: resultado, version: evento.version + 1 })
+    .eq("id", eventoId)
+    .eq("version", evento.version);
+  if (error) return { success: false, error: error.message };
+
+  const detalleTexto = detalle.trim();
+  const texto =
+    resultado === "SIN_NOVEDAD"
+      ? `Revisado en el SCADA: sin novedad.${detalleTexto ? ` ${detalleTexto}` : ""}`
+      : `Revisado en el SCADA: hay novedad. ${detalleTexto}`;
+  await supabase.from("guardia_novedad").insert({ evento_id: eventoId, texto, por: profile.id });
+
+  revalidatePath("/guardia/evento/[id]", "page");
+  return { success: true };
+}
+
+/**
+ * Cerrar el evento (HANDOFF §5, paso 8) — solo la guardia general (RLS). A
+ * quien no haya terminado se le pone fin = ahora. El cierre siempre lleva
+ * un texto que cuenta cómo quedó (ej. "quedó sin novedad" / "normalizado")
+ * — es lo que después se comparte al grupo de WhatsApp, nunca un cierre
+ * mudo.
+ */
+export async function cerrarEventoAction(eventoId: string, textoCierre: string): Promise<AccionResult> {
+  const profile = await requireProfile();
+  if (!textoCierre.trim()) return { success: false, error: "Contá cómo quedó para poder cerrar." };
   const supabase = await createClient();
 
   const { data: evento, error: errSelect } = await supabase
@@ -284,7 +323,7 @@ export async function cerrarEventoAction(eventoId: string): Promise<AccionResult
     .eq("version", evento.version);
   if (error) return { success: false, error: error.message };
 
-  await supabase.from("guardia_novedad").insert({ evento_id: eventoId, texto: "Evento cerrado.", por: profile.id });
+  await supabase.from("guardia_novedad").insert({ evento_id: eventoId, texto: textoCierre.trim(), por: profile.id });
 
   revalidatePath("/guardia/evento/[id]", "page");
   revalidatePath("/guardia/historial");

@@ -8,9 +8,11 @@ import {
   noContestaAction,
   agregarNovedadAction,
   terminarParticipacionAction,
+  revisarScadaAction,
   cerrarEventoAction,
 } from "@/app/(app)/guardia/actions";
 import type { AreaGuardia } from "@/lib/guardia/cronograma";
+import { linkWhatsappGrupo, linkWhatsappIndividual } from "@/lib/guardia/whatsapp";
 import type {
   EstadoEventoGuardia,
   EstadoParticipacionGuardia,
@@ -18,6 +20,7 @@ import type {
   PedidoParticipacionGuardia,
   TipoAlarmaGuardia,
   TicketTipoGuardia,
+  ScadaGuardia,
 } from "@/lib/database.types";
 import { Icon } from "@/components/icon";
 
@@ -30,6 +33,7 @@ export interface EventoDetalle {
   descripcion: string;
   ticketTipo: TicketTipoGuardia;
   ticketNumero: string | null;
+  scada: ScadaGuardia | null;
   creadoAt: string;
   cerradoAt: string | null;
 }
@@ -38,6 +42,7 @@ export interface ParticipacionFila {
   id: string;
   usuarioId: string;
   nombre: string;
+  telefono: string | null;
   area: AreaGuardia;
   modalidad: ModalidadParticipacionGuardia | null;
   pedido: PedidoParticipacionGuardia | null;
@@ -63,11 +68,13 @@ function fmt(iso: string | null): string {
 
 function FilaParticipacion({
   p,
+  evento,
   miUsuarioId,
   soyGuardiaGeneralDeEste,
   candidatos,
 }: {
   p: ParticipacionFila;
+  evento: EventoDetalle;
   miUsuarioId: string;
   soyGuardiaGeneralDeEste: boolean;
   candidatos: { id: string; nombre: string }[];
@@ -148,6 +155,21 @@ function FilaParticipacion({
             <button type="button" className="btn btn-primary btn-sm" onClick={terminar} disabled={busy}>
               Terminé
             </button>
+          )}
+          {!esMia && soyGuardiaGeneralDeEste && enCurso && !p.aceptoAt && p.telefono && (
+            <a
+              href={linkWhatsappIndividual(
+                p.telefono,
+                `Te activaron en la guardia de ${p.area}: ${evento.tipoAlarma} – ${evento.descripcion} (${evento.sitio}). Te piden: ${p.pedido === "ASISTIR" ? "asistir al sitio" : "revisar"}. Abrí la app para aceptar.`,
+              )}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn btn-secondary btn-sm"
+              title="Avisar por WhatsApp"
+              aria-label="Avisar por WhatsApp"
+            >
+              <Icon name="chat" size={13} />
+            </a>
           )}
           {!esMia && soyGuardiaGeneralDeEste && enCurso && !p.aceptoAt && (
             <button type="button" className="btn btn-secondary btn-sm" onClick={() => setElegirOtro((v) => !v)} disabled={busy}>
@@ -239,7 +261,64 @@ function ActivarGuardiaTecnica({ eventoId, personasPorArea }: { eventoId: string
   );
 }
 
-function Novedades({ eventoId, novedades }: { eventoId: string; novedades: NovedadFila[] }) {
+/**
+ * Revisión en SCADA (HANDOFF §5, paso 4 — ajustado por Ivan): no es un
+ * botón binario, hay que contar qué se vio. No cierra el evento — eso
+ * siempre es aparte, aunque salga "sin novedad" (ver `cerrarEventoAction`).
+ */
+function RevisionScada({ eventoId, scadaActual }: { eventoId: string; scadaActual: ScadaGuardia | null }) {
+  const router = useRouter();
+  const [detalle, setDetalle] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function revisar(resultado: ScadaGuardia) {
+    if (resultado === "CON_NOVEDAD" && !detalle.trim()) {
+      setError("Contá qué encontraste en el SCADA.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    const res = await revisarScadaAction(eventoId, resultado, detalle);
+    setBusy(false);
+    if (!res.success) {
+      setError(res.error || "No se pudo guardar.");
+      return;
+    }
+    setDetalle("");
+    router.refresh();
+  }
+
+  return (
+    <div className="card" style={{ marginBottom: 16 }}>
+      <div className="section-label">Revisión en SCADA</div>
+      {scadaActual && (
+        <p className="item-sub" style={{ marginTop: 6 }}>
+          Última revisión: {scadaActual === "SIN_NOVEDAD" ? "sin novedad" : "con novedad"}.
+        </p>
+      )}
+      <textarea
+        value={detalle}
+        onChange={(e) => setDetalle(e.target.value)}
+        disabled={busy}
+        placeholder="Qué viste al revisar en el SCADA..."
+        rows={2}
+        style={{ marginTop: 8, width: "100%" }}
+      />
+      <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
+        <button type="button" className="btn btn-secondary btn-sm" onClick={() => revisar("SIN_NOVEDAD")} disabled={busy}>
+          Sin novedad
+        </button>
+        <button type="button" className="btn btn-secondary btn-sm" onClick={() => revisar("CON_NOVEDAD")} disabled={busy}>
+          Hay novedad
+        </button>
+      </div>
+      {error && <div className="error-text">{error}</div>}
+    </div>
+  );
+}
+
+function Novedades({ eventoId, evento, novedades, grupoWhatsapp }: { eventoId: string; evento: EventoDetalle; novedades: NovedadFila[]; grupoWhatsapp: string }) {
   const router = useRouter();
   const [texto, setTexto] = useState("");
   const [busy, setBusy] = useState(false);
@@ -259,9 +338,24 @@ function Novedades({ eventoId, novedades }: { eventoId: string; novedades: Noved
     router.refresh();
   }
 
+  const textoResumen = [
+    `#${evento.numero.toString().padStart(4, "0")} · ${evento.tipoAlarma} — ${evento.sitio}`,
+    evento.descripcion,
+    "",
+    ...novedades.map((n) => `${fmt(n.at)} — ${n.texto}`),
+  ].join("\n");
+
   return (
     <div className="card">
-      <div className="section-label">Novedades</div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+        <div className="section-label">Novedades</div>
+        <a href={linkWhatsappGrupo(textoResumen)} target="_blank" rel="noopener noreferrer" className="btn btn-secondary btn-sm">
+          <Icon name="chat" size={13} /> Compartir resumen completo
+        </a>
+      </div>
+      <p className="item-sub" style={{ marginTop: 4 }}>
+        Se abre WhatsApp — elegí &quot;{grupoWhatsapp}&quot; y enviá.
+      </p>
       <div className="item-list" style={{ marginTop: 8 }}>
         {novedades.map((n) => (
           <div className="list-item" key={n.id}>
@@ -273,6 +367,16 @@ function Novedades({ eventoId, novedades }: { eventoId: string; novedades: Noved
                 </div>
               </div>
             </div>
+            <a
+              href={linkWhatsappGrupo(n.texto)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn btn-secondary btn-sm"
+              title="Compartir por WhatsApp"
+              aria-label="Compartir por WhatsApp"
+            >
+              <Icon name="chat" size={13} />
+            </a>
           </div>
         ))}
         {novedades.length === 0 && <p className="empty-note">Todavía no hay novedades.</p>}
@@ -295,6 +399,7 @@ export function EventoGuardiaDetalle({
   miUsuarioId,
   soyGuardiaGeneralDeEste,
   personasPorArea,
+  grupoWhatsapp,
 }: {
   evento: EventoDetalle;
   participaciones: ParticipacionFila[];
@@ -302,20 +407,30 @@ export function EventoGuardiaDetalle({
   miUsuarioId: string;
   soyGuardiaGeneralDeEste: boolean;
   personasPorArea: Record<AreaGuardia, { id: string; nombre: string }[]>;
+  grupoWhatsapp: string;
 }) {
   const router = useRouter();
   const [cerrando, setCerrando] = useState(false);
+  const [textoCierre, setTextoCierre] = useState("");
+  const [mostrarCierre, setMostrarCierre] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const abierto = evento.estado === "abierto";
 
   async function cerrar() {
-    if (!window.confirm("¿Cerrar el evento? A quien no haya terminado se le pone fin ahora.")) return;
+    if (!textoCierre.trim()) {
+      setError("Contá cómo quedó para poder cerrar.");
+      return;
+    }
     setCerrando(true);
     setError(null);
-    const res = await cerrarEventoAction(evento.id);
+    const res = await cerrarEventoAction(evento.id, textoCierre);
     setCerrando(false);
-    if (!res.success) setError(res.error || "No se pudo cerrar.");
-    else router.refresh();
+    if (!res.success) {
+      setError(res.error || "No se pudo cerrar.");
+      return;
+    }
+    setMostrarCierre(false);
+    router.refresh();
   }
 
   return (
@@ -323,8 +438,8 @@ export function EventoGuardiaDetalle({
       <div className="card" style={{ marginBottom: 16 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <span className="badge">{abierto ? "Abierto" : "Cerrado"}</span>
-          {soyGuardiaGeneralDeEste && abierto && (
-            <button type="button" className="btn btn-secondary btn-sm" onClick={cerrar} disabled={cerrando}>
+          {soyGuardiaGeneralDeEste && abierto && !mostrarCierre && (
+            <button type="button" className="btn btn-secondary btn-sm" onClick={() => setMostrarCierre(true)}>
               <Icon name="x" size={13} /> Cerrar evento
             </button>
           )}
@@ -335,8 +450,28 @@ export function EventoGuardiaDetalle({
           {evento.ticketNumero ? ` #${evento.ticketNumero}` : ""} · Llamada {fmt(evento.creadoAt)}
           {evento.cerradoAt && ` · Cerrado ${fmt(evento.cerradoAt)}`}
         </div>
+        {mostrarCierre && (
+          <div style={{ marginTop: 10, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-start" }}>
+            <input
+              type="text"
+              value={textoCierre}
+              onChange={(e) => setTextoCierre(e.target.value)}
+              disabled={cerrando}
+              placeholder="¿Cómo quedó? (ej. quedó sin novedad, normalizado...)"
+              style={{ flex: 1, minWidth: 220 }}
+            />
+            <button type="button" className="btn btn-primary btn-sm" onClick={cerrar} disabled={cerrando || !textoCierre.trim()}>
+              {cerrando ? "Cerrando..." : "Confirmar cierre"}
+            </button>
+            <button type="button" className="btn btn-secondary btn-sm" onClick={() => setMostrarCierre(false)} disabled={cerrando}>
+              Cancelar
+            </button>
+          </div>
+        )}
         {error && <div className="error-text">{error}</div>}
       </div>
+
+      {soyGuardiaGeneralDeEste && abierto && <RevisionScada eventoId={evento.id} scadaActual={evento.scada} />}
 
       {soyGuardiaGeneralDeEste && abierto && <ActivarGuardiaTecnica eventoId={evento.id} personasPorArea={personasPorArea} />}
 
@@ -344,12 +479,19 @@ export function EventoGuardiaDetalle({
         <div className="section-label">Participantes</div>
         <div className="item-list" style={{ marginTop: 8 }}>
           {participaciones.map((p) => (
-            <FilaParticipacion key={p.id} p={p} miUsuarioId={miUsuarioId} soyGuardiaGeneralDeEste={soyGuardiaGeneralDeEste} candidatos={personasPorArea[p.area]} />
+            <FilaParticipacion
+              key={p.id}
+              p={p}
+              evento={evento}
+              miUsuarioId={miUsuarioId}
+              soyGuardiaGeneralDeEste={soyGuardiaGeneralDeEste}
+              candidatos={personasPorArea[p.area]}
+            />
           ))}
         </div>
       </div>
 
-      <Novedades eventoId={evento.id} novedades={novedades} />
+      <Novedades eventoId={evento.id} evento={evento} novedades={novedades} grupoWhatsapp={grupoWhatsapp} />
     </>
   );
 }

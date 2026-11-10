@@ -967,6 +967,7 @@ export type GuardiaConfigRow = {
   cambio_min: number;
   periodo_desde: string;
   periodo_hasta: string;
+  grupo_whatsapp_nombre: string;
   updated_at: string;
 };
 
