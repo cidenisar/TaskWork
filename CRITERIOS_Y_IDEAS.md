@@ -1915,3 +1915,50 @@ guardarlo) sino CUÁNDO se capturaban los datos.
 - **Un recurso puede quedar en un estado intermedio real, "creado pero todavía no adjuntado a lo que lo va a referenciar"** — acá, una columna nullable (`informe_instalacion_id`) en la fila ya existente, en vez de una tabla "borrador" aparte. `null` = pendiente; se completa cuando se adjunta. Ese estado intermedio necesita (1) ser listable para adjuntarlo después y (2) ser reversible sin fricción, porque es común que el pendiente nunca se use (al final no se instala, se devuelve el material).
 - **La auto-corrección de ESE estado intermedio es una acción de permiso más angosto que la acción general equivalente**, aunque dispare el mismo mecanismo de fondo (acá, "devolver a depósito" ya existía para Admin/Supervisor). El gate no es el rol — es `created_by = yo AND todavía no lo adjuntó nadie`: el radio de daño queda acotado a algo que el propio usuario creó hace poco y nadie más tocó, así que no hace falta el permiso elevado de la acción general. Reusar el núcleo (resolver equipo, generar entrega, actualizar estado) pero con su propio gate, no el de la acción grande.
 - **Elegir "esto ya lo cargué antes" en un picker tiene que terminar en UPDATE de la fila existente, nunca en un INSERT nuevo** — aunque el mismo formulario, para la carga manual, sí inserte. La única forma confiable de distinguir los dos casos es que el cliente mande explícito el id de la fila elegida (`equipoExistenteId`); buscar duplicados después del hecho (mismo N° de serie, mismo sitio) es el parche que ya se había descartado en la §24.1 — acá se repite el error en otra forma si no se lleva el id. Y como ese id lo manda el cliente, la action lo tiene que re-validar completo en el servidor (dueño, estado, sitio) antes de tocar la fila — no alcanza con que el picker ya lo haya filtrado.
+
+## 31. "Avisar por WhatsApp" sin número de empresa: por qué no se puede automatizar y qué sí se puede construir (links `wa.me` + cierre manual con texto)
+
+**Contexto:** `informes-app`, módulo Guardia General — el circuito real
+(alguien llama, se escribe la novedad en un grupo de WhatsApp llamado
+"Novedades Guardia TI Cuyo", se revisa en SCADA, se activa si hace falta,
+se cierra avisando al grupo) tenía dos preguntas abiertas: ¿se puede
+automatizar el aviso a WhatsApp? ¿Qué hacer con la revisión de SCADA?
+
+- **Un link `wa.me` nunca puede abrir un grupo, solo un chat 1-a-1 (con
+  teléfono) o la pantalla "elegir chat" de WhatsApp (sin teléfono).** No
+  hay combinación de parámetros de URL que lo evite — es una limitación
+  del lado de WhatsApp, no de la app. Por eso "compartir una novedad al
+  grupo" solo puede ser "abrir WhatsApp con el texto ya armado y que la
+  persona elija el chat/grupo a mano", nunca un envío de un solo toque.
+- **Aunque la empresa tuviera un número de WhatsApp Business propio, la
+  API (Cloud API / Business API) tampoco podría postear en un grupo ya
+  creado a mano por las personas** — la gestión de grupos de esa API es
+  un mecanismo separado e incompatible con un grupo de consumidor
+  existente. "Conseguir un número de empresa" no resuelve esto: antes de
+  prometer automatización, confirmar que el canal de destino (un grupo ya
+  existente vs. uno gestionado por la API) es compatible con el mecanismo
+  que se piensa usar, no solo que la cuenta/API existe.
+- **El patrón que sí funciona siempre**: `https://wa.me/?text=<texto
+  codificado>` (sin destinatario, para "elegir chat/grupo a mano") y
+  `https://wa.me/<telefono sin signos>?text=<texto>` (directo a una
+  persona, cuando se tiene su teléfono). Ningún backend, ninguna cuenta,
+  cero mantenimiento — el costo es que SIEMPRE es un paso manual de la
+  persona que dispara el aviso. El aviso garantizado/automático sigue
+  siendo el push (ver §6); WhatsApp es siempre "mejor esfuerzo, con un
+  humano en el medio".
+- **El nombre del grupo/chat de destino es un parámetro editable en
+  pantalla con historial, nunca un string clavado en el código** — aunque
+  la app no pueda abrir el grupo directamente, mostrar su nombre como
+  recordatorio ("elegí `<nombre>` y enviá") sigue necesitando que ese
+  nombre no quede hardcodeado si la empresa lo cambia.
+- **Una revisión de control (acá, SCADA) que puede salir "todo bien" no
+  tiene por qué cerrar sola lo que estaba revisando.** La tentación es
+  automatizar el cierre cuando el resultado es positivo ("sin novedad →
+  listo, se cierra solo") — pero si cerrar significa avisarle a alguien
+  que ya terminó, cerrar sin que una persona redacte el mensaje de cierre
+  deja a esa persona sin nada para compartir. Mejor: la revisión de
+  control queda como su propio registro (acá, una novedad más), y el
+  cierre es SIEMPRE una acción manual aparte que pide un texto corto de
+  cómo quedó (ej. "quedó sin novedad", "normalizado") — ese texto es a la
+  vez el registro del cierre y lo que se comparte afuera, nunca un string
+  fijo tipo "Evento cerrado." que no dice nada para reenviar.
