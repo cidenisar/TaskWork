@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireProfile } from "@/lib/auth";
 import { CATEGORIA_EQUIPO_LABEL as EQUIPO_CATEGORIA_LABEL } from "@/components/equipos/types";
 import { CATEGORIA_EQUIPO_LABEL as RACK_CATEGORIA_LABEL } from "@/components/racks/types";
-import type { TipoEquipoBaja } from "@/lib/database.types";
+import type { EquipoCategoria, TipoEquipoBaja, TipoMontajeCamara } from "@/lib/database.types";
 
 export interface RackDeUbicacion {
   id: string;
@@ -84,4 +84,53 @@ export async function buscarEquipoReemplazoAction(ubicacionId: string, query: st
   }));
 
   return [...deEquipos, ...deRacks].slice(0, 15);
+}
+
+export interface MaterialPendienteDelSitio {
+  id: string;
+  categoriaEquipo: EquipoCategoria;
+  descripcion: string;
+  marcaModelo: string;
+  numeroSerie: string;
+  etiquetaYpf: string;
+  cantidad: number;
+  consumoPromedioW: number | null;
+  consumoMaxW: number | null;
+  tipoMontaje: TipoMontajeCamara | null;
+  alturaMontajeM: number | null;
+}
+
+/**
+ * Materiales que el propio técnico dio de alta (ver darDeAltaMaterialesAction
+ * en panel/materiales/alta-actions.ts) para ESTE sitio y todavía no adjuntó a
+ * ningún informe (`informe_instalacion_id is null`) — para no tener que
+ * volver a tipear marca/modelo/serie de algo que ya se cargó al sacarlo de
+ * depósito. Acotado al mismo sitio del informe (es ahí donde se va a
+ * instalar) y a lo propio (mismo criterio que la pestaña Alta).
+ */
+export async function buscarMaterialesPendientesDelSitioAction(ubicacionId: string): Promise<MaterialPendienteDelSitio[]> {
+  const profile = await requireProfile();
+  if (!ubicacionId) return [];
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("equipos")
+    .select("id, categoria_equipo, texto, marca_modelo, numero_serie, etiqueta_ypf, cantidad, consumo_promedio_w, consumo_max_w, tipo_montaje, altura_montaje_m")
+    .eq("ubicacion_id", ubicacionId)
+    .eq("created_by", profile.id)
+    .is("informe_instalacion_id", null)
+    .eq("estado", "activo")
+    .order("fecha_alta", { ascending: false });
+  return (data ?? []).map((e) => ({
+    id: e.id,
+    categoriaEquipo: e.categoria_equipo,
+    descripcion: e.texto,
+    marcaModelo: e.marca_modelo ?? "",
+    numeroSerie: e.numero_serie ?? "",
+    etiquetaYpf: e.etiqueta_ypf ?? "",
+    cantidad: e.cantidad,
+    consumoPromedioW: e.consumo_promedio_w,
+    consumoMaxW: e.consumo_max_w,
+    tipoMontaje: e.tipo_montaje,
+    alturaMontajeM: e.altura_montaje_m,
+  }));
 }

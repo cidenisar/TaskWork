@@ -94,6 +94,7 @@ export default async function EditarInformePage({ params }: { params: Promise<{ 
           tecnicos: (tecnicosRes.data ?? []).map((t) => ({ nombre: t.nombre_completo, torre: t.torre })),
           torres: (torresRes.data ?? []).map((t) => t.nombre),
           vehiculos: (vehiculosCatRes.data ?? []).map((v) => ({ patente: v.patente, marcaModelo: v.marca_modelo })),
+          recursoAlturaConfig: [], // editar un informe no toca materiales (ver wizard-editar.tsx) — no hace falta cargarlo acá
         }}
         logoUrl={configRes.data?.logo_empresa_url ?? null}
       />

@@ -9,7 +9,7 @@ const ITEMS: { href: string; label: string; icon: IconName }[] = [
   { href: "/panel/mantenimientos", label: "Mantenimientos", icon: "wrench" },
   { href: "/panel/vehiculos", label: "Vehículos", icon: "truck" },
   { href: "/panel/planos-qr", label: "Planos y QR", icon: "document" },
-  { href: "/panel/materiales", label: "Buscar Material", icon: "search" },
+  { href: "/panel/materiales", label: "Materiales", icon: "search" },
   { href: "/panel/riesgo-viaje", label: "Riesgo de Viaje", icon: "warning" },
 ];
 

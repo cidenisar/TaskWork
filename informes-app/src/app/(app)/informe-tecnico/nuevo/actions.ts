@@ -10,31 +10,8 @@ import { resolverUbicacionId, tagGpsSiFalta, type PayloadGps } from "@/lib/ubica
 import { crearEntregaDepositoLote, type MaterialLoteDeposito } from "@/lib/deposito/crear-lote";
 import { CATEGORIA_EQUIPO_LABEL } from "@/components/equipos/types";
 import { ejecutarBaja } from "@/lib/equipamiento/dar-de-baja";
-import type { EquipoCategoria, EstadoChecklist, RackCategoriaEquipo, TipoEquipoBaja } from "@/lib/database.types";
-
-/**
- * Antes de dar de alta un equipo nuevo suelto, chequea si ya existe uno
- * ACTIVO con el mismo N° de serie o etiqueta YPF en el mismo sitio — evita
- * duplicar el mismo equipo físico si quedó cargado dos veces (dos informes
- * distintos, o un olvido). No es búsqueda difusa: solo coincidencia exacta
- * de un dato identificador real.
- */
-async function buscarEquipoDuplicado(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  ubicacionId: string,
-  numeroSerie: string,
-  etiquetaYpf: string,
-): Promise<string | null> {
-  if (numeroSerie) {
-    const { data } = await supabase.from("equipos").select("id").eq("ubicacion_id", ubicacionId).eq("estado", "activo").eq("numero_serie", numeroSerie).limit(1).maybeSingle();
-    if (data) return data.id;
-  }
-  if (etiquetaYpf) {
-    const { data } = await supabase.from("equipos").select("id").eq("ubicacion_id", ubicacionId).eq("estado", "activo").eq("etiqueta_ypf", etiquetaYpf).limit(1).maybeSingle();
-    if (data) return data.id;
-  }
-  return null;
-}
+import { buscarEquipoDuplicado } from "@/lib/equipos/duplicados";
+import type { EquipoCategoria, EstadoChecklist, RackCategoriaEquipo, TipoEquipoBaja, TipoMontajeCamara } from "@/lib/database.types";
 
 /** Mismo chequeo que buscarEquipoDuplicado, pero para un componente dentro de un rack puntual. */
 async function buscarRackEquipamientoDuplicado(
@@ -78,9 +55,13 @@ interface PayloadMaterial {
   cantidad: number;
   consumoPromedioW: number | null;
   consumoMaxW: number | null;
+  tipoMontaje: TipoMontajeCamara | null;
+  alturaMontajeM: number | null;
   comentario: string;
   /** Si está elegido, el alta va a `rack_equipamientos` (en ese rack) en vez de a `equipos`. */
   rackId: string | null;
+  /** Si está elegido, este material YA es un equipo dado de alta antes — se actualiza, no se duplica (ver más abajo). */
+  equipoExistenteId: string | null;
   reemplazaEquipoId: string | null;
   reemplazaTipo: TipoEquipoBaja | null;
 }
@@ -402,6 +383,50 @@ export async function crearInformeTecnicoAction(formData: FormData): Promise<Cre
           if (rackErr || !nuevoEquipoRack) continue; // un material que falla no debe tirar abajo todo el informe
           rackEquipamientoId = nuevoEquipoRack.id;
         }
+      } else if (m.equipoExistenteId) {
+        // Material elegido desde "Buscar lo que ya diste de alta" (ver
+        // buscarMaterialesPendientesDelSitioAction) — UPDATE del equipo que
+        // ya existe, nunca un INSERT nuevo: evita duplicarlo. Se re-valida
+        // el gate completo acá (no solo en el picker) porque el payload lo
+        // manda el cliente — created_by/informe_instalacion_id/estado/sitio
+        // tienen que seguir siendo los mismos que cuando se armó la lista.
+        try {
+          if (!serviceParaBajas) serviceParaBajas = createServiceRoleClient();
+        } catch {
+          continue; // sin Service Role no se puede adjuntar — el material queda afuera, no tira abajo el informe
+        }
+        const { data: equipoExistente } = await serviceParaBajas
+          .from("equipos")
+          .select("created_by, informe_instalacion_id, estado, ubicacion_id")
+          .eq("id", m.equipoExistenteId)
+          .single();
+        if (
+          !equipoExistente ||
+          equipoExistente.created_by !== profile.id ||
+          equipoExistente.informe_instalacion_id !== null ||
+          equipoExistente.estado !== "activo" ||
+          equipoExistente.ubicacion_id !== ubicacionIdMateriales
+        ) {
+          continue; // ya no es válido (otro informe se lo adjuntó primero, cambió de estado/sitio) — se omite, no se inventa un fallback
+        }
+        const { error: updateErr } = await serviceParaBajas
+          .from("equipos")
+          .update({
+            categoria_equipo: m.categoriaEquipo,
+            texto: m.descripcion.trim(),
+            marca_modelo: marcaModelo,
+            numero_serie: numeroSerie,
+            etiqueta_ypf: etiquetaYpf,
+            cantidad: m.cantidad || 1,
+            consumo_promedio_w: m.consumoPromedioW,
+            consumo_max_w: m.consumoMaxW,
+            tipo_montaje: m.tipoMontaje,
+            altura_montaje_m: m.alturaMontajeM,
+            informe_instalacion_id: informeId,
+          })
+          .eq("id", m.equipoExistenteId);
+        if (updateErr) continue;
+        equipoId = m.equipoExistenteId;
       } else {
         equipoId = await buscarEquipoDuplicado(supabase, ubicacionIdMateriales, numeroSerie ?? "", etiquetaYpf ?? "");
         if (!equipoId) {
@@ -417,6 +442,10 @@ export async function crearInformeTecnicoAction(formData: FormData): Promise<Cre
               cantidad: m.cantidad || 1,
               consumo_promedio_w: m.consumoPromedioW,
               consumo_max_w: m.consumoMaxW,
+              tipo_montaje: m.tipoMontaje,
+              altura_montaje_m: m.alturaMontajeM,
+              informe_instalacion_id: informeId,
+              fecha_alta: payload.fecha,
               created_by: profile.id,
             })
             .select("id")

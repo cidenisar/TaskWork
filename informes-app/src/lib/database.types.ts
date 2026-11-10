@@ -662,6 +662,9 @@ export type EquipoRow = {
   /** Referencia "blanda" (sin FK, igual criterio que bajas_equipamiento.equipo_id): el equipo que este reemplaza, en la tabla que indique reemplaza_tipo. */
   reemplaza_equipo_id: string | null;
   reemplaza_tipo: TipoEquipoBaja | null;
+  /** null = dado de alta y todavía sin informe (pendiente) — ver CRITERIOS_Y_IDEAS.md sobre el alta de materiales. */
+  informe_instalacion_id: string | null;
+  fecha_alta: string | null;
   created_by: string | null;
   created_at: string;
 }

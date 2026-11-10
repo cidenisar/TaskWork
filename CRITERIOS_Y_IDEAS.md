@@ -1898,3 +1898,20 @@ Salió de pasar Informes a la imagen "Mezcla" (azul/naranja/blanco, 10/11/2026).
 - **Para animar íconos según cuál son** (el lápiz garabatea, la flecha de descarga baja, el tacho tiembla), el componente `<Icon>` pone `data-icon={name}` en el `<svg>` y el CSS elige por `svg[data-icon='edit']`. Ninguna pantalla se toca.
 - Siempre un bloque `@media (prefers-reduced-motion: reduce)` que apague todo.
 - **Si se cambia el tema por defecto** (oscuro → claro), el interruptor sigue leyendo la misma clave guardada: quien ya había elegido uno no nota el cambio.
+
+## 30. "Dar de alta" en el momento en que el recurso cambia de manos, no cuando se escribe el informe — estado pendiente con FK nullable, auto-corrección de bajo riesgo, y "adjuntar" nunca es "duplicar"
+
+**Contexto:** `informes-app` — dilema real que planteó el usuario: al
+sacar un equipo de depósito para instalarlo, los datos (marca, N° de
+serie, etiqueta YPF) solo están a mano en ESE momento; si el alta del
+equipo se posterga hasta escribir el Informe Técnico (que suele ser al
+terminar el trabajo), hay que reconstruir esos datos de memoria — o, para
+evitarlo, hacer el relevamiento de equipo ANTES del informe de
+instalación, es decir doble trabajo. La causa no era que faltara una
+función (el informe ya daba de alta el equipo automáticamente al
+guardarlo) sino CUÁNDO se capturaban los datos.
+
+- **Cuando un flujo tiene un paso de "capturar datos" y un paso de "cerrar/reportar" separados en el tiempo, y los datos solo están disponibles en el primero, no fuerces la captura al segundo paso.** Dale al primer paso su propia alta liviana (sin PDF, sin numeración, sin mail — un trámite de un minuto) y que el paso de reportar solo BUSQUE y ADJUNTE lo ya cargado, nunca lo tipee de nuevo. "¿Ya se puede hacer igual, solo que más tarde?" no es la pregunta correcta — la pregunta es en qué momento el usuario tiene los datos en la mano.
+- **Un recurso puede quedar en un estado intermedio real, "creado pero todavía no adjuntado a lo que lo va a referenciar"** — acá, una columna nullable (`informe_instalacion_id`) en la fila ya existente, en vez de una tabla "borrador" aparte. `null` = pendiente; se completa cuando se adjunta. Ese estado intermedio necesita (1) ser listable para adjuntarlo después y (2) ser reversible sin fricción, porque es común que el pendiente nunca se use (al final no se instala, se devuelve el material).
+- **La auto-corrección de ESE estado intermedio es una acción de permiso más angosto que la acción general equivalente**, aunque dispare el mismo mecanismo de fondo (acá, "devolver a depósito" ya existía para Admin/Supervisor). El gate no es el rol — es `created_by = yo AND todavía no lo adjuntó nadie`: el radio de daño queda acotado a algo que el propio usuario creó hace poco y nadie más tocó, así que no hace falta el permiso elevado de la acción general. Reusar el núcleo (resolver equipo, generar entrega, actualizar estado) pero con su propio gate, no el de la acción grande.
+- **Elegir "esto ya lo cargué antes" en un picker tiene que terminar en UPDATE de la fila existente, nunca en un INSERT nuevo** — aunque el mismo formulario, para la carga manual, sí inserte. La única forma confiable de distinguir los dos casos es que el cliente mande explícito el id de la fila elegida (`equipoExistenteId`); buscar duplicados después del hecho (mismo N° de serie, mismo sitio) es el parche que ya se había descartado en la §24.1 — acá se repite el error en otra forma si no se lleva el id. Y como ese id lo manda el cliente, la action lo tiene que re-validar completo en el servidor (dueño, estado, sitio) antes de tocar la fila — no alcanza con que el picker ya lo haya filtrado.

@@ -192,6 +192,7 @@ export function Step2Equipo({
                 hallazgos={materialesProps.hallazgos}
                 onEstadoHallazgo={materialesProps.setEstadoHallazgo}
                 onComentarioHallazgo={materialesProps.setComentarioHallazgo}
+                recursoAlturaConfig={catalogos.recursoAlturaConfig}
                 disabled={false}
               />
               {materialesProps.materiales.length === 0 && materialesProps.remitoItems.length === 0 && (

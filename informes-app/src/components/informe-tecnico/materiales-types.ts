@@ -1,4 +1,4 @@
-import type { EquipoCategoria, TipoEquipoBaja } from "@/lib/database.types";
+import type { EquipoCategoria, TipoEquipoBaja, TipoMontajeCamara } from "@/lib/database.types";
 
 /** Fotos de materiales/equipos que se mandan juntas a la IA en una sola lectura (mismo criterio que Equipos Individuales). */
 export const MATERIAL_FOTO_IA_MAX = 10;
@@ -24,10 +24,20 @@ export interface MaterialInformeItem {
   cantidad: number;
   consumoPromedioW: number | null;
   consumoMaxW: number | null;
+  /** Solo tiene sentido si categoriaEquipo === "camara_cctv" — ver CATEGORIAS_POSIBLES_EN_RACK para el mismo criterio de "solo aplica a una categoría puntual". */
+  tipoMontaje: TipoMontajeCamara | null;
+  alturaMontajeM: number | null;
   comentario: string;
   revisar: boolean;
   /** Si está elegido, el alta va a `rack_equipamientos` (en ese rack) en vez de a `equipos` — ver CATEGORIAS_POSIBLES_EN_RACK. */
   rackId: string | null;
+  /**
+   * Si está elegido (ver buscarMaterialesPendientesDelSitioAction), este
+   * material YA es un equipo dado de alta antes (depósito → Alta de
+   * Materiales) — al guardar se hace UPDATE de ese equipo (marcarlo
+   * adjunto a este informe), no un INSERT nuevo, para no duplicarlo.
+   */
+  equipoExistenteId: string | null;
   /** Si está elegido, este material reemplaza al equipo indicado — dispara la baja automática del viejo al guardar. */
   reemplazaEquipoId: string | null;
   reemplazaTipo: TipoEquipoBaja | null;
@@ -51,8 +61,11 @@ export const MATERIAL_INFORME_BASE: Omit<MaterialInformeItem, "descripcion" | "r
   cantidad: 1,
   consumoPromedioW: null,
   consumoMaxW: null,
+  tipoMontaje: null,
+  alturaMontajeM: null,
   comentario: "",
   rackId: null,
+  equipoExistenteId: null,
   reemplazaEquipoId: null,
   reemplazaTipo: null,
   reemplazaTexto: null,

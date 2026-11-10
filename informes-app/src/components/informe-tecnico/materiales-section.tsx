@@ -16,12 +16,15 @@ import {
 import {
   listarRacksDeUbicacionAction,
   buscarEquipoReemplazoAction,
+  buscarMaterialesPendientesDelSitioAction,
   type RackDeUbicacion,
   type EquipoParaReemplazo,
+  type MaterialPendienteDelSitio,
 } from "@/app/(app)/informe-tecnico/nuevo/materiales-picker-actions";
 import type { EquipoCategoria, EstadoChecklist, TipoEquipoBaja } from "@/lib/database.types";
 import { mezclarHallazgos, type HallazgoInspeccionIa } from "@/lib/inspeccion-ia/types";
 import { HallazgosInspeccionIaSection } from "@/components/inspeccion-ia/hallazgos-section";
+import { TIPO_MONTAJE_OPCIONES, TIPO_MONTAJE_LABEL, calcularRecursoAltura, type ConfigRecursoAltura } from "@/lib/equipos/recurso-altura";
 
 /**
  * Buscador de "¿reemplaza a un equipo existente?" acotado al sitio del
@@ -127,6 +130,82 @@ function ReemplazaPicker({
 }
 
 /**
+ * Botón + panel para elegir un material que el propio técnico ya dio de
+ * alta en este sitio (sacado de depósito antes de llegar a hacer el
+ * informe, ver darDeAltaMaterialesAction) y todavía no adjuntó a ningún
+ * informe — evita volver a tipear marca/modelo/serie de algo que ya se
+ * cargó. Al elegirlo desaparece de la lista (un mismo material no se puede
+ * elegir dos veces en el mismo informe).
+ */
+function PendientesPicker({
+  ubicacionId,
+  yaElegidos,
+  onElegir,
+  disabled,
+}: {
+  ubicacionId: string;
+  yaElegidos: Set<string>;
+  onElegir: (p: MaterialPendienteDelSitio) => void;
+  disabled: boolean;
+}) {
+  const [pendientes, setPendientes] = useState<MaterialPendienteDelSitio[]>([]);
+  const [abierto, setAbierto] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    let cancelado = false;
+    buscarMaterialesPendientesDelSitioAction(ubicacionId).then((res) => {
+      if (!cancelado) setPendientes(res);
+    });
+    return () => {
+      cancelado = true;
+    };
+  }, [ubicacionId]);
+
+  useEffect(() => {
+    function onOutside(e: MouseEvent | TouchEvent) {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setAbierto(false);
+    }
+    document.addEventListener("mousedown", onOutside);
+    document.addEventListener("touchstart", onOutside);
+    return () => {
+      document.removeEventListener("mousedown", onOutside);
+      document.removeEventListener("touchstart", onOutside);
+    };
+  }, []);
+
+  const disponibles = pendientes.filter((p) => !yaElegidos.has(p.id));
+  if (disponibles.length === 0) return null;
+
+  return (
+    <div ref={wrapRef} style={{ position: "relative", display: "inline-block" }}>
+      <button type="button" className="btn btn-secondary btn-sm" onClick={() => setAbierto((v) => !v)} disabled={disabled}>
+        <Icon name="search" size={13} /> Buscar lo que ya diste de alta ({disponibles.length})
+      </button>
+      {abierto && (
+        <div className="autocomplete-panel" style={{ minWidth: 280 }}>
+          {disponibles.map((p) => (
+            <button
+              type="button"
+              key={p.id}
+              className="autocomplete-item"
+              onClick={() => {
+                onElegir(p);
+                setAbierto(false);
+              }}
+            >
+              {p.descripcion}
+              {p.marcaModelo ? ` · ${p.marcaModelo}` : ""}
+              {p.numeroSerie ? ` · N° ${p.numeroSerie}` : ""}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
  * Sección opcional de "Materiales/equipos" dentro de Informe Técnico — no
  * es exclusiva de una instalación, cualquier trabajo (reparación, etc.)
  * puede haber usado materiales. Dos listas con fotos + IA independientes:
@@ -149,6 +228,7 @@ export function MaterialesSection({
   hallazgos,
   onEstadoHallazgo,
   onComentarioHallazgo,
+  recursoAlturaConfig,
   disabled,
 }: {
   ubicacionId: string | null;
@@ -163,6 +243,7 @@ export function MaterialesSection({
   hallazgos: HallazgoInspeccionIa[];
   onEstadoHallazgo: (itemId: string, estado: EstadoChecklist) => void;
   onComentarioHallazgo: (itemId: string, comentario: string) => void;
+  recursoAlturaConfig: ConfigRecursoAltura[];
   disabled: boolean;
 }) {
   const [fotosIa, setFotosIa] = useState<File[]>([]);
@@ -287,6 +368,27 @@ export function MaterialesSection({
 
   function agregarMaterial() {
     setMateriales((prev) => [...prev, { ...MATERIAL_INFORME_BASE, descripcion: "", revisar: false }]);
+  }
+
+  function agregarMaterialPendiente(p: MaterialPendienteDelSitio) {
+    setMateriales((prev) => [
+      ...prev,
+      {
+        ...MATERIAL_INFORME_BASE,
+        categoriaEquipo: p.categoriaEquipo,
+        descripcion: p.descripcion,
+        marcaModelo: p.marcaModelo,
+        numeroSerie: p.numeroSerie,
+        etiquetaYpf: p.etiquetaYpf,
+        cantidad: p.cantidad,
+        consumoPromedioW: p.consumoPromedioW,
+        consumoMaxW: p.consumoMaxW,
+        tipoMontaje: p.tipoMontaje,
+        alturaMontajeM: p.alturaMontajeM,
+        equipoExistenteId: p.id,
+        revisar: false,
+      },
+    ]);
   }
 
   function actualizarMaterial(i: number, patch: Partial<MaterialInformeItem>) {
@@ -700,6 +802,50 @@ export function MaterialesSection({
                 </div>
               </div>
 
+              {m.categoriaEquipo === "camara_cctv" && (
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-end" }}>
+                  <div className="field" style={{ marginBottom: 0, width: 150 }}>
+                    <label style={{ fontSize: 11 }}>
+                      Montaje <span className="opt">(opcional)</span>
+                    </label>
+                    <select
+                      value={m.tipoMontaje ?? ""}
+                      onChange={(e) => actualizarMaterial(i, { tipoMontaje: (e.target.value || null) as MaterialInformeItem["tipoMontaje"] })}
+                      disabled={disabled}
+                    >
+                      <option value="">—</option>
+                      {TIPO_MONTAJE_OPCIONES.map((t) => (
+                        <option key={t} value={t}>
+                          {TIPO_MONTAJE_LABEL[t]}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="field" style={{ marginBottom: 0, width: 110 }}>
+                    <label style={{ fontSize: 11 }}>
+                      Altura (m) <span className="opt">(opcional)</span>
+                    </label>
+                    <input
+                      type="number"
+                      min={0}
+                      step="0.1"
+                      placeholder="Ej: 12"
+                      value={m.alturaMontajeM ?? ""}
+                      onChange={(e) => actualizarMaterial(i, { alturaMontajeM: e.target.value === "" ? null : Number(e.target.value) })}
+                      disabled={disabled}
+                    />
+                  </div>
+                  {(() => {
+                    const recurso = calcularRecursoAltura(m.tipoMontaje, m.alturaMontajeM, recursoAlturaConfig);
+                    return recurso ? (
+                      <span className="chip">
+                        <Icon name="wrench" size={11} /> Recurso: {recurso}
+                      </span>
+                    ) : null;
+                  })()}
+                </div>
+              )}
+
               {ubicacionId && (
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-end" }}>
                   {CATEGORIAS_POSIBLES_EN_RACK.includes(m.categoriaEquipo) && racksDelSitio.length > 0 && (
@@ -731,9 +877,19 @@ export function MaterialesSection({
             </div>
           ))}
         </div>
-        <button type="button" className="btn btn-secondary btn-sm" onClick={agregarMaterial} disabled={disabled} style={{ marginTop: 10 }}>
-          <Icon name="plus" size={13} /> Agregar material manual
-        </button>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
+          <button type="button" className="btn btn-secondary btn-sm" onClick={agregarMaterial} disabled={disabled}>
+            <Icon name="plus" size={13} /> Agregar material manual
+          </button>
+          {ubicacionId && (
+            <PendientesPicker
+              ubicacionId={ubicacionId}
+              yaElegidos={new Set(materiales.map((m) => m.equipoExistenteId).filter((id): id is string => id !== null))}
+              onElegir={agregarMaterialPendiente}
+              disabled={disabled}
+            />
+          )}
+        </div>
       </div>
     </div>
   );
