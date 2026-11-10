@@ -254,7 +254,7 @@ export function Step1General({
         <div className="field-label-row">
           <label>Descripción del Trabajo</label>
           <div style={{ display: "flex", gap: 8 }}>
-            <button type="button" className="ai-btn" onClick={toggleDictation}>
+            <button type="button" className={dictating ? "ai-btn ai-btn-live" : "ai-btn"} onClick={toggleDictation}>
               {dictating ? (
                 <>
                   <StatusDot tone="danger" /> Escuchando...

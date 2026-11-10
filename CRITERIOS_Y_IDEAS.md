@@ -1885,3 +1885,16 @@ poder llegar a su propio trabajo diario desde una notebook. La regla: el
 auto-redirect a una pantalla "de más jerarquía" solo aplica a los roles
 para los que esa pantalla ya era un reemplazo completo de su pantalla de
 inicio, no a uno que la suma como una sección más.
+
+## 29. Cambiar la imagen de una app entera sin tocar cada pantalla: tokens + una capa de diseño al final
+
+Salió de pasar Informes a la imagen "Mezcla" (azul/naranja/blanco, 10/11/2026).
+
+- **Todo color sale de tokens CSS** (`--accent`, `--panel`, ...) en un solo archivo. Si una pantalla trae un color clavado, se reemplaza por el token antes de cambiar nada: si no, queda un pedazo de la imagen vieja.
+- **Un token que se usa como color de TEXTO tiene que pasar 4.5:1** contra el fondo. El naranja no pasa con texto blanco ni como texto sobre blanco: el botón naranja lleva texto oscuro (`--on-cta`) y el texto naranja usa otro token más oscuro (`--cta-ink`). Separar "relleno" de "tinta" en dos tokens evita tener que acordarse en cada pantalla.
+- **Los tintes viejos escritos a mano** (`rgba(255,106,61,.15)` = el naranja anterior) se pasan a `color-mix(in srgb, var(--accent) 15%, transparent)`: así siguen al token en claro, en oscuro y en el próximo cambio de imagen.
+- **Relieve, sombras y animaciones van en un bloque al FINAL de la hoja**, separado de los colores. Si va antes, cualquier regla posterior con el atajo `background:` le borra el degradé a los botones.
+- **Animaciones de entrada con `animation-fill-mode: backwards`**, nunca `both`/`forwards`: una animación terminada que "se queda" con `transform: none` le gana al `:hover` y la tarjeta deja de levantarse al pasar el mouse, sin ningún error a la vista.
+- **Para animar íconos según cuál son** (el lápiz garabatea, la flecha de descarga baja, el tacho tiembla), el componente `<Icon>` pone `data-icon={name}` en el `<svg>` y el CSS elige por `svg[data-icon='edit']`. Ninguna pantalla se toca.
+- Siempre un bloque `@media (prefers-reduced-motion: reduce)` que apague todo.
+- **Si se cambia el tema por defecto** (oscuro → claro), el interruptor sigue leyendo la misma clave guardada: quien ya había elegido uno no nota el cambio.

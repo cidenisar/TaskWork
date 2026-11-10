@@ -8,27 +8,30 @@ const CLAVE = "tema";
 /**
  * Interruptor propio de tema claro/oscuro — decisión de Ivan (9/11): se
  * construye para TODA la app, no depende del sistema operativo (HANDOFF
- * §12.9). El sistema de diseño ya tenía los tokens de `[data-theme='light']`
- * en `wireframe-ui.css` desde antes, pero nada los activaba — esto es lo
- * que faltaba. Oscuro es el default (sin atributo); claro es la excepción
- * explícita, igual que ya estaba armada la hoja de estilos.
+ * §12.9).
+ *
+ * Desde la imagen "Mezcla" (10/11) CLARO es el default (sin atributo) y
+ * OSCURO la excepción explícita (`data-theme='dark'`), al revés de como
+ * estaba: Ivan trabaja con la máquina en claro. Quien ya había elegido claro
+ * no nota nada; quien había elegido oscuro lo conserva (se lee la misma
+ * clave `tema`).
  */
 function aplicar(tema: "light" | "dark") {
-  if (tema === "light") document.documentElement.dataset.theme = "light";
+  if (tema === "dark") document.documentElement.dataset.theme = "dark";
   else delete document.documentElement.dataset.theme;
 }
 
 export function ThemeToggle({ className = "signout" }: { className?: string }) {
   // Inicializador perezoso, no un efecto: en el servidor no hay `localStorage`
-  // (devuelve "dark", el default) y en el cliente lee el valor real en la
+  // (devuelve "light", el default) y en el cliente lee el valor real en la
   // misma pasada de hidratación — React puede marcar esto con un aviso de
-  // "hydration mismatch" si el usuario eligió claro, por eso el
+  // "hydration mismatch" si el usuario eligió oscuro, por eso el
   // `suppressHydrationWarning` del botón; el <head> script ya puso el tema
   // correcto en el documento antes de este primer render, así que no hay
   // parpadeo visual, solo el aviso en consola que ese atributo existe para evitar.
   const [tema, setTema] = useState<"light" | "dark">(() => {
-    if (typeof localStorage === "undefined") return "dark";
-    return localStorage.getItem(CLAVE) === "light" ? "light" : "dark";
+    if (typeof localStorage === "undefined") return "light";
+    return localStorage.getItem(CLAVE) === "dark" ? "dark" : "light";
   });
 
   function alternar() {
@@ -56,4 +59,4 @@ export function ThemeToggle({ className = "signout" }: { className?: string }) {
 }
 
 /** Script inline para el <head> — aplica el tema guardado ANTES del primer render, sin esto se ve un parpadeo del tema por defecto al cargar. */
-export const SCRIPT_TEMA_INICIAL = `(function(){try{var t=localStorage.getItem('${CLAVE}');if(t==='light')document.documentElement.dataset.theme='light';}catch(e){}})();`;
+export const SCRIPT_TEMA_INICIAL = `(function(){try{var t=localStorage.getItem('${CLAVE}');if(t==='dark')document.documentElement.dataset.theme='dark';}catch(e){}})();`;

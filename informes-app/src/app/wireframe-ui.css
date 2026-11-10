@@ -3,49 +3,91 @@
  * No reinventar: cualquier componente nuevo debe reusar estas clases / variables.
  */
 
+/*
+ * Imagen "Mezcla" (elegida por Ivan el 10/11/2026, ver lienzo de diseño
+ * "Informes — Nueva imagen: opciones"): estructura en azul (barra superior en
+ * degradé marino → azul, pestañas, pasos, selección), el naranja reservado
+ * para la acción principal (.btn-primary) y fondo blanco liso.
+ *
+ * CLARO es el default (sin atributo) y OSCURO la excepción explícita
+ * (`data-theme='dark'`) — Ivan trabaja con la máquina en claro.
+ *
+ * Contraste: --accent se usa también como COLOR DE TEXTO (links, KPIs,
+ * badges), por eso es un azul que pasa 4.5:1 sobre blanco. El naranja NO
+ * pasa 4.5:1 con texto blanco: el botón principal lleva texto oscuro
+ * (--on-cta) y cualquier texto naranja va con --cta-ink.
+ */
 :root {
-  --bg: #0a0a0b;
-  --panel: #17171a;
-  --panel-2: #1e1e22;
-  --border: #2a2a2f;
-  --border-soft: #232327;
-  /* Borde de los campos de carga (input/textarea/select) — bien más claro que
-     --border a propósito: ese es casi del mismo tono que el fondo de la
-     tarjeta, y en el celular (sobre todo con luz de sol) el campo se pierde
-     por completo. Este sí tiene que notarse. */
-  --field-border: #55555f;
-  /* Fondo de los campos de carga — antes usaban --panel-2, casi el mismo
-     tono que la tarjeta (--panel), así que a simple vista solo se notaba el
-     borde y no el campo en sí. Este salto de luminosidad tiene que
-     notarse igual sin depender del borde. */
-  --field-bg: #2f2f38;
-  --text: #f2f2f3;
-  --text-dim: #9a9aa2;
-  --text-faint: #6a6a72;
-  --accent: #ff6a3d;
-  --accent-2: #ff3d3d;
-  --accent-grad: linear-gradient(135deg, #ff7a3d 0%, #ff4747 100%);
-  --ok: #35c46a;
-  --warn: #e0b23d;
+  --bg: #f6f8fb;
+  --panel: #ffffff;
+  --panel-2: #f0f3f8;
+  --border: #dde3ec;
+  --border-soft: #e8edf4;
+  /* Borde de los campos de carga (input/textarea/select) — más marcado que
+     --border a propósito: en el celular (sobre todo con luz de sol) el campo
+     tiene que notarse sin depender del fondo de la tarjeta. */
+  --field-border: #aeb9cb;
+  /* Fondo de los campos — un salto de luminosidad respecto de la tarjeta,
+     para que el campo se vea aunque no se distinga el borde. */
+  --field-bg: #f4f7fb;
+  --text: #0f1a2b;
+  --text-dim: #475569;
+  --text-faint: #5b6779;
+  --accent: #1d4ed8;
+  --accent-2: #c02a2a;
+  --danger-solid: #c02a2a;
+  --accent-grad: linear-gradient(120deg, #0b2a5b 0%, #1d4ed8 60%, #2563eb 100%);
+  --cta: #f97316;
+  --cta-top: #ff9147;
+  --cta-bot: #ea6a10;
+  --on-cta: #1c0a00;
+  --cta-ink: #c2410c;
+  --tile-bg: #e6eeff;
+  --tile-fg: #1d4ed8;
+  --tile-2-bg: #ffeddf;
+  --tile-2-fg: #c2410c;
+  --tile-3-bg: #e0f2fe;
+  --tile-3-fg: #0369a1;
+  --shadow: 0 1px 2px rgba(15, 26, 43, 0.05), 0 6px 18px rgba(15, 26, 43, 0.06);
+  --shadow-hover: 0 16px 34px rgba(29, 78, 216, 0.16);
+  --ok: #177a49;
+  --warn: #8c5d00;
   --radius: 10px;
   --radius-lg: 14px;
-  --font: var(--font-inter), -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-}
-:root:not([data-theme='light']) {
-  color-scheme: dark;
-}
-:root[data-theme='light'] {
-  --bg: #f4f4f5;
-  --panel: #ffffff;
-  --panel-2: #f7f7f8;
-  --border: #e2e2e5;
-  --border-soft: #ececee;
-  --field-border: #b3b3ba;
-  --field-bg: #f2f3f6;
-  --text: #17171a;
-  --text-dim: #5c5c64;
-  --text-faint: #8a8a92;
+  --font: var(--font-app), -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   color-scheme: light;
+}
+:root[data-theme='dark'] {
+  --bg: #0a1020;
+  --panel: #111a2e;
+  --panel-2: #18233b;
+  --border: #283652;
+  --border-soft: #1f2b45;
+  --field-border: #4a5b7d;
+  --field-bg: #1b2741;
+  --text: #eef3fb;
+  --text-dim: #b0bcd0;
+  --text-faint: #93a0b8;
+  --accent: #7aa2ff;
+  --accent-2: #ff8a8a;
+  --danger-solid: #dc2626;
+  --accent-grad: linear-gradient(120deg, #081a3a 0%, #13306f 60%, #1a3f8c 100%);
+  --cta: #fb923c;
+  --cta-top: #fda65e;
+  --cta-bot: #f07c2a;
+  --on-cta: #1c0a00;
+  --cta-ink: #fdba74;
+  --tile-bg: #1a2550;
+  --tile-fg: #9db8ff;
+  --tile-2-bg: #3a2014;
+  --tile-2-fg: #fdba74;
+  --tile-3-bg: #0f2a3d;
+  --tile-3-fg: #7dd3fc;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 8px 22px rgba(0, 0, 0, 0.3);
+  --shadow-hover: 0 16px 36px rgba(0, 0, 0, 0.5);
+  --ok: #4ade80;
+  --warn: #f5c04e;
+  color-scheme: dark;
 }
 
 * {
@@ -623,7 +665,7 @@ textarea {
   font-weight: 700;
   padding: 2px 7px;
   border-radius: 20px;
-  background: rgba(255, 106, 61, 0.15);
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
   color: var(--accent);
   margin-left: 7px;
   letter-spacing: 0.02em;
@@ -739,8 +781,8 @@ textarea {
   display: flex;
   align-items: center;
   gap: 9px;
-  background: rgba(53, 196, 106, 0.1);
-  border: 1px solid rgba(53, 196, 106, 0.3);
+  background: color-mix(in srgb, var(--ok) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--ok) 30%, transparent);
   color: var(--ok);
   font-size: 13px;
   font-weight: 600;
@@ -752,8 +794,8 @@ textarea {
   display: flex;
   align-items: center;
   gap: 9px;
-  background: rgba(255, 61, 61, 0.1);
-  border: 1px solid rgba(255, 61, 61, 0.3);
+  background: color-mix(in srgb, var(--accent-2) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent-2) 30%, transparent);
   color: var(--accent-2);
   font-size: 13px;
   font-weight: 600;
@@ -943,15 +985,15 @@ textarea {
   letter-spacing: 0.02em;
 }
 .hist-status.ok {
-  background: rgba(53, 196, 106, 0.15);
+  background: color-mix(in srgb, var(--ok) 15%, transparent);
   color: var(--ok);
 }
 .hist-status.gone {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--panel-2);
   color: var(--text-faint);
 }
 .hist-status.warn {
-  background: rgba(224, 178, 61, 0.15);
+  background: color-mix(in srgb, var(--warn) 15%, transparent);
   color: var(--warn);
 }
 .hist-actions {
@@ -1013,8 +1055,8 @@ textarea {
   display: flex;
   gap: 10px;
   align-items: flex-start;
-  background: rgba(224, 178, 61, 0.1);
-  border: 1px solid rgba(224, 178, 61, 0.3);
+  background: color-mix(in srgb, var(--warn) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--warn) 30%, transparent);
   border-radius: var(--radius);
   padding: 12px 14px;
   margin-bottom: 18px;
@@ -1113,7 +1155,7 @@ textarea {
   font-weight: 700;
   padding: 2px 8px;
   border-radius: 20px;
-  background: rgba(255, 106, 61, 0.15);
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
   color: var(--accent);
   letter-spacing: 0.03em;
 }
@@ -1439,15 +1481,15 @@ textarea {
   white-space: nowrap;
 }
 .venc-badge.ok {
-  background: rgba(53, 196, 106, 0.15);
+  background: color-mix(in srgb, var(--ok) 15%, transparent);
   color: var(--ok);
 }
 .venc-badge.warn {
-  background: rgba(224, 178, 61, 0.15);
+  background: color-mix(in srgb, var(--warn) 15%, transparent);
   color: var(--warn);
 }
 .venc-badge.danger {
-  background: rgba(255, 61, 61, 0.15);
+  background: color-mix(in srgb, var(--accent-2) 15%, transparent);
   color: var(--accent-2);
 }
 
@@ -1466,9 +1508,9 @@ textarea {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  background: rgba(255, 106, 61, 0.12);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
   color: var(--accent);
-  border: 1px solid rgba(255, 106, 61, 0.3);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
   border-radius: 20px;
   padding: 5px 12px;
   font-size: 12px;
@@ -1477,7 +1519,7 @@ textarea {
   font-family: var(--font);
 }
 .ai-btn:hover {
-  background: rgba(255, 106, 61, 0.2);
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
 }
 .ai-btn:disabled {
   opacity: 0.6;
@@ -1543,4 +1585,323 @@ textarea {
   width: 100%;
   max-height: 90vh;
   overflow-y: auto;
+}
+
+/* ==========================================================================
+ * NIVEL DE DISEÑO "MEZCLA" + ANIMACIONES (10/11/2026)
+ *
+ * Va AL FINAL de la hoja a propósito: si alguna regla posterior usa el atajo
+ * `background:`, le borra el degradé a los botones. Todo lo nuevo de
+ * apariencia (relieve, sombras, movimiento) vive en este bloque; los colores
+ * siguen saliendo de los tokens de arriba. Referencia visual: el lienzo
+ * "Informes — Nueva imagen: opciones" (fila "Mezcla + animaciones" y el
+ * catálogo de botones e íconos).
+ *
+ * Las entradas usan `animation-fill-mode: backwards`, nunca `both`/`forwards`:
+ * una animación terminada con `forwards` sigue pisando `transform`, y el
+ * "levantarse al pasar el mouse" de las tarjetas deja de funcionar.
+ * ========================================================================== */
+
+/* ---- Barra superior: banda en degradé azul con letra blanca ---- */
+.topbar {
+  background: var(--accent-grad);
+  color: #fff;
+  padding: 14px 18px;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  animation: mz-up 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+}
+.topbar .brand {
+  background: none;
+  -webkit-background-clip: border-box;
+  background-clip: border-box;
+  color: #fff;
+}
+.topbar .back {
+  color: rgba(255, 255, 255, 0.88);
+}
+.topbar .back:hover {
+  color: #fff;
+}
+.back svg {
+  transition: transform 0.25s;
+}
+.back:hover svg {
+  transform: translateX(-4px);
+}
+
+/* ---- Tarjetas con algo de relieve (la app se veía "chata") ---- */
+.card,
+.sessionbar,
+.navtabs,
+.kpi-card,
+.hist-item,
+.detalle-item {
+  box-shadow: var(--shadow);
+}
+.card,
+.module-card,
+.kpi-card,
+.hist-item,
+.list-item,
+.detalle-item,
+.success-note,
+.error-note,
+.banner {
+  animation: mz-up 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+}
+.module-card:nth-child(2), .kpi-card:nth-child(2), .hist-item:nth-child(2) { animation-delay: 0.05s; }
+.module-card:nth-child(3), .kpi-card:nth-child(3), .hist-item:nth-child(3) { animation-delay: 0.1s; }
+.module-card:nth-child(4), .kpi-card:nth-child(4), .hist-item:nth-child(4) { animation-delay: 0.15s; }
+.module-card:nth-child(5), .kpi-card:nth-child(5), .hist-item:nth-child(5) { animation-delay: 0.2s; }
+.module-card:nth-child(6), .kpi-card:nth-child(6), .hist-item:nth-child(6) { animation-delay: 0.25s; }
+.module-card:nth-child(n + 7), .kpi-card:nth-child(n + 7), .hist-item:nth-child(n + 7) { animation-delay: 0.3s; }
+
+/* ---- Tarjetas de módulo del inicio: ficha de color, íconos duotono que se dibujan ---- */
+.module-card {
+  box-shadow: var(--shadow);
+  transition: border-color 0.2s, transform 0.25s cubic-bezier(0.2, 0.7, 0.2, 1), box-shadow 0.25s;
+}
+.module-card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-hover);
+}
+.module-card:active {
+  transform: translateY(0) scale(0.99);
+}
+.module-ico {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 12px;
+  background: var(--tile-bg);
+  color: var(--tile-fg);
+  transition: box-shadow 0.3s;
+}
+.module-card:nth-child(3n + 2) .module-ico {
+  background: var(--tile-2-bg);
+  color: var(--tile-2-fg);
+}
+.module-card:nth-child(3n) .module-ico {
+  background: var(--tile-3-bg);
+  color: var(--tile-3-fg);
+}
+.module-card:hover .module-ico {
+  box-shadow: 0 0 0 6px color-mix(in srgb, currentColor 14%, transparent);
+}
+.module-card:hover .module-ico svg {
+  animation: mz-pop 0.5s ease;
+}
+/* Duotono: la primera forma de cada ícono de módulo lleva un relleno suave. */
+.module-ico svg > :first-child {
+  fill: currentColor;
+  fill-opacity: 0.16;
+}
+/* Se dibujan al entrar a la pantalla. */
+.module-ico svg * {
+  stroke-dasharray: 80;
+  stroke-dashoffset: 80;
+  animation: mz-draw 1.1s 0.25s ease forwards;
+}
+
+/* ---- Pestañas: la activa en azul con una raya naranja que crece ---- */
+.navtab {
+  position: relative;
+}
+.navtab:not(.active):hover {
+  color: var(--text);
+  background: var(--panel-2);
+}
+.navtab::after {
+  content: '';
+  position: absolute;
+  left: 18%;
+  right: 18%;
+  bottom: 3px;
+  height: 3px;
+  border-radius: 3px;
+  background: var(--cta);
+  transform: scaleX(0);
+  transition: transform 0.4s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.navtab.active::after {
+  transform: scaleX(1);
+}
+.subnav button.active,
+.navtab.active {
+  box-shadow: 0 6px 16px color-mix(in srgb, var(--accent) 28%, transparent);
+}
+
+/* ---- Botón principal: naranja con relieve, brillo al pasar, se hunde al tocar ---- */
+.btn {
+  transition: transform 0.2s cubic-bezier(0.2, 0.7, 0.2, 1), box-shadow 0.2s, background-color 0.2s, border-color 0.2s, color 0.2s, opacity 0.15s;
+}
+.btn-primary {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(180deg, var(--cta-top), var(--cta-bot));
+  color: var(--on-cta);
+  font-weight: 700;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 4px 14px color-mix(in srgb, var(--cta) 38%, transparent);
+}
+.btn-primary::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -70%;
+  width: 45%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.5), transparent);
+  transform: skewX(-20deg);
+  transition: left 0.7s ease;
+  pointer-events: none;
+}
+.btn-primary:hover:not(:disabled) {
+  opacity: 1;
+  transform: translateY(-2px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 12px 26px color-mix(in srgb, var(--cta) 48%, transparent);
+}
+.btn-primary:hover:not(:disabled)::after {
+  left: 135%;
+}
+.btn-primary:active:not(:disabled) {
+  transform: translateY(0) scale(0.97);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.18);
+}
+.btn-primary svg[data-icon='arrow-right'] {
+  transition: transform 0.25s;
+}
+.btn-primary:hover svg[data-icon='arrow-right'] {
+  transform: translateX(4px);
+}
+
+/* ---- Secundario: borde y texto toman el azul, el ícono salta ---- */
+.btn-secondary:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.btn-secondary:hover:not(:disabled) svg,
+.btn-danger:hover:not(:disabled) svg[data-icon='trash'] {
+  animation: mz-pop 0.45s ease;
+}
+.btn-danger {
+  background: var(--danger-solid);
+}
+.btn-danger:hover:not(:disabled) svg[data-icon='trash'] {
+  animation: mz-shake 0.5s;
+}
+
+/* ---- Botones de ícono de las listas: cada ícono tiene su gesto ---- */
+.icon-btn {
+  transition: background-color 0.2s, color 0.2s, border-color 0.2s, transform 0.2s;
+}
+.icon-btn:hover:not(:disabled) {
+  background: var(--tile-bg);
+  color: var(--tile-fg);
+  border-color: color-mix(in srgb, var(--tile-fg) 35%, transparent);
+  transform: translateY(-1px);
+}
+.icon-btn:active:not(:disabled) {
+  transform: scale(0.94);
+}
+.icon-btn-danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent-2) 10%, var(--panel));
+}
+:is(.icon-btn, .btn, .ai-btn, .link-btn, .signout):hover:not(:disabled) svg[data-icon='edit'] { animation: mz-wiggle 0.5s; }
+:is(.icon-btn, .btn, .ai-btn, .link-btn, .signout):hover:not(:disabled) svg[data-icon='download'] { animation: mz-drop 0.6s; }
+:is(.icon-btn, .btn, .ai-btn, .link-btn, .signout):hover:not(:disabled) svg[data-icon='upload'] { animation: mz-rise 0.6s; }
+:is(.icon-btn, .btn, .ai-btn, .link-btn, .signout):hover:not(:disabled) svg[data-icon='trash'] { animation: mz-shake 0.5s; }
+:is(.icon-btn, .btn, .ai-btn, .link-btn, .signout):hover:not(:disabled) svg[data-icon='mail'] { animation: mz-fly 0.7s; }
+:is(.icon-btn, .btn, .ai-btn, .link-btn, .signout):hover:not(:disabled) svg[data-icon='camera'] { animation: mz-flash 0.6s; }
+:is(.icon-btn, .btn, .ai-btn, .link-btn, .signout):hover:not(:disabled) svg[data-icon='bell'] { animation: mz-bell 0.8s; transform-origin: 50% 12%; }
+:is(.icon-btn, .btn, .ai-btn, .link-btn, .signout):hover:not(:disabled) svg[data-icon='sparkles'] { animation: mz-twinkle 0.8s; }
+:is(.icon-btn, .btn, .ai-btn, .link-btn, .signout):hover:not(:disabled) svg[data-icon='eye'] { animation: mz-blink 0.5s; }
+:is(.icon-btn, .btn, .ai-btn, .link-btn, .signout):hover:not(:disabled) svg[data-icon='search'] { animation: mz-pop 0.45s; }
+:is(.icon-btn, .btn, .ai-btn, .link-btn, .signout):hover:not(:disabled) svg:is([data-icon='sun'], [data-icon='moon']) { animation: mz-turn 0.9s cubic-bezier(0.2, 0.7, 0.2, 1); }
+
+/* ---- Botones de sesión (tema, ayuda, cuenta, salir) ---- */
+.sessionbar .signout {
+  transition: background-color 0.2s, color 0.2s, border-color 0.2s;
+}
+.avatar {
+  background: var(--accent-grad);
+}
+
+/* ---- Dictado por voz: el botón late mientras escucha ---- */
+.ai-btn {
+  transition: background-color 0.2s, transform 0.2s;
+}
+.ai-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+.ai-btn-live {
+  position: relative;
+  background: var(--accent-2);
+  color: #fff;
+  border-color: var(--accent-2);
+}
+.ai-btn-live::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  border: 2px solid var(--accent-2);
+  animation: mz-ring 1.6s ease-out infinite;
+  pointer-events: none;
+}
+:root[data-theme='dark'] .ai-btn-live {
+  background: var(--danger-solid);
+  border-color: var(--danger-solid);
+}
+
+/* ---- Pasos del asistente: el paso terminado "salta" al completarse ---- */
+.step-node.done {
+  animation: mz-pop 0.45s ease;
+}
+.step-node.active {
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 15%, transparent);
+}
+
+/* ---- Barras de estadísticas que se llenan solas ---- */
+.bar-fill {
+  transform-origin: left;
+  animation: mz-grow 1.1s 0.3s cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+}
+
+/* ---- Avisos de éxito/error: el ícono aparece con un salto ---- */
+.success-note svg,
+.error-note svg {
+  animation: mz-pop 0.5s 0.2s ease backwards;
+}
+
+/* ---- Movimientos ---- */
+@keyframes mz-up { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+@keyframes mz-draw { from { stroke-dashoffset: 80; } to { stroke-dashoffset: 0; } }
+@keyframes mz-grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes mz-pop { 0% { transform: scale(1); } 40% { transform: scale(1.25) rotate(-8deg); } 100% { transform: scale(1); } }
+@keyframes mz-wiggle { 0%, 100% { transform: rotate(0); } 25% { transform: rotate(-14deg); } 60% { transform: rotate(10deg); } }
+@keyframes mz-drop { 0% { transform: translateY(0); } 40% { transform: translateY(4px); } 65% { transform: translateY(-2px); } 100% { transform: translateY(0); } }
+@keyframes mz-rise { 0% { transform: translateY(0); } 40% { transform: translateY(-4px); } 65% { transform: translateY(2px); } 100% { transform: translateY(0); } }
+@keyframes mz-shake { 0%, 100% { transform: translateX(0); } 20% { transform: translateX(-2px) rotate(-6deg); } 40% { transform: translateX(2px) rotate(6deg); } 60% { transform: translateX(-1px); } 80% { transform: translateX(1px); } }
+@keyframes mz-fly { 0% { transform: none; opacity: 1; } 45% { transform: translate(8px, -8px) scale(0.6); opacity: 0; } 46% { transform: translate(-8px, 8px) scale(0.6); opacity: 0; } 100% { transform: none; opacity: 1; } }
+@keyframes mz-flash { 0%, 100% { filter: none; } 30% { filter: drop-shadow(0 0 5px #ffd27a) brightness(1.6); } }
+@keyframes mz-bell { 0%, 100% { transform: rotate(0); } 15% { transform: rotate(16deg); } 30% { transform: rotate(-14deg); } 45% { transform: rotate(10deg); } 60% { transform: rotate(-6deg); } 75% { transform: rotate(3deg); } }
+@keyframes mz-twinkle { 0%, 100% { transform: scale(1) rotate(0); } 50% { transform: scale(1.25) rotate(20deg); } }
+@keyframes mz-blink { 0%, 100% { transform: scaleY(1); } 45% { transform: scaleY(0.1); } }
+@keyframes mz-turn { from { transform: rotate(-90deg) scale(0.6); } to { transform: none; } }
+@keyframes mz-ring { from { transform: scale(1); opacity: 0.7; } to { transform: scale(1.35, 1.7); opacity: 0; } }
+
+/* Quien pidió "reducir movimiento" en su aparato no ve nada de esto. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+  .module-ico svg * {
+    stroke-dashoffset: 0;
+  }
 }

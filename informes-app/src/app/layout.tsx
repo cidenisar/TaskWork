@@ -1,11 +1,12 @@
 import type { Metadata, Viewport } from "next";
-import { Inter } from "next/font/google";
+import { Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 import { ClientErrorReporter } from "@/components/client-error-reporter";
 import { SCRIPT_TEMA_INICIAL } from "@/components/theme-toggle";
 
-const inter = Inter({
-  variable: "--font-inter",
+// Letra de la imagen "Mezcla" (10/11/2026). Reemplaza a Inter.
+const fuente = Plus_Jakarta_Sans({
+  variable: "--font-app",
   subsets: ["latin"],
   weight: ["400", "500", "600", "700", "800"],
 });
@@ -22,16 +23,16 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0a0a0b",
+  themeColor: "#0b2a5b",
   width: "device-width",
   initialScale: 1,
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="es" className={`${inter.variable}`}>
+    <html lang="es" className={`${fuente.variable}`}>
       <head>
-        {/* Antes del primer render: evita el parpadeo del tema oscuro por defecto si el usuario había elegido claro. */}
+        {/* Antes del primer render: evita el parpadeo del tema claro por defecto si el usuario había elegido oscuro. */}
         <script dangerouslySetInnerHTML={{ __html: SCRIPT_TEMA_INICIAL }} />
       </head>
       <body>

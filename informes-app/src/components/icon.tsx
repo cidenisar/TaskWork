@@ -261,6 +261,7 @@ export function Icon({ name, size = 16, style, className }: { name: IconName; si
       strokeLinecap="round"
       strokeLinejoin="round"
       className={className}
+      data-icon={name}
       style={{ display: "inline-block", verticalAlign: "-3px", flexShrink: 0, ...style }}
       aria-hidden="true"
     >
