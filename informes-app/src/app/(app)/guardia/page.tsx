@@ -7,6 +7,7 @@ import { horaGuardiaIso } from "@/lib/guardia/reloj";
 import { Icon } from "@/components/icon";
 import { BotonFeriadoHoy } from "@/components/guardia/boton-feriado-hoy";
 import { CambiosPendientes, type CambioPendiente } from "@/components/guardia/cambios-pendientes";
+import { AsuncionSemanal } from "@/components/guardia/asuncion-semanal";
 
 export default async function GuardiaPage() {
   const profile = await requireProfile();
@@ -25,7 +26,7 @@ export default async function GuardiaPage() {
   const esGG = esGuardiaGeneral(ctx);
   const hoy = horaGuardiaIso().slice(0, 10);
 
-  const [{ data: eventos }, { data: cambiosRows }, { data: feriadoHoy }] = await Promise.all([
+  const [{ data: eventos }, { data: cambiosRows }, { data: feriadoHoy }, { data: asuncionPendiente }] = await Promise.all([
     supabase
       .from("guardia_evento")
       .select("id, numero, estado, tipo_alarma, sitio, creado_at")
@@ -39,6 +40,9 @@ export default async function GuardiaPage() {
           .eq("estado", "pendiente")
       : Promise.resolve({ data: [] }),
     esGG ? supabase.from("guardia_feriado").select("fecha").eq("fecha", hoy).maybeSingle() : Promise.resolve({ data: null }),
+    esDeGuardia(ctx)
+      ? supabase.from("guardia_asuncion").select("semana_inicio, area").eq("usuario_id", profile.id).is("asumio_at", null).order("semana_inicio", { ascending: false }).limit(1).maybeSingle()
+      : Promise.resolve({ data: null }),
   ]);
 
   const originalIds = [...new Set((cambiosRows ?? []).map((c) => c.original_id))];
@@ -59,6 +63,8 @@ export default async function GuardiaPage() {
         <h1>Guardia General</h1>
         <p>{area ? `Vos hacés la guardia de ${area}` : "Vista de oficina"}</p>
       </div>
+
+      {asuncionPendiente && <AsuncionSemanal semanaInicio={asuncionPendiente.semana_inicio} area={asuncionPendiente.area} />}
 
       <CambiosPendientes cambios={cambiosPendientes} />
 

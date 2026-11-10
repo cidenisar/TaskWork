@@ -7,6 +7,7 @@ import { horaGuardiaIso } from "@/lib/guardia/reloj";
 import { guardiaDe, type AreaGuardia } from "@/lib/guardia/cronograma";
 import { cargarCronograma, cargarCambiosAceptados, cargarParametros, cargarAreaDe } from "@/lib/guardia/datos";
 import { esGuardiaGeneral } from "@/lib/guardia/permisos";
+import { notificar } from "@/lib/guardia/notificar";
 import type { RolParticipacionGuardia, ModalidadParticipacionGuardia, PedidoParticipacionGuardia } from "@/lib/database.types";
 
 export interface AccionResult {
@@ -89,20 +90,25 @@ export async function activarGuardiaTecnicaAction(
     if (existente) continue;
 
     const nowIso = new Date().toISOString();
-    const { error: errInsert } = await supabase.from("guardia_participacion").insert({
-      evento_id: eventoId,
-      usuario_id: usuarioId,
-      rol: ROL_POR_AREA[area],
-      pedido,
-      inicio_at: nowIso,
-    });
+    const { data: participacion, error: errInsert } = await supabase
+      .from("guardia_participacion")
+      .insert({ evento_id: eventoId, usuario_id: usuarioId, rol: ROL_POR_AREA[area], pedido, inicio_at: nowIso })
+      .select("id")
+      .single();
     if (errInsert) return { success: false, error: errInsert.message };
 
     const { data: persona } = await supabase.from("profiles").select("nombre_completo").eq("id", usuarioId).single();
+    const queHacer = pedido === "REVISAR" ? "revisar" : "asistir al sitio";
     await supabase.from("guardia_novedad").insert({
       evento_id: eventoId,
-      texto: `Se activa la guardia de ${area} (${persona?.nombre_completo ?? "—"}) para ${pedido === "REVISAR" ? "revisar" : "asistir al sitio"}.`,
+      texto: `Se activa la guardia de ${area} (${persona?.nombre_completo ?? "—"}) para ${queHacer}.`,
       por: profile.id,
+    });
+
+    await notificar(usuarioId, "activacion", "guardia_participacion", participacion.id, {
+      title: `Te activaron en la guardia de ${area}`,
+      body: `Te piden ${queHacer}. Abrí la app para aceptar.`,
+      url: `/guardia/evento/${eventoId}`,
     });
   }
 
@@ -296,7 +302,11 @@ export async function responderCambioAction(cambioId: string, respuesta: "acepta
   const profile = await requireProfile();
   const supabase = await createClient();
 
-  const { data: cambio, error: errSelect } = await supabase.from("guardia_cambio").select("persona_id, estado").eq("id", cambioId).single();
+  const { data: cambio, error: errSelect } = await supabase
+    .from("guardia_cambio")
+    .select("persona_id, estado, area, desde, hasta, registrado_por")
+    .eq("id", cambioId)
+    .single();
   if (errSelect || !cambio) return { success: false, error: "No se encontró el cambio." };
   if (cambio.persona_id !== profile.id) return { success: false, error: "Este cambio no es tuyo." };
   if (cambio.estado !== "pendiente") return { success: true }; // ya fue respondido — idempotente
@@ -307,6 +317,17 @@ export async function responderCambioAction(cambioId: string, respuesta: "acepta
     .eq("id", cambioId)
     .eq("estado", "pendiente");
   if (error) return { success: false, error: error.message };
+
+  const texto = `${profile.nombreCompleto} ${respuesta === "aceptado" ? "asume" : "no puede cubrir"} la guardia de ${cambio.area} (${cambio.desde} → ${cambio.hasta}).`;
+  const { data: oficina } = await supabase.from("profiles").select("id").in("rol", ["admin", "supervisor", "superusuario"]);
+  const destinatarios = [...new Set([cambio.registrado_por, ...(oficina ?? []).map((o) => o.id)])];
+  for (const destinatarioId of destinatarios) {
+    await notificar(destinatarioId, "cambio_respondido", "guardia_cambio", cambioId, {
+      title: respuesta === "aceptado" ? "Asumen la guardia" : "No pueden cubrir",
+      body: texto,
+      url: "/panel/guardia/cronograma",
+    });
+  }
 
   revalidatePath("/guardia");
   revalidatePath("/panel/guardia/cronograma");
@@ -334,5 +355,23 @@ export async function marcarFeriadoHoyAction(nombre: string): Promise<AccionResu
 
   revalidatePath("/guardia");
   revalidatePath("/panel/guardia/calendario");
+  return { success: true };
+}
+
+/** "Asumo la guardia" semanal (HANDOFF §7.6) — la fila la crea el cron de los miércoles; esto solo registra que la tocó quien tenía que tocarla. */
+export async function asumirGuardiaSemanalAction(semanaInicio: string, area: AreaGuardia): Promise<AccionResult> {
+  const profile = await requireProfile();
+  const supabase = await createClient();
+
+  const { error } = await supabase
+    .from("guardia_asuncion")
+    .update({ asumio_at: new Date().toISOString() })
+    .eq("semana_inicio", semanaInicio)
+    .eq("area", area)
+    .eq("usuario_id", profile.id)
+    .is("asumio_at", null);
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath("/guardia");
   return { success: true };
 }

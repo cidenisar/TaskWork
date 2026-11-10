@@ -1023,6 +1023,14 @@ export type GuardiaCronogramaSemanaRow = {
 export type EstadoCambioGuardiaDb = "pendiente" | "aceptado" | "rechazado" | "anulado";
 export type TipoCambioGuardia = "CUBRE" | "DEVUELVE";
 
+export type GuardiaAsuncionRow = {
+  semana_inicio: string;
+  area: AreaGuardiaDb;
+  usuario_id: string;
+  /** null = todavía no apretó "Asumo la guardia". */
+  asumio_at: string | null;
+};
+
 export type GuardiaCambioRow = {
   id: string;
   par_id: string;
@@ -1088,6 +1096,36 @@ export type GuardiaNovedadRow = {
   /** null = la escribió el sistema, no una persona. */
   por: string | null;
   idempotencia_key: string | null;
+};
+
+export type PushSubscriptionRow = {
+  id: string;
+  usuario_id: string;
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+  user_agent: string | null;
+  created_at: string;
+};
+
+export type TipoNotificacionGuardia = "activacion" | "cambio_pendiente" | "cambio_respondido" | "asuncion_semanal";
+export type EstadoNotificacionGuardia = "pendiente" | "enviada" | "entregada" | "leida" | "fallida";
+
+export type GuardiaNotificacionRow = {
+  id: string;
+  usuario_id: string;
+  tipo: TipoNotificacionGuardia;
+  ref_tipo: string;
+  ref_id: string;
+  canal: string;
+  payload: { title: string; body: string; url: string };
+  estado: EstadoNotificacionGuardia;
+  intentos: number;
+  error: string | null;
+  creada_at: string;
+  enviada_at: string | null;
+  entregada_at: string | null;
+  leida_at: string | null;
 };
 
 export interface Database {
@@ -1444,6 +1482,11 @@ export interface Database {
         Partial<GuardiaCronogramaHistRow> & Pick<GuardiaCronogramaHistRow, "semana_inicio" | "area" | "motivo">,
         Partial<GuardiaCronogramaHistRow>
       >;
+      guardia_asuncion: Tbl<
+        GuardiaAsuncionRow,
+        Partial<GuardiaAsuncionRow> & Pick<GuardiaAsuncionRow, "semana_inicio" | "area" | "usuario_id">,
+        Partial<GuardiaAsuncionRow>
+      >;
       guardia_cronograma_semana: Tbl<
         GuardiaCronogramaSemanaRow,
         Partial<GuardiaCronogramaSemanaRow> & Pick<GuardiaCronogramaSemanaRow, "semana_inicio" | "area">,
@@ -1469,6 +1512,16 @@ export interface Database {
         GuardiaNovedadRow,
         Partial<GuardiaNovedadRow> & Pick<GuardiaNovedadRow, "evento_id" | "texto">,
         Partial<GuardiaNovedadRow>
+      >;
+      push_subscriptions: Tbl<
+        PushSubscriptionRow,
+        Partial<PushSubscriptionRow> & Pick<PushSubscriptionRow, "usuario_id" | "endpoint" | "p256dh" | "auth">,
+        Partial<PushSubscriptionRow>
+      >;
+      guardia_notificacion: Tbl<
+        GuardiaNotificacionRow,
+        Partial<GuardiaNotificacionRow> & Pick<GuardiaNotificacionRow, "usuario_id" | "tipo" | "ref_tipo" | "ref_id" | "payload">,
+        Partial<GuardiaNotificacionRow>
       >;
     };
     Views: Record<string, never>;

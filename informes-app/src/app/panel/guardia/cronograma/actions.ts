@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireAdminOrSupervisor } from "@/lib/auth";
 import { generarProgramacion, celdasCambiadas, AREAS_GUARDIA, type AreaGuardia } from "@/lib/guardia/cronograma";
 import { cargarCronograma, cargarPersonas } from "@/lib/guardia/datos";
+import { notificar } from "@/lib/guardia/notificar";
 
 export interface AccionResult {
   success: boolean;
@@ -81,32 +82,52 @@ export async function crearCambioGuardiaAction(input: CrearCambioInput): Promise
 
   const supabase = await createClient();
   const parId = crypto.randomUUID();
-  const { error: errCubre } = await supabase.from("guardia_cambio").insert({
-    par_id: parId,
-    tipo: "CUBRE",
-    area: input.area,
-    persona_id: input.personaId,
-    original_id: input.originalId,
-    desde: input.desde,
-    hasta: input.hasta,
-    motivo: input.motivo.trim() || null,
-    registrado_por: profile.id,
-  });
-  if (errCubre) return { success: false, error: errCubre.message };
-
-  if (input.devolucion) {
-    const { error: errDevuelve } = await supabase.from("guardia_cambio").insert({
+  const { data: cubre, error: errCubre } = await supabase
+    .from("guardia_cambio")
+    .insert({
       par_id: parId,
-      tipo: "DEVUELVE",
+      tipo: "CUBRE",
       area: input.area,
-      persona_id: input.originalId,
-      original_id: input.personaId,
-      desde: input.devolucion.desde,
-      hasta: input.devolucion.hasta,
+      persona_id: input.personaId,
+      original_id: input.originalId,
+      desde: input.desde,
+      hasta: input.hasta,
       motivo: input.motivo.trim() || null,
       registrado_por: profile.id,
+    })
+    .select("id")
+    .single();
+  if (errCubre || !cubre) return { success: false, error: errCubre?.message || "No se pudo crear el cambio." };
+
+  await notificar(input.personaId, "cambio_pendiente", "guardia_cambio", cubre.id, {
+    title: "Te piden asumir la guardia",
+    body: `${input.area}: ${input.desde} → ${input.hasta}${input.motivo ? ` · ${input.motivo}` : ""}`,
+    url: "/guardia",
+  });
+
+  if (input.devolucion) {
+    const { data: devuelve, error: errDevuelve } = await supabase
+      .from("guardia_cambio")
+      .insert({
+        par_id: parId,
+        tipo: "DEVUELVE",
+        area: input.area,
+        persona_id: input.originalId,
+        original_id: input.personaId,
+        desde: input.devolucion.desde,
+        hasta: input.devolucion.hasta,
+        motivo: input.motivo.trim() || null,
+        registrado_por: profile.id,
+      })
+      .select("id")
+      .single();
+    if (errDevuelve || !devuelve) return { success: false, error: errDevuelve?.message || "No se pudo crear la devolución." };
+
+    await notificar(input.originalId, "cambio_pendiente", "guardia_cambio", devuelve.id, {
+      title: "Te piden asumir la guardia (devolución)",
+      body: `${input.area}: ${input.devolucion.desde} → ${input.devolucion.hasta}`,
+      url: "/guardia",
     });
-    if (errDevuelve) return { success: false, error: errDevuelve.message };
   }
 
   revalidatePath("/panel/guardia/cronograma");

@@ -9,6 +9,7 @@ const TABS = [
   { href: "/panel/guardia/parametros", label: "Parámetros" },
   { href: "/panel/guardia/calendario", label: "Calendario" },
   { href: "/panel/guardia/cronograma", label: "Cronograma" },
+  { href: "/panel/guardia/avisos", label: "Avisos" },
 ];
 
 export function GuardiaSubnav() {
