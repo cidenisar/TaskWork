@@ -234,6 +234,7 @@ export async function cerrarRendicionAction(rendicionId: string): Promise<Cerrar
       texto: `Se cerró la rendición de gastos "${rendicion.motivo}" (${rendicion.numero_generacion}). Se adjunta el PDF.`,
       pdfBuffer,
       filename: pdfFilename,
+      diagnostico: { supabase: db, userId: profile.id, contexto: "email-rendicion-gastos" },
     });
   }
 
