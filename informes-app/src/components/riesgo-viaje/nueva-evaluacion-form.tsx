@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { crearEvaluacionRiesgoViajeAction } from "@/app/(app)/riesgo-viaje/nueva/actions";
 import { actualizarEstadoViajeAction } from "@/app/(app)/riesgo-viaje/actions";
+import { linkWhatsappGrupo, linkWhatsappIndividual } from "@/lib/guardia/whatsapp";
 import { reportarErrorCliente } from "@/lib/client-error-report";
 import { ErrorNote, SuccessNote } from "@/components/notes";
 import { Icon } from "@/components/icon";
@@ -172,6 +173,11 @@ export function NuevaEvaluacionRiesgoViajeForm({
         return;
       }
       setViajeIniciado(true);
+      // Además del push a la guardia general (ya lo dispara la acción), se ofrece avisar por WhatsApp — el link lo abre quien dispara el aviso.
+      if (res.avisoWhatsapp) {
+        const { telefono, texto } = res.avisoWhatsapp;
+        window.open(telefono ? linkWhatsappIndividual(telefono, texto) : linkWhatsappGrupo(texto), "_blank");
+      }
     } finally {
       setIniciando(false);
     }

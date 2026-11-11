@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { obtenerUrlPdfRiesgoViajeAction, actualizarEstadoViajeAction } from "@/app/(app)/riesgo-viaje/actions";
+import { linkWhatsappGrupo, linkWhatsappIndividual } from "@/lib/guardia/whatsapp";
 import { Icon } from "@/components/icon";
 import { RiesgoBadge, EstadoViajeBadge } from "./badges";
 import type { EstadoViaje, NivelRiesgoViaje } from "@/lib/database.types";
@@ -79,6 +80,12 @@ export function HistorialRiesgoViaje({ evaluaciones: inicial, esAdmin }: { evalu
       finalizar: "finalizado",
     } as const;
     setEvaluaciones((prev) => prev.map((e) => (e.id === id ? { ...e, estadoViaje: estadoSiguiente[accion] } : e)));
+
+    // Al iniciar el viaje, además del push a la guardia general (ya lo dispara la acción), se ofrece avisar por WhatsApp — igual que al registrar una llamada de guardia: el link lo abre quien dispara el aviso.
+    if (accion === "iniciar" && res.avisoWhatsapp) {
+      const { telefono, texto } = res.avisoWhatsapp;
+      window.open(telefono ? linkWhatsappIndividual(telefono, texto) : linkWhatsappGrupo(texto), "_blank");
+    }
   }
 
   return (

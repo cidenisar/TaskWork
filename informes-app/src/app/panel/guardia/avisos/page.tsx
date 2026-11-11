@@ -10,6 +10,7 @@ const TIPO_LABEL: Record<TipoNotificacionGuardia, string> = {
   cambio_pendiente: "Cambio pendiente",
   cambio_respondido: "Cambio respondido",
   asuncion_semanal: "Asunción semanal",
+  viaje_iniciado: "Viaje iniciado",
 };
 
 const ESTADO_LABEL: Record<EstadoNotificacionGuardia, string> = {

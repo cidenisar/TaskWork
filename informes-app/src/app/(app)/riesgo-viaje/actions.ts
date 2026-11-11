@@ -5,11 +5,15 @@ import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { requireProfile, requireSuperusuario } from "@/lib/auth";
 import { filenameDesdeStoragePath } from "@/lib/pdf/filename";
 import { eliminarRegistroConArchivos, type EliminarResult } from "@/lib/admin/eliminar-registro";
+import { cargarGuardiaGeneralActual } from "@/lib/guardia/datos";
+import { notificar } from "@/lib/guardia/notificar";
 import type { EstadoViaje } from "@/lib/database.types";
 
 export interface ActualizarEstadoViajeResult {
   success: boolean;
   error?: string;
+  /** Solo cuando la acción fue "iniciar" — para que quien inició el viaje pueda avisar por WhatsApp a la guardia general (el aviso garantizado ya es el push). */
+  avisoWhatsapp?: { telefono: string | null; texto: string };
 }
 
 export interface UrlPdfResult {
@@ -54,7 +58,7 @@ export async function actualizarEstadoViajeAction(
 
   const { data: evaluacion } = await supabase
     .from("evaluaciones_riesgo_viaje")
-    .select("estado_viaje, created_by, punto_medio")
+    .select("estado_viaje, created_by, punto_medio, origen, destino, conductor_nombre, numero_generacion")
     .eq("id", evaluacionId)
     .single();
   if (!evaluacion) return { success: false, error: "No se encontró la evaluación." };
@@ -95,7 +99,22 @@ export async function actualizarEstadoViajeAction(
 
   revalidatePath("/riesgo-viaje/historial");
   revalidatePath("/panel/riesgo-viaje");
-  return { success: true };
+
+  let avisoWhatsapp: ActualizarEstadoViajeResult["avisoWhatsapp"];
+  if (accion === "iniciar") {
+    const texto = `Inició viaje: ${evaluacion.origen} → ${evaluacion.destino} — ${evaluacion.conductor_nombre} (${evaluacion.numero_generacion})`;
+    const guardia = await cargarGuardiaGeneralActual(supabase);
+    if (guardia) {
+      await notificar(guardia.usuarioId, "viaje_iniciado", "evaluacion_riesgo_viaje", evaluacionId, {
+        title: "Inició un viaje",
+        body: texto,
+        url: "/riesgo-viaje/historial",
+      });
+    }
+    avisoWhatsapp = { telefono: guardia?.telefono ?? null, texto };
+  }
+
+  return { success: true, avisoWhatsapp };
 }
 
 /** Solo Superusuario — mismo gate que el resto de los "Eliminar" de la app. Borra la evaluación (sus acompañantes caen en cascada por FK) y el PDF del storage. */
