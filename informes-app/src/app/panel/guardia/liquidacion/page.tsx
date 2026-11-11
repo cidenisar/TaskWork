@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { cargarPeriodoVigente, calcularLiquidacion } from "@/lib/guardia/datos";
+import { cargarPeriodoVigente, calcularLiquidacion, cargarParametros, cargarSemanasLiquidacion } from "@/lib/guardia/datos";
 import { formatActivaciones } from "@/lib/guardia/motor";
-import { formatMinutosHoras, csvLiquidacion } from "@/lib/guardia/liquidacion";
+import { formatMinutosHoras } from "@/lib/guardia/liquidacion";
 import { CerrarPeriodoButton } from "@/components/guardia/cerrar-periodo-button";
-import { DescargarCsvButton } from "@/components/guardia/descargar-csv-button";
+import { CerrarSemanaButton } from "@/components/guardia/cerrar-semana-button";
+import { Icon } from "@/components/icon";
 
 const PAGINA = 30;
 
@@ -22,19 +23,28 @@ export default async function LiquidacionPage({ searchParams }: { searchParams: 
   const filas = periodo.desde && periodo.hasta ? await calcularLiquidacion(supabase, periodo.desde, periodo.hasta) : [];
   const { data: cierreVigente } =
     periodo.desde && periodo.hasta
-      ? await supabase.from("guardia_periodo_cierre").select("id, cerrado_at").eq("desde", periodo.desde).eq("hasta", periodo.hasta).maybeSingle()
+      ? await supabase
+          .from("guardia_periodo_cierre")
+          .select("id, cerrado_at")
+          .eq("tipo", "global")
+          .eq("desde", periodo.desde)
+          .eq("hasta", periodo.hasta)
+          .maybeSingle()
       : { data: null };
 
   const limite = Math.max(PAGINA, Number(sp.limite) || PAGINA);
   const { data: cierres, count } = await supabase
     .from("guardia_periodo_cierre")
     .select("id, desde, hasta, cerrado_at", { count: "exact" })
+    .eq("tipo", "global")
     .order("cerrado_at", { ascending: false })
     .range(0, limite - 1);
   const totalCierres = count ?? 0;
   const quedan = Math.max(0, totalCierres - (cierres?.length ?? 0));
 
-  const csv = csvLiquidacion(filas.map((f) => ({ nombre: f.nombre, area: f.area, detalle: f.detalle })));
+  const parametros = await cargarParametros(supabase);
+  const semanas = await cargarSemanasLiquidacion(supabase, parametros.cambioMin);
+
   const totalGeneral = filas.reduce((acc, f) => acc + f.detalle.totalCentesimas, 0);
   const totalFrancosGeneral = filas.reduce((acc, f) => acc + f.detalle.totalFrancos, 0);
 
@@ -55,13 +65,38 @@ export default async function LiquidacionPage({ searchParams }: { searchParams: 
             {totalFrancosGeneral > 0 && <div className="item-sub">+ {formatActivaciones(totalFrancosGeneral)} francos compensatorios</div>}
           </div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <DescargarCsvButton nombreArchivo={`liquidacion_${periodo.desde}_${periodo.hasta}.csv`} contenido={csv} />
+            <a href={`/api/guardia/liquidacion/excel?desde=${periodo.desde}&hasta=${periodo.hasta}`} className="btn btn-secondary btn-sm">
+              <Icon name="download" size={13} /> Bajar Excel
+            </a>
             {cierreVigente ? (
               <span className="badge">Cerrado {new Date(cierreVigente.cerrado_at).toLocaleDateString("es-AR")}</span>
             ) : (
               <CerrarPeriodoButton />
             )}
           </div>
+        </div>
+      </div>
+
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div className="section-label">Semanas</div>
+        <p className="empty-note">Cada semana de guardia (miércoles a martes) se puede cerrar apenas termina, sin esperar al período completo.</p>
+        <div className="item-list" style={{ marginTop: 8 }}>
+          {semanas.map((s) => (
+            <div className="list-item" key={s.semanaInicio}>
+              <div className="info">
+                <div className="item-name">
+                  {fmtFecha(s.semanaInicio)} – {fmtFecha(s.semanaFin)}
+                </div>
+              </div>
+              {s.cerrada && s.cierreId ? (
+                <Link href={`/panel/guardia/liquidacion/${s.cierreId}`} className="btn btn-secondary btn-sm" style={{ textDecoration: "none" }}>
+                  Cerrada — ver detalle
+                </Link>
+              ) : (
+                <CerrarSemanaButton semanaInicio={s.semanaInicio} />
+              )}
+            </div>
+          ))}
         </div>
       </div>
 

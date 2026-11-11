@@ -1,8 +1,8 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { formatActivaciones } from "@/lib/guardia/motor";
-import { formatMinutosHoras, csvLiquidacion, type FichaPersonaDetalle } from "@/lib/guardia/liquidacion";
-import { DescargarCsvButton } from "@/components/guardia/descargar-csv-button";
+import { formatMinutosHoras, type FichaPersonaDetalle } from "@/lib/guardia/liquidacion";
+import { Icon } from "@/components/icon";
 
 interface FilaCongelada {
   usuarioId: string;
@@ -21,7 +21,7 @@ export default async function PeriodoCerradoPage({ params }: { params: Promise<{
   const supabase = await createClient();
   const { data: cierre } = await supabase
     .from("guardia_periodo_cierre")
-    .select("id, desde, hasta, cerrado_at, cerrado_por, resultado_json")
+    .select("id, desde, hasta, cerrado_at, cerrado_por, resultado_json, tipo")
     .eq("id", id)
     .maybeSingle();
   if (!cierre) notFound();
@@ -33,13 +33,13 @@ export default async function PeriodoCerradoPage({ params }: { params: Promise<{
   const filas = (cierre.resultado_json as FilaCongelada[] | null) ?? [];
   const totalGeneral = filas.reduce((acc, f) => acc + f.detalle.totalCentesimas, 0);
   const totalFrancosGeneral = filas.reduce((acc, f) => acc + (f.detalle.totalFrancos ?? 0), 0);
-  const csv = csvLiquidacion(filas.map((f) => ({ nombre: f.nombre, area: f.area, detalle: f.detalle })));
+  const esSemanal = cierre.tipo === "semanal";
 
   return (
     <div>
       <div className="page-heading">
         <h1>
-          Período {fmtFecha(cierre.desde)} – {fmtFecha(cierre.hasta)}
+          {esSemanal ? "Semana" : "Período"} {fmtFecha(cierre.desde)} – {fmtFecha(cierre.hasta)}
         </h1>
         <p>
           Cerrado el {new Date(cierre.cerrado_at).toLocaleString("es-AR")} por {quienCerro?.nombre_completo ?? "—"} — congelado, no se recalcula
@@ -49,11 +49,15 @@ export default async function PeriodoCerradoPage({ params }: { params: Promise<{
       <div className="card" style={{ marginBottom: 16 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
           <div>
-            <div className="section-label">Total del período</div>
+            <div className="section-label">
+              Total {esSemanal ? "de la semana" : "del período"} <span className="badge">{esSemanal ? "Semanal" : "Período"}</span>
+            </div>
             <div style={{ fontSize: 28, fontWeight: 700, marginTop: 4 }}>{formatActivaciones(totalGeneral)} activaciones</div>
             {totalFrancosGeneral > 0 && <div className="item-sub">+ {formatActivaciones(totalFrancosGeneral)} francos compensatorios</div>}
           </div>
-          <DescargarCsvButton nombreArchivo={`liquidacion_${cierre.desde}_${cierre.hasta}.csv`} contenido={csv} />
+          <a href={`/api/guardia/liquidacion/${cierre.id}/excel`} className="btn btn-secondary btn-sm">
+            <Icon name="download" size={13} /> Bajar Excel
+          </a>
         </div>
       </div>
 

@@ -23,7 +23,13 @@ export default async function ParametrosGuardiaPage() {
 
   const { data: cierreVigente } =
     config?.periodo_desde && config?.periodo_hasta
-      ? await supabase.from("guardia_periodo_cierre").select("id").eq("desde", config.periodo_desde).eq("hasta", config.periodo_hasta).maybeSingle()
+      ? await supabase
+          .from("guardia_periodo_cierre")
+          .select("id")
+          .eq("tipo", "global")
+          .eq("desde", config.periodo_desde)
+          .eq("hasta", config.periodo_hasta)
+          .maybeSingle()
       : { data: null };
 
   return (

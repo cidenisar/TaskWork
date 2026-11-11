@@ -66,7 +66,13 @@ export async function guardarParametroGuardiaAction(campo: CampoParametro, valor
     const hasta = campo === "periodo_hasta" ? (valorNuevo as string) : periodo?.periodo_hasta;
     if (desde && hasta && hasta < desde) return { success: false, error: "El fin del período no puede ser antes del inicio." };
     if (desde && hasta) {
-      const { data: cierre } = await supabase.from("guardia_periodo_cierre").select("id").eq("desde", desde).eq("hasta", hasta).maybeSingle();
+      const { data: cierre } = await supabase
+        .from("guardia_periodo_cierre")
+        .select("id")
+        .eq("tipo", "global")
+        .eq("desde", desde)
+        .eq("hasta", hasta)
+        .maybeSingle();
       if (cierre) return { success: false, error: "Ese período ya está cerrado — elegí otro rango (el siguiente)." };
     }
   }

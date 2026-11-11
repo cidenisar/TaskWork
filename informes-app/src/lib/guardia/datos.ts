@@ -8,7 +8,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/database.types";
 import type { Cronograma, CambioGuardia, PersonaGuardia, AreaGuardia } from "./cronograma";
-import { AREAS_GUARDIA, guardiaDe } from "./cronograma";
+import { AREAS_GUARDIA, guardiaDe, inicioSemana, finSemana } from "./cronograma";
 import type { ParametrosGuardia } from "./motor";
 import { horaGuardiaIso } from "./reloj";
 import { liquidarConDetalle, type FichaPersonaDetalle, type ParticipacionDetalle } from "./liquidacion";
@@ -181,6 +181,43 @@ export async function calcularLiquidacion(supabase: Client, desde: string, hasta
       detalle: resultado[id] ?? { porDia: {}, totalMinutos: 0, totalCentesimas: 0, totalFrancos: 0 },
     }))
     .sort((a, b) => a.nombre.localeCompare(b.nombre));
+}
+
+function restarDias(fechaIso: string, dias: number): string {
+  const d = new Date(`${fechaIso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - dias);
+  return d.toISOString().slice(0, 10);
+}
+
+export interface SemanaLiquidacion {
+  /** Miércoles (fecha de guardia) que arranca la semana. */
+  semanaInicio: string;
+  /** Martes siguiente — último día de guardia de esa semana. */
+  semanaFin: string;
+  cerrada: boolean;
+  cierreId: string | null;
+}
+
+/**
+ * Las últimas `cantidad` semanas de guardia (miércoles a martes, HANDOFF
+ * §7.1) que YA TERMINARON — nunca incluye la semana en curso, todavía no
+ * terminó — junto con si cada una ya se cerró. Pedido de Ivan: poder
+ * liquidar semana por semana a medida que pasan, antes de esperar al
+ * cierre del período global más grande.
+ */
+export async function cargarSemanasLiquidacion(supabase: Client, cambioMin: number, cantidad = 8): Promise<SemanaLiquidacion[]> {
+  const semanaActual = inicioSemana(horaGuardiaIso(), cambioMin);
+  const inicios = Array.from({ length: cantidad }, (_, i) => restarDias(semanaActual, 7 * (i + 1)));
+
+  const { data: cerradas } = await supabase.from("guardia_periodo_cierre").select("id, desde").eq("tipo", "semanal").in("desde", inicios);
+  const cierrePorDesde = new Map((cerradas ?? []).map((c) => [c.desde, c.id]));
+
+  return inicios.map((semanaInicio) => ({
+    semanaInicio,
+    semanaFin: finSemana(semanaInicio),
+    cerrada: cierrePorDesde.has(semanaInicio),
+    cierreId: cierrePorDesde.get(semanaInicio) ?? null,
+  }));
 }
 
 export interface GuardiaGeneralActual {

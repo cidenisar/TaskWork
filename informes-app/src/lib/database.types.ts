@@ -1007,6 +1007,8 @@ export type GuardiaFeriadoHistRow = {
   cuando: string;
 };
 
+export type TipoCierreGuardia = "semanal" | "global";
+
 export type GuardiaPeriodoCierreRow = {
   id: string;
   desde: string;
@@ -1015,6 +1017,7 @@ export type GuardiaPeriodoCierreRow = {
   cerrado_por: string;
   parametros_json: unknown;
   resultado_json: unknown;
+  tipo: TipoCierreGuardia;
 };
 
 export type GuardiaCronogramaHistRow = {

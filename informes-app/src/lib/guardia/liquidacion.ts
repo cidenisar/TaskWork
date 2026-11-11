@@ -2,8 +2,8 @@
  * Liquidación por período (HANDOFF §8/§11/§12.11/§13, Fase 6) — construido
  * ENCIMA del motor (`motor.ts`), sin tocar ni una de sus reglas ya
  * confirmadas por Ivan. Agrega solo lo que hace falta para mostrar en
- * pantalla y exportar a CSV: cuántos EVENTOS tocaron cada día (lo que
- * Ivan ya lleva a mano en su planilla) y el tipo de día.
+ * pantalla y exportar a planilla (ver `liquidacion-excel.ts`): cuántos
+ * EVENTOS tocaron cada día (lo que Ivan ya lleva a mano) y el tipo de día.
  *
  * "Derivados, no guardados" (HANDOFF §11): esto se vuelve a calcular cada
  * vez a partir de `guardia_participacion` — nunca se guarda un contador
@@ -11,7 +11,7 @@
  * `guardia_periodo_cierre`) se guarda una foto fija de lo que esta
  * función devolvió en ese momento.
  */
-import { calcularEvento, centesimasDelDia, formatActivaciones, PARAMETROS_DEFAULT, type ParametrosGuardia, type Participacion } from "./motor";
+import { calcularEvento, centesimasDelDia, PARAMETROS_DEFAULT, type ParametrosGuardia, type Participacion } from "./motor";
 
 export type TipoDia = "Feriado" | "Fin de semana" | "Día hábil";
 
@@ -124,62 +124,15 @@ export function liquidarConDetalle(
   return personas;
 }
 
-export interface FilaCsvPersona {
+/** Una fila de la liquidación lista para exportar (XLSX — ver `liquidacion-excel.ts`), por persona. */
+export interface FilaLiquidacionExport {
   nombre: string;
   area: string;
   detalle: FichaPersonaDetalle;
 }
 
-function fechaCsv(fecha: string): string {
+/** DD/MM/AAAA — para mostrar fechas en la planilla exportada. */
+export function fechaLegible(fecha: string): string {
   const [y, m, d] = fecha.split("-");
   return `${d}/${m}/${y}`;
-}
-
-function modalidadCsv(modalidad: ModalidadDetalle | null): string {
-  return modalidad === "CAMPO" ? "Asistió al sitio" : modalidad === "REMOTO" ? "Remoto" : "—";
-}
-
-/**
- * "Persona;Guardia;Fecha;Tipo de día;Incidente;Modalidad;Horas del evento;
- * Resultado del día;Franco" + fila TOTAL por persona — una fila por cada
- * incidente que aportó minutos ese día (no agregado por día como antes),
- * pedido de Ivan para poder evaluar qué pasó. "Resultado del día" y
- * "Franco" se repiten en cada fila de un mismo día porque el corte de 4:30
- * es sobre la suma del día entero, nunca evento por evento.
- */
-export function csvLiquidacion(filas: FilaCsvPersona[]): string {
-  const lineas = ["Persona;Guardia;Fecha;Tipo de día;Incidente;Modalidad;Horas del evento;Resultado del día;Franco"];
-  for (const { nombre, area, detalle } of filas) {
-    for (const fecha of Object.keys(detalle.porDia).sort()) {
-      const dia = detalle.porDia[fecha];
-      // Un cierre congelado antes de que existieran incidente/modalidad/franco no trae esos campos — se completan en blanco, nunca se recalculan.
-      const francos = dia.francos ?? 0;
-      const detalleEventos = dia.detalleEventos ?? [];
-      const resultadoDia = formatActivaciones(dia.centesimas);
-      const francoDia = francos > 0 ? formatActivaciones(francos) : "—";
-      const eventos = detalleEventos.length > 0 ? detalleEventos : [{ eventoId: "", incidente: "—", modalidad: null, minutos: dia.minutos }];
-      for (const ev of eventos) {
-        lineas.push(
-          [nombre, area, fechaCsv(fecha), dia.tipoDia, ev.incidente, modalidadCsv(ev.modalidad), formatMinutosHoras(ev.minutos), resultadoDia, francoDia].join(
-            ";",
-          ),
-        );
-      }
-    }
-    const totalFrancos = detalle.totalFrancos ?? 0;
-    lineas.push(
-      [
-        nombre,
-        area,
-        "TOTAL",
-        "",
-        "",
-        "",
-        formatMinutosHoras(detalle.totalMinutos),
-        formatActivaciones(detalle.totalCentesimas),
-        totalFrancos > 0 ? formatActivaciones(totalFrancos) : "—",
-      ].join(";"),
-    );
-  }
-  return lineas.join("\n");
 }

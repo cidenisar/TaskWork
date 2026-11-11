@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { liquidar, type Participacion } from "./motor";
-import { liquidarConDetalle, tipoDiaDe, formatMinutosHoras, csvLiquidacion, type ParticipacionDetalle } from "./liquidacion";
+import { liquidarConDetalle, tipoDiaDe, formatMinutosHoras, type ParticipacionDetalle } from "./liquidacion";
 
 const ev = (persona: string, inicio: string, fin: string, enCurso = false): ParticipacionDetalle => ({ persona, inicio, fin, enCurso });
 
@@ -50,27 +50,6 @@ test("liquidarConDetalle: marca enCurso en el día si la participación todavía
 test("liquidarConDetalle: tipoDia correcto por día (sábado = fin de semana)", () => {
   const r = liquidarConDetalle([ev("beto", "2026-09-12T10:00", "2026-09-12T14:00")]);
   assert.equal(r.beto.porDia["2026-09-12"].tipoDia, "Fin de semana");
-});
-
-test("csvLiquidacion: encabezado fijo + una fila por incidente del día + fila TOTAL por persona", () => {
-  const detalle = liquidarConDetalle([ev("ana", "2026-09-16T17:00", "2026-09-16T20:00")]).ana;
-  const csv = csvLiquidacion([{ nombre: "Ana", area: "Infraestructura", detalle }]);
-  const lineas = csv.split("\n");
-  assert.equal(lineas[0], "Persona;Guardia;Fecha;Tipo de día;Incidente;Modalidad;Horas del evento;Resultado del día;Franco");
-  assert.equal(lineas[1], "Ana;Infraestructura;16/09/2026;Día hábil;—;—;3:00;0,5;—");
-  assert.equal(lineas[2], "Ana;Infraestructura;TOTAL;;;;3:00;0,5;—");
-});
-
-test("csvLiquidacion: una fila por incidente cuando hay más de uno en el mismo día, con modalidad", () => {
-  const detalle = liquidarConDetalle([
-    { ...ev("ana", "2026-09-16T17:00", "2026-09-16T18:00"), eventoId: "e1", incidente: "#0001 · UPS — Mendoza", modalidad: "CAMPO" },
-    { ...ev("ana", "2026-09-16T20:00", "2026-09-16T21:00"), eventoId: "e2", incidente: "#0002 · Router — San Rafael", modalidad: "REMOTO" },
-  ]).ana;
-  const csv = csvLiquidacion([{ nombre: "Ana", area: "Infraestructura", detalle }]);
-  const lineas = csv.split("\n");
-  assert.equal(lineas[1], "Ana;Infraestructura;16/09/2026;Día hábil;#0001 · UPS — Mendoza;Asistió al sitio;1:00;0,5;—");
-  assert.equal(lineas[2], "Ana;Infraestructura;16/09/2026;Día hábil;#0002 · Router — San Rafael;Remoto;1:00;0,5;—");
-  assert.equal(lineas[3], "Ana;Infraestructura;TOTAL;;;;2:00;0,5;—");
 });
 
 test("francos: fin de semana u feriado trabajado da franco con el mismo corte de 4:30 que la activación", () => {
