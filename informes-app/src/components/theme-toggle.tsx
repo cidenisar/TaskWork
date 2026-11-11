@@ -21,7 +21,7 @@ function aplicar(tema: "light" | "dark") {
   else delete document.documentElement.dataset.theme;
 }
 
-export function ThemeToggle({ className = "signout" }: { className?: string }) {
+export function ThemeToggle({ className = "signout", soloIcono = false }: { className?: string; soloIcono?: boolean }) {
   // Inicializador perezoso, no un efecto: en el servidor no hay `localStorage`
   // (devuelve "light", el default) y en el cliente lee el valor real en la
   // misma pasada de hidratación — React puede marcar esto con un aviso de
@@ -51,9 +51,21 @@ export function ThemeToggle({ className = "signout" }: { className?: string }) {
       onClick={alternar}
       className={className}
       title={tema === "light" ? "Usar tema oscuro" : "Usar tema claro"}
+      aria-label={tema === "light" ? "Usar tema oscuro" : "Usar tema claro"}
       suppressHydrationWarning
     >
-      <Icon name={tema === "light" ? "moon" : "sun"} size={13} /> {tema === "light" ? "Oscuro" : "Claro"}
+      {soloIcono ? (
+        // `key` para que React monte un ícono nuevo al cambiar y se repita la animación de giro.
+        // La palabra solo se ve en el celular (criterio de la app: en móvil, ícono con palabra).
+        <>
+          <Icon key={tema} name={tema === "light" ? "moon" : "sun"} size={19} className="mz-gira" />
+          <span className="mz-lbl">{tema === "light" ? "Oscuro" : "Claro"}</span>
+        </>
+      ) : (
+        <>
+          <Icon name={tema === "light" ? "moon" : "sun"} size={13} /> {tema === "light" ? "Oscuro" : "Claro"}
+        </>
+      )}
     </button>
   );
 }

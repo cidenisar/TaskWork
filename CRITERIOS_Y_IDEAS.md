@@ -1914,6 +1914,7 @@ Salió de pasar Informes a la imagen "Mezcla" (azul/naranja/blanco, 10/11/2026).
 - **Para animar íconos según cuál son** (el lápiz garabatea, la flecha de descarga baja, el tacho tiembla), el componente `<Icon>` pone `data-icon={name}` en el `<svg>` y el CSS elige por `svg[data-icon='edit']`. Ninguna pantalla se toca.
 - Siempre un bloque `@media (prefers-reduced-motion: reduce)` que apague todo.
 - **Si se cambia el tema por defecto** (oscuro → claro), el interruptor sigue leyendo la misma clave guardada: quien ya había elegido uno no nota el cambio.
+- **Cambiar solo los colores no hace que la app "quede como el diseño".** En la primera pasada de Informes se cambiaron tokens y animaciones pero quedó la distribución vieja (barra en tarjeta, barra de sesión aparte, pestañas en píldora, pasos con círculos), y el dueño lo vio distinto del diseño aprobado. Si la maqueta tiene otra estructura (barra a todo el ancho con pestañas y cuenta adentro, avance en barras), hay que tocar los componentes de estructura (shell, stepper), no solo la hoja de estilos. Antes de dar por terminado, comparar captura contra maqueta lado a lado.
 
 ## 30. "Dar de alta" en el momento en que el recurso cambia de manos, no cuando se escribe el informe — estado pendiente con FK nullable, auto-corrección de bajo riesgo, y "adjuntar" nunca es "duplicar"
 

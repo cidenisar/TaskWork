@@ -25,11 +25,15 @@ export function PanelNav({ esAdminOSupervisor }: { esAdminOSupervisor: boolean }
   const pathname = usePathname();
   const items = esAdminOSupervisor ? [...ITEMS, ...ITEMS_ADMIN_SUPERVISOR] : ITEMS;
   return (
-    <nav className="panel-nav">
+    <nav className="panel-nav mz-nav" aria-label="Secciones del Panel">
       {items.map((item) => (
-        <Link key={item.href} href={item.href} className={`panel-nav-item${pathname === item.href ? " active" : ""}`}>
-          <span className="panel-nav-dot" />
-          <Icon name={item.icon} size={14} />
+        <Link
+          key={item.href}
+          href={item.href}
+          className={`panel-nav-item mz-nav-item${pathname === item.href ? " active on" : ""}`}
+          aria-current={pathname === item.href ? "page" : undefined}
+        >
+          <Icon name={item.icon} size={16} />
           {item.label}
         </Link>
       ))}
