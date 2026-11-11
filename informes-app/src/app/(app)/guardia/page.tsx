@@ -4,7 +4,7 @@ import { requireProfile } from "@/lib/auth";
 import { cargarAreaDe } from "@/lib/guardia/datos";
 import { esGuardiaGeneral, esDeGuardia } from "@/lib/guardia/permisos";
 import { horaGuardiaIso } from "@/lib/guardia/reloj";
-import { Icon } from "@/components/icon";
+import { Icon, StatusDot } from "@/components/icon";
 import { BotonFeriadoHoy } from "@/components/guardia/boton-feriado-hoy";
 import { CambiosPendientes, type CambioPendiente } from "@/components/guardia/cambios-pendientes";
 import { AsuncionSemanal } from "@/components/guardia/asuncion-semanal";
@@ -86,6 +86,9 @@ export default async function GuardiaPage() {
                 <div>
                   <div className="item-name">
                     #{e.numero.toString().padStart(4, "0")} · {e.tipo_alarma}
+                    <span className="venc-badge ok">
+                      <StatusDot tone="ok" /> Abierto
+                    </span>
                   </div>
                   <div className="item-sub">{e.sitio}</div>
                 </div>

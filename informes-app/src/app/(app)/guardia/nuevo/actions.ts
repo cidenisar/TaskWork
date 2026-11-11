@@ -11,6 +11,7 @@ export interface CrearEventoResult {
   success: boolean;
   eventoId?: string;
   numero?: number;
+  sitio?: string;
   error?: string;
 }
 
@@ -88,5 +89,5 @@ export async function crearEventoAction(formData: FormData): Promise<CrearEvento
   revalidatePath("/guardia");
   revalidatePath("/guardia/historial");
   revalidatePath("/panel/guardia");
-  return { success: true, eventoId: evento.id, numero: evento.numero };
+  return { success: true, eventoId: evento.id, numero: evento.numero, sitio: sitioTexto };
 }

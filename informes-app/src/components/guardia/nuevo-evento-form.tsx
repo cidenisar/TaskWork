@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { crearEventoAction } from "@/app/(app)/guardia/nuevo/actions";
 import { UbicacionFields, type GpsCapturado } from "@/components/ubicaciones/ubicacion-fields";
 import type { Ubicacion } from "@/components/ubicaciones/types";
+import { linkWhatsappGrupo } from "@/lib/guardia/whatsapp";
 import type { TipoAlarmaGuardia, TicketTipoGuardia } from "@/lib/database.types";
 
 const TIPOS_ALARMA: TipoAlarmaGuardia[] = ["Grupo electrógeno", "Router", "UPS", "Otro"];
@@ -55,7 +56,13 @@ export function NuevoEventoGuardiaForm({ provincias, ubicaciones }: { provincias
       setError(res.error || "No se pudo registrar el evento.");
       return;
     }
-    router.push(`/guardia/evento/${res.eventoId}`);
+    const textoLlamada = [
+      `#${(res.numero ?? 0).toString().padStart(4, "0")} · ${tipoAlarma} — ${res.sitio ?? ""}`,
+      descripcion,
+      `${ticketTipo}${ticketNumero ? ` #${ticketNumero}` : ""}`,
+    ].join("\n");
+    window.open(linkWhatsappGrupo(textoLlamada), "_blank");
+    router.push("/guardia");
   }
 
   return (

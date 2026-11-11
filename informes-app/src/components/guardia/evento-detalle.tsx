@@ -247,6 +247,8 @@ function RevisionEvento({
       setError(res.error || "No se pudo guardar.");
       return;
     }
+    const detalleTexto = detalle.trim();
+    window.open(linkWhatsappGrupo(`Revisado en el SCADA: sin novedad.${detalleTexto ? ` ${detalleTexto}` : ""}`), "_blank");
     setDetalle("");
     setDecision(null);
     router.refresh();
@@ -277,6 +279,11 @@ function RevisionEvento({
       setError(resActivar.error || "No se pudo activar.");
       return;
     }
+    const queHacer = pedido === "ASISTIR" ? "asistir al sitio" : "revisar";
+    window.open(
+      linkWhatsappGrupo(`Revisado en el SCADA: hay novedad. ${detalle.trim()}\nSe activa guardia de ${[...areas].join(", ")} para ${queHacer}.`),
+      "_blank",
+    );
     if (resActivar.sinAsignar) setSinAsignar(resActivar.sinAsignar);
     setAreas(new Set());
     setDetalle("");
@@ -463,12 +470,6 @@ export function EventoGuardiaDetalle({
   const [error, setError] = useState<string | null>(null);
   const abierto = evento.estado === "abierto";
 
-  const textoLlamada = [
-    `#${evento.numero.toString().padStart(4, "0")} · ${evento.tipoAlarma} — ${evento.sitio}`,
-    evento.descripcion,
-    `${evento.ticketTipo}${evento.ticketNumero ? ` #${evento.ticketNumero}` : ""}`,
-  ].join("\n");
-
   async function cerrar() {
     if (!textoCierre.trim()) {
       setError("Contá cómo quedó para poder cerrar.");
@@ -482,8 +483,8 @@ export function EventoGuardiaDetalle({
       setError(res.error || "No se pudo cerrar.");
       return;
     }
-    setMostrarCierre(false);
-    router.refresh();
+    window.open(linkWhatsappGrupo(textoCierre.trim()), "_blank");
+    router.push("/guardia");
   }
 
   return (
@@ -503,18 +504,6 @@ export function EventoGuardiaDetalle({
           {evento.ticketNumero ? ` #${evento.ticketNumero}` : ""} · Llamada {fmt(evento.creadoAt)}
           {evento.cerradoAt && ` · Cerrado ${fmt(evento.cerradoAt)}`}
         </div>
-        <a
-          href={linkWhatsappGrupo(textoLlamada)}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="btn btn-primary"
-          style={{ marginTop: 12, width: "100%" }}
-        >
-          <Icon name="chat" size={14} /> Compartir al grupo
-        </a>
-        <p className="item-sub" style={{ marginTop: 6 }}>
-          Se abre WhatsApp — elegí &quot;{grupoWhatsapp}&quot; y enviá.
-        </p>
         {mostrarCierre && (
           <div style={{ marginTop: 10, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-start" }}>
             <input
