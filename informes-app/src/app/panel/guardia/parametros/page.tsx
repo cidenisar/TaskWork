@@ -1,9 +1,10 @@
 import { createClient } from "@/lib/supabase/server";
 import { ParametrosGuardiaCard } from "@/components/panel/guardia/parametros-guardia-card";
+import { TiposAlarmaCard } from "@/components/panel/guardia/tipos-alarma-card";
 
 export default async function ParametrosGuardiaPage() {
   const supabase = await createClient();
-  const [{ data: config }, { data: hist }] = await Promise.all([
+  const [{ data: config }, { data: hist }, { data: tiposAlarma }] = await Promise.all([
     supabase
       .from("guardia_config")
       .select(
@@ -12,6 +13,7 @@ export default async function ParametrosGuardiaPage() {
       .eq("id", 1)
       .single(),
     supabase.from("guardia_config_hist").select("id, campo, antes, despues, quien, cuando").order("cuando", { ascending: false }).limit(30),
+    supabase.from("guardia_tipo_alarma").select("id, nombre, activo").order("nombre"),
   ]);
 
   const quienIds = [...new Set((hist ?? []).map((h) => h.quien).filter((id): id is string => id !== null))];
@@ -55,6 +57,7 @@ export default async function ParametrosGuardiaPage() {
         }))}
         periodoCerrado={!!cierreVigente}
       />
+      <TiposAlarmaCard tipos={tiposAlarma ?? []} />
     </div>
   );
 }

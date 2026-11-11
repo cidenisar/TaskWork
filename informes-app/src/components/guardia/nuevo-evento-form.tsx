@@ -8,12 +8,19 @@ import type { Ubicacion } from "@/components/ubicaciones/types";
 import { linkWhatsappGrupo } from "@/lib/guardia/whatsapp";
 import type { TipoAlarmaGuardia, TicketTipoGuardia } from "@/lib/database.types";
 
-const TIPOS_ALARMA: TipoAlarmaGuardia[] = ["Grupo electrógeno", "Router", "UPS", "Otro"];
 const TIPOS_TICKET: TicketTipoGuardia[] = ["Incidencia", "Ticket", "Tarea de cambio"];
 
-export function NuevoEventoGuardiaForm({ provincias, ubicaciones }: { provincias: string[]; ubicaciones: Ubicacion[] }) {
+export function NuevoEventoGuardiaForm({
+  provincias,
+  ubicaciones,
+  tiposAlarma,
+}: {
+  provincias: string[];
+  ubicaciones: Ubicacion[];
+  tiposAlarma: string[];
+}) {
   const router = useRouter();
-  const [tipoAlarma, setTipoAlarma] = useState<TipoAlarmaGuardia>("Grupo electrógeno");
+  const [tipoAlarma, setTipoAlarma] = useState<TipoAlarmaGuardia>(tiposAlarma[0] ?? "");
   const [provinciaFiltro, setProvinciaFiltro] = useState("");
   const [ubicacionId, setUbicacionId] = useState("");
   const [localidadNueva, setLocalidadNueva] = useState("");
@@ -69,8 +76,8 @@ export function NuevoEventoGuardiaForm({ provincias, ubicaciones }: { provincias
     <div className="card">
       <div className="field">
         <label>Tipo de alarma</label>
-        <select value={tipoAlarma} onChange={(e) => setTipoAlarma(e.target.value as TipoAlarmaGuardia)} disabled={busy}>
-          {TIPOS_ALARMA.map((t) => (
+        <select value={tipoAlarma} onChange={(e) => setTipoAlarma(e.target.value)} disabled={busy}>
+          {tiposAlarma.map((t) => (
             <option key={t} value={t}>
               {t}
             </option>

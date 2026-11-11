@@ -1067,8 +1067,17 @@ export type ModalidadParticipacionGuardia = "REMOTO" | "CAMPO";
 export type PedidoParticipacionGuardia = "REVISAR" | "ASISTIR";
 export type EstadoParticipacionGuardia = "en_curso" | "terminada" | "no_contesto";
 export type ScadaGuardia = "SIN_NOVEDAD" | "CON_NOVEDAD";
-export type TipoAlarmaGuardia = "Grupo electrógeno" | "Router" | "UPS" | "Otro";
+/** Catálogo editable (`guardia_tipo_alarma`) — texto libre a propósito: un evento ya registrado no se rompe si más adelante se saca ese tipo del catálogo. */
+export type TipoAlarmaGuardia = string;
 export type TicketTipoGuardia = "Incidencia" | "Ticket" | "Tarea de cambio";
+
+export type GuardiaTipoAlarmaRow = {
+  id: string;
+  nombre: string;
+  activo: boolean;
+  creado_por: string | null;
+  creado_at: string;
+};
 
 export type GuardiaEventoRow = {
   id: string;
@@ -1123,7 +1132,7 @@ export type PushSubscriptionRow = {
   created_at: string;
 };
 
-export type TipoNotificacionGuardia = "activacion" | "cambio_pendiente" | "cambio_respondido" | "asuncion_semanal";
+export type TipoNotificacionGuardia = "activacion" | "cambio_pendiente" | "cambio_respondido" | "asuncion_semanal" | "viaje_iniciado";
 export type EstadoNotificacionGuardia = "pendiente" | "enviada" | "entregada" | "leida" | "fallida";
 
 export type GuardiaNotificacionRow = {
@@ -1492,6 +1501,7 @@ export interface Database {
         Partial<GuardiaPeriodoCierreRow> & Pick<GuardiaPeriodoCierreRow, "desde" | "hasta" | "cerrado_por" | "parametros_json" | "resultado_json">,
         Partial<GuardiaPeriodoCierreRow>
       >;
+      guardia_tipo_alarma: Tbl<GuardiaTipoAlarmaRow, Partial<GuardiaTipoAlarmaRow> & Pick<GuardiaTipoAlarmaRow, "nombre">, Partial<GuardiaTipoAlarmaRow>>;
       guardia_feriado_hist: Tbl<
         GuardiaFeriadoHistRow,
         Partial<GuardiaFeriadoHistRow> & Pick<GuardiaFeriadoHistRow, "fecha" | "accion">,

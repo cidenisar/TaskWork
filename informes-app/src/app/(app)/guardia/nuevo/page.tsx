@@ -18,9 +18,10 @@ export default async function NuevoEventoGuardiaPage() {
     );
   }
 
-  const [provinciasRes, ubicaciones] = await Promise.all([
+  const [provinciasRes, ubicaciones, tiposAlarmaRes] = await Promise.all([
     supabase.from("catalogo_provincias").select("nombre").order("nombre"),
     fetchTodasLasUbicaciones(supabase),
+    supabase.from("guardia_tipo_alarma").select("nombre").eq("activo", true).order("nombre"),
   ]);
 
   return (
@@ -29,7 +30,11 @@ export default async function NuevoEventoGuardiaPage() {
         <h1>Registrar llamada</h1>
         <p>Lo que comentó operación central — tipo de alarma, sitio y ticket</p>
       </div>
-      <NuevoEventoGuardiaForm provincias={(provinciasRes.data ?? []).map((p) => p.nombre)} ubicaciones={ubicaciones} />
+      <NuevoEventoGuardiaForm
+        provincias={(provinciasRes.data ?? []).map((p) => p.nombre)}
+        ubicaciones={ubicaciones}
+        tiposAlarma={(tiposAlarmaRes.data ?? []).map((t) => t.nombre)}
+      />
     </div>
   );
 }
