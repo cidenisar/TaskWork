@@ -150,6 +150,7 @@ const NAV_CONFIG: Record<string, ModuleConfig> = {
     brand: "Guardia General",
     tabs: [
       { href: "/guardia", label: "Mi guardia" },
+      { href: "/guardia/horas", label: "Mis horas" },
       { href: "/guardia/historial", label: "Historial" },
     ],
   },

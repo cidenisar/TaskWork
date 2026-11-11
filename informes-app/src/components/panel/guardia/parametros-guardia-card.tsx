@@ -52,7 +52,15 @@ const CAMPOS_HORA: { campo: Campo; label: string; nota: string }[] = [
   { campo: "cambio_min", label: "Hora de cambio de guardia (miércoles)", nota: "Cuándo entra la guardia nueva de la semana" },
 ];
 
-export function ParametrosGuardiaCard({ config, historial }: { config: ConfigGuardia; historial: HistEntry[] }) {
+export function ParametrosGuardiaCard({
+  config,
+  historial,
+  periodoCerrado,
+}: {
+  config: ConfigGuardia;
+  historial: HistEntry[];
+  periodoCerrado: boolean;
+}) {
   const [valores, setValores] = useState(config);
   const [edit, setEdit] = useState<Record<string, string>>({});
   const [busyCampo, setBusyCampo] = useState<Campo | null>(null);
@@ -179,8 +187,14 @@ export function ParametrosGuardiaCard({ config, historial }: { config: ConfigGua
       </div>
 
       <div className="card" style={{ marginTop: 16 }}>
-        <div className="section-label">Período de liquidación</div>
-        <p className="empty-note">Vale hacia adelante — un cambio nunca mueve un período ya cerrado.</p>
+        <div className="section-label">
+          Período de liquidación {periodoCerrado && <span className="badge">Cerrado</span>}
+        </div>
+        <p className="empty-note">
+          {periodoCerrado
+            ? "Este período ya se cerró en Liquidación y queda congelado — para seguir, configurá acá el período siguiente."
+            : "Vale hacia adelante — un cambio nunca mueve un período ya cerrado."}
+        </p>
         <div className="tech-form-grid" style={{ marginTop: 10 }}>
           <div className="field">
             <label>Desde</label>

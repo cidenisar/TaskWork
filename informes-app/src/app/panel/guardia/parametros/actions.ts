@@ -28,12 +28,14 @@ const ETIQUETA: Record<CampoParametro, string> = {
 
 /**
  * Editar UN parámetro de negocio de Guardia General (HANDOFF §8): "un
- * cambio vale hacia adelante y nunca mueve un período ya cerrado" — hoy
- * todavía no existe la clausura de períodos (Fase 6), así que esa parte de
- * la regla no tiene nada que verificar aún; cuando se construya
- * `guardia_periodo_cierre`, este action es el lugar donde hay que
- * bloquear la edición de `periodo_desde`/`periodo_hasta` si el período
- * vigente ya está cerrado.
+ * cambio vale hacia adelante y nunca mueve un período ya cerrado" — un
+ * cambio de `periodo_desde`/`periodo_hasta` SIEMPRE se puede usar para
+ * avanzar al período siguiente; lo único que se bloquea es dejar
+ * configurado exactamente el mismo rango que ya tiene su cierre en
+ * `guardia_periodo_cierre` (eso sí "movería" un período cerrado — volver
+ * a apuntar Parámetros contra algo que ya quedó congelado). Reabrir un
+ * cierre para corregirlo queda para discutir aparte con Ivan (HANDOFF
+ * §16.10) — no se inventa acá.
  */
 const CAMPOS_MINUTOS_DEL_DIA: CampoParametro[] = ["entrada_min", "salida_activacion_min", "madrugada_hasta_min", "tope_media_min", "cambio_min"];
 const CAMPOS_CENTESIMAS: CampoParametro[] = ["valor_media", "valor_entera"];
@@ -63,6 +65,10 @@ export async function guardarParametroGuardiaAction(campo: CampoParametro, valor
     const desde = campo === "periodo_desde" ? (valorNuevo as string) : periodo?.periodo_desde;
     const hasta = campo === "periodo_hasta" ? (valorNuevo as string) : periodo?.periodo_hasta;
     if (desde && hasta && hasta < desde) return { success: false, error: "El fin del período no puede ser antes del inicio." };
+    if (desde && hasta) {
+      const { data: cierre } = await supabase.from("guardia_periodo_cierre").select("id").eq("desde", desde).eq("hasta", hasta).maybeSingle();
+      if (cierre) return { success: false, error: "Ese período ya está cerrado — elegí otro rango (el siguiente)." };
+    }
   }
 
   // El cast es honesto: `campo` es una de las claves editables de GuardiaConfigRow (el tipo

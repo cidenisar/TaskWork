@@ -19,6 +19,11 @@ export default async function ParametrosGuardiaPage() {
     quienIds.length > 0 ? await supabase.from("profiles").select("id, nombre_completo").in("id", quienIds) : { data: [] };
   const nombrePorId = new Map((quienes ?? []).map((q) => [q.id, q.nombre_completo]));
 
+  const { data: cierreVigente } =
+    config?.periodo_desde && config?.periodo_hasta
+      ? await supabase.from("guardia_periodo_cierre").select("id").eq("desde", config.periodo_desde).eq("hasta", config.periodo_hasta).maybeSingle()
+      : { data: null };
+
   return (
     <div>
       <div className="page-heading">
@@ -48,6 +53,7 @@ export default async function ParametrosGuardiaPage() {
           quien: (h.quien && nombrePorId.get(h.quien)) ?? "—",
           cuando: h.cuando,
         }))}
+        periodoCerrado={!!cierreVigente}
       />
     </div>
   );

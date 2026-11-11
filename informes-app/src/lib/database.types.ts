@@ -1007,6 +1007,16 @@ export type GuardiaFeriadoHistRow = {
   cuando: string;
 };
 
+export type GuardiaPeriodoCierreRow = {
+  id: string;
+  desde: string;
+  hasta: string;
+  cerrado_at: string;
+  cerrado_por: string;
+  parametros_json: unknown;
+  resultado_json: unknown;
+};
+
 export type GuardiaCronogramaHistRow = {
   id: string;
   semana_inicio: string;
@@ -1476,6 +1486,11 @@ export interface Database {
         GuardiaFeriadoRow,
         Partial<GuardiaFeriadoRow> & Pick<GuardiaFeriadoRow, "fecha" | "nombre" | "origen">,
         Partial<GuardiaFeriadoRow>
+      >;
+      guardia_periodo_cierre: Tbl<
+        GuardiaPeriodoCierreRow,
+        Partial<GuardiaPeriodoCierreRow> & Pick<GuardiaPeriodoCierreRow, "desde" | "hasta" | "cerrado_por" | "parametros_json" | "resultado_json">,
+        Partial<GuardiaPeriodoCierreRow>
       >;
       guardia_feriado_hist: Tbl<
         GuardiaFeriadoHistRow,
