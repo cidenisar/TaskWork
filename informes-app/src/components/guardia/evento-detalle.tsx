@@ -66,6 +66,11 @@ function fmt(iso: string | null): string {
   return iso ? new Date(iso).toLocaleString("es-AR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "—";
 }
 
+/** A qué evento se refiere cada mensaje publicado — así no se mezclan cuando hay varios eventos en el mismo grupo de WhatsApp. */
+function encabezadoEvento(evento: EventoDetalle): string {
+  return `#${evento.numero.toString().padStart(4, "0")} · ${evento.tipoAlarma} — ${evento.sitio}`;
+}
+
 function FilaParticipacion({
   p,
   evento,
@@ -203,22 +208,22 @@ function FilaParticipacion({
 /**
  * Revisión del evento (HANDOFF §5, pasos 4-5 — unificados en una sola
  * decisión, pedido de Ivan después de la primera prueba real): la guardia
- * general revisa (SCADA u otro medio) y tiene que decidir UNA cosa — o ya
- * está normalizado (lleva directo a escribir el cierre, nunca se cierra
- * solo), o hace falta activar guardia técnica (eligiendo área y pedido).
- * Lo que se escribe como "qué encontraste" siempre queda como novedad
- * (`revisarScadaAction`), haya o no activación después.
+ * general revisa (SCADA u otro medio) y tiene que decidir UNA cosa.
+ *
+ * "Normalizado" (sin activar nada) da el asunto por resuelto en el mismo
+ * paso — publica y cierra el evento ahí mismo, sin pedir un segundo texto
+ * de cierre aparte (eso sería repetir lo mismo dos veces). "Hace falta
+ * activar guardia" en cambio NO cierra solo — ahí sí sigue habiendo
+ * trabajo pendiente, así que el evento sigue abierto hasta que alguien dé
+ * el cierre a mano (botón "Cerrar evento" del encabezado) una vez
+ * resuelto.
  */
 function RevisionEvento({
-  eventoId,
-  scadaActual,
+  evento,
   personasPorArea,
-  onNormalizado,
 }: {
-  eventoId: string;
-  scadaActual: ScadaGuardia | null;
+  evento: EventoDetalle;
   personasPorArea: Record<AreaGuardia, { id: string; nombre: string }[]>;
-  onNormalizado: () => void;
 }) {
   const router = useRouter();
   const [decision, setDecision] = useState<"normalizado" | "activar" | null>(null);
@@ -239,20 +244,27 @@ function RevisionEvento({
   }
 
   async function confirmarNormalizado() {
-    setBusy(true);
-    setError(null);
-    const res = await revisarScadaAction(eventoId, "SIN_NOVEDAD", detalle);
-    setBusy(false);
-    if (!res.success) {
-      setError(res.error || "No se pudo guardar.");
+    if (!detalle.trim()) {
+      setError("Contá cómo quedó para poder cerrar.");
       return;
     }
-    const detalleTexto = detalle.trim();
-    window.open(linkWhatsappGrupo(`Revisado en el SCADA: sin novedad.${detalleTexto ? ` ${detalleTexto}` : ""}`), "_blank");
-    setDetalle("");
-    setDecision(null);
-    router.refresh();
-    onNormalizado();
+    setBusy(true);
+    setError(null);
+    const texto = detalle.trim();
+    const resScada = await revisarScadaAction(evento.id, "SIN_NOVEDAD", texto);
+    if (!resScada.success) {
+      setBusy(false);
+      setError(resScada.error || "No se pudo guardar.");
+      return;
+    }
+    const resCierre = await cerrarEventoAction(evento.id, texto);
+    setBusy(false);
+    if (!resCierre.success) {
+      setError(resCierre.error || "No se pudo cerrar.");
+      return;
+    }
+    window.open(linkWhatsappGrupo(`${encabezadoEvento(evento)}\n${texto}`), "_blank");
+    router.push("/guardia");
   }
 
   async function confirmarActivar() {
@@ -267,13 +279,13 @@ function RevisionEvento({
     setBusy(true);
     setError(null);
     setSinAsignar(null);
-    const resScada = await revisarScadaAction(eventoId, "CON_NOVEDAD", detalle);
+    const resScada = await revisarScadaAction(evento.id, "CON_NOVEDAD", detalle);
     if (!resScada.success) {
       setBusy(false);
       setError(resScada.error || "No se pudo guardar.");
       return;
     }
-    const resActivar = await activarGuardiaTecnicaAction(eventoId, [...areas], pedido);
+    const resActivar = await activarGuardiaTecnicaAction(evento.id, [...areas], pedido);
     setBusy(false);
     if (!resActivar.success) {
       setError(resActivar.error || "No se pudo activar.");
@@ -281,7 +293,9 @@ function RevisionEvento({
     }
     const queHacer = pedido === "ASISTIR" ? "asistir al sitio" : "revisar";
     window.open(
-      linkWhatsappGrupo(`Revisado en el SCADA: hay novedad. ${detalle.trim()}\nSe activa guardia de ${[...areas].join(", ")} para ${queHacer}.`),
+      linkWhatsappGrupo(
+        `${encabezadoEvento(evento)}\nRevisado en el SCADA: hay novedad. ${detalle.trim()}\nSe activa guardia de ${[...areas].join(", ")} para ${queHacer}.`,
+      ),
       "_blank",
     );
     if (resActivar.sinAsignar) setSinAsignar(resActivar.sinAsignar);
@@ -294,9 +308,9 @@ function RevisionEvento({
   return (
     <div className="card" style={{ marginBottom: 16 }}>
       <div className="section-label">Revisión</div>
-      {scadaActual && (
+      {evento.scada && (
         <p className="item-sub" style={{ marginTop: 6 }}>
-          Última revisión: {scadaActual === "SIN_NOVEDAD" ? "sin novedad" : "con novedad"}.
+          Última revisión: {evento.scada === "SIN_NOVEDAD" ? "sin novedad" : "con novedad"}.
         </p>
       )}
       <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
@@ -324,12 +338,18 @@ function RevisionEvento({
             value={detalle}
             onChange={(e) => setDetalle(e.target.value)}
             disabled={busy}
-            placeholder="¿Qué viste al revisar? (opcional)"
+            placeholder="¿Cómo quedó? (ej. sin novedad, normalizado...) — esto publica y cierra el evento"
             rows={2}
             style={{ width: "100%" }}
           />
-          <button type="button" className="btn btn-primary btn-sm" style={{ marginTop: 8 }} onClick={confirmarNormalizado} disabled={busy}>
-            {busy ? "Guardando..." : "Confirmar normalizado"}
+          <button
+            type="button"
+            className="btn btn-primary btn-sm"
+            style={{ marginTop: 8 }}
+            onClick={confirmarNormalizado}
+            disabled={busy || !detalle.trim()}
+          >
+            {busy ? "Cerrando..." : "Confirmar normalizado y cerrar"}
           </button>
         </div>
       )}
@@ -392,12 +412,7 @@ function Novedades({ eventoId, evento, novedades, grupoWhatsapp }: { eventoId: s
     router.refresh();
   }
 
-  const textoResumen = [
-    `#${evento.numero.toString().padStart(4, "0")} · ${evento.tipoAlarma} — ${evento.sitio}`,
-    evento.descripcion,
-    "",
-    ...novedades.map((n) => `${fmt(n.at)} — ${n.texto}`),
-  ].join("\n");
+  const textoResumen = [encabezadoEvento(evento), evento.descripcion, "", ...novedades.map((n) => `${fmt(n.at)} — ${n.texto}`)].join("\n");
 
   return (
     <div className="card">
@@ -422,7 +437,7 @@ function Novedades({ eventoId, evento, novedades, grupoWhatsapp }: { eventoId: s
               </div>
             </div>
             <a
-              href={linkWhatsappGrupo(n.texto)}
+              href={linkWhatsappGrupo(`${encabezadoEvento(evento)}\n${n.texto}`)}
               target="_blank"
               rel="noopener noreferrer"
               className="btn btn-secondary btn-sm"
@@ -483,7 +498,7 @@ export function EventoGuardiaDetalle({
       setError(res.error || "No se pudo cerrar.");
       return;
     }
-    window.open(linkWhatsappGrupo(textoCierre.trim()), "_blank");
+    window.open(linkWhatsappGrupo(`${encabezadoEvento(evento)}\n${textoCierre.trim()}`), "_blank");
     router.push("/guardia");
   }
 
@@ -525,14 +540,7 @@ export function EventoGuardiaDetalle({
         {error && <div className="error-text">{error}</div>}
       </div>
 
-      {soyGuardiaGeneralDeEste && abierto && (
-        <RevisionEvento
-          eventoId={evento.id}
-          scadaActual={evento.scada}
-          personasPorArea={personasPorArea}
-          onNormalizado={() => setMostrarCierre(true)}
-        />
-      )}
+      {soyGuardiaGeneralDeEste && abierto && <RevisionEvento evento={evento} personasPorArea={personasPorArea} />}
 
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="section-label">Participantes</div>
