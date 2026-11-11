@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { EstadoRendicion, Moneda } from "@/lib/database.types";
-import { agregarGastoAction, cerrarRendicionAction, eliminarGastoAction } from "@/app/(app)/rendicion-gastos/[id]/actions";
+import { agregarGastoAction, cerrarRendicionAction, eliminarGastoAction, type GastoActionResult } from "@/app/(app)/rendicion-gastos/[id]/actions";
 import { obtenerUrlPdfRendicionAction } from "@/app/(app)/rendicion-gastos/historial/actions";
 import type { CatalogosRendicion, GastoTecnicoChip } from "./types";
 import { TICKETS_FOTO_MAX } from "./types";
@@ -338,7 +338,18 @@ function AgregarGastoForm({
       }
     }
 
-    const res = await agregarGastoAction(rendicionId, fd);
+    // Si agregarGastoAction tira (caída de red, función que se corta a mitad
+    // de subir la foto, etc.) hay que atraparlo igual que una respuesta
+    // {success:false} — sin este catch, setBusy(false) nunca se ejecuta y el
+    // formulario queda trabado para siempre con el botón deshabilitado.
+    let res: GastoActionResult;
+    try {
+      res = await agregarGastoAction(rendicionId, fd);
+    } catch (err) {
+      setBusy(false);
+      setError(err instanceof Error ? err.message : "No se pudo agregar el gasto — probá de nuevo.");
+      return;
+    }
     setBusy(false);
     if (!res.success) {
       setError(res.error || "No se pudo agregar el gasto.");
@@ -581,37 +592,49 @@ function CargaMasivaTicketsForm({
   async function confirmarTodos() {
     setConfirmando(true);
     let huboExito = false;
-    for (const d of drafts) {
-      const key = d.previewUrl;
-      if (d.status === "guardando") continue;
-      const categoriaFinal = d.categoria === "__new" ? d.categoriaNueva.trim() : d.categoria;
-      const montoNum = Number(d.monto.replace(",", "."));
-      if (!d.fecha || !categoriaFinal || !Number.isFinite(montoNum) || montoNum <= 0) {
-        actualizarDraft(key, { status: "error", error: "Completá fecha, categoría y un monto válido." });
-        continue;
+    try {
+      for (const d of drafts) {
+        const key = d.previewUrl;
+        if (d.status === "guardando") continue;
+        const categoriaFinal = d.categoria === "__new" ? d.categoriaNueva.trim() : d.categoria;
+        const montoNum = Number(d.monto.replace(",", "."));
+        if (!d.fecha || !categoriaFinal || !Number.isFinite(montoNum) || montoNum <= 0) {
+          actualizarDraft(key, { status: "error", error: "Completá fecha, categoría y un monto válido." });
+          continue;
+        }
+        actualizarDraft(key, { status: "guardando", error: undefined });
+        const fd = new FormData();
+        fd.set("fecha", d.fecha);
+        fd.set("categoria", categoriaFinal);
+        fd.set("monto", d.monto);
+        fd.set("descripcion", d.descripcion);
+        fd.set("tecnicos", "[]");
+        try {
+          const jpeg = await resizeImageToJpeg(d.file);
+          fd.set("comprobante", jpeg, "comprobante.jpg");
+        } catch {
+          // si falla el resize del comprobante, el gasto se guarda igual sin foto adjunta
+        }
+        // Si agregarGastoAction tira (caída de red, función que se corta a
+        // mitad de subir la foto, etc.) hay que atraparlo por cada ticket y
+        // seguir con el resto — sin este catch, el primero que falla corta
+        // todo el for en silencio: ni termina de confirmar los que siguen
+        // ni suelta el botón (setConfirmando(false) quedaba sin ejecutar).
+        try {
+          const res = await agregarGastoAction(rendicionId, fd);
+          if (res.success) {
+            huboExito = true;
+            quitarDraft(key);
+          } else {
+            actualizarDraft(key, { status: "error", error: res.error || "No se pudo guardar." });
+          }
+        } catch (err) {
+          actualizarDraft(key, { status: "error", error: err instanceof Error ? err.message : "No se pudo guardar — probá de nuevo." });
+        }
       }
-      actualizarDraft(key, { status: "guardando", error: undefined });
-      const fd = new FormData();
-      fd.set("fecha", d.fecha);
-      fd.set("categoria", categoriaFinal);
-      fd.set("monto", d.monto);
-      fd.set("descripcion", d.descripcion);
-      fd.set("tecnicos", "[]");
-      try {
-        const jpeg = await resizeImageToJpeg(d.file);
-        fd.set("comprobante", jpeg, "comprobante.jpg");
-      } catch {
-        // si falla el resize del comprobante, el gasto se guarda igual sin foto adjunta
-      }
-      const res = await agregarGastoAction(rendicionId, fd);
-      if (res.success) {
-        huboExito = true;
-        quitarDraft(key);
-      } else {
-        actualizarDraft(key, { status: "error", error: res.error || "No se pudo guardar." });
-      }
+    } finally {
+      setConfirmando(false);
     }
-    setConfirmando(false);
     if (huboExito) onAdded();
   }
 
