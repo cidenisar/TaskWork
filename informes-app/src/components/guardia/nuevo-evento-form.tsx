@@ -3,15 +3,23 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { crearEventoAction } from "@/app/(app)/guardia/nuevo/actions";
+import { UbicacionFields, type GpsCapturado } from "@/components/ubicaciones/ubicacion-fields";
+import type { Ubicacion } from "@/components/ubicaciones/types";
 import type { TipoAlarmaGuardia, TicketTipoGuardia } from "@/lib/database.types";
 
 const TIPOS_ALARMA: TipoAlarmaGuardia[] = ["Grupo electrógeno", "Router", "UPS", "Otro"];
 const TIPOS_TICKET: TicketTipoGuardia[] = ["Incidencia", "Ticket", "Tarea de cambio"];
 
-export function NuevoEventoGuardiaForm() {
+export function NuevoEventoGuardiaForm({ provincias, ubicaciones }: { provincias: string[]; ubicaciones: Ubicacion[] }) {
   const router = useRouter();
   const [tipoAlarma, setTipoAlarma] = useState<TipoAlarmaGuardia>("Grupo electrógeno");
-  const [sitio, setSitio] = useState("");
+  const [provinciaFiltro, setProvinciaFiltro] = useState("");
+  const [ubicacionId, setUbicacionId] = useState("");
+  const [localidadNueva, setLocalidadNueva] = useState("");
+  const [sitioNueva, setSitioNueva] = useState("");
+  const [plantaNueva, setPlantaNueva] = useState("");
+  const [oficinaNueva, setOficinaNueva] = useState("");
+  const [gps, setGps] = useState<GpsCapturado | null>(null);
   const [descripcion, setDescripcion] = useState("");
   const [ticketTipo, setTicketTipo] = useState<TicketTipoGuardia>("Incidencia");
   const [ticketNumero, setTicketNumero] = useState("");
@@ -19,14 +27,28 @@ export function NuevoEventoGuardiaForm() {
   const [error, setError] = useState<string | null>(null);
 
   async function registrar() {
-    if (!sitio.trim() || !descripcion.trim()) {
+    if (!ubicacionId || !descripcion.trim()) {
       setError("Completá el sitio y qué comentó operación central.");
       return;
     }
     setBusy(true);
     setError(null);
     const fd = new FormData();
-    fd.set("payload", JSON.stringify({ tipoAlarma, sitio, descripcion, ticketTipo, ticketNumero }));
+    fd.set(
+      "payload",
+      JSON.stringify({
+        tipoAlarma,
+        ubicacionId: ubicacionId === "__new" ? null : ubicacionId,
+        ubicacionNueva:
+          ubicacionId === "__new"
+            ? { provincia: provinciaFiltro, localidad: localidadNueva, sitio: sitioNueva, planta: plantaNueva, oficina: oficinaNueva }
+            : null,
+        gps,
+        descripcion,
+        ticketTipo,
+        ticketNumero,
+      }),
+    );
     const res = await crearEventoAction(fd);
     setBusy(false);
     if (!res.success || !res.eventoId) {
@@ -48,10 +70,24 @@ export function NuevoEventoGuardiaForm() {
           ))}
         </select>
       </div>
-      <div className="field">
-        <label>Sitio</label>
-        <input type="text" value={sitio} onChange={(e) => setSitio(e.target.value)} disabled={busy} placeholder="Nombre del sitio" />
-      </div>
+      <UbicacionFields
+        ubicaciones={ubicaciones}
+        provincias={provincias}
+        provinciaFiltro={provinciaFiltro}
+        onProvinciaFiltroChange={setProvinciaFiltro}
+        ubicacionId={ubicacionId}
+        onUbicacionIdChange={setUbicacionId}
+        localidadNueva={localidadNueva}
+        onLocalidadNuevaChange={setLocalidadNueva}
+        sitioNueva={sitioNueva}
+        onSitioNuevaChange={setSitioNueva}
+        plantaNueva={plantaNueva}
+        onPlantaNuevaChange={setPlantaNueva}
+        oficinaNueva={oficinaNueva}
+        onOficinaNuevaChange={setOficinaNueva}
+        onGpsCapturado={setGps}
+        disabled={busy}
+      />
       <div className="field">
         <label>¿Qué comentó operación central?</label>
         <textarea value={descripcion} onChange={(e) => setDescripcion(e.target.value)} disabled={busy} rows={3} />

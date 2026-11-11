@@ -1071,6 +1071,7 @@ export type GuardiaEventoRow = {
   ticket_tipo: TicketTipoGuardia;
   ticket_numero: string | null;
   scada: ScadaGuardia | null;
+  ubicacion_id: string | null;
   creado_por: string;
   creado_at: string;
   cerrado_at: string | null;

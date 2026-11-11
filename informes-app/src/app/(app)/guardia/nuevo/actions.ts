@@ -3,6 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireProfile } from "@/lib/auth";
+import { resolverUbicacionId, tagGpsSiFalta, type PayloadUbicacionNueva, type PayloadGps } from "@/lib/ubicaciones/resolver";
+import { labelUbicacion } from "@/components/ubicaciones/types";
 import type { TipoAlarmaGuardia, TicketTipoGuardia } from "@/lib/database.types";
 
 export interface CrearEventoResult {
@@ -14,7 +16,9 @@ export interface CrearEventoResult {
 
 interface CrearEventoPayload {
   tipoAlarma: TipoAlarmaGuardia;
-  sitio: string;
+  ubicacionId: string | null;
+  ubicacionNueva: PayloadUbicacionNueva | null;
+  gps: PayloadGps | null;
   descripcion: string;
   ticketTipo: TicketTipoGuardia;
   ticketNumero?: string;
@@ -28,19 +32,43 @@ interface CrearEventoPayload {
  * misma transacción de Postgres.
  */
 export async function crearEventoAction(formData: FormData): Promise<CrearEventoResult> {
-  await requireProfile();
+  const profile = await requireProfile();
   const raw = formData.get("payload");
   if (typeof raw !== "string") return { success: false, error: "Datos inválidos." };
   const payload: CrearEventoPayload = JSON.parse(raw);
 
-  if (!payload.sitio.trim() || !payload.descripcion.trim()) {
-    return { success: false, error: "Faltan datos de la llamada (sitio, qué comentó operación central)." };
+  if (!payload.descripcion.trim()) {
+    return { success: false, error: "Falta qué comentó operación central." };
   }
 
   const supabase = await createClient();
+
+  const ubicacionResuelta = await resolverUbicacionId(
+    supabase,
+    { ubicacionId: payload.ubicacionId, ubicacionNueva: payload.ubicacionNueva },
+    profile.id,
+    "la llamada",
+  );
+  if ("error" in ubicacionResuelta) return { success: false, error: ubicacionResuelta.error };
+
+  const { data: ubicacionFila } = await supabase
+    .from("ubicaciones")
+    .select("sitio, planta, oficina, localidad, provincia")
+    .eq("id", ubicacionResuelta.id)
+    .single();
+  if (!ubicacionFila) return { success: false, error: "No se pudo resolver la ubicación." };
+  const sitioTexto = labelUbicacion({
+    id: ubicacionResuelta.id,
+    pais: "Argentina",
+    region: "",
+    lat: null,
+    lng: null,
+    ...ubicacionFila,
+  });
+
   const { data: evento, error } = await supabase.rpc("guardia_crear_evento", {
     p_tipo_alarma: payload.tipoAlarma,
-    p_sitio: payload.sitio.trim(),
+    p_sitio: sitioTexto,
     p_descripcion: payload.descripcion.trim(),
     p_ticket_tipo: payload.ticketTipo,
     p_ticket_numero: payload.ticketNumero?.trim() || null,
@@ -53,6 +81,9 @@ export async function crearEventoAction(formData: FormData): Promise<CrearEvento
         : error?.message || "No se pudo registrar el evento.",
     };
   }
+
+  await supabase.from("guardia_evento").update({ ubicacion_id: ubicacionResuelta.id }).eq("id", evento.id);
+  await tagGpsSiFalta(supabase, ubicacionResuelta.id, payload.gps, profile.id);
 
   revalidatePath("/guardia");
   revalidatePath("/guardia/historial");

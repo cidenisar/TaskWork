@@ -2,6 +2,7 @@ import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { cargarAreaDe } from "@/lib/guardia/datos";
 import { esGuardiaGeneral } from "@/lib/guardia/permisos";
+import { fetchTodasLasUbicaciones } from "@/lib/ubicaciones/fetch-todas";
 import { NuevoEventoGuardiaForm } from "@/components/guardia/nuevo-evento-form";
 
 export default async function NuevoEventoGuardiaPage() {
@@ -17,13 +18,18 @@ export default async function NuevoEventoGuardiaPage() {
     );
   }
 
+  const [provinciasRes, ubicaciones] = await Promise.all([
+    supabase.from("catalogo_provincias").select("nombre").order("nombre"),
+    fetchTodasLasUbicaciones(supabase),
+  ]);
+
   return (
     <div>
       <div className="page-heading">
         <h1>Registrar llamada</h1>
         <p>Lo que comentó operación central — tipo de alarma, sitio y ticket</p>
       </div>
-      <NuevoEventoGuardiaForm />
+      <NuevoEventoGuardiaForm provincias={(provinciasRes.data ?? []).map((p) => p.nombre)} ubicaciones={ubicaciones} />
     </div>
   );
 }
