@@ -1156,13 +1156,6 @@ textarea {
   font-size: 24px;
   margin-bottom: 6px;
 }
-.login-logo {
-  display: block;
-  max-width: 180px;
-  max-height: 72px;
-  margin: 0 auto 14px;
-  object-fit: contain;
-}
 .login-sub {
   text-align: center;
   color: var(--text-dim);
