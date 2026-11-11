@@ -264,7 +264,7 @@ export async function terminarParticipacionAction(participacionId: string): Prom
  */
 export async function revisarScadaAction(eventoId: string, resultado: ScadaGuardia, detalle: string): Promise<AccionResult> {
   const profile = await requireProfile();
-  if (resultado === "CON_NOVEDAD" && !detalle.trim()) return { success: false, error: "Contá qué encontraste en el SCADA." };
+  if (resultado === "CON_NOVEDAD" && !detalle.trim()) return { success: false, error: "Contá qué encontraste al revisar." };
   const supabase = await createClient();
 
   const { data: evento, error: errSelect } = await supabase.from("guardia_evento").select("id, version").eq("id", eventoId).single();
@@ -280,8 +280,8 @@ export async function revisarScadaAction(eventoId: string, resultado: ScadaGuard
   const detalleTexto = detalle.trim();
   const texto =
     resultado === "SIN_NOVEDAD"
-      ? `Revisado en el SCADA: sin novedad.${detalleTexto ? ` ${detalleTexto}` : ""}`
-      : `Revisado en el SCADA: hay novedad. ${detalleTexto}`;
+      ? `Revisando: sin novedad.${detalleTexto ? ` ${detalleTexto}` : ""}`
+      : `Revisando: hay novedad. ${detalleTexto}`;
   await supabase.from("guardia_novedad").insert({ evento_id: eventoId, texto, por: profile.id });
 
   revalidatePath("/guardia/evento/[id]", "page");

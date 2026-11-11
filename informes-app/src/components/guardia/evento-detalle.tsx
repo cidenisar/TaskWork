@@ -296,7 +296,7 @@ function RevisionEvento({
     const queHacer = pedido === "ASISTIR" ? "asistir al sitio" : "revisar";
     window.open(
       linkWhatsappGrupo(
-        `${encabezadoEvento(evento)}\nRevisado en el SCADA: hay novedad. ${detalle.trim()}\nSe activa guardia de ${[...areas].join(", ")} para ${queHacer}.`,
+        `${encabezadoEvento(evento)}\nRevisando: hay novedad. ${detalle.trim()}\nSe activa guardia de ${[...areas].join(", ")} para ${queHacer}.`,
       ),
       "_blank",
     );
