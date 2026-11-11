@@ -200,15 +200,36 @@ function FilaParticipacion({
   );
 }
 
-function ActivarGuardiaTecnica({ eventoId, personasPorArea }: { eventoId: string; personasPorArea: Record<AreaGuardia, { id: string; nombre: string }[]> }) {
+/**
+ * Revisión del evento (HANDOFF §5, pasos 4-5 — unificados en una sola
+ * decisión, pedido de Ivan después de la primera prueba real): la guardia
+ * general revisa (SCADA u otro medio) y tiene que decidir UNA cosa — o ya
+ * está normalizado (lleva directo a escribir el cierre, nunca se cierra
+ * solo), o hace falta activar guardia técnica (eligiendo área y pedido).
+ * Lo que se escribe como "qué encontraste" siempre queda como novedad
+ * (`revisarScadaAction`), haya o no activación después.
+ */
+function RevisionEvento({
+  eventoId,
+  scadaActual,
+  personasPorArea,
+  onNormalizado,
+}: {
+  eventoId: string;
+  scadaActual: ScadaGuardia | null;
+  personasPorArea: Record<AreaGuardia, { id: string; nombre: string }[]>;
+  onNormalizado: () => void;
+}) {
   const router = useRouter();
+  const [decision, setDecision] = useState<"normalizado" | "activar" | null>(null);
+  const [detalle, setDetalle] = useState("");
   const [areas, setAreas] = useState<Set<AreaGuardia>>(new Set());
   const [pedido, setPedido] = useState<PedidoParticipacionGuardia>("REVISAR");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sinAsignar, setSinAsignar] = useState<AreaGuardia[] | null>(null);
 
-  function toggle(area: AreaGuardia) {
+  function toggleArea(area: AreaGuardia) {
     setAreas((prev) => {
       const next = new Set(prev);
       if (next.has(area)) next.delete(area);
@@ -217,103 +238,129 @@ function ActivarGuardiaTecnica({ eventoId, personasPorArea }: { eventoId: string
     });
   }
 
-  async function activar() {
-    if (areas.size === 0) return;
+  async function confirmarNormalizado() {
     setBusy(true);
     setError(null);
-    setSinAsignar(null);
-    const res = await activarGuardiaTecnicaAction(eventoId, [...areas], pedido);
-    setBusy(false);
-    if (!res.success) {
-      setError(res.error || "No se pudo activar.");
-      return;
-    }
-    if (res.sinAsignar) setSinAsignar(res.sinAsignar);
-    setAreas(new Set());
-    router.refresh();
-  }
-
-  return (
-    <div className="card" style={{ marginBottom: 16 }}>
-      <div className="section-label">Activar guardia técnica</div>
-      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 8 }}>
-        {AREAS_TECNICAS.map((area) => (
-          <label key={area} className="checkbox-row" style={{ marginBottom: 0 }}>
-            <input type="checkbox" checked={areas.has(area)} onChange={() => toggle(area)} disabled={busy} />
-            {area} {personasPorArea[area].length === 0 && "(sin gente cargada)"}
-          </label>
-        ))}
-      </div>
-      <div className="tech-form-grid" style={{ marginTop: 10 }}>
-        <select value={pedido} onChange={(e) => setPedido(e.target.value as PedidoParticipacionGuardia)} disabled={busy}>
-          <option value="REVISAR">Revisar</option>
-          <option value="ASISTIR">Asistir al sitio</option>
-        </select>
-        <button type="button" className="btn btn-primary btn-sm" onClick={activar} disabled={busy || areas.size === 0}>
-          {busy ? "Activando..." : "Activar y avisar"}
-        </button>
-      </div>
-      {error && <div className="error-text">{error}</div>}
-      {sinAsignar && sinAsignar.length > 0 && (
-        <div className="error-text">No había nadie de guardia ahora mismo en: {sinAsignar.join(", ")}.</div>
-      )}
-    </div>
-  );
-}
-
-/**
- * Revisión en SCADA (HANDOFF §5, paso 4 — ajustado por Ivan): no es un
- * botón binario, hay que contar qué se vio. No cierra el evento — eso
- * siempre es aparte, aunque salga "sin novedad" (ver `cerrarEventoAction`).
- */
-function RevisionScada({ eventoId, scadaActual }: { eventoId: string; scadaActual: ScadaGuardia | null }) {
-  const router = useRouter();
-  const [detalle, setDetalle] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function revisar(resultado: ScadaGuardia) {
-    if (resultado === "CON_NOVEDAD" && !detalle.trim()) {
-      setError("Contá qué encontraste en el SCADA.");
-      return;
-    }
-    setBusy(true);
-    setError(null);
-    const res = await revisarScadaAction(eventoId, resultado, detalle);
+    const res = await revisarScadaAction(eventoId, "SIN_NOVEDAD", detalle);
     setBusy(false);
     if (!res.success) {
       setError(res.error || "No se pudo guardar.");
       return;
     }
     setDetalle("");
+    setDecision(null);
+    router.refresh();
+    onNormalizado();
+  }
+
+  async function confirmarActivar() {
+    if (!detalle.trim()) {
+      setError("Contá qué encontraste.");
+      return;
+    }
+    if (areas.size === 0) {
+      setError("Elegí al menos un área para activar.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    setSinAsignar(null);
+    const resScada = await revisarScadaAction(eventoId, "CON_NOVEDAD", detalle);
+    if (!resScada.success) {
+      setBusy(false);
+      setError(resScada.error || "No se pudo guardar.");
+      return;
+    }
+    const resActivar = await activarGuardiaTecnicaAction(eventoId, [...areas], pedido);
+    setBusy(false);
+    if (!resActivar.success) {
+      setError(resActivar.error || "No se pudo activar.");
+      return;
+    }
+    if (resActivar.sinAsignar) setSinAsignar(resActivar.sinAsignar);
+    setAreas(new Set());
+    setDetalle("");
+    setDecision(null);
     router.refresh();
   }
 
   return (
     <div className="card" style={{ marginBottom: 16 }}>
-      <div className="section-label">Revisión en SCADA</div>
+      <div className="section-label">Revisión</div>
       {scadaActual && (
         <p className="item-sub" style={{ marginTop: 6 }}>
           Última revisión: {scadaActual === "SIN_NOVEDAD" ? "sin novedad" : "con novedad"}.
         </p>
       )}
-      <textarea
-        value={detalle}
-        onChange={(e) => setDetalle(e.target.value)}
-        disabled={busy}
-        placeholder="Qué viste al revisar en el SCADA..."
-        rows={2}
-        style={{ marginTop: 8, width: "100%" }}
-      />
       <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
-        <button type="button" className="btn btn-secondary btn-sm" onClick={() => revisar("SIN_NOVEDAD")} disabled={busy}>
-          Sin novedad
+        <button
+          type="button"
+          className={`btn btn-sm ${decision === "normalizado" ? "btn-primary" : "btn-secondary"}`}
+          onClick={() => setDecision("normalizado")}
+          disabled={busy}
+        >
+          Normalizado
         </button>
-        <button type="button" className="btn btn-secondary btn-sm" onClick={() => revisar("CON_NOVEDAD")} disabled={busy}>
-          Hay novedad
+        <button
+          type="button"
+          className={`btn btn-sm ${decision === "activar" ? "btn-primary" : "btn-secondary"}`}
+          onClick={() => setDecision("activar")}
+          disabled={busy}
+        >
+          Hace falta activar guardia
         </button>
       </div>
+
+      {decision === "normalizado" && (
+        <div style={{ marginTop: 10 }}>
+          <textarea
+            value={detalle}
+            onChange={(e) => setDetalle(e.target.value)}
+            disabled={busy}
+            placeholder="¿Qué viste al revisar? (opcional)"
+            rows={2}
+            style={{ width: "100%" }}
+          />
+          <button type="button" className="btn btn-primary btn-sm" style={{ marginTop: 8 }} onClick={confirmarNormalizado} disabled={busy}>
+            {busy ? "Guardando..." : "Confirmar normalizado"}
+          </button>
+        </div>
+      )}
+
+      {decision === "activar" && (
+        <div style={{ marginTop: 10 }}>
+          <textarea
+            value={detalle}
+            onChange={(e) => setDetalle(e.target.value)}
+            disabled={busy}
+            placeholder="¿Qué encontraste?"
+            rows={2}
+            style={{ width: "100%" }}
+          />
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 8 }}>
+            {AREAS_TECNICAS.map((area) => (
+              <label key={area} className="checkbox-row" style={{ marginBottom: 0 }}>
+                <input type="checkbox" checked={areas.has(area)} onChange={() => toggleArea(area)} disabled={busy} />
+                {area} {personasPorArea[area].length === 0 && "(sin gente cargada)"}
+              </label>
+            ))}
+          </div>
+          <div className="tech-form-grid" style={{ marginTop: 10 }}>
+            <select value={pedido} onChange={(e) => setPedido(e.target.value as PedidoParticipacionGuardia)} disabled={busy}>
+              <option value="REVISAR">Revisar</option>
+              <option value="ASISTIR">Asistir al sitio</option>
+            </select>
+            <button type="button" className="btn btn-primary btn-sm" onClick={confirmarActivar} disabled={busy || areas.size === 0}>
+              {busy ? "Activando..." : "Activar y avisar"}
+            </button>
+          </div>
+        </div>
+      )}
+
       {error && <div className="error-text">{error}</div>}
+      {sinAsignar && sinAsignar.length > 0 && (
+        <div className="error-text">No había nadie de guardia ahora mismo en: {sinAsignar.join(", ")}.</div>
+      )}
     </div>
   );
 }
@@ -416,6 +463,12 @@ export function EventoGuardiaDetalle({
   const [error, setError] = useState<string | null>(null);
   const abierto = evento.estado === "abierto";
 
+  const textoLlamada = [
+    `#${evento.numero.toString().padStart(4, "0")} · ${evento.tipoAlarma} — ${evento.sitio}`,
+    evento.descripcion,
+    `${evento.ticketTipo}${evento.ticketNumero ? ` #${evento.ticketNumero}` : ""}`,
+  ].join("\n");
+
   async function cerrar() {
     if (!textoCierre.trim()) {
       setError("Contá cómo quedó para poder cerrar.");
@@ -450,6 +503,18 @@ export function EventoGuardiaDetalle({
           {evento.ticketNumero ? ` #${evento.ticketNumero}` : ""} · Llamada {fmt(evento.creadoAt)}
           {evento.cerradoAt && ` · Cerrado ${fmt(evento.cerradoAt)}`}
         </div>
+        <a
+          href={linkWhatsappGrupo(textoLlamada)}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="btn btn-primary"
+          style={{ marginTop: 12, width: "100%" }}
+        >
+          <Icon name="chat" size={14} /> Compartir al grupo
+        </a>
+        <p className="item-sub" style={{ marginTop: 6 }}>
+          Se abre WhatsApp — elegí &quot;{grupoWhatsapp}&quot; y enviá.
+        </p>
         {mostrarCierre && (
           <div style={{ marginTop: 10, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-start" }}>
             <input
@@ -471,9 +536,14 @@ export function EventoGuardiaDetalle({
         {error && <div className="error-text">{error}</div>}
       </div>
 
-      {soyGuardiaGeneralDeEste && abierto && <RevisionScada eventoId={evento.id} scadaActual={evento.scada} />}
-
-      {soyGuardiaGeneralDeEste && abierto && <ActivarGuardiaTecnica eventoId={evento.id} personasPorArea={personasPorArea} />}
+      {soyGuardiaGeneralDeEste && abierto && (
+        <RevisionEvento
+          eventoId={evento.id}
+          scadaActual={evento.scada}
+          personasPorArea={personasPorArea}
+          onNormalizado={() => setMostrarCierre(true)}
+        />
+      )}
 
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="section-label">Participantes</div>
