@@ -8,7 +8,13 @@ import { guardiaDe, type AreaGuardia } from "@/lib/guardia/cronograma";
 import { cargarCronograma, cargarCambiosAceptados, cargarParametros, cargarAreaDe } from "@/lib/guardia/datos";
 import { esGuardiaGeneral } from "@/lib/guardia/permisos";
 import { notificar } from "@/lib/guardia/notificar";
-import type { RolParticipacionGuardia, ModalidadParticipacionGuardia, PedidoParticipacionGuardia, ScadaGuardia } from "@/lib/database.types";
+import type {
+  RolParticipacionGuardia,
+  ModalidadParticipacionGuardia,
+  PedidoParticipacionGuardia,
+  ScadaGuardia,
+  TicketTipoGuardia,
+} from "@/lib/database.types";
 
 export interface AccionResult {
   success: boolean;
@@ -328,6 +334,33 @@ export async function cerrarEventoAction(eventoId: string, textoCierre: string):
   revalidatePath("/guardia/evento/[id]", "page");
   revalidatePath("/guardia/historial");
   revalidatePath("/panel/guardia");
+  return { success: true };
+}
+
+const TICKET_TIPOS: TicketTipoGuardia[] = ["Incidencia", "Ticket", "Tarea de cambio"];
+
+/**
+ * Editar ticket/incidente de un evento ya registrado — pedido de Ivan: a
+ * veces el número de ticket no se conoce todavía al momento de la llamada y
+ * hay que poder completarlo después. Solo esos dos campos (RLS exige lo
+ * mismo que para cerrar: admin/supervisor o la guardia general del evento).
+ */
+export async function editarTicketAction(eventoId: string, ticketTipo: TicketTipoGuardia, ticketNumero: string): Promise<AccionResult> {
+  await requireProfile();
+  if (!TICKET_TIPOS.includes(ticketTipo)) return { success: false, error: "Tipo de ticket inválido." };
+  const supabase = await createClient();
+
+  const { data: evento, error: errSelect } = await supabase.from("guardia_evento").select("id, version").eq("id", eventoId).single();
+  if (errSelect || !evento) return { success: false, error: "No se encontró el evento." };
+
+  const { error } = await supabase
+    .from("guardia_evento")
+    .update({ ticket_tipo: ticketTipo, ticket_numero: ticketNumero.trim() || null, version: evento.version + 1 })
+    .eq("id", eventoId)
+    .eq("version", evento.version);
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath("/guardia/evento/[id]", "page");
   return { success: true };
 }
 

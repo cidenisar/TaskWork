@@ -10,6 +10,7 @@ import {
   terminarParticipacionAction,
   revisarScadaAction,
   cerrarEventoAction,
+  editarTicketAction,
 } from "@/app/(app)/guardia/actions";
 import type { AreaGuardia } from "@/lib/guardia/cronograma";
 import { linkWhatsappGrupo, linkWhatsappIndividual } from "@/lib/guardia/whatsapp";
@@ -61,6 +62,7 @@ export interface NovedadFila {
 
 const ESTADO_PARTICIPACION_LABEL: Record<EstadoParticipacionGuardia, string> = { en_curso: "En curso", terminada: "Terminada", no_contesto: "No contestó" };
 const AREAS_TECNICAS: AreaGuardia[] = ["Infraestructura", "Datos", "Enlaces"];
+const TICKET_TIPOS: TicketTipoGuardia[] = ["Incidencia", "Ticket", "Tarea de cambio"];
 
 function fmt(iso: string | null): string {
   return iso ? new Date(iso).toLocaleString("es-AR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "—";
@@ -461,6 +463,79 @@ function Novedades({ eventoId, evento, novedades, grupoWhatsapp }: { eventoId: s
   );
 }
 
+function TicketEditable({ evento, puedeEditar }: { evento: EventoDetalle; puedeEditar: boolean }) {
+  const router = useRouter();
+  const [editando, setEditando] = useState(false);
+  const [ticketTipo, setTicketTipo] = useState<TicketTipoGuardia>(evento.ticketTipo);
+  const [ticketNumero, setTicketNumero] = useState(evento.ticketNumero ?? "");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  if (!editando) {
+    return (
+      <span>
+        {evento.ticketTipo}
+        {evento.ticketNumero ? ` #${evento.ticketNumero}` : ""}
+        {puedeEditar && (
+          <button type="button" className="btn btn-secondary btn-sm" style={{ marginLeft: 6 }} onClick={() => setEditando(true)}>
+            <Icon name="edit" size={12} /> Editar
+          </button>
+        )}
+      </span>
+    );
+  }
+
+  async function guardar() {
+    setBusy(true);
+    setError(null);
+    const res = await editarTicketAction(evento.id, ticketTipo, ticketNumero);
+    setBusy(false);
+    if (!res.success) {
+      setError(res.error || "No se pudo guardar.");
+      return;
+    }
+    setEditando(false);
+    router.refresh();
+  }
+
+  return (
+    <span style={{ display: "inline-flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+      <select value={ticketTipo} onChange={(e) => setTicketTipo(e.target.value as TicketTipoGuardia)} disabled={busy} style={{ width: "auto" }}>
+        {TICKET_TIPOS.map((t) => (
+          <option key={t} value={t}>
+            {t}
+          </option>
+        ))}
+      </select>
+      <input
+        type="text"
+        value={ticketNumero}
+        onChange={(e) => setTicketNumero(e.target.value)}
+        disabled={busy}
+        placeholder="N° (opcional)"
+        style={{ width: 110 }}
+      />
+      <button type="button" className="btn btn-primary btn-sm" onClick={guardar} disabled={busy}>
+        {busy ? "Guardando..." : "Guardar"}
+      </button>
+      <button
+        type="button"
+        className="btn btn-secondary btn-sm"
+        onClick={() => {
+          setEditando(false);
+          setTicketTipo(evento.ticketTipo);
+          setTicketNumero(evento.ticketNumero ?? "");
+          setError(null);
+        }}
+        disabled={busy}
+      >
+        Cancelar
+      </button>
+      {error && <div className="error-text">{error}</div>}
+    </span>
+  );
+}
+
 export function EventoGuardiaDetalle({
   evento,
   participaciones,
@@ -515,8 +590,7 @@ export function EventoGuardiaDetalle({
         </div>
         <p style={{ marginTop: 10 }}>{evento.descripcion}</p>
         <div className="item-sub">
-          {evento.ticketTipo}
-          {evento.ticketNumero ? ` #${evento.ticketNumero}` : ""} · Llamada {fmt(evento.creadoAt)}
+          <TicketEditable evento={evento} puedeEditar={soyGuardiaGeneralDeEste} /> · Llamada {fmt(evento.creadoAt)}
           {evento.cerradoAt && ` · Cerrado ${fmt(evento.cerradoAt)}`}
         </div>
         {mostrarCierre && (
