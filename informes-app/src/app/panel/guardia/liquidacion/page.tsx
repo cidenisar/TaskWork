@@ -36,6 +36,7 @@ export default async function LiquidacionPage({ searchParams }: { searchParams: 
 
   const csv = csvLiquidacion(filas.map((f) => ({ nombre: f.nombre, area: f.area, detalle: f.detalle })));
   const totalGeneral = filas.reduce((acc, f) => acc + f.detalle.totalCentesimas, 0);
+  const totalFrancosGeneral = filas.reduce((acc, f) => acc + f.detalle.totalFrancos, 0);
 
   return (
     <div>
@@ -51,6 +52,7 @@ export default async function LiquidacionPage({ searchParams }: { searchParams: 
           <div>
             <div className="section-label">Total del período</div>
             <div style={{ fontSize: 28, fontWeight: 700, marginTop: 4 }}>{formatActivaciones(totalGeneral)} activaciones</div>
+            {totalFrancosGeneral > 0 && <div className="item-sub">+ {formatActivaciones(totalFrancosGeneral)} francos compensatorios</div>}
           </div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <DescargarCsvButton nombreArchivo={`liquidacion_${periodo.desde}_${periodo.hasta}.csv`} contenido={csv} />
@@ -75,6 +77,7 @@ export default async function LiquidacionPage({ searchParams }: { searchParams: 
                   </div>
                   <div className="item-sub">
                     {Object.keys(f.detalle.porDia).length} días con activación · {formatMinutosHoras(f.detalle.totalMinutos)} hs
+                    {f.detalle.totalFrancos > 0 && ` · ${formatActivaciones(f.detalle.totalFrancos)} francos`}
                   </div>
                 </div>
               </div>

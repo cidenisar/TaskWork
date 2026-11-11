@@ -15,26 +15,52 @@ import { calcularEvento, centesimasDelDia, formatActivaciones, PARAMETROS_DEFAUL
 
 export type TipoDia = "Feriado" | "Fin de semana" | "Día hábil";
 
+/** Mismos valores que `ModalidadParticipacionGuardia` de `database.types.ts` — se redefine acá (y no se importa) para que este archivo siga siendo calculable sin la capa de datos, como el resto del motor. */
+export type ModalidadDetalle = "REMOTO" | "CAMPO";
+
 export interface ParticipacionDetalle extends Participacion {
   /** true si esta participación todavía no tiene `fin` real (se calculó usando "ahora" como fin provisorio). */
   enCurso?: boolean;
+  /** Datos del incidente que originó esta participación — solo para mostrar/exportar, el motor no los usa para calcular nada. */
+  eventoId?: string;
+  /** Texto ya armado (ej. "#0007 · UPS — Mendoza") — mismo formato que `encabezadoEvento()` del detalle del evento. */
+  incidente?: string;
+  modalidad?: ModalidadDetalle | null;
+}
+
+/** Un evento puntual que aportó minutos a este día — para el detalle del CSV ("qué pasó ese día"). */
+export interface EventoDelDia {
+  eventoId: string;
+  incidente: string;
+  modalidad: ModalidadDetalle | null;
+  minutos: number;
 }
 
 export interface DiaLiquidadoDetalle {
   minutos: number;
   /** Centésimas — ver `formatActivaciones()` para mostrarlo. */
   centesimas: number;
-  /** Cuántos eventos distintos aportaron minutos este día — la columna "Eventos" del CSV (HANDOFF §12.11). */
+  /** Cuántos eventos distintos aportaron minutos este día. */
   eventos: number;
   tipoDia: TipoDia;
   /** Alguno de los eventos de este día todavía no terminó. */
   enCurso: boolean;
+  /**
+   * Franco compensatorio (pedido de Ivan) — fin de semana/feriado trabajado:
+   * mismo corte de 4:30 que la activación (`centesimasDelDia`), pero como
+   * beneficio EN PARALELO al valor en pesos, nunca en su lugar. 0 en día
+   * hábil (ahí el franco no corresponde).
+   */
+  francos: number;
+  /** Cada participación que aportó minutos este día — para el CSV detallado por incidente. */
+  detalleEventos: EventoDelDia[];
 }
 
 export interface FichaPersonaDetalle {
   porDia: Record<string, DiaLiquidadoDetalle>;
   totalMinutos: number;
   totalCentesimas: number;
+  totalFrancos: number;
 }
 
 /** "Feriado" > "Fin de semana" > "Día hábil" — mismo criterio que el prototipo (`tipoDiaLabel`). */
@@ -67,7 +93,7 @@ export function liquidarConDetalle(
   const personas: Record<string, FichaPersonaDetalle> = {};
   for (const x of participaciones) {
     const r = calcularEvento(x.inicio, x.fin, feriados, p);
-    const ficha = (personas[x.persona] ??= { porDia: {}, totalMinutos: 0, totalCentesimas: 0 });
+    const ficha = (personas[x.persona] ??= { porDia: {}, totalMinutos: 0, totalCentesimas: 0, totalFrancos: 0 });
     for (const [fecha, min] of Object.entries(r.minutosPorDia)) {
       const dia = (ficha.porDia[fecha] ??= {
         minutos: 0,
@@ -75,17 +101,24 @@ export function liquidarConDetalle(
         eventos: 0,
         tipoDia: tipoDiaDe(fecha, feriados),
         enCurso: false,
+        francos: 0,
+        detalleEventos: [],
       });
       dia.minutos += min;
       dia.eventos += 1;
       if (x.enCurso) dia.enCurso = true;
+      if (x.eventoId) {
+        dia.detalleEventos.push({ eventoId: x.eventoId, incidente: x.incidente ?? "—", modalidad: x.modalidad ?? null, minutos: min });
+      }
     }
   }
   for (const ficha of Object.values(personas)) {
     for (const dia of Object.values(ficha.porDia)) {
       dia.centesimas = centesimasDelDia(dia.minutos, p);
+      dia.francos = dia.tipoDia !== "Día hábil" ? centesimasDelDia(dia.minutos, p) : 0;
       ficha.totalMinutos += dia.minutos;
       ficha.totalCentesimas += dia.centesimas;
+      ficha.totalFrancos += dia.francos;
     }
   }
   return personas;
@@ -102,17 +135,51 @@ function fechaCsv(fecha: string): string {
   return `${d}/${m}/${y}`;
 }
 
-/** "Persona;Guardia;Fecha;Tipo de día;Eventos;Horas de activación;Resultado del día" + fila TOTAL por persona — formato fijo, HANDOFF §12.11. */
+function modalidadCsv(modalidad: ModalidadDetalle | null): string {
+  return modalidad === "CAMPO" ? "Asistió al sitio" : modalidad === "REMOTO" ? "Remoto" : "—";
+}
+
+/**
+ * "Persona;Guardia;Fecha;Tipo de día;Incidente;Modalidad;Horas del evento;
+ * Resultado del día;Franco" + fila TOTAL por persona — una fila por cada
+ * incidente que aportó minutos ese día (no agregado por día como antes),
+ * pedido de Ivan para poder evaluar qué pasó. "Resultado del día" y
+ * "Franco" se repiten en cada fila de un mismo día porque el corte de 4:30
+ * es sobre la suma del día entero, nunca evento por evento.
+ */
 export function csvLiquidacion(filas: FilaCsvPersona[]): string {
-  const lineas = ["Persona;Guardia;Fecha;Tipo de día;Eventos;Horas de activación;Resultado del día"];
+  const lineas = ["Persona;Guardia;Fecha;Tipo de día;Incidente;Modalidad;Horas del evento;Resultado del día;Franco"];
   for (const { nombre, area, detalle } of filas) {
     for (const fecha of Object.keys(detalle.porDia).sort()) {
       const dia = detalle.porDia[fecha];
-      lineas.push(
-        [nombre, area, fechaCsv(fecha), dia.tipoDia, String(dia.eventos), formatMinutosHoras(dia.minutos), formatActivaciones(dia.centesimas)].join(";"),
-      );
+      // Un cierre congelado antes de que existieran incidente/modalidad/franco no trae esos campos — se completan en blanco, nunca se recalculan.
+      const francos = dia.francos ?? 0;
+      const detalleEventos = dia.detalleEventos ?? [];
+      const resultadoDia = formatActivaciones(dia.centesimas);
+      const francoDia = francos > 0 ? formatActivaciones(francos) : "—";
+      const eventos = detalleEventos.length > 0 ? detalleEventos : [{ eventoId: "", incidente: "—", modalidad: null, minutos: dia.minutos }];
+      for (const ev of eventos) {
+        lineas.push(
+          [nombre, area, fechaCsv(fecha), dia.tipoDia, ev.incidente, modalidadCsv(ev.modalidad), formatMinutosHoras(ev.minutos), resultadoDia, francoDia].join(
+            ";",
+          ),
+        );
+      }
     }
-    lineas.push([nombre, area, "TOTAL", "", "", formatMinutosHoras(detalle.totalMinutos), formatActivaciones(detalle.totalCentesimas)].join(";"));
+    const totalFrancos = detalle.totalFrancos ?? 0;
+    lineas.push(
+      [
+        nombre,
+        area,
+        "TOTAL",
+        "",
+        "",
+        "",
+        formatMinutosHoras(detalle.totalMinutos),
+        formatActivaciones(detalle.totalCentesimas),
+        totalFrancos > 0 ? formatActivaciones(totalFrancos) : "—",
+      ].join(";"),
+    );
   }
   return lineas.join("\n");
 }

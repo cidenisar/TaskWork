@@ -46,6 +46,11 @@ export default async function MisHorasPage() {
         <div className="section-label">Total del período</div>
         <div style={{ fontSize: 32, fontWeight: 700, marginTop: 6 }}>{formatActivaciones(mia?.detalle.totalCentesimas ?? 0)}</div>
         <div className="item-sub">activaciones · {formatMinutosHoras(mia?.detalle.totalMinutos ?? 0)} hs</div>
+        {(mia?.detalle.totalFrancos ?? 0) > 0 && (
+          <div className="item-sub" style={{ marginTop: 4 }}>
+            + {formatActivaciones(mia!.detalle.totalFrancos)} francos compensatorios
+          </div>
+        )}
       </div>
 
       <div className="card">
@@ -60,6 +65,7 @@ export default async function MisHorasPage() {
                     <div className="item-name">
                       {fmtFecha(fecha)} <span className="badge">{dia.tipoDia}</span>
                       {dia.enCurso && <span className="badge">En curso</span>}
+                      {dia.francos > 0 && <span className="badge">Franco {formatActivaciones(dia.francos)}</span>}
                     </div>
                     <div className="item-sub">
                       {dia.eventos} {dia.eventos === 1 ? "evento" : "eventos"} · {formatMinutosHoras(dia.minutos)} hs

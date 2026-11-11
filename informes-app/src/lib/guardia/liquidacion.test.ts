@@ -52,11 +52,35 @@ test("liquidarConDetalle: tipoDia correcto por día (sábado = fin de semana)", 
   assert.equal(r.beto.porDia["2026-09-12"].tipoDia, "Fin de semana");
 });
 
-test("csvLiquidacion: encabezado fijo + una fila por día + fila TOTAL por persona", () => {
+test("csvLiquidacion: encabezado fijo + una fila por incidente del día + fila TOTAL por persona", () => {
   const detalle = liquidarConDetalle([ev("ana", "2026-09-16T17:00", "2026-09-16T20:00")]).ana;
   const csv = csvLiquidacion([{ nombre: "Ana", area: "Infraestructura", detalle }]);
   const lineas = csv.split("\n");
-  assert.equal(lineas[0], "Persona;Guardia;Fecha;Tipo de día;Eventos;Horas de activación;Resultado del día");
-  assert.equal(lineas[1], "Ana;Infraestructura;16/09/2026;Día hábil;1;3:00;0,5");
-  assert.equal(lineas[2], "Ana;Infraestructura;TOTAL;;;3:00;0,5");
+  assert.equal(lineas[0], "Persona;Guardia;Fecha;Tipo de día;Incidente;Modalidad;Horas del evento;Resultado del día;Franco");
+  assert.equal(lineas[1], "Ana;Infraestructura;16/09/2026;Día hábil;—;—;3:00;0,5;—");
+  assert.equal(lineas[2], "Ana;Infraestructura;TOTAL;;;;3:00;0,5;—");
+});
+
+test("csvLiquidacion: una fila por incidente cuando hay más de uno en el mismo día, con modalidad", () => {
+  const detalle = liquidarConDetalle([
+    { ...ev("ana", "2026-09-16T17:00", "2026-09-16T18:00"), eventoId: "e1", incidente: "#0001 · UPS — Mendoza", modalidad: "CAMPO" },
+    { ...ev("ana", "2026-09-16T20:00", "2026-09-16T21:00"), eventoId: "e2", incidente: "#0002 · Router — San Rafael", modalidad: "REMOTO" },
+  ]).ana;
+  const csv = csvLiquidacion([{ nombre: "Ana", area: "Infraestructura", detalle }]);
+  const lineas = csv.split("\n");
+  assert.equal(lineas[1], "Ana;Infraestructura;16/09/2026;Día hábil;#0001 · UPS — Mendoza;Asistió al sitio;1:00;0,5;—");
+  assert.equal(lineas[2], "Ana;Infraestructura;16/09/2026;Día hábil;#0002 · Router — San Rafael;Remoto;1:00;0,5;—");
+  assert.equal(lineas[3], "Ana;Infraestructura;TOTAL;;;;2:00;0,5;—");
+});
+
+test("francos: fin de semana u feriado trabajado da franco con el mismo corte de 4:30 que la activación", () => {
+  const corto = liquidarConDetalle([ev("beto", "2026-09-12T10:00", "2026-09-12T13:00")]).beto.porDia["2026-09-12"]; // sábado, 3hs
+  assert.equal(corto.francos, 50);
+  const largo = liquidarConDetalle([ev("beto", "2026-09-12T08:00", "2026-09-12T14:00")]).beto.porDia["2026-09-12"]; // sábado, 6hs
+  assert.equal(largo.francos, 100);
+});
+
+test("francos: no corresponde en día hábil aunque haya activación", () => {
+  const r = liquidarConDetalle([ev("ana", "2026-09-16T17:00", "2026-09-16T20:00")]).ana.porDia["2026-09-16"]; // martes
+  assert.equal(r.francos, 0);
 });

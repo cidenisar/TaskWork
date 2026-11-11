@@ -29,8 +29,10 @@ export default async function PeriodoCerradoPage({ params }: { params: Promise<{
   const { data: quienCerro } = await supabase.from("profiles").select("nombre_completo").eq("id", cierre.cerrado_por).maybeSingle();
 
   // Foto congelada al momento del cierre — nunca se recalcula, aunque hoy los parámetros sean otros.
+  // Un cierre guardado antes de que existieran los francos no tiene ese campo en la foto — 0 por defecto.
   const filas = (cierre.resultado_json as FilaCongelada[] | null) ?? [];
   const totalGeneral = filas.reduce((acc, f) => acc + f.detalle.totalCentesimas, 0);
+  const totalFrancosGeneral = filas.reduce((acc, f) => acc + (f.detalle.totalFrancos ?? 0), 0);
   const csv = csvLiquidacion(filas.map((f) => ({ nombre: f.nombre, area: f.area, detalle: f.detalle })));
 
   return (
@@ -49,6 +51,7 @@ export default async function PeriodoCerradoPage({ params }: { params: Promise<{
           <div>
             <div className="section-label">Total del período</div>
             <div style={{ fontSize: 28, fontWeight: 700, marginTop: 4 }}>{formatActivaciones(totalGeneral)} activaciones</div>
+            {totalFrancosGeneral > 0 && <div className="item-sub">+ {formatActivaciones(totalFrancosGeneral)} francos compensatorios</div>}
           </div>
           <DescargarCsvButton nombreArchivo={`liquidacion_${cierre.desde}_${cierre.hasta}.csv`} contenido={csv} />
         </div>
@@ -66,6 +69,7 @@ export default async function PeriodoCerradoPage({ params }: { params: Promise<{
                   </div>
                   <div className="item-sub">
                     {Object.keys(f.detalle.porDia).length} días con activación · {formatMinutosHoras(f.detalle.totalMinutos)} hs
+                    {(f.detalle.totalFrancos ?? 0) > 0 && ` · ${formatActivaciones(f.detalle.totalFrancos)} francos`}
                   </div>
                 </div>
               </div>

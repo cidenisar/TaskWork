@@ -8,7 +8,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/database.types";
 import type { Cronograma, CambioGuardia, PersonaGuardia, AreaGuardia } from "./cronograma";
-import { AREAS_GUARDIA } from "./cronograma";
+import { AREAS_GUARDIA, guardiaDe } from "./cronograma";
 import type { ParametrosGuardia } from "./motor";
 import { horaGuardiaIso } from "./reloj";
 import { liquidarConDetalle, type FichaPersonaDetalle, type ParticipacionDetalle } from "./liquidacion";
@@ -86,12 +86,21 @@ export async function cargarPeriodoVigente(supabase: Client): Promise<PeriodoGua
   return { desde: data?.periodo_desde ?? "", hasta: data?.periodo_hasta ?? "" };
 }
 
+/** Mismo formato que `encabezadoEvento()` en `evento-detalle.tsx` — a qué incidente se refiere cada fila de la liquidación. */
+function formatIncidente(numero: number, tipoAlarma: string, sitio: string): string {
+  return `#${numero.toString().padStart(4, "0")} · ${tipoAlarma} — ${sitio}`;
+}
+
 /**
  * Participaciones que puedan tocar algún día entre `desde` y `hasta` — la
  * consulta viene con un día de margen de cada lado (la zona horaria hace
  * que el día calendario de la guardia no coincida 1 a 1 con el de UTC);
  * el recorte exacto al período pedido lo hace `calcularLiquidacion`
- * después de pasar todo por el motor.
+ * después de pasar todo por el motor. Trae también a qué incidente
+ * perteneció cada participación y si fue remota o en sitio — pedido de
+ * Ivan para poder evaluar la liquidación en detalle, no solo el total del
+ * día (dos consultas + join en JS, como el resto de la app — el tipo
+ * `Database` de este proyecto es manual y no describe relaciones).
  */
 async function cargarParticipacionesDelPeriodo(supabase: Client, desde: string, hasta: string) {
   const margenDesde = new Date(`${desde}T00:00:00-03:00`);
@@ -100,10 +109,17 @@ async function cargarParticipacionesDelPeriodo(supabase: Client, desde: string, 
   margenHasta.setUTCDate(margenHasta.getUTCDate() + 2);
   const { data } = await supabase
     .from("guardia_participacion")
-    .select("usuario_id, inicio_at, fin_at")
+    .select("usuario_id, inicio_at, fin_at, evento_id, modalidad")
     .gte("inicio_at", margenDesde.toISOString())
     .lt("inicio_at", margenHasta.toISOString());
-  return data ?? [];
+  const rows = data ?? [];
+
+  const eventoIds = [...new Set(rows.map((r) => r.evento_id))];
+  const { data: eventos } =
+    eventoIds.length > 0 ? await supabase.from("guardia_evento").select("id, numero, tipo_alarma, sitio").in("id", eventoIds) : { data: [] };
+  const incidentePorEvento = new Map((eventos ?? []).map((e) => [e.id, formatIncidente(e.numero, e.tipo_alarma, e.sitio)]));
+
+  return rows.map((r) => ({ ...r, incidente: incidentePorEvento.get(r.evento_id) ?? "—" }));
 }
 
 export interface FilaLiquidacionPersona {
@@ -135,6 +151,9 @@ export async function calcularLiquidacion(supabase: Client, desde: string, hasta
     inicio: horaGuardiaIso(new Date(p.inicio_at)),
     fin: p.fin_at ? horaGuardiaIso(new Date(p.fin_at)) : ahora,
     enCurso: !p.fin_at,
+    eventoId: p.evento_id,
+    incidente: p.incidente,
+    modalidad: p.modalidad as ParticipacionDetalle["modalidad"],
   }));
   const resultado = liquidarConDetalle(participaciones, feriados, parametros);
 
@@ -145,6 +164,7 @@ export async function calcularLiquidacion(supabase: Client, desde: string, hasta
     }
     ficha.totalMinutos = Object.values(ficha.porDia).reduce((acc, d) => acc + d.minutos, 0);
     ficha.totalCentesimas = Object.values(ficha.porDia).reduce((acc, d) => acc + d.centesimas, 0);
+    ficha.totalFrancos = Object.values(ficha.porDia).reduce((acc, d) => acc + d.francos, 0);
   }
 
   const idsConActividad = Object.keys(resultado).filter((id) => !personas.some((p) => p.id === id));
@@ -158,9 +178,32 @@ export async function calcularLiquidacion(supabase: Client, desde: string, hasta
       usuarioId: id,
       nombre: nombrePorId.get(id) ?? "—",
       area: areaPorId.get(id) ?? "General",
-      detalle: resultado[id] ?? { porDia: {}, totalMinutos: 0, totalCentesimas: 0 },
+      detalle: resultado[id] ?? { porDia: {}, totalMinutos: 0, totalCentesimas: 0, totalFrancos: 0 },
     }))
     .sort((a, b) => a.nombre.localeCompare(b.nombre));
+}
+
+export interface GuardiaGeneralActual {
+  usuarioId: string;
+  nombre: string;
+  telefono: string | null;
+}
+
+/**
+ * Quién hace la guardia general EN ESTE INSTANTE (cronograma + cambios
+ * aceptados vigentes, igual que al activar guardia técnica) — para avisar
+ * a esa persona cuando pasa algo que la guardia general tiene que saber
+ * aunque no sea un evento de Guardia General en sí (ej. Riesgo de Viaje).
+ * null si nadie tiene asignada el área "General" en este momento.
+ */
+export async function cargarGuardiaGeneralActual(supabase: Client): Promise<GuardiaGeneralActual | null> {
+  const [cronograma, cambios, parametros] = await Promise.all([cargarCronograma(supabase), cargarCambiosAceptados(supabase), cargarParametros(supabase)]);
+  const usuarioId = guardiaDe(cronograma, cambios, "General", horaGuardiaIso(), parametros.cambioMin);
+  if (!usuarioId) return null;
+
+  const { data: perfil } = await supabase.from("profiles").select("nombre_completo, telefono").eq("id", usuarioId).maybeSingle();
+  if (!perfil) return null;
+  return { usuarioId, nombre: perfil.nombre_completo, telefono: perfil.telefono };
 }
 
 export { AREAS_GUARDIA };
