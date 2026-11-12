@@ -60,7 +60,7 @@ async function medir(proveedor: string, modelo: string, fn: () => Promise<string
 }
 
 /** Llamada estilo OpenAI (Groq, Mistral). */
-async function openAiCompat(url: string, key: string, modelo: string, dataUri: string): Promise<string> {
+async function openAiCompat(url: string, key: string, modelo: string, dataUri: string, reintento = true): Promise<string> {
   const res = await fetch(url, {
     method: "POST",
     headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
@@ -80,6 +80,14 @@ async function openAiCompat(url: string, key: string, modelo: string, dataUri: s
     }),
   });
   const body = await res.text();
+  // Plan gratis con límite por minuto: si pide esperar poco, se espera y se reintenta una vez.
+  if (res.status === 429 && reintento) {
+    const seg = Number(body.match(/try again in ([\d.]+)s/i)?.[1] ?? res.headers.get("retry-after") ?? NaN);
+    if (Number.isFinite(seg) && seg <= 30) {
+      await new Promise((r) => setTimeout(r, Math.ceil(seg * 1000) + 500));
+      return openAiCompat(url, key, modelo, dataUri, false);
+    }
+  }
   if (!res.ok) throw new Error(`HTTP ${res.status}: ${body.slice(0, 300)}`);
   const json = JSON.parse(body) as { choices?: { message?: { content?: string } }[] };
   return json.choices?.[0]?.message?.content ?? "";
