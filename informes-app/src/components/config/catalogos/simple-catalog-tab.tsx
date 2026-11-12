@@ -14,7 +14,8 @@ type SimpleCatalogTable =
   | "catalogo_clientes"
   | "catalogo_provincias"
   | "catalogo_tipos_informe"
-  | "catalogo_categorias_gasto";
+  | "catalogo_categorias_gasto"
+  | "catalogo_tipos_recurso_altura";
 
 export function SimpleCatalogTab({
   tabla,

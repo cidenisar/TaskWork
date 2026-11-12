@@ -4,6 +4,8 @@ import { requireProfile } from "@/lib/auth";
 import { puedeVerEstadisticas } from "@/lib/types";
 import { createClient } from "@/lib/supabase/server";
 import { getEstadisticasBase } from "@/lib/estadisticas/aggregates";
+import { registrarUsoIa } from "@/lib/ai/registrar-uso";
+import { verificarLimiteIa } from "@/lib/ai/rate-limit";
 
 /**
  * Insights automáticos (spec sección 8.4 / 10 #5): pre-calculamos números
@@ -35,10 +37,17 @@ export async function GET() {
     return NextResponse.json({ error: "Los insights automáticos no están configurados en este entorno (falta ANTHROPIC_API_KEY)." }, { status: 503 });
   }
 
+  const limite = await verificarLimiteIa(supabase, profile.id);
+  if (!limite.permitido) {
+    return NextResponse.json({ error: limite.error }, { status: 429 });
+  }
+
   try {
     const client = new Anthropic();
-    const response = await client.messages.create({
-      model: "claude-opus-5",
+    const response = await client.beta.messages.create({
+      model: "claude-opus-5-5",
+      betas: ["server-side-fallback-2026-07-01"],
+      fallbacks: "default",
       max_tokens: 1024,
       output_config: { effort: "low" },
       system:
@@ -51,6 +60,15 @@ export async function GET() {
         "categoría; (4) tono profesional y directo, una oración por observación; (5) respondé SOLO con las " +
         "observaciones, una por línea, sin numerarlas ni agregar texto antes o después.",
       messages: [{ role: "user", content: JSON.stringify(insightsContext) }],
+    });
+
+    await registrarUsoIa(supabase, {
+      endpoint: "estadisticas/insights",
+      modulo: "estadisticas",
+      modelo: response.model,
+      inputTokens: response.usage.input_tokens,
+      outputTokens: response.usage.output_tokens,
+      userId: profile.id,
     });
 
     const textBlock = response.content.find((b) => b.type === "text");

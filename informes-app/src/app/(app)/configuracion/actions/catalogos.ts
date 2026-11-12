@@ -17,7 +17,8 @@ type SimpleCatalogTable =
   | "catalogo_clientes"
   | "catalogo_provincias"
   | "catalogo_tipos_informe"
-  | "catalogo_categorias_gasto";
+  | "catalogo_categorias_gasto"
+  | "catalogo_tipos_recurso_altura";
 
 const ETIQUETAS: Record<SimpleCatalogTable, string> = {
   catalogo_torres: "Torres",
@@ -25,6 +26,7 @@ const ETIQUETAS: Record<SimpleCatalogTable, string> = {
   catalogo_provincias: "Provincias",
   catalogo_tipos_informe: "Tipos de Informe",
   catalogo_categorias_gasto: "Categorías de Gasto",
+  catalogo_tipos_recurso_altura: "Tipos de Recurso (altura)",
 };
 
 export async function addSimpleCatalogItemAction(

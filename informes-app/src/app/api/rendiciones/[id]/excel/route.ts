@@ -36,7 +36,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   }
 
   const workbook = new ExcelJS.Workbook();
-  workbook.creator = "Informes";
+  workbook.creator = "TaskWork";
   const sheet = workbook.addWorksheet(rendicion.numero_generacion);
 
   sheet.addRow([`Rendición de Gastos — ${rendicion.motivo}`]);

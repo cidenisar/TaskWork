@@ -1,0 +1,16 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/liberar-storage",
+      "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/cron/guardia-asuncion-semanal",
+      "schedule": "0 11 * * *"
+    },
+    {
+      "path": "/api/cron/guardia-reintentar-notificaciones",
+      "schedule": "30 11 * * *"
+    }
+  ]
+}

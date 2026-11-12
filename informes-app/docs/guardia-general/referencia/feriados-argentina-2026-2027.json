@@ -1,0 +1,139 @@
+{
+ "_fuente": "Calendario nacional de Argentina compilado de notas periodísticas (Canal 26 para 2026, Hacecuentas para 2027). NO cita decreto oficial: verificar contra el Boletín Oficial / argentina.gob.ar antes de usar en una liquidación.",
+ "_estado": {
+  "2026": "feriados nacionales; no incluye días no laborables con fines turísticos (10/07 y 07/12) ni feriados locales",
+  "2027": "calculado según la ley; traslado del 20/11 y puentes a confirmar por decreto"
+ },
+ "2026": [
+  [
+   "2026-01-01",
+   "Año Nuevo"
+  ],
+  [
+   "2026-02-16",
+   "Carnaval"
+  ],
+  [
+   "2026-02-17",
+   "Carnaval"
+  ],
+  [
+   "2026-03-24",
+   "Día de la Memoria por la Verdad y la Justicia"
+  ],
+  [
+   "2026-04-02",
+   "Día del Veterano y de los Caídos en Malvinas"
+  ],
+  [
+   "2026-04-03",
+   "Viernes Santo"
+  ],
+  [
+   "2026-05-01",
+   "Día del Trabajador"
+  ],
+  [
+   "2026-05-25",
+   "Revolución de Mayo"
+  ],
+  [
+   "2026-06-15",
+   "Paso a la Inmortalidad de Güemes (trasladado del 17/06)"
+  ],
+  [
+   "2026-06-20",
+   "Paso a la Inmortalidad de Belgrano"
+  ],
+  [
+   "2026-07-09",
+   "Día de la Independencia"
+  ],
+  [
+   "2026-08-17",
+   "Paso a la Inmortalidad de San Martín"
+  ],
+  [
+   "2026-10-12",
+   "Respeto a la Diversidad Cultural"
+  ],
+  [
+   "2026-11-23",
+   "Día de la Soberanía Nacional (trasladado del 20/11)"
+  ],
+  [
+   "2026-12-08",
+   "Inmaculada Concepción de María"
+  ],
+  [
+   "2026-12-25",
+   "Navidad"
+  ]
+ ],
+ "2027": [
+  [
+   "2027-01-01",
+   "Año Nuevo"
+  ],
+  [
+   "2027-02-08",
+   "Carnaval"
+  ],
+  [
+   "2027-02-09",
+   "Carnaval"
+  ],
+  [
+   "2027-03-24",
+   "Día de la Memoria por la Verdad y la Justicia"
+  ],
+  [
+   "2027-03-26",
+   "Viernes Santo"
+  ],
+  [
+   "2027-04-02",
+   "Día del Veterano y de los Caídos en Malvinas"
+  ],
+  [
+   "2027-05-01",
+   "Día del Trabajador"
+  ],
+  [
+   "2027-05-25",
+   "Revolución de Mayo"
+  ],
+  [
+   "2027-06-20",
+   "Paso a la Inmortalidad de Belgrano"
+  ],
+  [
+   "2027-06-21",
+   "Paso a la Inmortalidad de Güemes (trasladado del 17/06)"
+  ],
+  [
+   "2027-07-09",
+   "Día de la Independencia"
+  ],
+  [
+   "2027-08-16",
+   "Paso a la Inmortalidad de San Martín (trasladado del 17/08)"
+  ],
+  [
+   "2027-10-11",
+   "Respeto a la Diversidad Cultural (trasladado del 12/10)"
+  ],
+  [
+   "2027-11-20",
+   "Día de la Soberanía Nacional (traslado a confirmar)"
+  ],
+  [
+   "2027-12-08",
+   "Inmaculada Concepción de María"
+  ],
+  [
+   "2027-12-25",
+   "Navidad"
+  ]
+ ]
+}

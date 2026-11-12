@@ -5,22 +5,38 @@ import { labelUbicacion } from "@/components/ubicaciones/types";
 import type { TableroConCircuitos } from "@/components/tableros/types";
 import { fetchTodasLasUbicaciones } from "@/lib/ubicaciones/fetch-todas";
 
-export default async function NuevaMedicionPage() {
+export default async function NuevaMedicionPage({ searchParams }: { searchParams: Promise<{ tableroId?: string }> }) {
   await requireProfile();
+  const { tableroId } = await searchParams;
   const supabase = await createClient();
 
-  const [tablerosRes, circuitosRes, ubicaciones, provinciasRes] = await Promise.all([
-    supabase.from("tableros").select("id, subsistemas, denominacion, ubicacion_id").order("denominacion"),
+  const [tablerosRes, circuitosRes, ubicaciones, provinciasRes, hallazgosRes, clientesRes] = await Promise.all([
+    supabase
+      .from("tableros")
+      .select("id, subsistemas, denominacion, ubicacion_id, equipamiento_esperado, tiene_bypass_ups")
+      .order("denominacion"),
     supabase
       .from("tablero_circuitos")
-      .select("id, tablero_id, numero, texto, amp_nominal, categoria_equipo, tipo_circuito")
+      .select(
+        "id, tablero_id, numero, texto, amp_nominal, categoria_equipo, tipo_circuito, cuerpo, alimentado_por_ups, rol_bypass_ups, circuito_padre_id, etiqueta_cable",
+      )
+      .eq("estado", "activo")
       .order("numero"),
     fetchTodasLasUbicaciones(supabase),
     supabase.from("catalogo_provincias").select("nombre").order("nombre"),
+    supabase.from("catalogo_inspeccion_ia").select("id, texto").eq("modulo", "tableros").order("orden"),
+    supabase.from("catalogo_clientes").select("nombre").order("nombre"),
   ]);
+  const clientes = (clientesRes.data ?? []).map((c) => c.nombre);
 
   const ubicacionesPorId = new Map(ubicaciones.map((u) => [u.id, u]));
   const provincias = (provinciasRes.data ?? []).map((p) => p.nombre);
+  const catalogoHallazgos = hallazgosRes.data ?? [];
+
+  // circuito_padre_id es un id de otro circuito — el form elige el padre por
+  // N° (más estable mientras se está armando la medición), así que acá se
+  // resuelve una sola vez con un mapa id→N° de todos los circuitos leídos.
+  const numeroPorId = new Map((circuitosRes.data ?? []).map((c) => [c.id, c.numero]));
 
   const circuitosPorTablero = new Map<string, TableroConCircuitos["circuitos"]>();
   for (const c of circuitosRes.data ?? []) {
@@ -32,6 +48,11 @@ export default async function NuevaMedicionPage() {
       ampNominal: c.amp_nominal ?? "",
       categoriaEquipo: c.categoria_equipo,
       tipoCircuito: c.tipo_circuito,
+      cuerpo: c.cuerpo ?? "",
+      alimentadoPorUps: c.alimentado_por_ups,
+      rolBypassUps: c.rol_bypass_ups,
+      padreNumero: c.circuito_padre_id ? (numeroPorId.get(c.circuito_padre_id) ?? null) : null,
+      etiquetaCable: c.etiqueta_cable ?? "",
     });
     circuitosPorTablero.set(c.tablero_id, lista);
   }
@@ -47,13 +68,22 @@ export default async function NuevaMedicionPage() {
         ubicacionId: t.ubicacion_id,
         ubicacionLabel: labelUbicacion(ubicacion),
         circuitos: circuitosPorTablero.get(t.id) ?? [],
+        equipamientoEsperado: t.equipamiento_esperado,
+        tieneBypassUps: t.tiene_bypass_ups,
       };
     })
     .filter((t): t is TableroConCircuitos => t !== null);
 
   return (
     <div>
-      <NuevaMedicionForm tableros={tableros} ubicaciones={ubicaciones} provincias={provincias} />
+      <NuevaMedicionForm
+        tableros={tableros}
+        ubicaciones={ubicaciones}
+        provincias={provincias}
+        tableroIdInicial={tableroId ?? null}
+        catalogoHallazgos={catalogoHallazgos}
+        clientes={clientes}
+      />
     </div>
   );
 }

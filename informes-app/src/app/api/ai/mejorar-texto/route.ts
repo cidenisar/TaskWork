@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { requireProfile } from "@/lib/auth";
+import { createClient } from "@/lib/supabase/server";
+import { registrarUsoIa } from "@/lib/ai/registrar-uso";
+import { verificarLimiteIa } from "@/lib/ai/rate-limit";
 
 /**
  * "Mejorar con IA" (spec sección 6.1 / 10, funcionalidad #1): corrige ortografía
@@ -12,7 +15,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "No autenticado." }, { status: 401 });
   }
 
-  const { texto } = (await request.json().catch(() => ({}))) as { texto?: string };
+  const { texto, modo } = (await request.json().catch(() => ({}))) as { texto?: string; modo?: "descripcion" | "lista_tareas" };
   if (!texto || !texto.trim()) {
     return NextResponse.json({ error: "No hay texto para mejorar." }, { status: 400 });
   }
@@ -24,18 +27,43 @@ export async function POST(request: Request) {
     );
   }
 
+  const supabase = await createClient();
+
+  const limite = await verificarLimiteIa(supabase, profile.id);
+  if (!limite.permitido) {
+    return NextResponse.json({ error: limite.error }, { status: 429 });
+  }
+
   try {
     const client = new Anthropic();
-    const response = await client.messages.create({
-      model: "claude-opus-5",
+    const response = await client.beta.messages.create({
+      model: "claude-opus-5-5",
+      betas: ["server-side-fallback-2026-07-01"],
+      fallbacks: "default",
       max_tokens: 2048,
       output_config: { effort: "low" },
       system:
-        "Corregís ortografía y gramática de descripciones de trabajos técnicos de campo (informes técnicos) " +
-        "y subís el tono a uno profesional. Nunca inventes ni agregues información que no esté en el texto " +
-        "original — solo reescribís lo que ya está. Respondé únicamente con el texto corregido, sin comillas, " +
-        "sin explicaciones ni comentarios adicionales.",
+        modo === "lista_tareas"
+          ? "Corregís ortografía y gramática de una lista de tareas pendientes de un informe técnico de campo, " +
+            "una por línea, y subís el tono a uno profesional. Mantenés EXACTAMENTE una línea por tarea, en el " +
+            "mismo orden, sin fusionar líneas en un párrafo ni agregar numeración o viñetas propias (el PDF ya " +
+            "las agrega). Nunca inventes ni agregues tareas que no estén en el texto original — solo reescribís " +
+            "lo que ya está. Respondé únicamente con la lista corregida, sin comillas, sin explicaciones ni " +
+            "comentarios adicionales."
+          : "Corregís ortografía y gramática de descripciones de trabajos técnicos de campo (informes técnicos) " +
+            "y subís el tono a uno profesional. Nunca inventes ni agregues información que no esté en el texto " +
+            "original — solo reescribís lo que ya está. Respondé únicamente con el texto corregido, sin comillas, " +
+            "sin explicaciones ni comentarios adicionales.",
       messages: [{ role: "user", content: texto }],
+    });
+
+    await registrarUsoIa(supabase, {
+      endpoint: "ai/mejorar-texto",
+      modulo: "mejorar-texto",
+      modelo: response.model,
+      inputTokens: response.usage.input_tokens,
+      outputTokens: response.usage.output_tokens,
+      userId: profile.id,
     });
 
     const textBlock = response.content.find((b) => b.type === "text");

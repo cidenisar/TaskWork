@@ -1,6 +1,7 @@
 import type { ImagenInforme, Tecnico, Vehiculo } from "@/lib/types";
 import type { GpsCapturado } from "@/components/ubicaciones/ubicacion-fields";
 import { labelUbicacion, type Ubicacion } from "@/components/ubicaciones/types";
+import type { ConfigRecursoAltura } from "@/lib/equipos/recurso-altura";
 
 export interface InformeFormState {
   titulo: string;
@@ -50,6 +51,7 @@ export interface CatalogosInforme {
   tecnicos: { nombre: string; torre: string | null }[];
   torres: string[];
   vehiculos: { patente: string; marcaModelo: string | null }[];
+  recursoAlturaConfig: ConfigRecursoAltura[];
 }
 
 /** Etiqueta de la Ubicación elegida/creada en el form, para mostrar en las pantallas de revisión. */

@@ -5,7 +5,7 @@ import { RendicionWorkspace } from "@/components/rendicion-gastos/workspace";
 
 export default async function RendicionAbiertaPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  await requireProfile();
+  const profile = await requireProfile();
   const supabase = await createClient();
 
   // RLS (rendiciones_gastos_select_own) ya limita esto a rendiciones propias.
@@ -77,10 +77,9 @@ export default async function RendicionAbiertaPage({ params }: { params: Promise
       moneda={rendicion.moneda}
       estado={rendicion.estado}
       pdfDisponible={pdfDisponible}
+      esAdmin={(profile.rol === "admin" || profile.rol === "superusuario")}
       gastos={gastos}
       catalogos={{
-        provincias: [],
-        ubicaciones: [],
         categoriasGasto: (categoriasRes.data ?? []).map((c) => c.nombre),
         tecnicos: (tecnicosRes.data ?? []).map((t) => ({ nombre: t.nombre_completo, torre: t.torre })),
         torres: (torresRes.data ?? []).map((t) => t.nombre),

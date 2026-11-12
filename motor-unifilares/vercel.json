@@ -1,0 +1,12 @@
+{
+  "functions": {
+    "api/**/*.ts": {
+      "maxDuration": 60,
+      "includeFiles": "{reglas/**,node_modules/pdfkit/js/data/**,node_modules/pdfkit/js/standard-fonts/**}"
+    }
+  },
+  "rewrites": [
+    { "source": "/simbolos", "destination": "/simbolos.html" },
+    { "source": "/probar", "destination": "/probar.html" }
+  ]
+}

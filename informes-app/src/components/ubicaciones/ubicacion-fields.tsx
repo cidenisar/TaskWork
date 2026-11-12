@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { Icon } from "@/components/icon";
+import { FilterableSelect } from "@/components/ui/filterable-select";
 import type { Ubicacion } from "./types";
 
 export interface GpsCapturado {
@@ -325,29 +326,31 @@ export function UbicacionFields({
           <label>
             Sitio {requerido ? <span className="req">*</span> : <span className="opt">(opcional)</span>}
           </label>
-          <select value={sitioEl} onChange={(e) => elegirSitio(e.target.value)} disabled={disabled}>
-            <option value="">Seleccionar sitio...</option>
-            {sitiosDeLaProvincia.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-            <option value="__new">+ Crear sitio nuevo...</option>
-          </select>
+          <FilterableSelect
+            value={sitioEl}
+            onChange={elegirSitio}
+            placeholder="Buscar o elegir sitio..."
+            disabled={disabled}
+            options={[
+              ...sitiosDeLaProvincia.map((s) => ({ value: s, label: s })),
+              { value: "__new", label: "+ Crear sitio nuevo..." },
+            ]}
+          />
         </div>
       )}
       {sitioEl && sitioEl !== "__new" && plantasDelSitio.length > 1 && (
         <div className="field">
           <label>Planta</label>
-          <select value={plantaEl} onChange={(e) => elegirPlanta(e.target.value)} disabled={disabled}>
-            <option value="">Seleccionar planta...</option>
-            {plantasDelSitio.map((p) => (
-              <option key={p || "__sin"} value={p}>
-                {p || "(sin planta especificada)"}
-              </option>
-            ))}
-            <option value="__new">+ Crear planta nueva...</option>
-          </select>
+          <FilterableSelect
+            value={plantaEl}
+            onChange={elegirPlanta}
+            placeholder="Buscar o elegir planta..."
+            disabled={disabled}
+            options={[
+              ...plantasDelSitio.map((p) => ({ value: p, label: p || "(sin planta especificada)" })),
+              { value: "__new", label: "+ Crear planta nueva..." },
+            ]}
+          />
         </div>
       )}
       {plantaEl === "__new" && (
@@ -386,15 +389,16 @@ export function UbicacionFields({
       {plantaEl && plantaEl !== "__new" && oficinasDeLaPlanta.length > 1 && (
         <div className="field">
           <label>Oficina</label>
-          <select value={oficinaEl} onChange={(e) => elegirOficina(e.target.value)} disabled={disabled}>
-            <option value="">Seleccionar oficina...</option>
-            {oficinasDeLaPlanta.map((o) => (
-              <option key={o || "__sin"} value={o}>
-                {o || "(sin oficina especificada)"}
-              </option>
-            ))}
-            <option value="__new">+ Crear oficina nueva...</option>
-          </select>
+          <FilterableSelect
+            value={oficinaEl}
+            onChange={elegirOficina}
+            placeholder="Buscar o elegir oficina..."
+            disabled={disabled}
+            options={[
+              ...oficinasDeLaPlanta.map((o) => ({ value: o, label: o || "(sin oficina especificada)" })),
+              { value: "__new", label: "+ Crear oficina nueva..." },
+            ]}
+          />
         </div>
       )}
       {oficinaEl === "__new" && (

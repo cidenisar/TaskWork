@@ -51,6 +51,21 @@ server-side a "lo que ya tiene algo cargado encima" antes de mandarlo al
 cliente evita una lista enorme que es puro ruido para esa pantalla en
 particular.
 
+**Una misma entidad con dos orígenes posibles (uno ya existente en el
+sistema, otro en texto libre) comparte tabla y PDF, no una lógica
+separada por cada uno.** Pasó con "Entregas a Depósito" (Informes):
+podía ser un equipo que ya estaba cargado en un sitio, o material que
+nunca se registró (cables sueltos, repuestos). En vez de dos tablas o
+dos flujos paralelos, una sola tabla con una columna `origen` como
+discriminante (`equipo_existente` | `material_libre`), donde las
+columnas que no aplican a un origen quedan `null` — así ambos comparten
+el mismo número de generación, el mismo PDF, el mismo Historial y
+cualquier filtro por sitio (ej. `ubicacion_id`), sin if/else repetido en
+cada pantalla que los lista. El picker/resolver de "elegí uno existente
+o creá uno nuevo" que ya exista en el proyecto (en este caso el de
+Ubicación, con alta al vuelo) se reusa tal cual para el origen "libre",
+en vez de construir un formulario de alta paralelo.
+
 ## 2. Consultas a Supabase/Postgres
 
 **Nunca traer una tabla completa sin paginar.** Supabase/PostgREST corta en
@@ -75,6 +90,44 @@ la app por esto si la pantalla ya se refresca sola en algún momento
 razonable (foco, poll, etc.); alcanza con saberlo para no perder tiempo
 buscando un bug que no está en la política.
 
+**Una tabla de catálogo nueva necesita su propia columna `id` (uuid) como
+PK aunque tenga una clave natural obvia (un enum, un código) — no uses la
+clave natural como PK directa si en el proyecto hay algún helper genérico
+que asuma `id` en toda tabla.** Pasó en Informes: se creó
+`torre_tipo_largos` con `tipo_torre` (un enum de 4 valores) como primary
+key directa — parecía más simple, sin un `id` "de más". Rompió
+`tsc` en un helper totalmente aparte
+(`lib/admin/eliminar-registro.ts`, que borra cualquier fila por `id` para
+limpiar datos de prueba) porque ese helper tipa `tabla: keyof
+Database["Tables"]` y asume que **todas** las tablas tienen `id` — al
+faltarle a una, TypeScript angosta el tipo del argumento de `.eq()` a
+`never` para la unión completa. La corrección fue agregar `id uuid
+primary key default gen_random_uuid()` + `unique(tipo_torre)`, igual
+patrón que ya usaba `mantenimiento_intervalos` (`id` + `unique
+(tipo_equipo, categoria)`) — que resultó ser la convención real del
+proyecto, no cada tabla improvisando su propia PK. Antes de diseñarle una
+PK natural a una tabla nueva, revisar qué convención ya siguen las tablas
+similares (¿tienen `id` + `unique` en la clave natural, o la clave natural
+es la PK?) y copiarla, en vez de optimizar por "menos una columna".
+
+**Si `apply_migration`/`execute_sql` de las herramientas de Supabase se
+cuelgan (timeout) específicamente en un `DROP TABLE`, mientras que
+`CREATE TABLE`/`ALTER TABLE` en el mismo momento andan bien — no es un
+lock real, probablemente es la herramienta.** Pasó en Informes: un `DROP
+TABLE` se colgó 3 veces seguidas (con una tabla real y con una de prueba
+creada al toque para descartar que fuera algo propio de esa tabla en
+particular), mientras que crear la tabla de prueba y aplicar el resto de
+la migración (ALTER + CREATE TABLE + policies) anduvo normal. Antes de
+asumir "hay un lock" — confirmarlo de verdad con
+`select * from pg_locks where relation = 'public.mi_tabla'::regclass;` y
+`pg_stat_activity` (queries activas, no solo "idle") — si ninguna de las
+dos muestra nada bloqueando, es la herramienta, no la base. Salida
+pragmática: sacar el `DROP TABLE` de la migración, dejar la tabla
+huérfana (documentada en un comentario, sin RLS floja ni datos reales) y
+resolver el drop más tarde a mano o cuando la herramienta ande — no vale
+la pena perder más de 2-3 reintentos en un DDL que ya se demostró
+reproducible.
+
 ## 3. RLS (seguridad por fila)
 
 **Toda tabla con `.update()` desde el cliente necesita su policy de UPDATE
@@ -84,6 +137,29 @@ silencio. Puede pasar desapercibido durante meses si nada en la UI compara
 "¿se guardó lo que pedí guardar?". Checklist para cualquier tabla nueva:
 SELECT, INSERT, UPDATE y DELETE (los que apliquen) definidos desde el
 principio.
+
+**Este bug exacto (falta la policy de UPDATE en una tabla de
+"relevamiento") ya se había encontrado y arreglado una vez en este mismo
+proyecto — y volvió a aparecer en un módulo nuevo por copiar la migración
+de CREACIÓN original de otro módulo en vez de revisar el esquema vivo.**
+Pasó con "Torres de Comunicaciones" (Informes): se construyó mirando
+Racks, pero copiando el `create table rack_relevamientos` + sus policies
+tal como estaban en la migración original de Racks — que en su momento
+SÍ tenía este mismo bug, arreglado después en una migración de fix
+aparte (`..._fix_relevamiento_update_rls.sql`) que agregó la policy de
+UPDATE faltante a Tableros/Racks/Equipos. Esa migración de fix nunca se
+leyó al mirar "cómo está armado Racks", así que el módulo nuevo heredó el
+bug ya resuelto en el que se estaba inspirando. Síntoma real: el técnico
+cargó un relevamiento, el PDF y las fotos SÍ se subieron a Storage, pero
+la fila de la base nunca se enteró (UPDATE con 0 filas afectadas, sin
+error) — en el historial quedó como "Solo registro", sin poder ver ni
+PDF ni fotos, y hubo que recuperarlo con el mismo backfill manual que la
+vez anterior. Regla general: al construir un módulo nuevo mirando uno
+existente como referencia, no alcanza con leer SU MIGRACIÓN DE CREACIÓN
+— hay que revisar TODAS las migraciones posteriores que lo tocaron (o,
+más simple, listar el esquema/policies vivos de la tabla de referencia
+vía la herramienta de Supabase) para no reintroducir un bug que ya se
+había pagado una vez.
 
 **`upsert()` necesita policy de SELECT, aunque el diseño diga que nunca se
 lee esa tabla desde el cliente.** Un `upsert(..., { onConflict: "x" })` se
@@ -116,6 +192,96 @@ explícitamente: confirmar con un usuario de alcance angosto que RLS sola
 deja leer un registro fuera de su alcance (si lo deja, el gate de
 aplicación es la única protección real, no un refuerzo redundante).
 
+**Cuando un rol nuevo necesita escribir una tabla cuyo UPDATE es
+admin-only por RLS, no aflojar la policy — mover la decisión de rol al
+código y escribir con el cliente de service-role.** Pasó en Informes con
+"dar de baja equipamiento": `rack_equipamientos`/`equipos` tenían UPDATE
+`is_admin()`-only (a propósito, para que un técnico no edite equipamiento
+que cargó otro) y la feature nueva necesitaba que Supervisor también
+pudiera. Ensanchar la policy a `is_admin_or_supervisor()` hubiera abierto
+esas tablas a CUALQUIER update de un Supervisor, no solo al de esta
+acción puntual. En vez de eso: la Server Action valida el rol explícitamente
+al principio (antes de tocar la base), y de ahí en más usa el cliente de
+service-role (bypassea RLS) solo para ese flujo — la restricción de "quién
+puede" queda en el código de la acción, no en la tabla. Mismo criterio que
+el ítem de "alcance dentro de un rol" de más arriba: la policy de la tabla
+sigue siendo la barrera general (admin-only para ediciones libres), y el
+gate de aplicación es la excepción puntual y auditada para una acción
+específica — no al revés.
+
+El mismo criterio generaliza a un caso más sutil: cuando una acción de
+menor privilegio dispara, como EFECTO SECUNDARIO automático, la misma
+escritura que ya existe como una acción pública gateada a un rol mayor.
+Pasó en Informes con "Instalación" (abierta a cualquier técnico) cuyo
+sobrante de un remito genera sola una fila en `entregas_deposito` (tabla
+admin/supervisor-only por RLS, con su propia Server Action pública
+gateada a ese rol). La solución NO es llamar a la Server Action pública
+desde adentro (heredaría su gate y rechazaría al técnico) ni aflojar la
+policy de la tabla — es extraer la lógica de "crear la fila(s) + el PDF"
+a una función de librería compartida que recibe el cliente de Supabase
+como parámetro (normal o service-role, a elección de quien la llama), y
+que cada chamada decida: la acción pública la llama con el cliente normal
+(ya validó el rol mayor antes), el efecto secundario la llama con
+service-role (validó en código que esto es un efecto secundario legítimo
+de una acción de menor privilegio, no un acceso directo a la tabla). Así
+no se duplica el render del PDF ni el manejo de colisión del número de
+generación, y cada camino de entrada mantiene su propio control de
+acceso sin heredar el del otro.
+
+**Un mismo bucket de Storage se puede compartir entre features sin
+mezclar sus permisos, si cada una vive bajo su propio prefijo de
+carpeta literal y sus policies lo exigen explícitamente.** Pasó en
+Informes: ya existía un bucket privado (`informes-pdf`) usado por
+"Nueva Medición" de tableros, con policies que exigen que el primer
+segmento del path sea el `auth.uid()` de quien sube. Una feature nueva
+("adjuntar un archivo suelto a un tablero", abierta a cualquier técnico
+logueado, no solo al dueño) reusó el MISMO bucket pero bajo un prefijo
+distinto (`tablero-adjuntos/...`), con policies propias y ADITIVAS que
+chequean `(storage.foldername(name))[1] = 'tablero-adjuntos'` — nunca
+tocó ni aflojó las policies existentes del otro prefijo. Como las
+policies permisivas de Postgres se combinan con OR, esto es seguro por
+diseño: ningún técnico gana acceso a la carpeta por-uid de otro, cada
+prefijo tiene su propia regla de quién lee/escribe/borra. Generaliza a
+cualquier caso de "necesito otro patrón de acceso en el mismo bucket
+ya existente": no crear un bucket nuevo (fragmenta configuración) ni
+ensanchar las policies existentes — un prefijo de carpeta propio +
+policies propias alcanza.
+
+**Un redirect automático por dispositivo/rol puede trabarse con la
+propia navegación interna de la app — revisar ese caso ANTES de
+shippear, no esperar a que el usuario lo encuentre.** Pasó en Informes:
+se agregó un redirect en `/` que manda a Admin/Supervisor en desktop
+directo a `/panel` (y deja el celular entrar normal). El bug (detectado
+antes de pushear, no reportado por el usuario) es que el propio link
+"Volver a la app" del panel apunta a `/`, así que ese mismo redirect lo
+rebotaba de inmediato de vuelta a `/panel` — el link quedaba inservible
+para ese rol en desktop. El arreglo es chequear el header `referer`: si
+viene de dentro de la misma app (`referer.includes("/panel")`), respetar
+la navegación explícita del usuario y NO re-redirigir. Regla general:
+cualquier redirect automático en una ruta de entrada/landing tiene que
+probarse contra los propios links internos de la app que apuntan ahí —
+si alguno existe, hace falta una señal (referer, query param, lo que
+sea) que distinga "llegué acá por default" de "elegí volver acá a
+propósito".
+
+**Antes de asumir que un visor con datos "en vivo" necesita pasar a
+estático por riesgo de desactualización (o viceversa), revisar los
+caminos de escritura reales de esa tabla — la respuesta suele ser que
+da lo mismo.** Surgió en Informes con el plano unifilar público
+(se redibuja en vivo desde `tablero_circuitos` en cada vista del QR,
+a propósito, para no quedar desactualizado). La pregunta era si
+convenía pasar a un PDF pre-generado que se regenere en cada edición.
+Revisando las policies, la tabla no tiene UPDATE directo habilitado —
+la ÚNICA forma de tocar un circuito es a través del flujo que YA
+regenera el archivo estático (DXF) en ese mismo momento. Conclusión:
+si no hay una vía de escritura por fuera del único flujo controlado,
+un archivo pre-generado y un render en vivo quedan igual de
+actualizados en la práctica — la decisión entre los dos pasa a ser de
+simplicidad/mantenimiento, no de riesgo de staleness. Antes de elegir
+entre "vivo" y "estático" por miedo a que quede viejo, listar
+explícitamente TODOS los caminos de escritura de la tabla fuente (no
+asumir que existen más de los que en verdad hay).
+
 **Diagnosticar RLS con los logs reales y reproduciendo la consulta exacta —
 nunca a ciegas.** `edge_logs`/API logs (qué pedido llegó, con qué código) y
 los logs de Postgres (el error real, a veces con el SQL completo) resuelven
@@ -129,6 +295,22 @@ set local request.jwt.claims to '{"sub":"<uuid-real>","role":"authenticated"}';
 -- la consulta exacta que falla
 rollback;
 ```
+
+**Una policy de RLS que hace `exists(select 1 from LA_MISMA_TABLA where ...)` para resolver "¿tengo yo un rol especial sobre OTRA fila de esta tabla?" (ej. "¿soy yo la guardia general de este evento, para poder ver/tocar la fila de otro participante?") revienta con `infinite recursion detected in policy for relation "x"` (código `42P17`), siempre, sin importar si la lógica terminaría en la práctica.** Postgres no hace evaluación de punto fijo: para planear la subquery sobre esa misma tabla tiene que expandir la policy de ESA tabla otra vez, lo que vuelve a traer la subquery, sin fin — el error sale en tiempo de planeo, no de ejecución, así que ni corto-circuita por el resto del `OR` ni importa qué fila sea. Pasó en Guardia General (`guardia_participacion_select/insert/update` comprobando "¿soy GUARDIA_GENERAL de este evento?" contra `guardia_participacion` misma) y, por tabla referenciada en cascada, rompió TODA lectura de `guardia_evento` y `guardia_novedad` también (sus policies hacen `exists(...)` contra `guardia_participacion`, que a su vez no podía resolverse a sí misma). Arreglo: nunca autorreferenciar la tabla dentro de su propia policy — mover ese chequeo a una función `security definer` (mismo patrón que `is_admin_or_supervisor()`), que bypasea RLS al consultar y no dispara la policy de nuevo:
+```sql
+create or replace function public.es_x_de_fila(p_fila_id uuid, p_usuario_id uuid)
+returns boolean language sql security definer set search_path = public stable as $$
+  select exists (select 1 from public.esa_tabla t where t.fila_id = p_fila_id and t.usuario_id = p_usuario_id and t.rol = 'ROL_ESPECIAL');
+$$;
+-- y en la policy: ... or public.es_x_de_fila(fila_id, (select auth.uid())) ...
+```
+**Este bug puede quedar invisible durante meses si los tests del proyecto son lógica de permisos en JS puro (`esGuardiaGeneral()`, etc.) y nunca pegan contra RLS real contra Postgres** — acá pasó justo eso: 54 tests pasando, pero el circuito entero estaba roto desde que se creó la tabla, hasta la primera prueba de punta a punta real. Una tabla con una policy que se referencia a sí misma (directa o indirectamente, vía otra tabla cuya policy la referencia a ella) es una señal para revisar esto ANTES de que aparezca en producción, no después.
+
+**Una subquery correlacionada dentro de una policy de RLS, cuando la tabla de ADENTRO tiene una columna con el MISMO NOMBRE que la columna de AFUERA que se quiere comparar, resuelve el nombre suelto contra la tabla de ADENTRO — en silencio, sin error — y la condición queda siempre falsa o siempre verdadera según de qué lado estaba el nombre repetido.** Encontrado en el mismo incidente que la recursión de arriba, en las OTRAS policies que de rebote quedaron bien (no recursivas, pero igual de rotas):
+- `guardia_evento_update` tenía `exists(select 1 from guardia_participacion p where p.evento_id = id and ...)` — adentro de esa subquery, `guardia_participacion` TAMBIÉN tiene una columna `id` (su propia primary key), así que el `id` suelto se resolvía como `p.id`, no como `guardia_evento.id` (la fila de afuera que la policy debía proteger). Como `p.evento_id = p.id` casi nunca es cierto, la condición quedaba SIEMPRE falsa para cualquiera que no fuera admin/supervisor — "Cerrar evento" nunca afectaba ninguna fila, sin ningún error que lo delatara.
+- `guardia_novedad_select`/`_insert` tenían el error contrario: `exists(select 1 from guardia_participacion p where p.evento_id = evento_id and ...)` — acá `evento_id` suelto se resolvía como `p.evento_id` (la subquery también tiene esa columna), volviendo la comparación una tautología SIEMPRE verdadera (`p.evento_id = p.evento_id`) — cualquier participante de CUALQUIER evento podía, por policy, leer/escribir novedades de cualquier OTRO evento. No se notó en pantalla porque la propia app sigue filtrando por `evento_id` en cada consulta — la policy en sí, aisladamente, no protegía nada.
+
+Regla general: en una subquery correlacionada dentro de una policy, **nunca dejar un nombre de columna sin calificar si existe en más de una tabla de la consulta** (la de afuera Y la de adentro) — ni `select count(*) from information_schema` ni el `EXPLAIN` avisan de esto, porque sintácticamente es SQL válido con un significado real, solo que no el que el autor quiso. La forma de no volver a pisar esto es la misma del punto anterior: mover el chequeo a una función `security definer` con parámetros `p_evento_id`/`p_usuario_id` (nombres que NUNCA coinciden con una columna real) — ahí la ambigüedad es imposible por construcción, en vez de depender de acordarse de calificar cada referencia a mano.
 
 ## 4. Arquitectura cliente/servidor y secretos
 
@@ -169,6 +351,32 @@ persona — la policy bloquea al nuevo dueño legítimo. Hace falta una
 función intermedia (`security definer`) que libere explícitamente la fila
 del dueño anterior antes de que el nuevo la reclame.
 
+**Job programado en Vercel sin infraestructura nueva: `vercel.json` +
+una ruta API protegida por secreto, nunca sin protección.** Para una
+tarea en background que tiene que correr sola (liberar storage viejo,
+mandar un resumen, lo que sea) en una app ya desplegada en Vercel, no
+hace falta sumar un worker/cola aparte: un `vercel.json` con `crons`
+apuntando a una ruta `GET` alcanza. Esa ruta **tiene que fallar cerrado**
+si falta el secreto (`CRON_SECRET` sin configurar → 500, nunca "corro
+igual sin chequear") y comparar el header `Authorization: Bearer
+<secreto>` que Vercel manda solo automáticamente — nunca conformarse con
+"nadie va a adivinar la URL".
+
+**Un job que borra algo "viejo" para liberar espacio: nunca borrar sin
+confirmar el backup primero, y entender qué es lo que realmente se
+ahorra.** Patrón de dos pasos, en ese orden exacto: 1) copiar el archivo a
+donde sea que viva el backup, 2) recién si esa copia devuelve éxito,
+borrar el original — si la copia falla, el original queda intacto, nunca
+"borro y después me fijo". Ojo con un error de diseño fácil de cometer acá:
+mover un archivo a OTRO bucket/carpeta **dentro del mismo proveedor y
+proyecto** no reduce el costo de storage si ese proveedor cobra por bytes
+totales del proyecto (es el caso de Supabase Storage) — da una separación
+prolija entre "activo" y "archivo" y un lugar seguro para recuperar algo,
+pero no es un ahorro real de plata; eso solo se logra sacando el dato del
+proveedor (otro proveedor externo, más barato para guardar en frío). Si el
+objetivo real es bajar el costo, no solo "ordenar", hay que decirlo
+explícito antes de elegir dónde va el backup.
+
 ## 5. Un módulo genérico con IA, en vez de uno por tipo
 
 Cuando el usuario necesita relevar/registrar cosas de **distintos tipos**
@@ -180,6 +388,174 @@ después es ampliar un enum, no crear tabla+migración+formulario nuevos.
 Reservar un módulo propio solo cuando la entidad es realmente un
 **contenedor** con estructura interna distinta (ej. un tablero con sus
 circuitos) — ahí sí se justifica.
+
+**"Identificar un objeto físico en una foto" y "transcribir una lista/tabla
+de un documento en papel" son dos prompts distintos — no reusar el mismo
+para los dos.** Pasó en Informes con el módulo "Instalación": además de
+fotos de los equipos instalados (igual prompt que ya existía, "¿qué es
+esto que veo?"), el usuario quería leer el remito en papel que entrega
+depósito (a veces manuscrito) para sacar una lista de materiales y
+cantidades esperadas. Usar el prompt de "identificar equipamiento" para
+eso da resultados raros — el modelo intenta clasificar el PAPEL como si
+fuera un objeto, en vez de leer su contenido como texto. El prompt para
+un documento tiene que decirlo explícito ("no estás identificando un
+objeto físico, estás transcribiendo una lista/tabla"), pedir los campos
+tal cual se leen (nunca reinterpretar o resumir), y devolver null/omitir
+una línea que no se entienda en vez de inventarla — mismo criterio de "no
+inventar" que el resto de los prompts de esta app, aplicado a texto en
+vez de a identificación visual.
+
+**Una IA que identifica un objeto real por foto puede, en el mismo
+pedido, estimar algo que no se ve en la imagen (consumo típico, vida
+útil, lo que sea) — pero hay que separarle explícitamente en el prompt
+cuál es cuál fuente.** Si se le pide "identificá marca/modelo" y
+"estimá el consumo" en el mismo turno sin aclarar la diferencia, el
+modelo puede mezclar "lo que veo en la foto" con "lo que sé en general de
+ese producto" y perder el criterio de cuándo decir que no sabe. Separarlo
+en el prompt ("el campo X viene de lo que ves en la imagen; el campo Y es
+tu estimación por conocimiento general del producto, no de la foto, devolvé
+null si el modelo no te resulta familiar") deja al modelo dar una
+estimación razonable sin inventar specs de un equipo que no reconoce.
+Para lo que ya estaba cargado antes de agregar un campo así (o donde no
+se pudo estimar en el momento), conviene un backfill aparte — un pedido de
+texto (sin fotos, más barato) sobre lo que falta, disparado a demanda, no
+automático en cada carga de página.
+
+**Un solo número para "consumo/capacidad/rendimiento estimado" de un
+equipo casi siempre esconde una ambigüedad entre dos magnitudes
+distintas — pedir SIEMPRE un par (típico/promedio y pico/máximo), nunca
+uno solo.** Pasó en la práctica, no es hipotético: pedirle a una IA "el
+consumo estimado en Watts" de una notebook con marca/modelo identificado
+devolvió 65W — que resultó ser el vatiaje de la FUENTE/CARGADOR (lo
+máximo que esa fuente puede entregar), no lo que la notebook consume la
+mayoría del tiempo en uso normal (mucho menos). La confusión es casi
+inevitable con un solo campo, porque la especificación más fácil de
+encontrar de un equipo (la de su fuente/placa/nameplate) es casi siempre
+un límite/capacidad, no un consumo típico real. El prompt tiene que
+pedir los dos valores por separado y explicarle la diferencia
+("promedio = consumo real típico, nunca el vatiaje nominal de la fuente
+si es mayor; máximo = el pico bajo la carga más alta posible, que sí
+puede acercarse al vatiaje de la fuente pero no es automáticamente el
+mismo número — max siempre >= promedio"). Esto generaliza más allá de
+consumo eléctrico: cualquier "estimá X" sobre un producto real tiene
+casi siempre una lectura de nameplate/spec-sheet (un límite o capacidad)
+y una lectura de uso real (lo que pasa la mayoría del tiempo) — nombrar
+ambas explícitamente en el prompt evita que el modelo devuelva la
+primera que encuentra pensando que responde la pregunta.
+
+**Para estimar una magnitud física que no se puede medir directo de una
+sola foto (altura, distancia, lo que sea) — buscar una unidad discreta y
+estandarizada que se pueda CONTAR en la imagen, y multiplicarla por un
+valor real configurado, en vez de pedirle a la IA que "calcule" la
+magnitud por fotogrametría o por su conocimiento general del valor
+estándar.** Surgió con la altura de una torre de comunicaciones: una sola
+foto sacada desde abajo no alcanza para fotogrametría real (no hay
+referencia de escala ni distancia conocida), así que inventar un número
+"calculado" ahí sería tan poco confiable como preguntarle el clima. Pero
+las torres se arman en TRAMOS modulares de largo estándar — eso sí es
+contable en una foto (una unión/brida visible entre secciones), así que
+el patrón queda: la IA clasifica el tipo de objeto y CUENTA unidades
+discretas visibles (marcando explícitamente si no está segura de haber
+visto el conjunto completo, igual criterio que "identificado" en el resto
+de la app) — el LARGO REAL de cada unidad sale de un catálogo chico
+configurado a mano (Configuración), nunca del "conocimiento general" de
+la IA sobre cuánto mide un tramo estándar (varía por fabricante/modelo,
+e inventarlo es la misma clase de error que preguntarle el clima en vez
+de usar una API real). Generaliza a cualquier "¿cuánto mide/pesa/vale X
+en total?" que se pueda descomponer en unidades contables × un valor
+real: preferir siempre esa descomposición antes que pedirle a una IA que
+estime la magnitud total de una.
+
+**Un `max_tokens` bajo en un pedido de IA que devuelve una LISTA (no un
+campo fijo) corta la respuesta a mitad del JSON sin ningún error de la
+API — y el síntoma en el cliente es indistinguible de "la IA no
+encontró nada".** Pasó en Informes: dos endpoints casi idénticos
+(`tableros/leer-foto` y `racks/leer-foto`), ambos migrados al mismo
+modelo, quedaron con límites distintos (`max_tokens: 8192`/`effort:
+"medium"` en tableros vs. `16000`/`"high"` en racks) porque se copiaron
+en momentos distintos sin unificar el criterio. Un tablero grande (20-30+
+circuitos, cada uno con una descripción larga) genera una respuesta más
+extensa que un rack típico, así que tableros rompía: el modelo se queda
+sin tokens, el texto llega cortado (ej. `{"circuitos":[{"numero":1,...`
+sin cerrar nunca el array/objeto), el `JSON.parse` tira excepción, y el
+endpoint devuelve "no se pudo leer" — un usuario reporta esto como "la
+IA no trae ninguna información", no como un error de truncamiento, y es
+indistinguible a simple vista de un problema de prompt o de visión. Se
+detectó leyendo `client_errores` (la tabla de diagnóstico que cada
+endpoint de lectura de fotos ya escribe en el `catch` del `JSON.parse`)
+y confirmando que el texto guardado arrancaba bien formado pero nunca
+cerraba. Regla general: cualquier endpoint de IA que devuelve una lista
+de longitud variable (no se sabe de antemano cuántos ítems va a haber)
+necesita un `max_tokens` generoso (igualar al endpoint hermano más
+permisivo del mismo patrón, no el mínimo que "andaba" en las pruebas
+chicas) — y cuando se agregan endpoints "iguales" para distintas
+entidades del mismo módulo (ver más abajo), hay que mantener sus límites
+de tokens/effort sincronizados a propósito, no dejar que diverjan por
+copy-paste en momentos distintos.
+
+**Antes de armar un módulo nuevo para un pedido que "suena" distinto, revisar
+si ya existe uno con el mismo patrón de uso — puede que solo le falte una
+forma más de conseguir el ítem.** Pasó en Informes: el pedido era un
+"informe de instalación" (fotos + IA + lista con número de serie, para
+dejar constancia de qué se instaló) — sonaba a un módulo nuevo, paralelo a
+"Entregas a Depósito". Pero el módulo "Equipos Individuales" YA tenía
+exactamente ese patrón (fotos + IA + lista + alta de equipo en un sitio);
+lo único que faltaba era una tercera forma de poblar un ítem de la lista
+—además de "nuevo" y "ya existente en este sitio"— que fuera "viene de
+depósito de cualquier sitio", y que al guardar, en vez de crear una fila
+nueva, reactive (estado) y reubique (ubicación) la fila que ya existía.
+Construir el módulo paralelo hubiera duplicado la UI de fotos/IA/lista, el
+PDF y el Historial enteros para ganar solamente ese tercer origen. La
+pregunta a hacerse antes de diseñar un módulo nuevo: "¿el pedido es
+realmente una entidad distinta, o es el mismo patrón de carga con una
+fuente más para el ítem?" — si es lo segundo, extender el picker/origen
+del módulo existente es mucho más barato que levantar uno en paralelo.
+
+**Cuando la entidad nueva SÍ es un contenedor con estructura interna
+propia, el módulo aparte es la decisión correcta — pero si el nombre
+natural de esa entidad ya significa otra cosa en la app, hay que
+desambiguarlo en el código, no solo confiar en el contexto.** Pasó en
+Informes con "Torres de Comunicaciones" (antenas/radioenlaces montados en
+una torre física): el patrón correcto era un módulo propio mirando
+Racks (alta de la torre + equipamiento + relevamiento por visita, mismo
+criterio que la sección de arriba sobre contenedores con estructura
+propia). Pero la app ya usaba la palabra "torre" para un concepto
+completamente distinto y preexistente (la cuadrilla/turno de un técnico
+— `profiles.torre`, `catalogo_torres`, usado en Informe Técnico y
+Rendición de Gastos). Nombrar la tabla/tipo nuevo simplemente `torres`
+hubiera sido ambiguo para cualquiera que lea el código después (¿cuál
+"torre" es esta?) aunque en la UI el usuario nunca se confunda por el
+contexto. Se resolvió calificando el nombre en TODO el código del
+concepto nuevo (tablas `torres_comunicacion`/
+`torre_comunicacion_equipamientos`/etc., tipo
+`TorreComunicacionCategoriaEquipo`, ruta `/torres-comunicacion/...`) en
+vez de dejar que conviviera un `torres` ambiguo con el `catalogo_torres`
+ya existente. Regla general: antes de nombrar una entidad nueva, buscar
+si la palabra obvia ya está tomada en el dominio de la app (grep del
+término) — si lo está para un concepto no relacionado, calificar el
+nombre nuevo explícitamente desde la primera migración, aunque quede un
+poco más largo; es mucho más barato que renombrar después de que el
+nombre ambiguo se haya esparcido por tablas, tipos y rutas.
+
+**Seguimiento real del ítem de arriba, misma sesión:** el "módulo nuevo"
+que se armó esa vez (un standalone "Instalación", con remito + devolución
+automática — ver más abajo la sección de IA leyendo documentos) resultó
+ser TAMBIÉN una duplicación, una vez que el usuario lo probó de verdad:
+"Informe Técnico" ya era el lugar donde se documentaba cualquier visita
+de trabajo (técnicos, vehículos, fotos), e Instalación terminó siendo un
+segundo formulario para la MISMA visita. La corrección fue la misma
+lógica que el ítem de arriba, aplicada un nivel más arriba: en vez de un
+módulo aparte, una sección opcional ("+ Agregar materiales/equipos")
+DENTRO de Informe Técnico — reusando los mismos componentes de fotos+IA
++ remito que ya se habían escrito, solo cambiando dónde viven. Lección
+más general: la pregunta "¿esto es una entidad distinta o el mismo
+patrón con una fuente más?" no se responde una sola vez al diseñar — el
+uso real (no la intuición de diseño) es la prueba final, y vale la pena
+quedarse abierto a que la respuesta cambie apenas alguien lo prueba con
+un caso real, aunque eso signifique deshacer una decisión de hace pocas
+horas. Construir el módulo paralelo la primera vez no fue un error en
+sí — era la mejor decisión con la información de ese momento — pero
+tampoco hay que aferrarse a ella cuando el uso real dice otra cosa.
 
 ## 6. Avisos push (web)
 
@@ -236,6 +612,29 @@ código que decide cuándo llamar al envío?".
 
 ## 8. Proceso de debugging general
 
+- **Antes de escribir un archivo nuevo con un nombre "obvio" (el que
+  cualquiera elegiría para esa feature), revisar si ya existe uno con esa
+  ruta exacta — y si existe, LEERLO antes de escribir, nunca asumir que
+  está vacío o que es el que uno se imagina.** Pasó en Informes: al armar
+  un Plan de Mantenimiento nuevo (cross-módulo, para Racks/Equipos), se
+  escribió un archivo de acciones en
+  `configuracion/actions/mantenimiento.ts` sin revisar antes — ese
+  nombre YA estaba tomado por una feature completamente distinta y sin
+  relación ("vaciar datos de prueba", pensada como limpieza general de la
+  app antes de ir a producción), que quedó parcialmente borrada en el
+  momento. El error se notó recién por el `tsc` tirando un import roto en
+  otro componente — de no haber corrido el type-check, el archivo viejo
+  habría quedado perdido en silencio. Se corrigió restaurando el original
+  con `git checkout` y moviendo las funciones nuevas a un archivo con
+  nombre más específico (`mantenimiento-intervalos.ts`) en vez de
+  pelearse por el nombre genérico. Lección: "mantenimiento" (como antes
+  "torre") es una palabra que esta app ya usa para dos conceptos sin
+  relación — la regla general sigue siendo la misma que para nombrar una
+  tabla nueva (ver sección de Torres de Comunicaciones): antes de
+  escribir, listar el directorio/grepear el nombre candidato, y si ya
+  existe algo con ese nombre, LEERLO primero (la herramienta de escritura
+  puede no avisar si el archivo ya estaba trackeado por git y el diff
+  parcialmente se superpone).
 - **Un comentario que describe una intención no significa que esté
   implementada.** Un campo/columna puede tener un comentario correcto
   sobre para qué sirve (ej. "para que una unidad en el taller no se
@@ -307,3 +706,1354 @@ código que decide cuándo llamar al envío?".
   lo que rompió y cómo se arregló**, en el orden en que apareció — no una
   guía genérica del proveedor, sino la lista específica de esta vez, para
   no volver a perder el tiempo con los mismos problemas la próxima.
+- **"Redeploy" sobre una fila VIEJA de la lista de Deployments de Vercel
+  reconstruye ESE commit puntual, no la punta real de la rama** — si en el
+  medio se pushearon commits nuevos, ese Redeploy los ignora
+  silenciosamente. Si un error "ya arreglado" sigue reapareciendo
+  idéntico después de pushear el fix y hacer Redeploy, lo primero a
+  revisar es CUÁL fila de la lista se redesplegó — comparar el hash de
+  commit que muestra esa fila contra `git log` de la rama. La señal más
+  confiable para confirmar esto sin acceso directo al dashboard: los
+  números de línea del stack trace de un error en runtime logs — si no
+  coinciden con el archivo actual pero sí con una versión unos commits
+  atrás (`git show <commit>:<archivo> | grep -n ...`), el deploy que
+  corrió en producción es ese commit viejo, no el HEAD.
+- **La build cache de Vercel puede dejar una función sirviendo código
+  viejo aunque el deployment diga "Source: <el commit correcto>"** — pasó
+  en esta sesión: el commit del deployment era el HEAD real (con un fix
+  ya aplicado), pero el stack trace en runtime seguía siendo el de 3
+  commits atrás. La build había tardado sospechosamente poco (~24s) para
+  una recompilación completa de TypeScript, consistente con haber
+  reusado un bundle cacheado de una build anterior en vez de recompilar
+  ese archivo. La solución: desde el menú "..." del deployment más
+  reciente, "Redeploy" y DESTILDAR la casilla "Use existing Build Cache"
+  antes de confirmar — fuerza una build 100% desde cero. Vale la pena
+  probar esto temprano cuando un fix "no aparece" en producción pese a
+  que el Source del deployment ya es el commit correcto — antes de seguir
+  sospechando del código.
+
+## 10. Generación de PDF con @react-pdf/renderer
+
+**Un bloque "alto" (Svg + varios `<Text>` con `position: absolute` apilados
+encima, o una fila de tabla con `wrap={false}`) puede dejar a
+@react-pdf/renderer colgado en un loop sin fin — sin tirar excepción, sin
+timeout propio — en vez de simplemente fallar o paginar mal.** Pasó en
+Informes con el esquema unifilar de Tableros (un `<View>` con un `<Svg>` de
+líneas/rectángulos y ~1 `<Text position="absolute">` por circuito encima):
+con un tablero real de 42 circuitos en un solo cuerpo, la altura del bloque
+cruza un umbral (confirmado entre 39 ítems ≈662pt, que renderiza bien, y 40
+≈678pt, que cuelga para siempre) y el proceso de Node queda al 50-100% de
+CPU sin devolver nunca una respuesta — en el cliente esto se ve como "An
+unexpected response was received from the server" (el mensaje genérico de
+Next.js cuando una Server Action nunca contesta), indistinguible a simple
+vista de cualquier otro error. Mismo patrón, más chico, en una fila de
+tabla con `wrap={false}` cuando la tabla tiene muchas filas y el contenido
+de alguna fuerza un salto de página justo ahí. No depende del largo del
+texto ni de activar/desactivar `wrap`/`break` en ese bloque — es la altura
+total acumulada la que importa.
+
+**Cómo diagnosticar esto (nunca a ciegas, nunca asumiendo "debe ser un
+error de datos"):** si una Server Action que genera un PDF devuelve ese
+mensaje genérico, antes de sospechar de los datos o del RLS, revisar si la
+fila que SÍ se guardó en la base (el registro padre de la medición/informe,
+si el flujo inserta antes de generar el PDF) quedó con el campo del PDF en
+null — eso confirma que el proceso llegó hasta la generación y se colgó
+ahí, no que falló antes. Para reproducir y aislar la causa real: armar una
+ruta de API descartable (nombre SIN empezar con `_`, porque Next.js excluye
+las carpetas `_foldername` del ruteo — un detalle que cuesta un rato
+perdido si no se sabe) que llame directo a la función de render con datos
+reales sacados de la base (no inventados — el bug puede depender de la
+combinación exacta de altura/cantidad), excluirla del matcher de
+`proxy.ts`/middleware para no necesitar sesión, y pegarle con `curl
+--max-time <n>`. Si el proceso de `next dev` (`ps aux | grep next-server`)
+queda consumiendo CPU mucho después de que el `curl` cortó por timeout, es
+un colgado real del renderer, no una excepción — matar el proceso y
+reiniciar `next dev` entre cada prueba (una vez colgado, TODO pedido nuevo
+queda en cola detrás, dando falsos positivos de "también cuelga" en
+pruebas que en realidad nunca llegaron a correr). Achicar el dataset a
+mano (binary search sobre la cantidad de filas) hasta encontrar el umbral
+exacto confirma la causa antes de tocar el código de verdad.
+
+**El arreglo bajo presión (hay un usuario bloqueado ahora mismo) y el
+arreglo de fondo no son el mismo commit — pero tampoco hay que quedarse en
+el primero.** El primer paso razonable es un techo conservador por bloque
+que, si se supera, omite ese contenido puntual con una nota en vez de
+tirar abajo todo el documento (nunca dejar que la generación entera
+dependa de que un bloque puntual entre en un caso sano de la librería) —
+eso destraba al usuario en minutos. Pero "omitir el dibujo si hay
+demasiados elementos" es una regresión real para cualquier caso que supere
+el techo, no una solución — y vale la pena volver enseguida después con el
+arreglo que sí sostiene cualquier volumen: en vez de un bloque gigante,
+**particionar el contenido en varios bloques más chicos, cada uno
+garantizado por debajo del umbral, dejando que la paginación normal del
+documento los acomode** (mismo criterio que ya usa cualquier tabla larga —
+varias filas chicas en vez de una fila gigante). Concretamente acá: una
+función que arma el dibujo completo sin partir (para el DXF, que no pasa
+por react-pdf y no tiene este problema) y una versión paginada aparte (solo
+para el PDF) que corta cualquier grupo que por sí solo exceda el máximo en
+"parte 1/N, parte 2/N...", agrupando grupos chicos consecutivos en el mismo
+bloque para no desperdiciar espacio. Probado hasta 500 ítems en un solo
+grupo sin cuelgue. La lección general: cuando el parche rápido es "cortar
+contenido para esquivar un bug de una librería", preguntarse enseguida si
+en cambio se puede **partir ese contenido en unidades más chicas que caigan
+del lado sano del bug** — casi siempre es la diferencia entre un límite
+arbitrario que alguien va a pisar tarde o temprano y una solución que
+escala sola.
+
+## 11. Server Actions con muchas fotos — límite de tamaño de la plataforma
+
+**Juntar varias fotos ya comprimidas + el resto del payload en UNA sola
+Server Action puede superar un límite de tamaño de request que impone la
+PLATAFORMA de hosting (no Next.js) — y ese límite no se sube tocando
+`bodySizeLimit` en `next.config`, porque ese valor solo controla lo que
+Next.js mismo está dispuesto a aceptar, no lo que la infraestructura de
+abajo deja pasar.** Pasó en Informes con el alta de vehículo con fotos (IA):
+un solo botón "Dar de alta" mandaba el payload + hasta 8 fotos de exterior +
+6 de interior (14 en total, ~300-700KB cada una ya con
+`canvas.toBlob(..., "image/jpeg", 0.85)` a 1600px) en una sola Server
+Action — con varias fotos reales de un vehículo, ese combinado cruza el
+límite de la plataforma. El síntoma es idéntico al de react-pdf colgado
+(mismo mensaje genérico "An unexpected response was received from the
+server") pero la causa y la forma de confirmarla son distintas: acá el
+pedido se corta ANTES de que el código del servidor llegue a correr, así
+que **no queda ninguna fila nueva en la tabla, ni ningún registro en la
+tabla de diagnóstico de la app** (`client_errores`) — eso es lo que separa
+este caso del cuelgue de react-pdf (que si llega a ejecutar, solo que no
+termina): revisar primero si el registro padre se alcanzó a crear es la
+forma más rápida de distinguir "nunca llegó" de "llegó y se colgó".
+
+**El arreglo es el mismo principio que la sección anterior — partir en
+piezas chicas que caen del lado sano del límite, no perseguir el número
+exacto.** Separar el guardado en dos pasos: una Server Action que crea el
+registro principal con el payload de texto (siempre liviano, nunca se
+acerca a ningún límite) y devuelve el id, y una segunda Server Action que
+sube UNA TANDA CHICA de fotos por vez (3 en este caso) a la galería de ese
+registro — el cliente la llama tantas veces como haga falta, en secuencia,
+sin importar cuántas fotos haya en total. Una tanda que falla no debe tirar
+abajo lo que ya se guardó: el registro principal queda igual, y se avisa
+qué fotos no entraron en vez de hacer parecer que toda la operación
+falló. Este mismo patrón (un módulo que junta "payload + bastantes fotos
+ya comprimidas" en una sola Server Action) vale la pena revisarlo en
+cualquier flujo nuevo que guarde una galería completa de fotos en el mismo
+pedido que el resto de los datos — cuantas más fotos admite el módulo por
+diseño, más cerca está de pisar este límite.
+
+## 12. Convenciones de dibujo "a mano" (AutoCAD) → reglas de orden en código, no en la IA
+
+**Cuando un usuario pide "enseñarle a la IA" a dibujar/armar algo de una
+forma convencional (un plano, un esquema, un documento con estructura
+fija), la primera pregunta es si ese dibujo lo genera la IA o código
+determinístico — casi siempre es lo segundo, y ahí la tarea es traducir la
+convención a reglas de orden/agrupación en ese código, no a un prompt.**
+Pasó en Informes con el esquema unifilar de Tableros
+(`lib/tableros/unifilar.ts`): el usuario pidió "enseñarle a la IA" a
+dibujar el unifilar con las mismas convenciones que usa a mano en AutoCAD
+(todo lo que sale del tablero va con bornera abajo; de arriba hacia abajo
+siempre 380V/220V → 24V → control de acceso → CCTV, repetido por cuerpo si
+el tablero tiene varios; distinguir "circuitos normales" de "circuitos de
+UPS"). La IA (`/api/tableros/leer-foto`) no tiene ninguna participación en
+el dibujo — solo clasifica cada circuito individual desde la foto
+(categoría, tipo, amperaje); el layout lo arma 100% `construirUnifilar`
+con los datos ya cargados. El trabajo real fue: (1) confirmar con el
+usuario qué parte de la terminología era jerga del oficio que no conocía
+("rodeo" = bypass manual de UPS, 3 térmicas entrada/bypass/salida que se
+maniobran para sacar el UPS de servicio sin cortar los equipos), (2)
+revisar si los campos ya cargados (`categoriaEquipo`, `tipoCircuito`,
+`cuerpo`) alcanzaban para expresar la regla, y (3) para lo que no
+alcanzaba (distinguir "circuito normal" de "circuito de UPS" no se puede
+inferir de nada existente), agregar un campo nuevo chico en vez de forzarlo
+con una convención de texto libre — en este caso dos columnas booleana/enum
+(`alimentado_por_ups`, `rol_bypass_ups`) con su checkbox/select en el form
+de alta, no una migración de datos existentes (los circuitos ya cargados
+quedan con el default `false`/`null`, que es el comportamiento correcto:
+"circuito normal, no es parte de ningún bypass").
+
+**La función de orden se aplica ANTES de cualquier otra lógica que corte o
+pagine la lista, nunca después.** `construirUnifilarPaginado` ya partía
+cada cuerpo en bloques más chicos cuando no entraban en un bloque de PDF
+(ver § 10) — si se ordena cada bloque por separado después de partir, cada
+parte queda prolija por sí sola pero el corte entre partes cae en
+cualquier categoría, mezclando el orden global. Hubo que mover el
+`ordenarCircuitosParaUnifilar(circuitos)` a ANTES del cálculo de
+`maxItemsPorGrupo`/slicing, no dentro de cada slice.
+
+## 13. Escribir DXF a mano: versión de entidades y codepage de texto, no solo sintaxis
+
+**Un archivo DXF "ASCII mínimo" escrito a mano (sin librería) puede tener
+sintaxis perfecta — secciones bien cerradas, EOF al final — y aun así abrir
+vacío o con texto corrupto, por dos motivos invisibles si solo se mira "¿el
+archivo tiene la forma de un DXF?": la versión de cada ENTIDAD declarada, y
+el codepage del TEXTO.** Pasó en Informes con el DXF del esquema unifilar
+de Tableros (`lib/dxf/writer.ts`): el usuario reportó "el DXF no muestra
+nada" después de probar un tablero de prueba. Dos bugs reales, ninguno
+visible leyendo el código por arriba:
+
+1. **LWPOLYLINE no existe en DXF R12 (`$ACADVER AC1009`)** — se agregó
+   recién en R14 (1997). El archivo declaraba R12 en el header pero usaba
+   LWPOLYLINE para los rectángulos (más compacta de escribir a mano que la
+   POLYLINE clásica), una combinación inválida que varios lectores de DXF
+   (sobre todo visores livianos que implementan un subset estricto por
+   versión, no AutoCAD en sí) rechazan **entero** en vez de ignorar solo esa
+   entidad — de ahí "no muestra nada" en vez de "le faltan los cuadraditos".
+   Arreglo: usar POLYLINE clásica (grupo 66+70) + VERTEX + SEQEND, que es
+   válida desde las versiones más viejas de DXF.
+2. **Un TEXT de DXF ASCII no es UTF-8** — son bytes crudos interpretados
+   según el codepage que declara el header (`$DWGCODEPAGE`, típicamente
+   `ANSI_1252`/Windows-1252), nunca UTF-8. Escribir el archivo con
+   `Buffer.from(contenido, "utf-8")` deja cualquier tilde/ñ/° corrupta
+   aunque el DXF abra perfecto. La tentación obvia — escapar los caracteres
+   no-ASCII como `\U+XXXX` — es la notación real del formato DXF, pero
+   **solo existe para MTEXT** (que ni siquiera existe en R12): un TEXT
+   común con esa notación la deja tal cual, literal, en el dibujo (peor que
+   el acento roto). El arreglo correcto es escribir el archivo entero en
+   Windows-1252 (coincide con Unicode 1 a 1 salvo un puñado de símbolos en
+   0x80-0x9F que necesitan su propia tabla) y declarar `$DWGCODEPAGE` en el
+   header.
+
+**Cómo se verificó de verdad, no "a ojo":** el bug original pasó
+desapercibido en el code review porque el archivo "se veía bien" como
+texto — todas las secciones, todas las entidades con sus pares de grupo
+correctos. La única forma de confirmarlo fue abrirlo con un lector de DXF
+real (`ezdxf`, Python, instalable con `pip install ezdxf matplotlib` en el
+sandbox) y renderizarlo a PNG — ahí aparecieron tanto el rechazo total del
+archivo (antes del fix 1) como el texto corrupto/literal (durante el fix a
+medias del punto 2). Para cualquier generador de un formato binario/de
+texto estructurado escrito a mano (DXF, pero el principio vale para
+cualquier otro), "la sintaxis cierra" no es lo mismo que "un lector real lo
+entiende" — conseguir o instalar un lector/validador real del formato y
+probar contra él, no quedarse en inspección visual del texto generado.
+
+## 14. Probar react-pdf fuera de Next.js con `tsx`: el error no es del código
+
+**⚠️ Corrección (ver `motor-unifilares`, deploy en Vercel): la afirmación de
+abajo de que "en producción esto no afecta en absoluto" es FALSA en
+general — solo es cierta para Next.js/webpack. Cualquier runtime que SÍ
+aplique la resolución estricta de `exports` de Node (entre ellos, las
+funciones serverless de Node.js de Vercel, que no pasan por webpack) pisa
+este mismo bug en producción, no solo al correr sueltos con `tsx`. El
+síntoma en ese caso no es el mismo `ERR_PACKAGE_PATH_NOT_EXPORTED` de abajo
+— ahí el bundler de la función, al no poder resolver la dependencia
+transitiva rota, directamente deja afuera del bundle el módulo que la
+importa (sin aviso en el log de build) y en runtime tira
+`ERR_MODULE_NOT_FOUND: Cannot find module '.../pdf-renderer.js'` (o el
+nombre que tenga el archivo que importa `@react-pdf/renderer` en esa app),
+apuntando a un archivo propio que a simple vista no tiene nada que ver con
+`@react-pdf/hyphenate`. Si aparece ese error en un deploy serverless con
+react-pdf, es este bug — no asumir que es un problema de extensión de
+archivo (`.tsx`/`.ts`) ni de que el bundler no sabe "rastrear" la
+dependencia pesada; es puntualmente la falta de condición `"require"` en
+`exports` de `@react-pdf/hyphenate`.**
+
+**Fix permanente (no un parche manual a mano cada vez): `patch-package`.**
+Agregar `patch-package` como devDependency, parchear
+`node_modules/@react-pdf/hyphenate/package.json` agregando `"require"`
+igual al `"import"` existente en cada entrada de `exports` (`"."` y
+`"./*"`), congelar el parche con `npx patch-package @react-pdf/hyphenate`
+(guarda un `.patch` en `patches/`, que sí se commitea) y agregar
+`"postinstall": "patch-package"` a los `scripts` del `package.json` — así
+el parche se reaplica solo en cada `npm install`, incluido el que corre
+Vercel (o cualquier otro CI) en cada deploy, sin depender de que alguien
+lo repita a mano. Mismo criterio sirve para `informes-app` si alguna vez
+necesita correr react-pdf fuera de Next.js/webpack (ej. un script de
+prueba con `tsx`, o si algún día deja de usar webpack).
+
+**Al intentar reproducir localmente el cuelgue de react-pdf (§10) con `npx
+tsx algo.ts` importando `@react-pdf/renderer` directo (sin pasar por
+Next.js), el import falla con
+`ERR_PACKAGE_PATH_NOT_EXPORTED: Package subpath './en-us' is not defined by
+"exports" in .../@react-pdf/hyphenate/package.json` — no es un bug en nuestro
+código ni en react-pdf, es que `@react-pdf/hyphenate` solo declara condición
+`"import"` en su `exports` (es un paquete ESM puro), y el hook de resolución
+de módulos de `tsx` intenta resolver ese subpath también por el lado
+`require` (CJS) y lo rechaza. Next.js/webpack nunca pisan este problema
+porque resuelven distinto (no aplican la validación estricta de `exports`
+de Node), así que en producción (vía Next.js/webpack) esto no afecta — pero
+sí afecta en cualquier otro runtime con resolución estricta, ver la
+corrección arriba.**
+Workaround histórico para poder probar sin el fix permanente de arriba:
+copiar
+`node_modules/@react-pdf/hyphenate/package.json`, agregarle a mano un
+campo `"require"` igual al `"import"` existente en cada entrada de
+`exports` (`"."` y `"./*"`), correr la prueba, y restaurar el archivo
+original de la copia al terminar (no es un cambio para commitear — vive en
+`node_modules`, y una reinstalación lo pisa solo). Con ese parche temporal,
+un script `.ts` dentro del propio `informes-app/` (tiene que estar ahí
+para que la resolución de `node_modules` llegue) puede llamar
+`renderToBuffer(...)` directo y cronometrar/confirmar que un caso grande
+(ej. 120 circuitos, el bloque más denso con 142 `<Text>` en 477pt) termina
+rápido y no cuelga — exactamente la prueba que hacía falta antes de
+confiar en un rediseño del dibujo del unifilar que cambió mucho la
+densidad de comandos por punto de altura (ver § 15) sin tener la certeza
+de que el límite de altura seguro (`ALTO_MAX_BLOQUE_SEGURO`, ver § 10)
+seguía siendo válido con ese nuevo layout.
+
+## 15. Rediseño del unifilar a "escalera" (barra arriba, columnas abajo) — fiel a los planos reales, no al criterio propio
+
+**Cuando el usuario ya definió a mano cómo tiene que verse algo (le mostró
+varios PDF reales de AutoCAD con el estilo que usa en el trabajo), la
+referencia es esa, no una interpretación "razonable" de la convención
+general — y conviene pedirla/leerla ANTES de iterar más veces a ciegas.**
+Pasó en Informes con el esquema unifilar de Tableros: después de dos
+rondas de ajustes (symbolos + agrupación por categoría, segunda ronda con
+más símbolos reales) el usuario seguía diciendo "sigue dibujando igual" —
+recién cuando adjuntó 4 planos reales de AutoCAD (tableros TSBT, CAS,
+unifilares 24V/220V) quedó claro que el problema no era de símbolos sino de
+**orientación**: los planos reales usan una barra horizontal arriba con
+cada circuito colgando hacia abajo en su propia columna (estilo
+"escalera"), agrupados de a ~5 columnas por fila con un símbolo de llave
+seccionadora real (dos bornes + cuchilla diagonal) o de borne de salida
+(par de círculos), un bloque de 2-3 líneas de datos debajo, y una cajita de
+identificación del circuito al pie — nada que ver con la lista vertical
+(aunque ya tuviera buenos símbolos) que se había armado en las rondas
+anteriores. Dos lecciones:
+
+1. **Pedir la referencia real apenas el usuario la mencione como
+   disponible** ("te voy a buscar un ejemplo de cómo lo dibujo en
+   AutoCAD") en vez de seguir iterando sobre la propia interpretación —
+   cuesta una ronda de ida y vuelta, pero ahorra varias rondas de "no es
+   eso" después.
+2. **El dato real de los planos (nomenclatura, numeración de circuitos
+   C1/D1, IDs de cable A80/A81, "CIRCUITO X — ...") es información de
+   producto, no solo de estilo** — confirma qué campos hacen falta y cómo
+   nombrarlos, más allá de la geometría.
+
+**Límite aceptado a propósito, no un descuido:** los planos reales a veces
+encadenan más de un dispositivo en la misma columna (ej. bornera de
+entrada → térmica → disyuntor, los tres en la misma bajada, porque
+físicamente un circuito pasa por más de una protección en serie) y también
+incluyen una vista "topográfica" aparte (dónde queda cada módulo
+físicamente dentro del gabinete, con sus medidas). Ninguna de las dos cosas
+se replicó: el modelo de datos actual (`tablero_circuitos`) guarda cada
+dispositivo como un circuito independiente sin relación "este alimenta a
+este otro", y no hay coordenadas físicas de montaje — harían falta campos
+nuevos (relación entre circuitos, posición X/Y), no solo una función de
+dibujo distinta. Documentado y comunicado explícitamente al usuario en vez
+de fingir una réplica 1 a 1 que el dato disponible no sostiene.
+
+## 16. Encadenado de circuitos en una columna: cerrando el límite de la § 15
+
+Cierra una de las dos brechas documentadas en la § 15 (la de "bornera →
+térmica → disyuntor en la misma bajada" — la vista topográfica con
+coordenadas X/Y sigue sin implementarse, esa sí requiere un modelo de
+datos totalmente distinto). El patrón que terminó andando:
+
+- **Campo de relación por N°, no por id.** `circuito_padre_id` (uuid, FK a
+  `tablero_circuitos`) es lo que se persiste, pero el formulario de alta
+  elige el padre por **número de circuito** (`padreNumero` en el tipo de
+  UI), no por id — porque en el form un circuito recién agregado en la
+  misma visita todavía no tiene id hasta guardar. La resolución
+  N°→id pasa a una segunda pasada DESPUÉS del insert loop (`actions.ts`):
+  se insertan todos los circuitos primero, se arma un mapa N°→id con los
+  ids ya generados, y recién ahí se hace el `update` de
+  `circuito_padre_id` — así no importa si el padre y el hijo se cargaron
+  en el mismo visita o si el padre ya existía de una visita anterior.
+- **Altura simulada, no estimada.** El riesgo real al agregar "más de un
+  dispositivo por columna" es que la función que calcula cuánto mide cada
+  bloque (para el corte seguro de react-pdf, ver § 10/§ 14) empiece a
+  **subestimar** la altura real dibujada — si eso pasa, el bloque se
+  arma por debajo del límite seguro en el cálculo pero el dibujo real lo
+  supera, y vuelve el cuelgue silencioso. La función
+  `alturaColumna(profundidad)` evita ese riesgo literalmente replicando
+  paso a paso el mismo avance de `y` que hace el loop real de dibujo
+  (`dibujarColumna`), en vez de una fórmula aproximada — cualquier cambio
+  futuro al loop de dibujo que no se refleje en `alturaColumna` es un bug
+  de altura por construcción, no silencioso: alcanza con mirar que ambas
+  funciones avancen `y` de la misma forma.
+- **Un solo hijo por padre, con fallback silencioso documentado como tal.**
+  Si dos circuitos distintos apuntan al mismo padre (dato mal cargado),
+  solo el de N° más bajo continúa la cadena — los demás quedan como
+  cabeza de su propia columna en vez de fallar o loopear. Nunca pasa con
+  el uso real (una térmica tiene un único disyuntor aguas abajo), pero es
+  mejor un fallback predecible que una excepción en el render de un PDF
+  de producción.
+- **Validado con el mismo método de la § 14, ahora con cadenas reales.**
+  Antes de confiar en el rediseño de altura, se corrió el mismo tipo de
+  prueba (patch temporal a `@react-pdf/hyphenate` + `tsx` + reversión) con
+  un tablero sintético de 78 circuitos incluyendo cadenas de profundidad 2
+  y 3 — el bloque más alto dio 446pt (seguro, el límite es 480pt) y
+  renderizó en <500ms sin colgarse.
+
+**Lo que se dejó explícitamente para después (acordado con el usuario, no
+un olvido):** la detección automática de encadenado desde la foto (que la
+IA de `leer-foto` reconozca "esta térmica tiene un disyuntor pegado abajo"
+y pre-cargue `padreNumero`) no se implementó en este incremento — el campo
+se carga a mano en el form. Igual con la etiqueta de cable
+(`etiqueta_cable`): es texto libre que tipea el técnico, nunca
+autogenerado, porque el esquema de numeración propio del cliente
+(continuidad entre planos, por ejemplo "A80") no es algo que el sistema
+pueda inventar de forma confiable sin ver el resto de los planos del
+sitio.
+
+## 17. Por qué una herramienta generativa (foto → dibujo en un paso) y un pipeline determinístico no son la misma solución al mismo problema
+
+El usuario comparó este feature con pasarle una foto a Claude Cowork y
+pedirle que dibuje el plano directo — con menos correcciones de ida y
+vuelta que las rondas que costó este unifilar. Vale la pena dejarlo
+escrito porque es una pregunta que va a volver a aparecer con cualquier
+output "visual" que el sistema tenga que generar:
+
+- **Cowork resuelve "dibujame esto una vez, que se parezca"**: un modelo
+  con visión mira la foto/PDF de referencia y genera directamente el
+  dibujo final (SVG/código de dibujo) en un solo paso, usando su criterio
+  de qué es "parecido" sobre ESE caso puntual. Barato en iteración
+  porque no hay pipeline que mantener, pero el resultado no es
+  reproducible (la misma foto dos veces puede salir distinta), no
+  escala a miles de tableros sin re-pagar el costo de IA por cada uno, y
+  no da garantías de que el PDF/DXF resultante sea válido para abrir en
+  AutoCAD real (texto bien formado, entidades correctas, campos
+  editables) — el output es "una imagen que se ve bien", no un plano
+  técnico con estructura de datos detrás.
+- **Esta app resuelve "de estos datos estructurados (circuitos, amperaje,
+  categoría, relación padre-hijo), generá SIEMPRE el mismo dibujo
+  correcto"**: la IA de `leer-foto` solo clasifica circuitos individuales
+  desde una foto (texto, categoría, amperaje) — el layout del unifilar
+  (`lib/tableros/unifilar.ts`) es código determinístico, cero IA, que
+  arma el mismo dibujo pixel-exacto a partir de los mismos datos, sin
+  importar cuántas veces se regenere. Esto es necesario acá porque: (1)
+  el PDF/DXF se vuelve a generar en cada visita y tiene que seguir
+  viéndose igual de prolijo sin reintentos ni revisión manual; (2) tiene
+  que abrir sin errores en AutoCAD real (de ahí los bugs de § 13); (3) el
+  costo de IA por imagen no se puede pagar por cada uno de los miles de
+  tableros relevados; (4) cualquier corrección al estilo de dibujo (como
+  el encadenado de la § 16) tiene que aplicarse retroactivamente a TODOS
+  los tableros existentes con un solo cambio de código, no volviendo a
+  generar imagen por imagen.
+- **La contrapartida real**: cuando el layout determinístico no reconoce
+  un patrón nuevo de los planos reales (como pasó con el encadenado antes
+  de la § 16), hay que programarlo a mano — no "simplemente funciona"
+  como con un modelo generativo. Por eso la lección de la § 15 (pedir la
+  referencia real cuanto antes) importa tanto acá: cada patrón nuevo que
+  el código no contempla todavía es una ronda de ida y vuelta, a
+  diferencia de una herramienta generativa que "adivina" razonablemente
+  bien sobre casos que nunca vio.
+
+**Conclusión para el próximo proyecto con un output visual similar:** si
+el resultado tiene que ser reproducible, barato de regenerar en volumen,
+y válido para un formato técnico externo (CAD, no solo una imagen), un
+pipeline determinístico (datos estructurados → reglas de dibujo en
+código) es la elección correcta aunque cueste más iteración inicial que
+pedirle a un modelo con visión que lo dibuje directo.
+
+## 18. Comparar el output de una herramienta generativa puntual contra el pipeline determinístico puede señalar una brecha de ESTÁNDAR, no solo de estilo
+
+Seguimiento real de la § 17: en otra sesión se armó un plano a mano
+(script Python + ezdxf, fuera de la app) para reconstruir el unifilar de
+un tablero real a partir de 4 fotos, siguiendo un documento de reglas de
+dibujo CAD bastante más completo que lo que ya hacía
+`lib/tableros/unifilar.ts` (grilla 1-16/A-H con flechas de centrado,
+sello "PARA REVISIÓN", rótulo IEC completo abajo a la derecha,
+numeración de conductores `A n` correlativa con par de bornes N/F en
+cada punto de conexión, marca diagonal de formación de cable en cada
+tramo, tabla de PUESTA A TIERRA). El usuario comparó ese resultado
+contra lo que ya existía y pidió llevar el mismo nivel de detalle al
+generador real de la app — un pedido válido y distinto de "arreglame
+este plano puntual": la pregunta correcta no es "¿cuál de los dos se ve
+mejor?" sino "¿el estándar que sigue el de afuera es el que el
+generador de producción debería seguir también?".
+
+**División en etapas, no todo junto.** Dado el tamaño (toca
+`lib/tableros/unifilar.ts`, `lib/dxf/writer.ts`, y potencialmente
+`lib/pdf/tablero.tsx` + el modelo de datos), se dividió en etapas
+confirmadas una por una con el usuario antes de tocar código: (1)
+símbolo de borne + marca de cable + numeración `A n` sobre el layout
+"escalera" ya existente (sin cambiar su forma); (2) rótulo IEC completo
++ grilla + sello (pendiente — necesita datos que hoy no existen, ver
+abajo); (3) hoja de cabecera + tabla de PUESTA A TIERRA (pendiente).
+Cada etapa se valida y pushea por separado.
+
+**Un dato que "suena" fijo (nombre de la contratista) puede no serlo —
+preguntar, no asumir, ni siquiera copiando un ejemplo ya usado en otro
+lado.** El script manual (de otra sesión) había puesto `"TerraLogic"`
+como contratista en el rótulo — un nombre que no aparece en ningún lado
+del código ni de los datos reales de esta app. Al proponer llevar ese
+mismo dato al generador de producción, el usuario lo marcó de inmediato
+como sospechoso ("Terralogic???????"): la contratista real es otra
+(`SONDA`). Mismo criterio que "no inventar" ya aplicado en todos los
+prompts de IA de este proyecto (ver § 5), pero acá aplicado a una
+decisión de otra sesión de Claude que se iba a propagar sin chequear.
+
+**"¿De dónde sale este dato del rótulo?" puede revelar que falta un
+campo entero, no solo un valor.** Al armar el rótulo real (cliente,
+contratista, obra), aparecieron dos huecos reales en el modelo de
+datos: "cliente" no existía en Tableros (sí en Informe Técnico, con
+`catalogo_clientes` + alta al vuelo — mismo patrón a reusar, pendiente
+para la etapa 2) y el nombre de la empresa contratista no existía como
+texto en ningún lado (`config_general` solo tenía el logo como imagen,
+`logo_empresa_url`, sin nombre). Se agregó `nombre_empresa` a
+`config_general` (default `"SONDA"`, la contratista real) junto al
+logo existente en Configuración → Datos de la Empresa, en vez de
+hardcodear el nombre en el código del plano — mismo criterio que el
+resto de esta app: un dato de la empresa es config, no una constante en
+el generador.
+
+**Simplificar a propósito la fidelidad visual de una convención a mano
+cuando hay un costo de performance real detrás — y dejarlo escrito
+como decisión, no como omisión.** El plano de referencia (a mano)
+dibuja el par de bornes N/F en LOS DOS extremos de cada tramo de cable
+(mismo número, pero el símbolo se repite físicamente en cada terminal).
+El generador de producción dibuja ese par una sola vez por dispositivo
+(en su entrada) — sigue siendo 100% correcto según la regla real ("el
+número cambia al atravesar una protección, no a lo largo de un cable"),
+pero genera la mitad de bornes dibujados. La razón no es estética: cada
+línea nueva de verdad cuesta en este archivo puntual, porque
+`@react-pdf/renderer` tiene un historial real de cuelgue por altura de
+bloque (§ 10/§ 14/§ 16) — duplicar los bornes habría duplicado también
+el crecimiento de altura por circuito. Elegir la versión más liviana
+y documentar por qué (en vez de copiar la convención a mano 1 a 1 sin
+pensarlo) es el mismo criterio de la § 17: "esquema simplificado, no a
+escala" es una decisión de diseño de esta app, no una limitación a
+esconder.
+
+**Revalidar el límite de altura segura CADA VEZ que cambia la densidad
+de comandos por punto de altura — no asumir que un número que fue
+seguro una vez lo sigue siendo.** `ALTO_MAX_BLOQUE_SEGURO = 480` se
+calibró en su momento (§ 10) para la densidad de comandos de ESE
+layout. Agregar bornes + marcas de cable casi duplicó el alto por
+dispositivo (`PASO_DISPOSITIVO` nuevo ≈ 23.5pt vs. los ~13-18pt
+anteriores) — el límite en sí no cambió, pero había que confirmar que
+seguía siendo seguro con la nueva densidad, no asumirlo. Se repitió el
+método exacto de la § 14 (parchear a mano
+`node_modules/@react-pdf/hyphenate/package.json` agregando `"require"`
+igual al `"import"` existente, correr un script `.ts` con `tsx` dentro
+de `informes-app/`, restaurar el parche al final) con un tablero
+sintético de 96 circuitos (igual orden de magnitud que el caso real de
+§ 16): la paginación automática (que ya calcula el alto real vía
+`alturaColumna`, no un número fijo de circuitos por bloque) produjo
+bloques de hasta 470pt — justo debajo del límite — y renderizó en
+888ms sin colgarse. Un segundo caso con 390 circuitos (11 bloques,
+máximo 470pt) renderizó en 3.7s, también sano. Conclusión: el límite
+de 480 seguía siendo válido, pero solo se supo probándolo de nuevo con
+el layout real, no reusando la confianza de la medición anterior.
+
+## 19. Etapa 2 del mismo rediseño: marco ISO + rótulo completo — un presupuesto de altura "reservado" hay que actualizarlo en el mismo commit que lo que reserva
+
+Seguimiento directo de la § 18 (Etapa 1: bornes + numeración + marca de
+cable). La Etapa 2 agregó al generador real de Tableros
+(`lib/tableros/unifilar.ts`) el resto del estándar de dibujo por hoja:
+grilla 1-16 arriba/abajo y A-H izq/der con flechas de centrado en los 4
+lados, bloque de revisiones (RevNo/Revision note/Date/Signature/
+Checked), título arriba a la izquierda, sello "PARA REVISIÓN", y el
+rótulo completo abajo a la derecha (antes solo tenía sitio/tablero/
+fecha/realizó/plano/hoja en 2 líneas; ahora suma CLIENTE y CONTRATISTA).
+
+**Dos datos nuevos del rótulo que no existían en el modelo — se agregó
+el campo real, no un texto fijo.** "Cliente" no existía en Tableros
+(sí en Informe Técnico, con `catalogo_clientes` + alta al vuelo —
+mismo patrón reusado acá: `tableros.cliente`, autocompletado, default
+`"YPF"`). "Contratista" tampoco existía como texto en ningún lado
+(`config_general` solo tenía el logo como imagen) — se agregó
+`config_general.nombre_empresa` junto al logo en Configuración →
+Datos de la Empresa (default `"SONDA"`, el nombre real, confirmado
+por el usuario — nunca el que había usado el script manual de la § 18,
+que resultó inventado). Mismo criterio en los dos casos: un dato que
+"suena" fijo (el nombre de la propia empresa) se pregunta, nunca se
+asume ni se copia de un ejemplo anterior.
+
+**Texto sin alineación "derecha" en el formato de draw commands propio
+— hay que calcular el ancho a mano para que no se corte contra el
+borde.** `DrawCommand.text` (de este mismo proyecto, ver § 13) solo
+tiene `x` (ancla izquierda) — no existe un modo "texto justificado a la
+derecha". El sello "PARA REVISIÓN", pensado para terminar pegado al
+borde derecho de la hoja, al principio se ancló directo en `x = borde`
+(texto arrancando ahí, extendiéndose hacia afuera) y quedó cortado
+fuera del lienzo en el render de prueba — invisible en cualquier lector
+real, no solo "se ve distinto". Arreglo: estimar el ancho del texto a
+mano (`texto.length * size * factor`, mismo criterio que ya usa
+`truncar`/`truncarColumna` en este archivo para no pasarse de ancho) y
+restarlo de la coordenada del borde antes de ubicar el `x`. Generaliza
+a cualquier texto "ancla a la derecha/centrado" en un formato de dibujo
+propio sin layout real: nunca asumir que un texto largo "entra", medir
+u orientar el ancla para que el peor caso (el texto más largo posible)
+siga adentro del lienzo — y confirmarlo con el mismo chequeo de
+superposición/límites por coordenadas (no solo a ojo en un render)
+que ya viene usándose para este archivo.
+
+**Un presupuesto de altura "reservado para lo que se agrega después"
+hay que actualizarlo en el MISMO cambio que agranda lo que reserva —
+si no, el presupuesto queda mintiendo con el aspecto de seguir
+vigente.** `construirUnifilarPaginado` ya reservaba espacio para el
+rótulo ANTES de que existiera (`limiteBloque = ALTO_MAX_BLOQUE_SEGURO
+- ALTO_ROTULO - MARGEN`, ver § 10) — ese cálculo seguía ahí, intacto,
+compilando sin error, cuando el marco nuevo pasó a agregar ~90pt por
+hoja (grilla + banda de título + rótulo) en vez de los ~38pt de antes.
+Nada en el tipo ni en el build avisa que una reserva de altura quedó
+desactualizada: es un número que sigue siendo "válido" sintácticamente
+pero ya no describe lo que de verdad se agrega — el error solo
+aparece como un bloque real que supera el límite seguro de
+react-pdf, en producción, con un tablero real lo bastante grande.
+Se encontró ANTES de pushear porque la Etapa 1 ya había dejado
+instalado el hábito (§ 18) de revalidar el límite con el método de la
+§ 14 cada vez que cambia la densidad de comandos — correr esa misma
+prueba con el marco agregado mostró bloques superando 480pt hasta que
+se corrigió `limiteBloque` para restar la altura real del marco
+completo (`alturaMarco = BANDA_GRID*2 + 8 + BANDA_TITULO +
+ALTO_ROTULO`), no solo la del rótulo viejo. Confirmado después con el
+mismo tablero sintético de 390 circuitos: ahora parte en 14 bloques en
+vez de 11 (cada uno con menos circuitos, por el overhead extra), todos
+por debajo de 480pt, sin colgarse. Regla general: cuando un número
+representa "cuánto se va a agregar después" (una reserva, un offset,
+un margen calculado), buscarlo y actualizarlo explícitamente en el
+mismo commit que cambia lo que ese número reserva — no asumir que
+porque el valor anterior "andaba" sigue siendo correcto.
+
+## 20. Etapa 3 del mismo rediseño: tabla de PUESTA A TIERRA — el mismo bug de presupuesto de altura, ahora en un bloque nuevo que nunca pasó por el chequeo viejo
+
+Seguimiento directo de la § 19. La Etapa 3 agregó la tabla PUESTA A
+TIERRA (A7 del estándar) al generador real: cada circuito que es un
+destino real (hoja del árbol de encadenado, no un eslabón intermedio
+como una térmica con un disyuntor colgando) recibe un `Tn` correlativo
+único para todo el tablero, listado en una tabla aparte al pie del
+DXF (hoja única) o como su propia hoja final en el PDF paginado.
+
+**La hoja de cabecera fija (alimentación/térmica general/protector de
+sobretensión/borneras BNR-01-02) quedó fuera a propósito — no por
+quedarse corta de tiempo, por no inventar estructura que el dato no
+sostiene.** Esa parte del estándar (A1/B1 de REGLAS_UNIFILAR) asume
+una topología FIJA (bornera de entrada → térmica general → bornera de
+reparto → protector/distribución) que no tiene equivalente en el
+modelo actual de circuitos (un árbol flexible, sin concepto de "origen
+de la alimentación" ni de "bornera de entrada" separados de los
+circuitos). Ya hay una categoría `descargador_gaseoso` que cubre el
+protector de sobretensión como un circuito más — construir la
+cabecera fija completa pediría campos nuevos (de dónde viene la
+alimentación, como mínimo) que nadie confirmó todavía. Mismo criterio
+que la § 15 de este mismo documento (vista topográfica, nunca
+replicada por la misma razón): documentarlo como decisión pendiente
+de producto, no fingir una réplica que el dato disponible no sostiene.
+
+**El mismo bug de presupuesto de altura de la § 19 — exactamente el
+mismo tipo de error, en código nuevo que nunca pasó por el chequeo
+anterior.** La tabla de tierra parte sus filas en bloques cuando no
+entran en una sola hoja (`construirBloquesTierra`, mismo criterio de
+partición que `construirUnifilarPaginado`), con un número de filas por
+columna calculado a mano para quedar "bien debajo" del límite seguro
+de 480pt. El error: ese cálculo se hizo contra los 480pt directo, sin
+restar `ALTURA_MARCO_HOJA` (lo que agrega después `agregarMarcoYRotulo`
+— grilla + banda de título + rótulo, ~90pt) — el mismo error conceptual
+de la § 19, pero en una función nueva que nunca se benefició del fix
+anterior porque ese fix solo tocó `construirUnifilarPaginado`, no este
+código nuevo. Se encontró con el mismo método (tablero sintético de
+550 circuitos / 350 destinos reales, forzando que la tabla de tierra
+necesitara partirse en más de un bloque): el último bloque dio 486pt,
+por encima del límite. Arreglo: se extrajo `ALTURA_MARCO_HOJA` como una
+constante compartida (antes calculada inline, duplicada, dentro de
+`construirUnifilarPaginado`) y se recalculó el presupuesto de filas de
+la tabla de tierra contra `ALTO_MAX_BLOQUE_SEGURO - ALTURA_MARCO_HOJA`,
+igual que ya hacía `limiteBloque`. Confirmado después: 24 bloques
+(antes 23), el más alto en 462pt, renderiza en 7.4s sin colgarse.
+**Lección que no se puede marcar "aprendida" después de aplicarse una
+vez**: una constante compartida que describe "cuánto agrega el marco"
+protege solo al código que la usa — cualquier función nueva que
+calcule su propio presupuesto de altura a mano, aunque sea "bien por
+debajo" a ojo, puede reintroducir el mismo bug si no deriva su número
+de esa misma constante. Antes de escribir un número "seguro" a mano
+para un presupuesto de altura en este archivo, buscar primero si ya
+existe una constante que lo describe (`ALTURA_MARCO_HOJA`,
+`ALTO_MAX_BLOQUE_SEGURO`) y calcular contra esas, nunca contra un
+número redondo elegido por intuición.
+
+## 21. Un botón que dispara un paso largo con IA no debe colgarse de la respuesta HTTP — encolar + worker aparte, no seguir achicando lotes
+
+**Contexto:** el botón "Generar unifilar" de `informes-app` le pedía a
+`motor-unifilares` (servicio aparte en Vercel) que generara el plano
+completo (varios llamados a Claude + render de PDF/DXF) y esperaba la
+respuesta en el mismo `POST /api/unifilar`. Se intentó, en orden,
+reducir el modelo (Opus→Sonnet), partir la generación en lotes
+secuenciales, pasar los lotes a paralelo (`Promise.all`), subir y bajar
+el tamaño de lote, y subir el `max_tokens` por lote — cada iteración
+arregló el síntoma inmediato (`stop_reason=max_tokens`, el guard de
+streaming del SDK) pero el timeout de 60s de la función serverless
+volvía a aparecer.
+
+**El error de fondo:** correr los lotes en paralelo solo evita que sus
+tiempos se SUMEN — el tiempo total de la función sigue siendo
+`tiempo del lote más lento` + `tiempo del llamado final que depende de
+todos los anteriores (si lo hay)` + `tiempo de cualquier render/upload
+después`. Si un único lote bien detallado ya puede tardar 40-60s en que
+la IA lo resuelva, ningún tamaño de lote lo arregla — achicar el lote
+no baja el PISO de tiempo que tarda un llamado, solo reduce cuánto se
+pierde si uno se cuelga. **Un único request HTTP que espera de punta a
+punta una generación con IA no entra de forma confiable en el timeout
+de ninguna función serverless**, sin importar cuánto se siga
+retocando el batching puertas adentro.
+
+**La solución real, una vez reconocido esto, fue arquitectónica, no otro
+ajuste de parámetros:** desacoplar "pedir" de "generar".
+1. El endpoint que atiende el click del botón solo valida y ENCOLA el
+   pedido en una tabla (`estado: "pendiente"`) — responde en
+   milisegundos, sin llamar a la IA.
+2. Un worker aparte, que corre como **proceso de Node, nunca como
+   función serverless**, es el que de verdad procesa la cola — sin
+   ningún `maxDuration`, puede tardar los minutos que haga falta.
+3. El worker escribe el resultado directo donde la UI ya lo espera
+   (mismas columnas/tablas que antes llenaba la respuesta síncrona), así
+   que la UI que consume el resultado no necesita cambios — solo
+   necesita, además, mostrar un estado intermedio ("pendiente" /
+   "generando" / "error") mientras tanto.
+4. Mientras la calidad del generador todavía se está ajustando, está
+   bien que ese worker se dispare A MANO (un script) en vez de
+   automático — automatizar el disparo de algo que todavía no da
+   resultados confiables solo genera más output para revisar sin que
+   nadie lo pidió. Cablear un disparo automático (cron, "fire and
+   forget" después de responder) es una mejora para después, no un
+   prerrequisito de la arquitectura asincrónica.
+
+**La señal para reconocer este caso a tiempo (antes de perder varias
+iteraciones):** si una tarea con IA detrás de un botón sigue dando
+timeout después de paralelizar Y de subir los topes de tokens Y de
+reducir el tamaño de lote, el problema ya no es de tuning — es que la
+tarea, por su naturaleza, no cabe en el contrato "un click = una
+respuesta HTTP inmediata". Encolar + worker aparte no es la última
+opción a probar cuando todo lo demás falló: es la primera pregunta a
+hacerse apenas se sospecha que un paso con IA puede acercarse al límite
+de tiempo de la plataforma.
+
+**Addendum, una vez resuelto el timeout: paralelizar llamados a la IA
+tiene un costo en $ que no es obvio hasta que se mide.** Con el motor ya
+corriendo en el worker (sin límite de tiempo), seguía disparando los ~9-10
+llamados de un tablero EN PARALELO — ya no hacía falta para el tiempo,
+pero nadie lo había reconsiderado. El prompt de reglas (grande, varios
+miles de tokens) se manda completo en cada llamado; con `cache_control`
+(Anthropic), el SEGUNDO llamado en adelante lo puede leer del caché a
+~1/10 del precio — pero SOLO si arranca DESPUÉS de que el anterior ya
+terminó de escribirlo. En paralelo, todos arrancan casi al mismo tiempo,
+así que NINGUNO ve el caché tibio: pagan precio completo del prompt
+grande, todos. Pasar esos mismos llamados a SERIE (un simple `for` en vez
+de `Promise.all`) no cambió nada funcional — bajó el costo real de la
+corrida completa. **La lección general: una vez que paralelizar llamados
+a un LLM deja de ser necesario para cumplir un tiempo límite, hay que
+revisar si sigue siendo gratis — con prompt caching de por medio,
+frecuentemente no lo es.** No se sabe el ahorro real sin medir: loguear
+`response.usage` (input/cache-write/cache-read/output tokens, el
+"thinking" invisible se cobra como output) de cada llamado y calcular el
+costo real con los precios publicados, en vez de adivinar cuánto se está
+gastando por el tamaño de la factura al final del mes.
+
+## 22. Librería de símbolos: cuando un elemento se repite igual en cada generación, no se le pide a la IA que lo dibuje de nuevo cada vez
+
+**Contexto:** en `motor-unifilares`, cada circuito con térmica o
+disyuntor le pedía a la IA que dibujara la geometría completa del
+símbolo (rectángulo + diagonal, o rectángulo + óvalo de toroide) como
+parte del JSON de comandos de ese circuito — lo mismo que ya dibujó bien
+en el circuito anterior, vuelto a generar desde cero, circuito tras
+circuito, tablero tras tablero.
+
+**El problema con dejar que la IA redibuje lo que ya es idéntico siempre:**
+cuesta tokens de salida en cada llamado (no es gratis, ver § 21), y cada
+repetición es una nueva oportunidad de que la proporción salga un poco
+distinta — nada garantiza que el disyuntor del circuito 14 tenga
+exactamente el mismo tamaño de óvalo que el del circuito 3, aunque las
+reglas escritas sean las mismas.
+
+**La solución, mismo criterio que un BLOCK/INSERT de AutoCAD:** si un
+elemento se repite con la misma forma siempre (solo cambia DÓNDE va, no
+CÓMO es), no se le pide a la IA que dibuje su geometría — se le pide que
+mande una instancia corta (`{"type":"simbolo","nombre":"termica","x":...,
+"y":...}`) y una función en código, no en el prompt, la expande a la
+geometría real (líneas/rects/ellipses) justo antes de que el dibujo
+llegue a los renderers (DXF/PDF) — ver `motor-unifilares/src/simbolos/`.
+La geometría de cada símbolo se extrajo 1:1 de un plano real ya generado
+y validado visualmente por el usuario (no se inventó una proporción
+nueva): es la única fuente de verdad de "cómo se ve ese símbolo", y vive
+en un solo lugar en vez de estar implícita en un prompt de texto.
+
+**Cuándo aplica este patrón y cuándo no:** solo para elementos cuya
+geometría NO depende del contexto del circuito (tamaño/forma fijos,
+nada que varíe según el tablero) — térmica y disyuntor encajan, una
+bornera con grupos de letras variables (N/F vs. R/S/T/N) no, porque ahí
+el contenido sí cambia según el `tipoCircuito`. No reemplaza al
+mecanismo de "enseñar" (`scripts/ensenar.ts`, ejemplos puntuales
+resueltos que se agregan al prompt): la librería de símbolos resuelve
+piezas chicas y 100% repetibles sin tocar el prompt en absoluto; "enseñar"
+sigue siendo el mecanismo para patrones más grandes o con variación real
+que sí conviene mostrarle a la IA como ejemplo. Es el mismo espíritu que
+motivó originalmente "enseñar" — ir alimentando al motor con una
+librería para que generar sea cada vez más fácil — pero resuelto en
+código puro para la parte que no necesita juicio de la IA en absoluto.
+
+**Addendum: cuando el usuario ya tiene su propia librería de símbolos en
+AutoCAD, extraerla DIRECTO del DXF es más exacto que "enseñar" con una
+foto — y conviene que crezca sin deploy.** Los dos símbolos de arriba
+salieron de medir a mano un plano ya generado; el paso siguiente, cuando
+el usuario tiene una librería de bloques AutoCAD propia (la geometría
+"oficial" de la empresa, ya usada en planos reales), fue dejar de medir a
+mano y leer esa geometría directo del archivo: `motor-unifilares/src/
+dxf-import.ts` usa `dxf-parser` (Node puro, sin Python/`ezdxf` — el deploy
+real corre en funciones serverless de Vercel, sin Python disponible) para
+leer cada `BLOCK` nombrado del DXF y convertir sus entidades reales
+(líneas, arcos, polilíneas con bulge/esquinas redondeadas, `SOLID`,
+`INSERT` anidados con rotación/escala) a `DrawCommand[]`, sin que ningún
+modelo interprete nada. Dos decisiones de diseño que valen la pena anotar:
+
+1. **Todo el trabajo geométrico (rotar, escalar, muestrear arcos) se hace
+   en el sistema de coordenadas nativo del DXF (Y hacia arriba, como
+   cualquier CAD) — el único cambio de convención (a Y hacia abajo, como
+   el resto del motor) se aplica una sola vez, al final, sobre puntos ya
+   resueltos.** Mezclar el flip de eje con las rotaciones intermedias
+   invierte el sentido de giro si no se lleva la cuenta de signos con
+   mucho cuidado — separar "resolver la geometría" de "cambiar de
+   convención" en dos pasadas distintas evita esa clase entera de bugs.
+2. **Una vez que la librería del usuario puede tener decenas de
+   componentes y seguir creciendo, que viva hardcodeada en archivos de
+   código (como los dos símbolos originales) deja de alcanzar** — cada
+   símbolo nuevo necesitaría un commit. Se migró a una tabla de Supabase
+   (`motor_unifilares_simbolos`, mismo criterio que `motor_unifilares_
+   ejemplos`) con una pantalla propia (`public/simbolos.html`) que sube el
+   DXF, previsualiza cada bloque detectado y guarda los que se confirman
+   — correr el mismo flujo de nuevo cuando la librería real cambia
+   actualiza la base sola, sin tocar código. El criterio general: un
+   patrón que "no necesita juicio de la IA" (este caso) o "se enseña una
+   vez y se reusa" (`motor_unifilares_ejemplos`) pertenece a una tabla con
+   una pantalla de carga, no a un archivo fuente — el código es para la
+   lógica que transforma esos datos, no para los datos en sí.
+
+## 23. Lectura de un documento/tablero con fotos: "entera + mitades ampliadas" para no perder letra chica, y "nunca inventes, null si no se lee" como regla de oro
+
+**Contexto:** `informes-app/src/lib/tableros/leer-tablero.ts` (ENCARGO.md,
+repo `cidenisar/motor-unifilar` rama `lectura-fotos`) — un endpoint que lee
+fotos de un tablero eléctrico con Claude Vision para precargar la pantalla
+de carga de circuitos, igual problema de fondo que cualquier módulo de
+"IA lee una foto y completa un formulario" de este repo (Racks, Torres,
+Vehículos, etc.).
+
+**1. Las imágenes que manda cualquier proveedor de Vision tienen un tope
+de resolución efectiva (acá, 1568px de lado máximo) — más grande no suma
+nada, solo cuesta más tokens. El problema es que a ESE tamaño se pierde
+la letra chica (un "25A 30mA" impreso en una térmica).** La solución no
+es mandar la foto más grande (no sirve) ni pedirle al usuario que saque
+una foto de cerca de cada etiqueta (no es realista en campo): se manda la
+foto **entera** (achicada al tope) MÁS **2 mitades, recortadas del
+original ANTES de achicar** (10% de solape entre las dos, para no cortar
+un equipo justo por el medio), cada mitad achicada a su vez al mismo
+tope — el recorte conserva más resolución efectiva sobre esa porción que
+la entera sola. Hace falta avisarle explícitamente al modelo que las
+mitades son ampliaciones de la misma foto, no equipos nuevos, o las
+puede contar dos veces. Ver `partesDeFoto()` — usa `sharp(buffer).rotate()`
+(sin argumentos) para aplicar la orientación EXIF una sola vez, antes de
+cualquier recorte, con `toBuffer({resolveWithObject:true})` para obtener
+en el mismo paso el buffer ya rotado y sus dimensiones reales (necesarias
+para decidir si el recorte es horizontal o vertical).
+
+**2. "Nunca dejes un campo vacío, describí lo que ves si no hay etiqueta"
+(el criterio histórico de este repo, ver `/api/tableros/leer-foto`) y
+"si no se lee con seguridad, el campo va `null`, nunca inventes" (el
+criterio de `REGLAS_LECTURA.md`) son dos reglas de oro CONTRADICTORIAS,
+y la que conviene depende de qué va a pasar con ese campo después, no de
+cuál suena más prolijo.** Para un campo de TEXTO/CLASIFICACIÓN (qué es
+este elemento) donde cualquier respuesta es mejor que ninguna y el
+técnico de todos modos va a revisar, "describí lo que ves" funciona. Para
+un campo NUMÉRICO/DE MEDICIÓN (un calibre, un amperaje) donde un valor
+inventado queda indistinguible de uno leído una vez que está en el
+formulario — y en un plano eléctrico, un calibre equivocado que "parece
+confirmado" es peor que uno vacío que obviamente hay que revisar — la
+regla tiene que ser `null` si no hay certeza. El síntoma de violar esto
+sin darse cuenta: un modelo de vision completa calibres "por costumbre"
+cuando ve el mismo valor repetido varias veces en la foto (acá, 16A en
+casi todas las térmicas) — un control barato que lo agarra: si TODOS los
+valores leídos de un campo numérico son idénticos y hay 3 o más, marcarlo
+para revisar en vez de confiar en él (ver `controlarLecturaTablero` →
+sospecha "todos iguales"). Verificado contra fotos reales en esta misma
+sesión: de 25 circuitos, el único caso de sospecha real resultó ser un
+calibre tapado físicamente por la palanca del propio interruptor en la
+foto — no legible desde ningún ángulo disponible, exactamente el caso que
+la regla de oro está pensada para atajar.
+
+**3. Para medir "qué tan bien lee la IA" (cuántos campos el revisor no
+tuvo que tocar), nunca uses como clave un campo que el usuario puede
+editar en la pantalla de revisión — usá la POSICIÓN dentro de la lectura
+original.** El primer diseño de esto comparaba filas por su N° de
+circuito, hasta notar que ese campo es un `<input type="number">`
+editable en el formulario (el técnico puede renumerar sin querer, o a
+propósito): comparar por N° después de una renumeración compara filas que
+no son la misma fila. La solución (ver `origenLecturaId`/
+`origenLecturaPosicion` en `nueva-medicion-form.tsx` y `cerrarLecturasIa`
+en `tableros/nuevo/actions.ts`) es taggear cada fila, al insertarla en el
+estado del formulario, con su posición de origen dentro del array que
+devolvió la IA — un índice que el usuario nunca ve ni puede tocar — y
+reindexar ese tag exactamente como ya se reindexaba el estado de
+lecturas al borrar una fila (mismo patrón, nuevo campo). Una fila que el
+usuario borra del todo cuenta como 0% de acierto en vez de desaparecer
+del cálculo — borrar no es lo mismo que "la IA acertó".
+
+## 24. "Equipo" vs. "material a granel", referencias blandas entre tablas de equipamiento, y contraste al revés (lista conocida → evidencia) en vez de detección abierta
+
+**Contexto:** `informes-app` — trazabilidad de materiales de Informe
+Técnico (sección "Materiales/equipos" + remito), y las tres
+inconsistencias reales que señaló el usuario al revisarla: un componente
+de rack cargado como material quedaba duplicado en dos tablas sin
+relación; dar de baja un equipo reemplazado era un trámite manual
+desconectado del alta del nuevo; y faltaba una forma de confirmar que lo
+cargado como "usado" realmente se ve instalado en las fotos de evidencia.
+
+**1. "Equipo" (activo discreto, con marca/modelo/N° de serie, vida propia:
+mantenimientos, bajas) y "material a granel" (cañería, bulonería — solo
+cantidad, sin identidad individual) son dos conceptos de datos distintos,
+y cuando una misma categoría puede significar cualquiera de los dos según
+dónde esté instalado (acá: switch/UPS/banco de baterías — equipo suelto O
+componente de un rack), la UI tiene que preguntar explícitamente "¿dónde
+va?" ANTES de decidir a qué tabla insertar, en vez de insertar siempre en
+la tabla "por defecto" y confiar en una búsqueda posterior para no
+duplicar. Buscar duplicados después de los hechos es un parche; preguntar
+el destino correcto antes de crear la fila resuelve la causa.
+
+**2. Cuando un equipo puede vivir en 3 tablas distintas según su tipo
+(`tablero_circuitos`/`rack_equipamientos`/`equipos`, acá vía
+`TipoEquipoBaja`), una referencia entre equipos ("este reemplaza a aquel")
+no puede ser una FK real — tiene que ser el mismo patrón "blando" que ya
+usa `bajas_equipamiento` (`tipo_equipo` + `equipo_id` sin constraint de FK,
+porque `equipo_id` apunta a una tabla distinta según `tipo_equipo`).
+Replicar ese mismo par de columnas (`reemplaza_equipo_id`+`reemplaza_tipo`)
+en las tablas de destino, en vez de inventar un esquema nuevo, es lo que
+permite reusar el resolver ya existente (`resolverEquipo`/`TABLA_POR_TIPO`
+en `lib/equipamiento/resolver-equipo.ts`) para los dos sentidos de la
+relación.
+
+**3. Una acción que hoy es manual y de otro rol (dar de baja, solo
+Admin/Supervisor) se puede disparar automáticamente desde una acción de un
+rol distinto (el técnico, al cargar el material nuevo que reemplaza al
+viejo) sin tocar el gate de rol de la acción original — extrayendo el
+núcleo de la lógica (resolver, insertar el registro, actualizar estado,
+generar el PDF) a una función separada (`ejecutarBaja` en
+`lib/equipamiento/dar-de-baja.ts`) que la action gateada por rol sigue
+usando igual que antes, y que el flujo automático llama directo con
+Service Role. El gate de rol vive en la action, nunca en el núcleo — así
+el núcleo se puede reusar desde cualquier lugar donde la decisión de "dar
+de baja esto" ya se tomó por otro camino (acá, el técnico marcando
+"reemplaza a" en el momento de instalar). Mismo criterio que ya aplicaba
+la devolución a depósito automática del sobrante del remito: un efecto
+mecánico de una decisión que el usuario ya tomó no es una habilitación de
+rol nueva.
+
+**4. Para "¿lo cargado está realmente instalado?" con Vision, el contraste
+correcto parte de la lista CONOCIDA (materiales/remito ya cargados) y
+pregunta contra la evidencia (fotos) "¿esto está?", en vez de pedirle a
+la IA que mire las fotos y adivine qué hay sin lista previa.** Preguntar
+al revés ("¿qué ves en la foto que no está en la lista?") es un problema
+mucho más difícil y propenso a falsos positivos (la IA puede "ver" un
+equipo que ya estaba antes, de otra visita, y marcarlo como nuevo). El
+riesgo se invierte también: con la lista conocida como punto de partida,
+el riesgo real es el falso NEGATIVO (un material chico/oculto/mal
+encuadrado que SÍ está pero no se nota) — por eso el resultado tiene que
+ser siempre una sugerencia para que el humano revise y agregue una foto
+puntual si hace falta, nunca un bloqueo ni una verdad asumida.
+
+## 25. "Borrado real" en una app Next.js/Server Actions sobre Supabase: el borrado en sí no es el bug, el cache stale de OTRAS pantallas sí
+
+**Contexto:** `informes-app` — el usuario reportó que un relevamiento que
+él mismo había borrado desde Historial seguía "apareciendo en otros
+lados" (el mapa del Panel, por ejemplo), aunque la lista de Historial ya
+mostraba el conteo correcto y reducido.
+
+**El borrado de la fila nunca fue el problema — faltaba
+`revalidatePath` después del borrado.** El helper compartido detrás de
+los 9 botones "Eliminar" de Historial (`eliminarRegistroConArchivos` en
+`lib/admin/eliminar-registro.ts`) sí borra la fila de la DB y sus archivos
+de Storage correctamente; lo que no hace, a propósito, es llamar
+`revalidatePath` — esa responsabilidad queda en cada Server Action que lo
+llama. El cliente de Supabase no es parte del Data Cache de Next (sus
+fetches no pasan por `fetch()` de Next), así que borrar la fila es
+inmediato en la base — pero el Router Cache/Full Route Cache de CUALQUIER
+OTRA página que renderizó esa data server-side antes puede seguir
+sirviendo RSC output viejo hasta que se invalide explícitamente esa ruta.
+Si la action solo revalida su propia página (`revalidatePath("/x/historial")`,
+patrón que ya existía en un par de módulos), todas las DEMÁS pantallas que
+muestran la misma data (el mapa del Panel, un conteo en Estadísticas, otra
+lista) van a seguir mostrando el dato borrado hasta que alguien las fuerce
+a refrescar de otra forma.
+
+**La solución generalizable: cuando una acción de borrado/alta puede
+afectar la data que se ve en pantallas que no conocés de antemano (un
+mapa, un panel, estadísticas — consumidores indirectos de la misma
+tabla), usar `revalidatePath("/", "layout")` en vez de tratar de enumerar
+cada ruta afectada.** Enumerar rutas es un acoplamiento oculto que se
+rompe en silencio el día que se agrega una pantalla nueva que también
+muestra esa data — invalidar todo el árbol desde el layout raíz es más
+caro (un refetch más amplio en la próxima navegación) pero correcto por
+construcción, y en una app de este tamaño el costo es insignificante
+comparado con el bug de mostrar data borrada como si existiera.
+
+## 26. Rol "por encima" de otro (superset) vs. rol "al costado" (sibling) — y el borrado real de usuarios cuando ninguna FK tiene cascade
+
+**Contexto:** `informes-app` — el usuario pidió un rol nuevo,
+"superusuario", que reemplaza a Admin como el techo de la jerarquía:
+Admin se queda con casi todo lo que ya tenía, pero pierde la capacidad de
+borrar definitivamente (los 9 "Eliminar" de Historial, "Vaciar datos de
+prueba", y un borrado real de usuario que no existía todavía — antes solo
+había Desactivar/Reactivar). Solo otro superusuario puede asignar el rol
+superusuario.
+
+**1. Un rol que es superset de otro (tiene TODO lo que el otro tiene, más
+algo exclusivo) se modela ampliando los gates existentes, nunca creándolo
+como un rol "al costado".** Si "superusuario" se agrega como una rama
+paralela a "admin" en cada chequeo (`rol === "admin" || rol ===
+"superusuario"`... en CADA lugar donde hoy dice `rol === "admin"`), es
+fácil olvidarse de uno y crear una regresión silenciosa (un admin con todo
+menos una función al azar, o un superusuario que no puede hacer algo que
+un admin común sí puede). La forma correcta es tratar la relación como lo
+que es — superset, no sibling — y ampliar los puntos de entrada
+compartidos: si la mayoría de las políticas RLS de borrado dependen de dos
+funciones SQL (`is_admin()`/`is_admin_or_supervisor()`), ampliar ESAS DOS
+funciones para incluir el rol nuevo propaga el cambio a todas las policies
+que las usan sin tocarlas una por una; y a nivel TypeScript, el guard
+compartido (`requireAdmin()`) se amplía de la misma forma, así cualquier
+action que ya llamaba `requireAdmin()` sigue funcionando para superusuario
+sin cambios. El gate EXCLUSIVO nuevo (`requireSuperusuario()`, a propósito
+SIN aceptar `"admin"`) se agrega aparte, solo en los puntos puntuales que
+pasan a ser exclusivos.
+
+**2. Un ENUM de Postgres no permite agregar un valor nuevo y usarlo en la
+misma transacción.** `alter type rol add value 'superusuario'` seguido de
+una función que hace `... and rol = 'superusuario'` en el mismo
+`apply_migration`/transacción tira `55P04: unsafe use of new value ...
+New enum values must be committed before they can be used`. Hay que
+partirlo en dos migraciones separadas (el `alter type` en un archivo, las
+funciones/policies que usan el valor nuevo en el siguiente) — no es un
+detalle de la herramienta de turno, es una regla de Postgres sobre
+transacciones y tipos enum, así que aplica en cualquier proyecto que
+agregue un valor a un enum y lo use enseguida.
+
+**3. Antes de ofrecer un "borrado real" (DELETE de verdad, no
+Desactivar/soft-delete) sobre una tabla central como `profiles`/`usuarios`,
+hay que relevar TODA la cadena de FKs que apuntan a esa tabla y verificar
+si tienen `on delete cascade`/`set null` o son `NO ACTION` (el default de
+Postgres).** En este proyecto, ninguna de las ~37 columnas que referencian
+`profiles.id` en todo el esquema tenía cascade — todas eran `NO ACTION` a
+propósito (nunca se pensó un usuario como algo borrable con historial real
+atrás). Eso significa que un DELETE directo sobre esa fila falla con un
+error de FK en cuanto exista UN solo registro que la referencie en
+cualquier tabla — lo cual, para una cuenta con cualquier actividad real
+(un informe, una medición, un solo renglón de auditoría), es casi
+garantizado. La forma segura de ofrecer "borrado real" sin arriesgar
+integridad referencial ni duplicar lógica de cascada a mano es: (a) barrer
+cada tabla que referencia `profiles.id` con un `count` por columna (sin
+JOIN posible entre tablas tan distintas entre sí) y rechazar el borrado si
+CUALQUIERA tiene actividad — señalando al usuario que la herramienta
+correcta para ese caso sigue siendo Desactivar; (b) para la cuenta que
+pasa ese chequeo (sin ningún rastro real todavía), usar
+`auth.admin.deleteUser(id)` de la API de administración de Supabase en vez
+de un DELETE manual sobre `profiles` — esa es la única FK que SÍ tiene
+`on delete cascade` (`profiles.id references auth.users(id) on delete
+cascade`), así que borrar del lado de `auth.users` cae en cascada
+correctamente sobre `profiles` sin violar ninguna otra FK.
+
+**4. Quién puede asignar un rol "techo" (el más alto de la jerarquía) a
+otra cuenta — regla de bootstrap.** Si la regla es "solo otro superusuario
+puede asignar superusuario" (para que un Admin nunca pueda
+auto-promoverse), hace falta un paso de bootstrap manual (una sola vez,
+por SQL directo contra la DB) para que exista el primer superusuario —
+ninguna UI puede crear al primero sin romper la regla. Vale la pena
+decidir y ejecutar ese bootstrap ANTES de dar por terminada la feature, no
+después: hasta que exista al menos un superusuario, ninguna de las
+acciones exclusivas nuevas es alcanzable por nadie.
+
+## 27. Auditoría de seguridad de una app Next.js/Supabase — checklist y hallazgos reusables
+
+**Contexto:** `informes-app` — el usuario pidió una auditoría completa de
+seguridad (código + base + dependencias) y un diagnóstico de contra qué
+estándar está la app. El proceso y los hallazgos de tipo "esto puede pasar
+en cualquier proyecto de esta familia" quedan acá.
+
+**1. El gate de un rol "techo" tiene que estar en LAS DOS capas, con la
+MISMA regla exacta — la capa de Next.js sola no alcanza.** En §26 se
+documentó la regla "solo un superusuario puede asignar superusuario", y la
+Server Action (`usuarios.ts`) la cumplía bien
+(`rol === "superusuario" ? requireSuperusuario() : requireAdmin()`). Pero
+el trigger de Postgres que protege `profiles.rol` contra ediciones propias
+(`protect_profile_privileged_fields`) solo chequeaba `is_admin()` — que
+devuelve true tanto para 'admin' como para 'superusuario' por ser un rol
+superset (ver §26.1). Resultado: un Admin común, pegándole directo a la
+REST API de Supabase con su propia sesión (sin pasar por la UI/Server
+Action), podía hacer `PATCH profiles?id=eq.<su-propio-id>` con
+`{"rol":"superusuario"}` y el trigger lo dejaba pasar — rompiendo la regla
+de bootstrap exclusiva. La regla "exclusiva" de un rol techo nunca es
+"nadie más puede hacer esto en la UI", es "nadie más puede hacer esto,
+punto" — y la única capa que de verdad lo garantiza contra cualquier
+cliente (app, curl, Postman) es la base. Siempre que un rol sea superset
+de otro (§26.1), cualquier regla MÁS estricta que aplique solo al rol
+superior (asignar/quitar ESE rol puntual, no las demás acciones que sí
+comparte con el rol de abajo) necesita su propio chequeo explícito en el
+trigger/policy — no alcanza con el chequeo genérico `is_admin()` que ya
+usan las demás columnas protegidas.
+
+**2. Un `next`/`redirect_to` que sale de un query param nunca se valida
+solo con `startsWith("/")`.** `"//evil.com"` también empieza con `/` —
+los navegadores lo interpretan como URL protocol-relative (mismo esquema
+que la página actual, pero dominio distinto) y redirigen afuera del sitio
+igual. Cualquier login/flujo con un parámetro "volver a esta página
+después" tiene que rechazar explícitamente los que arrancan con `//` (y,
+si se quiere ser estricto, con `/\` — algunos navegadores viejos también
+lo tratan como protocol-relative).
+
+**3. Los advisors de seguridad/performance de Supabase (`get_advisors`)
+son el primer paso de cualquier auditoría, no un detalle opcional —** y
+conviene correrlos de nuevo después de cualquier tanda de migraciones,
+no solo al final. En esta pasada encontraron: una tabla de diagnóstico
+vieja con RLS deshabilitada y expuesta en el schema público (quedó
+documentada en el README como pendiente de un DROP que se colgaba con la
+herramienta de turno — funcionó con `apply_migration`, igual que el resto
+de esta sesión); y 5 funciones `SECURITY DEFINER` (los helpers `is_admin`,
+`is_admin_or_supervisor`, `is_superusuario`, `protect_profile_privileged_fields`,
+`handle_new_user`) invocables directo como RPC
+(`/rest/v1/rpc/is_admin`) por `anon`/`authenticated` — bajo riesgo real en
+este caso puntual (son funciones de solo-lectura sobre el propio usuario, o
+funciones de trigger que fallan si se llaman fuera de un trigger), pero la
+forma correcta a mediano plazo es moverlas a un schema no expuesto
+(`private.is_admin()`) en vez de dejarlas en `public`
+— **ojo:** no alcanza con `REVOKE EXECUTE FROM anon, authenticated` a
+secas, porque esas mismas funciones las siguen llamando las policies de
+RLS que corren como el rol de quien hace la consulta — revocar el EXECUTE
+rompe todas las policies que las usan. El fix real es "moverlas de
+schema", no "sacarles el permiso".
+
+**4. No hay rate-limiting de ningún tipo en los endpoints que llaman a la
+API de Anthropic (`/api/**/leer-*`, `/api/estadisticas/asistente`,
+`/api/vehiculos/comparar-estado`, etc.).** Cualquier usuario autenticado
+(cualquier rol, no solo Admin) puede llamarlos sin límite — no es solo un
+tema de performance, es un vector de abuso de costo real (cada llamada
+gasta crédito de la cuenta de Anthropic). Vale la pena, en el próximo
+proyecto con módulos de IA por foto, pensar el límite (por usuario y por
+ventana de tiempo) DESDE el diseño del endpoint, reusando la tabla de
+`ia_uso`/`registrarUsoIa` que ya existe para medir costo — no hace falta
+infra nueva (Redis/Upstash) si ya se está logueando cada llamada con
+usuario y timestamp: alcanza con un `count` contra esa tabla antes de
+dejar pasar la llamada.
+
+**5. `next.config.ts` sin un bloque `headers()` es el default de
+`create-next-app`, no una decisión — así que toda app nueva arranca sin
+`X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`,
+`Permissions-Policy` ni HSTS.** Agregarlos es una sola función en
+`next.config.ts`, sin riesgo de romper nada (son headers de respuesta, no
+cambian comportamiento de la app) — conviene copiarlo en el scaffold de
+cualquier proyecto nuevo de esta familia en vez de esperar a una
+auditoría para notarlo. Un Content-Security-Policy real, en cambio, sí
+hay que armarlo caso por caso (depende de qué CDNs/fuentes/scripts use
+cada app — Leaflet, Google Fonts, etc.) y probarlo visualmente antes de
+mandarlo a producción, así que no entra en ese mismo "default gratis".
+
+**6. `npm audit` no es solo para dependencias de testing/lint — revisa
+siempre el árbol de producción primero (`npm audit --omit=dev`).** En esta
+pasada encontró a Next.js mismo con un CVE crítico (RCE) vigente en la
+versión que estaba instalada — subirlo de versión dentro del mismo major
+(16.3.4 → 16.4.5) fue seguro (típecheck + lint + build limpios después),
+pero conviene correr esta auditoría como parte del checklist de cualquier
+sesión de "mantenimiento" o antes de un deploy grande, no solo cuando el
+usuario pide una auditoría explícita.
+
+## 28. Abrirle una pantalla admin-only a un rol nuevo: el riesgo no es que explote, es que mienta en silencio
+
+**Contexto:** `informes-app` — el usuario pidió que un técnico pudiera
+entrar al Panel de Supervisión (antes exclusivo de Admin/Supervisor), pero
+limitado a ciertas secciones. La tentación es tratarlo como un cambio de
+UI (sacar el gate de la capa de ruta, ocultar algunos ítems de nav) — el
+trabajo real está una capa más abajo.
+
+**1. Cada tabla/bucket que esa pantalla consulta tiene su propia RLS,
+pensada para la audiencia ORIGINAL — y una policy "own-row OR
+is_admin_or_supervisor()" no le avisa a nadie cuando el nuevo rol no
+matchea ninguna de las dos mitades.** La consulta no tira error: devuelve
+menos filas (o cero) y la pantalla renderiza igual, con KPIs o historiales
+incompletos — mucho peor que un 403, porque nadie se entera. Antes de
+destrabar una pantalla para un rol nuevo, hay que listar command por
+command (`select tablename, cmd, qual from pg_policies ...`) cada tabla
+que esa pantalla toca (y cada bucket de storage que firma URLs) y
+clasificarla en una de tres categorías: ya abierta a cualquier
+autenticado (no hace falta tocar nada), scoped a "propio" (el rol nuevo va
+a ver solo lo suyo — aceptable si esa sección es igual de parcial para
+cualquiera, raro si se vende como vista "general"), o exclusiva del rol
+viejo (hay que decidir explícitamente si se abre o se deja así, nunca
+dejar que quede así "por accidente").
+
+**2. Cuando la pantalla mezcla datos operativos (ok de mostrar a más
+gente) con datos personales de terceros (DNI, licencia, sueldo, lo que
+sea) en el MISMO cuadro o el mismo array, no alcanza con destrabar la
+pantalla entera — hay que separar esa porción puntual.** Acá la "Vista
+general" traía, en un solo array `vencimientos`, el vencimiento de
+Tarjeta Verde/RTO de los vehículos (dato operativo, está bien que lo vea
+cualquiera) mezclado con el vencimiento de DNI/licencia de CADA empleado
+por nombre y apellido (dato personal de terceros). La función que arma
+ese array ganó un parámetro (`incluirVencimientosPersonal`) para que el
+caller decida, en vez de que la función-de-datos conozca roles — así
+sigue sirviendo igual a quien sí debe ver todo.
+
+**3. Un bucket de storage con policy admin-only para INSERT, al abrirse a
+un rol nuevo, nunca debe ganar un INSERT abierto a cualquier path —
+reusar el patrón de carpeta propia (`(storage.foldername(name))[1] =
+auth.uid()`) que ya usan los demás buckets "de usuario" de la app
+(`informe-fotos`, `comprobantes`, `informes-pdf`).** El rol nuevo sube
+bajo su propia carpeta, nunca puede pisar un path que ya usa el rol viejo
+(que sigue usando paths sin ese prefijo, ej. `{vehiculoId}/tarjeta-
+verde.jpg`) — ambos conviven en el mismo bucket sin que ninguno pueda
+tocar los archivos del otro. El SELECT del bucket, en cambio, conviene
+abrirlo a cualquier autenticado si el contenido no es sensible (fotos de
+un vehículo de la flota, no de una persona): si se deja scoped a "propia
+carpeta" en SELECT también, una funcionalidad que compara "contra el
+último conocido" (sea quien sea que lo haya cargado) deja de encontrar la
+referencia ajena y degrada en silencio — mismo síntoma que el punto 1.
+
+**4. Una redirección automática a la pantalla nueva ("en PC arrancá
+directo en el Panel") NO debe extenderse al rol nuevo solo porque ahora
+también puede entrar — hay que preguntarse si esa pantalla es un
+SUPERSET de lo que el rol ya tenía, o una vista aparte y más chica.** Acá
+el Panel limitado no tiene ni de cerca todo lo que un técnico carga desde
+el menú mobile (informes, rendiciones, control de vehículo, etc.) —
+auto-redirigirlo ahí en vez de a su menú de siempre lo habría dejado sin
+poder llegar a su propio trabajo diario desde una notebook. La regla: el
+auto-redirect a una pantalla "de más jerarquía" solo aplica a los roles
+para los que esa pantalla ya era un reemplazo completo de su pantalla de
+inicio, no a uno que la suma como una sección más.
+
+## 29. Cambiar la imagen de una app entera sin tocar cada pantalla: tokens + una capa de diseño al final
+
+Salió de pasar Informes a la imagen "Mezcla" (azul/naranja/blanco, 10/11/2026).
+
+- **Todo color sale de tokens CSS** (`--accent`, `--panel`, ...) en un solo archivo. Si una pantalla trae un color clavado, se reemplaza por el token antes de cambiar nada: si no, queda un pedazo de la imagen vieja.
+- **Un token que se usa como color de TEXTO tiene que pasar 4.5:1** contra el fondo. El naranja no pasa con texto blanco ni como texto sobre blanco: el botón naranja lleva texto oscuro (`--on-cta`) y el texto naranja usa otro token más oscuro (`--cta-ink`). Separar "relleno" de "tinta" en dos tokens evita tener que acordarse en cada pantalla.
+- **Los tintes viejos escritos a mano** (`rgba(255,106,61,.15)` = el naranja anterior) se pasan a `color-mix(in srgb, var(--accent) 15%, transparent)`: así siguen al token en claro, en oscuro y en el próximo cambio de imagen.
+- **Relieve, sombras y animaciones van en un bloque al FINAL de la hoja**, separado de los colores. Si va antes, cualquier regla posterior con el atajo `background:` le borra el degradé a los botones.
+- **Animaciones de entrada con `animation-fill-mode: backwards`**, nunca `both`/`forwards`: una animación terminada que "se queda" con `transform: none` le gana al `:hover` y la tarjeta deja de levantarse al pasar el mouse, sin ningún error a la vista.
+- **Para animar íconos según cuál son** (el lápiz garabatea, la flecha de descarga baja, el tacho tiembla), el componente `<Icon>` pone `data-icon={name}` en el `<svg>` y el CSS elige por `svg[data-icon='edit']`. Ninguna pantalla se toca.
+- Siempre un bloque `@media (prefers-reduced-motion: reduce)` que apague todo.
+- **Si se cambia el tema por defecto** (oscuro → claro), el interruptor sigue leyendo la misma clave guardada: quien ya había elegido uno no nota el cambio.
+- **El tema que pone un script del `<head>` necesita `suppressHydrationWarning` en el `<html>`.** Si el default es "sin atributo" y el script agrega `data-theme="dark"` antes de hidratar, React (Next 16) toma la diferencia como error de hidratación, re-renderiza desde el cliente y borra el atributo: el tema elegido "se pierde al recargar" sin ningún error visible. En claro no pasa nada porque no hay diferencia, por eso el bug solo lo ve quien eligió oscuro. Ver la guía `preventing-flash-before-hydration.md` de la propia versión de Next.
+- **Cambiar solo los colores no hace que la app "quede como el diseño".** En la primera pasada de Informes se cambiaron tokens y animaciones pero quedó la distribución vieja (barra en tarjeta, barra de sesión aparte, pestañas en píldora, pasos con círculos), y el dueño lo vio distinto del diseño aprobado. Si la maqueta tiene otra estructura (barra a todo el ancho con pestañas y cuenta adentro, avance en barras), hay que tocar los componentes de estructura (shell, stepper), no solo la hoja de estilos. Antes de dar por terminado, comparar captura contra maqueta lado a lado.
+
+## 30. "Dar de alta" en el momento en que el recurso cambia de manos, no cuando se escribe el informe — estado pendiente con FK nullable, auto-corrección de bajo riesgo, y "adjuntar" nunca es "duplicar"
+
+**Contexto:** `informes-app` — dilema real que planteó el usuario: al
+sacar un equipo de depósito para instalarlo, los datos (marca, N° de
+serie, etiqueta YPF) solo están a mano en ESE momento; si el alta del
+equipo se posterga hasta escribir el Informe Técnico (que suele ser al
+terminar el trabajo), hay que reconstruir esos datos de memoria — o, para
+evitarlo, hacer el relevamiento de equipo ANTES del informe de
+instalación, es decir doble trabajo. La causa no era que faltara una
+función (el informe ya daba de alta el equipo automáticamente al
+guardarlo) sino CUÁNDO se capturaban los datos.
+
+- **Cuando un flujo tiene un paso de "capturar datos" y un paso de "cerrar/reportar" separados en el tiempo, y los datos solo están disponibles en el primero, no fuerces la captura al segundo paso.** Dale al primer paso su propia alta liviana (sin PDF, sin numeración, sin mail — un trámite de un minuto) y que el paso de reportar solo BUSQUE y ADJUNTE lo ya cargado, nunca lo tipee de nuevo. "¿Ya se puede hacer igual, solo que más tarde?" no es la pregunta correcta — la pregunta es en qué momento el usuario tiene los datos en la mano.
+- **Un recurso puede quedar en un estado intermedio real, "creado pero todavía no adjuntado a lo que lo va a referenciar"** — acá, una columna nullable (`informe_instalacion_id`) en la fila ya existente, en vez de una tabla "borrador" aparte. `null` = pendiente; se completa cuando se adjunta. Ese estado intermedio necesita (1) ser listable para adjuntarlo después y (2) ser reversible sin fricción, porque es común que el pendiente nunca se use (al final no se instala, se devuelve el material).
+- **La auto-corrección de ESE estado intermedio es una acción de permiso más angosto que la acción general equivalente**, aunque dispare el mismo mecanismo de fondo (acá, "devolver a depósito" ya existía para Admin/Supervisor). El gate no es el rol — es `created_by = yo AND todavía no lo adjuntó nadie`: el radio de daño queda acotado a algo que el propio usuario creó hace poco y nadie más tocó, así que no hace falta el permiso elevado de la acción general. Reusar el núcleo (resolver equipo, generar entrega, actualizar estado) pero con su propio gate, no el de la acción grande.
+- **Elegir "esto ya lo cargué antes" en un picker tiene que terminar en UPDATE de la fila existente, nunca en un INSERT nuevo** — aunque el mismo formulario, para la carga manual, sí inserte. La única forma confiable de distinguir los dos casos es que el cliente mande explícito el id de la fila elegida (`equipoExistenteId`); buscar duplicados después del hecho (mismo N° de serie, mismo sitio) es el parche que ya se había descartado en la §24.1 — acá se repite el error en otra forma si no se lleva el id. Y como ese id lo manda el cliente, la action lo tiene que re-validar completo en el servidor (dueño, estado, sitio) antes de tocar la fila — no alcanza con que el picker ya lo haya filtrado.
+
+## 31. "Avisar por WhatsApp" sin número de empresa: por qué no se puede automatizar y qué sí se puede construir (links `wa.me` + cierre manual con texto)
+
+**Contexto:** `informes-app`, módulo Guardia General — el circuito real
+(alguien llama, se escribe la novedad en un grupo de WhatsApp llamado
+"Novedades Guardia TI Cuyo", se revisa en SCADA, se activa si hace falta,
+se cierra avisando al grupo) tenía dos preguntas abiertas: ¿se puede
+automatizar el aviso a WhatsApp? ¿Qué hacer con la revisión de SCADA?
+
+- **Un link `wa.me` nunca puede abrir un grupo, solo un chat 1-a-1 (con
+  teléfono) o la pantalla "elegir chat" de WhatsApp (sin teléfono).** No
+  hay combinación de parámetros de URL que lo evite — es una limitación
+  del lado de WhatsApp, no de la app. Por eso "compartir una novedad al
+  grupo" solo puede ser "abrir WhatsApp con el texto ya armado y que la
+  persona elija el chat/grupo a mano", nunca un envío de un solo toque.
+- **Aunque la empresa tuviera un número de WhatsApp Business propio, la
+  API (Cloud API / Business API) tampoco podría postear en un grupo ya
+  creado a mano por las personas** — la gestión de grupos de esa API es
+  un mecanismo separado e incompatible con un grupo de consumidor
+  existente. "Conseguir un número de empresa" no resuelve esto: antes de
+  prometer automatización, confirmar que el canal de destino (un grupo ya
+  existente vs. uno gestionado por la API) es compatible con el mecanismo
+  que se piensa usar, no solo que la cuenta/API existe.
+- **El patrón que sí funciona siempre**: `https://wa.me/?text=<texto
+  codificado>` (sin destinatario, para "elegir chat/grupo a mano") y
+  `https://wa.me/<telefono sin signos>?text=<texto>` (directo a una
+  persona, cuando se tiene su teléfono). Ningún backend, ninguna cuenta,
+  cero mantenimiento — el costo es que SIEMPRE es un paso manual de la
+  persona que dispara el aviso. El aviso garantizado/automático sigue
+  siendo el push (ver §6); WhatsApp es siempre "mejor esfuerzo, con un
+  humano en el medio".
+- **El nombre del grupo/chat de destino es un parámetro editable en
+  pantalla con historial, nunca un string clavado en el código** — aunque
+  la app no pueda abrir el grupo directamente, mostrar su nombre como
+  recordatorio ("elegí `<nombre>` y enviá") sigue necesitando que ese
+  nombre no quede hardcodeado si la empresa lo cambia.
+- **Una revisión de control (acá, SCADA) que puede salir "todo bien" no
+  tiene por qué cerrar sola lo que estaba revisando.** La tentación es
+  automatizar el cierre cuando el resultado es positivo ("sin novedad →
+  listo, se cierra solo") — pero si cerrar significa avisarle a alguien
+  que ya terminó, cerrar sin que una persona redacte el mensaje de cierre
+  deja a esa persona sin nada para compartir. Mejor: la revisión de
+  control queda como su propio registro (acá, una novedad más), y el
+  cierre es SIEMPRE una acción manual aparte que pide un texto corto de
+  cómo quedó (ej. "quedó sin novedad", "normalizado") — ese texto es a la
+  vez el registro del cierre y lo que se comparte afuera, nunca un string
+  fijo tipo "Evento cerrado." que no dice nada para reenviar.
+
+## 32. Pasar de "una fila por persona" a "una fila por (persona, categoría)": dos bugs silenciosos que hay que buscar a propósito, no esperar a que avisen
+
+**Contexto:** `informes-app`, módulo Guardia General — una tabla
+(`guardia_persona`, PK `usuario_id`) modelaba a propósito "cada técnico
+hace UNA guardia" con una fila por persona. Un pedido real del negocio
+("hay técnicos que hacen la guardia de su sector Y ADEMÁS la General, que
+coordina los sectores") rompió ese supuesto: hubo que pasar a PK
+`(usuario_id, area)` — cero o más filas por persona, una por categoría que
+cubre. El cambio de esquema en sí fue trivial (`drop constraint` + `add
+primary key`); lo que importa es la lista de lugares donde "como antes
+nunca había más de una fila por persona" estaba asumido EN SILENCIO, sin
+que nada lo dijera explícito, y que hay que salir a buscar a propósito
+porque ninguno de los dos tira un error en el caso común (0 o 1 fila):
+
+- **Una función SQL que devuelve un escalar con un `select ... where
+  clave = x` sin `limit`, cuando `clave` deja de ser única, no falla al
+  migrar el esquema — falla en producción la primera vez que alguien
+  real tiene 2 filas**, con un error de Postgres genérico ("more than one
+  row returned by a subquery used as an expression") que no apunta a la
+  causa real. El mismo problema del lado de Supabase-JS es `.maybeSingle()`
+  (o `.single()`): tira/da error apenas hay más de una fila. La única
+  forma de no descubrirlo en producción es grepear TODO uso de
+  `.maybeSingle()`/`.single()`/subquery escalar sobre la tabla que va a
+  pasar a tener N filas, ANTES de aplicar la migración, y decidir para
+  cada uno si de verdad necesita "una sola" (entonces agregar
+  `order by ... limit 1` a propósito, documentando que es determinístico
+  pero no "la única") o si en realidad necesita convertirse en una lista.
+- **Peor que el crash: una función que responde "¿esta persona tiene rol
+  X?" indirectamente, a través de "¿cuál es SU categoría?" (singular),
+  puede dar un FALSO NEGATIVO silencioso con 2+ filas** — si el orden de
+  desempate no es el que casualmente se necesitaba, devuelve la OTRA
+  categoría y la pregunta "¿es X?" sale `false` para alguien que sí lo es.
+  Esto es más peligroso que el crash de arriba porque no corta nada, no
+  tira error, simplemente deniega acceso a quien debería tenerlo. El
+  arreglo correcto no es "ordenar mejor" — es cambiar la pregunta de
+  "¿cuál es tu categoría?" (singular, mal planteada para N filas) a
+  "¿tenés AL MENOS UNA fila con categoría X?" (`exists(select 1 from ...
+  where usuario_id = x and categoria = 'X')`), que da la respuesta
+  correcta sin importar cuántas otras categorías tenga esa persona.
+- **Un `Map` armado con `.map((fila) => [fila.id, fila])` para buscar "la
+  fila de tal id" asume, también en silencio, que hay como máximo una
+  fila por id — con 2+ filas para el mismo id, el `Map` simplemente se
+  queda con la ÚLTIMA y pierde las demás, sin ningún error ni warning.**
+  Aparece tanto en UI (una lista que muestra "la" categoría de cada
+  persona) como en cálculos server-side (un `Map<id, categoria>` usado
+  para enriquecer resultados). El arreglo es agrupar en un array
+  (`Map<id, Categoria[]>`, empujando en vez de asignar) en todo punto
+  donde se construye un `Map` keyed por el mismo campo que ahora puede
+  repetirse — buscar literalmente `new Map(...).map(... => [x.id, ...])`
+  sobre la tabla/entidad afectada es la forma de encontrarlos todos de
+  una, en vez de esperar a que un usuario reporte "a tal persona le falta
+  una de sus dos categorías en tal pantalla".
+- **La buena noticia, y por qué vale la pena revisar el motor antes de
+  asumir que el cambio es grande: si la lógica de negocio YA estaba
+  escrita "por categoría" (recibe la categoría como parámetro explícito
+  en cada llamada, nunca la deriva de "la" categoría de la persona),
+  soporta N filas por persona SIN NINGÚN CAMBIO.** En este caso, todo el
+  motor de rotación/cronograma ya filtraba una lista plana por `area` en
+  cada función — una persona con 2 filas simplemente aparece en las 2
+  listas filtradas, cada una independiente, porque nunca hubo un punto
+  donde el código preguntara "¿cuál es la ÚNICA área de esta persona?".
+  Antes de estimar el alcance de este tipo de cambio como "hay que
+  tocar todo lo que usa esta tabla", separar primero qué funciones ya
+  reciben la categoría como parámetro (no tocar) de las que derivan "la"
+  categoría de la entidad (sí tocar) — grep de la función/tipo que
+  representa "la categoría de X" es más preciso que grep de la tabla
+  entera.
+- **Un tipo de dato puro que antes decía `area: AreaGuardia | null` para
+  "la categoría de esta persona (o ninguna)" pasa a `areas:
+  AreaGuardia[]` — y las dos funciones booleanas que lo leían (`esX(ctx)
+  { return ctx.area === 'X' }`, `tieneCategoria(ctx) { return ctx.area !==
+  null }`) cambian a `.includes('X')`/`.length > 0`, sin que el resto de
+  su firma ni de quien las llama necesite cambiar.** Mismo patrón que
+  cualquier ensanche de tipo puro: el cambio se queda contenido en la
+  definición y en el cuerpo de esas dos funciones, no se filtra a cada
+  lugar que las llama.

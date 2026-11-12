@@ -4,6 +4,7 @@ import { ROL_LABEL } from "@/lib/types";
 import { DatosPersonalesForm } from "@/components/cuenta/datos-personales-form";
 import { DatosAdicionalesForm } from "@/components/cuenta/datos-adicionales-form";
 import { CambiarClaveForm } from "@/components/cuenta/cambiar-clave-form";
+import { AvisosPushCard } from "@/components/notificaciones/avisos-push-card";
 
 export default async function CuentaPage() {
   const profile = await requireProfile();
@@ -49,6 +50,7 @@ export default async function CuentaPage() {
         }}
       />
       <CambiarClaveForm />
+      <AvisosPushCard />
     </div>
   );
 }

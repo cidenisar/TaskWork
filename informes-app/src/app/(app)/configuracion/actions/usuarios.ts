@@ -2,9 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
-import { requireAdmin } from "@/lib/auth";
+import { requireAdmin, requireSuperusuario } from "@/lib/auth";
 import { logAudit } from "@/lib/config/audit";
 import { ROL_LABEL, type Rol } from "@/lib/types";
+import { ejecutarEliminarUsuario } from "@/lib/admin/eliminar-usuario";
 import type { ConfigActionResult } from "./empresa";
 
 export interface CrearUsuarioResult extends ConfigActionResult {
@@ -46,7 +47,7 @@ export async function crearUsuarioAction(
   torre: string,
   passwordManual?: string,
 ): Promise<CrearUsuarioResult> {
-  const profile = await requireAdmin();
+  const profile = rol === "superusuario" ? await requireSuperusuario() : await requireAdmin();
   const correo = email.trim().toLowerCase();
   const nombre = nombreCompleto.trim();
   const torreValue = torre.trim() || null;
@@ -109,7 +110,7 @@ export async function cambiarRolAction(
   nombre: string,
   nuevoRol: Rol,
 ): Promise<ConfigActionResult> {
-  const profile = await requireAdmin();
+  const profile = nuevoRol === "superusuario" ? await requireSuperusuario() : await requireAdmin();
   if (userId === profile.id) {
     return { success: false, error: "No podés cambiar tu propio rol." };
   }
@@ -244,4 +245,65 @@ export async function reactivarUsuarioAction(userId: string, nombre: string): Pr
   revalidatePath("/informe-tecnico/nuevo");
   revalidatePath("/rendicion-gastos/nueva");
   return { success: true };
+}
+
+/**
+ * Solo Superusuario. Borrado REAL de la cuenta (a diferencia de Desactivar,
+ * que nunca borra nada) — se rechaza si el usuario ya tiene actividad
+ * registrada en cualquier otro módulo (ver ejecutarEliminarUsuario), así
+ * nunca se pierde trabajo real por accidente.
+ */
+export async function eliminarUsuarioAction(userId: string, nombre: string): Promise<ConfigActionResult> {
+  const profile = await requireSuperusuario();
+  if (userId === profile.id) {
+    return { success: false, error: "No podés borrar tu propia cuenta." };
+  }
+
+  const adminRes = obtenerClienteAdmin();
+  if ("error" in adminRes) return { success: false, error: adminRes.error };
+
+  const resultado = await ejecutarEliminarUsuario(adminRes.client, userId);
+  if (!resultado.success) return resultado;
+
+  const supabase = await createClient();
+  await logAudit(supabase, profile, `Borró definitivamente al usuario "${nombre}"`);
+  revalidatePath("/configuracion");
+  revalidatePath("/informe-tecnico/nuevo");
+  revalidatePath("/rendicion-gastos/nueva");
+  return { success: true };
+}
+
+export interface SubirFotoPerfilResult extends ConfigActionResult {
+  fotoPerfilUrl?: string;
+}
+
+/**
+ * Un Admin puede cargar/cambiar la foto de perfil de CUALQUIER usuario —
+ * hasta ahora solo el propio usuario podía subir la suya desde /cuenta
+ * (ver actualizarDatosPersonalesAction). Mismo path fijo "{uid}/foto" con
+ * upsert (una sola foto por usuario, se reemplaza) y el mismo cache-bust
+ * con "?v=" para que el navegador no muestre la vieja después de cambiarla.
+ */
+export async function subirFotoPerfilUsuarioAction(userId: string, nombre: string, formData: FormData): Promise<SubirFotoPerfilResult> {
+  const profile = await requireAdmin();
+  const foto = formData.get("foto");
+  if (!(foto instanceof File) || foto.size === 0) return { success: false, error: "Falta la foto." };
+
+  const supabase = await createClient();
+  const path = `${userId}/foto`;
+  const { error: upErr } = await supabase.storage.from("fotos-perfil").upload(path, Buffer.from(await foto.arrayBuffer()), {
+    contentType: foto.type || "image/jpeg",
+    upsert: true,
+  });
+  if (upErr) return { success: false, error: `No se pudo subir la foto: ${upErr.message}` };
+
+  const { data: pub } = supabase.storage.from("fotos-perfil").getPublicUrl(path);
+  const fotoPerfilUrl = `${pub.publicUrl}?v=${Date.now()}`;
+
+  const { error } = await supabase.from("profiles").update({ foto_perfil_url: fotoPerfilUrl }).eq("id", userId);
+  if (error) return { success: false, error: error.message };
+
+  await logAudit(supabase, profile, `Cambió la foto de perfil de "${nombre}"`);
+  revalidatePath("/configuracion/usuarios");
+  return { success: true, fotoPerfilUrl };
 }

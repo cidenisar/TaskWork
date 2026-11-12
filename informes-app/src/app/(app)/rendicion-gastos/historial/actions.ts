@@ -1,8 +1,10 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
-import { requireProfile } from "@/lib/auth";
+import { revalidatePath } from "next/cache";
+import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
+import { requireProfile, requireSuperusuario } from "@/lib/auth";
 import { filenameDesdeStoragePath } from "@/lib/pdf/filename";
+import { eliminarRegistroConArchivos, type EliminarResult } from "@/lib/admin/eliminar-registro";
 
 export interface UrlPdfResult {
   url: string | null;
@@ -32,4 +34,29 @@ export async function obtenerUrlPdfRendicionAction(rendicionId: string): Promise
     return { url: null, error: "No se pudo generar el link de descarga." };
   }
   return { url: signed.signedUrl, filename: filenameDesdeStoragePath(rendicion.pdf_url) };
+}
+
+/** Solo Administrador. Borra la rendición, sus gastos/técnicos (cascada por FK) y el PDF/comprobantes del storage. */
+export async function eliminarRendicionAction(rendicionId: string): Promise<EliminarResult> {
+  const profile = await requireSuperusuario();
+  const service = createServiceRoleClient();
+
+  const [{ data: rendicion }, { data: gastos }] = await Promise.all([
+    service.from("rendiciones_gastos").select("pdf_url, numero_generacion, motivo").eq("id", rendicionId).single(),
+    service.from("gastos").select("comprobante_url").eq("rendicion_id", rendicionId),
+  ]);
+
+  const resultado = await eliminarRegistroConArchivos(
+    service,
+    profile,
+    "rendiciones_gastos",
+    rendicionId,
+    [
+      { bucket: "informes-pdf", path: rendicion?.pdf_url ?? null },
+      ...(gastos ?? []).map((g) => ({ bucket: "comprobantes", path: g.comprobante_url })),
+    ],
+    `Eliminó la rendición de gastos ${rendicion?.numero_generacion ?? rendicionId}${rendicion?.motivo ? ` (${rendicion.motivo})` : ""}`,
+  );
+  if (resultado.success) revalidatePath("/", "layout");
+  return resultado;
 }

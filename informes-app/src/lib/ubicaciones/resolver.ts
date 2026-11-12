@@ -1,4 +1,4 @@
-import type { createClient } from "@/lib/supabase/server";
+import { createServiceRoleClient, type createClient } from "@/lib/supabase/server";
 
 export interface PayloadUbicacionNueva {
   provincia: string;
@@ -75,6 +75,15 @@ export async function resolverUbicacionId(
  * — es el "aprendizaje": la próxima vez que alguien esté cerca de ese
  * punto, la app ya va a reconocer el sitio solo. Nunca pisa coordenadas que
  * ya estaban guardadas.
+ *
+ * El UPDATE de `ubicaciones` es admin-only por RLS (a propósito: la edición
+ * libre de una Ubicación ya existente es cosa de Administrador). Este
+ * guardado de GPS NO es una edición libre — es un efecto secundario mecánico
+ * de una acción que el usuario ya tiene permiso de hacer (cargar un informe/
+ * relevamiento en esa Ubicación), así que usa el cliente de service-role acá
+ * mismo, igual criterio que `darDeBajaAction`/`entregarLoteADepositoAction`.
+ * Sin esto, la función queda rota en silencio para cualquier no-Admin (el
+ * 100% del uso real de campo).
  */
 export async function tagGpsSiFalta(
   supabase: Awaited<ReturnType<typeof createClient>>,
@@ -85,7 +94,8 @@ export async function tagGpsSiFalta(
   if (!gps) return;
   const { data: row } = await supabase.from("ubicaciones").select("lat").eq("id", ubicacionId).single();
   if (row && row.lat === null) {
-    await supabase
+    const service = createServiceRoleClient();
+    await service
       .from("ubicaciones")
       .update({
         lat: gps.lat,

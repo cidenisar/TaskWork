@@ -33,7 +33,6 @@ export function EditarInformeTecnicoWizard({
   initialTecnicos,
   initialVehiculos,
   catalogos,
-  logoUrl,
 }: {
   informeId: string;
   numeroGeneracion: string;
@@ -42,7 +41,6 @@ export function EditarInformeTecnicoWizard({
   initialTecnicos: Tecnico[];
   initialVehiculos: Vehiculo[];
   catalogos: CatalogosInforme;
-  logoUrl: string | null;
 }) {
   const router = useRouter();
   const [step, setStep] = useState(1);
@@ -116,12 +114,12 @@ export function EditarInformeTecnicoWizard({
   return (
     <div>
       <div className="hint" style={{ marginBottom: 12 }}>
-        Editando {numeroGeneracion} — las fotos ya cargadas ({cantidadFotos}) no se tocan acá; si hay que
-        cambiar una foto, hay que rehacer el informe.
+        Editando {numeroGeneracion} — las fotos ya cargadas ({cantidadFotos}) y los materiales/equipos (si los hay) no se tocan
+        acá; si hay que cambiarlos, hay que rehacer el informe.
       </div>
       <Stepper steps={STEPS} current={step} />
 
-      {step === 1 && <Step1General form={form} onChange={patchForm} catalogos={catalogos} logoUrl={logoUrl} />}
+      {step === 1 && <Step1General form={form} onChange={patchForm} catalogos={catalogos} />}
       {step === 2 && (
         <Step2Equipo
           tecnicos={tecnicos}
@@ -129,6 +127,7 @@ export function EditarInformeTecnicoWizard({
           vehiculos={vehiculos}
           setVehiculos={setVehiculos}
           catalogos={catalogos}
+          materialesProps={null}
         />
       )}
       {step === 3 && (

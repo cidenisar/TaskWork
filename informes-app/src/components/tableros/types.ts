@@ -1,7 +1,31 @@
-import type { TableroCategoriaEquipo, TableroEventoTipo, TableroTipo, TableroTipoCircuito } from "@/lib/database.types";
+import type {
+  TableroCategoriaEquipo,
+  TableroEventoTipo,
+  TableroJerarquia,
+  TableroRolBypassUps,
+  TableroTipo,
+  TableroTipoCircuito,
+} from "@/lib/database.types";
 
-/** Máximo de fotos que se pueden mandar juntas a la lectura con IA de un tablero (distintos ángulos/secciones del mismo gabinete). */
-export const TABLERO_FOTO_IA_MAX = 7;
+/**
+ * Máximo de fotos que se pueden mandar juntas a la lectura con IA de un
+ * tablero (distintos ángulos/secciones del mismo gabinete). Un tablero con
+ * varios cuerpos (ver campo `cuerpo` de `CircuitoItem`) necesita varias
+ * fotos por cuerpo para cubrirlo entero, no solo una del conjunto — mismo
+ * techo que Racks/Torres (`RACK_FOTO_IA_MAX`/`TORRE_FOTO_IA_MAX`), que ya
+ * tienen el mismo problema de "contenedor con varias secciones".
+ */
+export const TABLERO_FOTO_IA_MAX = 14;
+
+/** Máximo de fotos generales que se guardan como evidencia de una visita (una por cuerpo, u otros ángulos de detalle). */
+export const TABLERO_FOTO_GENERAL_MAX = 4;
+
+export const TABLERO_JERARQUIA_OPCIONES: TableroJerarquia[] = ["principal", "secundario"];
+
+export const TABLERO_JERARQUIA_LABEL: Record<TableroJerarquia, string> = {
+  principal: "Principal",
+  secundario: "Secundario",
+};
 
 export const TABLERO_TIPOS: TableroTipo[] = ["energia", "cctv", "control_acceso"];
 
@@ -61,6 +85,22 @@ export const CATEGORIA_EQUIPO_LABEL: Record<TableroCategoriaEquipo, string> = {
   otro: "Otro",
 };
 
+/**
+ * Subconjunto de categorías para el checklist de "equipamiento esperado"
+ * del tablero (se carga una vez al dar de alta, antes de las fotos) — deja
+ * afuera térmica/disyuntor/bornera/bornera_fusible (están en básicamente
+ * todos los tableros, no aportan como checklist) y cámara/lectora/
+ * cerradura (ya cubiertas por el subsistema CCTV/Control de Acceso).
+ */
+export const TABLERO_EQUIPO_ESPERADO_OPCIONES: TableroCategoriaEquipo[] = [
+  "fuente_industrial",
+  "ups_industrial",
+  "bateria",
+  "conversor_dc",
+  "descargador_gaseoso",
+  "inyector_poe",
+];
+
 export const TIPO_CIRCUITO_OPCIONES: TableroTipoCircuito[] = ["220v_mono", "380v_tri", "24vdc", "12vdc", "na"];
 
 export const TIPO_CIRCUITO_LABEL: Record<TableroTipoCircuito, string> = {
@@ -69,6 +109,22 @@ export const TIPO_CIRCUITO_LABEL: Record<TableroTipoCircuito, string> = {
   "24vdc": "24V DC",
   "12vdc": "12V DC",
   na: "No aplica",
+};
+
+/**
+ * Rol en el bypass manual de un UPS: las 3 térmicas con la misma
+ * denominación (entrada UPS, bypass, salida UPS) que permiten sacar el UPS
+ * de servicio sin cortar los equipos aguas abajo (se baja entrada+salida,
+ * se sube bypass). Solo tiene sentido en térmicas/disyuntores — no es lo
+ * mismo que `alimentadoPorUps` (que marca un circuito de carga, aguas abajo
+ * de la salida del UPS, como "circuito de UPS" en vez de "circuito normal").
+ */
+export const ROL_BYPASS_UPS_OPCIONES: TableroRolBypassUps[] = ["entrada", "bypass", "salida"];
+
+export const ROL_BYPASS_UPS_LABEL: Record<TableroRolBypassUps, string> = {
+  entrada: "Entrada UPS",
+  bypass: "Bypass",
+  salida: "Salida UPS",
 };
 
 /** Solo térmicas/disyuntores llevan corriente de carga medible por fase. */
@@ -129,6 +185,31 @@ export interface CircuitoItem {
   categoriaEquipo: TableroCategoriaEquipo;
   tipoCircuito: TableroTipoCircuito;
   /**
+   * Cuerpo físico del tablero (gabinete/puerta) al que pertenece este
+   * circuito — un tablero con varios cuerpos tiene contenido y fecha de
+   * visita distintos por cuerpo. Solo se puede cargar al dar de alta el
+   * circuito, igual criterio que el resto de los campos de alta.
+   */
+  cuerpo: string;
+  /**
+   * true = circuito de carga alimentado por la salida del UPS ("circuito de
+   * UPS"), en vez de un circuito normal (mains directo) — ver también
+   * `rolBypassUps` para las térmicas del bypass del UPS en sí.
+   */
+  alimentadoPorUps: boolean;
+  /** Solo para las 3 térmicas del bypass manual de un UPS — ver ROL_BYPASS_UPS_LABEL. */
+  rolBypassUps: TableroRolBypassUps | null;
+  /**
+   * N° de OTRO circuito de este mismo tablero del que "cuelga" este (ej. un
+   * disyuntor diferencial que va pegado debajo de su térmica, en la misma
+   * columna del plano) — null si este circuito es la cabeza de su propia
+   * columna. Se guarda por N° (no por id) porque en el form un circuito
+   * nuevo todavía no tiene id hasta guardar la medición completa.
+   */
+  padreNumero: number | null;
+  /** Número/código de cable tal como lo usa el técnico en sus propios planos (ej. "A80") — texto libre, nunca autogenerado. */
+  etiquetaCable: string;
+  /**
    * Solo transitorio en el form (no se persiste): true cuando lo cargó la
    * lectura de foto con IA sin encontrar una etiqueta legible, así el
    * técnico sabe que el texto es una descripción visual y conviene
@@ -144,6 +225,12 @@ export interface TableroConCircuitos {
   ubicacionId: string;
   ubicacionLabel: string;
   circuitos: CircuitoItem[];
+  jerarquia?: TableroJerarquia | null;
+  tableroPadreId?: string | null;
+  /** Equipamiento especial que se sabe que tiene este tablero — ver TABLERO_EQUIPO_ESPERADO_OPCIONES. */
+  equipamientoEsperado: TableroCategoriaEquipo[];
+  /** true si el tablero tiene bypass manual de UPS (entrada/bypass/salida). */
+  tieneBypassUps: boolean;
 }
 
 export interface MantenimientoRow {
@@ -197,3 +284,7 @@ export function calcularResumenEquipamiento(
     .sort((a, b) => b.cantidad - a.cantidad);
   return { total: items.length, circuitos220vMono, circuitos380vTri, porCategoria };
 }
+
+// Inspección IA (hallazgos evaluados contra el catálogo configurable del
+// módulo, más allá de los circuitos) vive en src/lib/inspeccion-ia/types.ts
+// — es compartida por los 4 módulos que usan identificación con IA.

@@ -4,6 +4,8 @@ import { requireProfile } from "@/lib/auth";
 import { puedeVerEstadisticas } from "@/lib/types";
 import { createClient } from "@/lib/supabase/server";
 import { ESTADISTICAS_TOOLS, ejecutarHerramienta } from "@/lib/estadisticas/tools";
+import { registrarUsoIa } from "@/lib/ai/registrar-uso";
+import { verificarLimiteIa } from "@/lib/ai/rate-limit";
 
 const SYSTEM_PROMPT =
   "Sos un asistente que responde preguntas sobre informes técnicos y rendiciones de gastos de un equipo de " +
@@ -33,18 +35,35 @@ export async function POST(request: Request) {
   }
 
   const supabase = await createClient();
+
+  const limite = await verificarLimiteIa(supabase, profile.id);
+  if (!limite.permitido) {
+    return NextResponse.json({ error: limite.error }, { status: 429 });
+  }
+
   const client = new Anthropic();
-  const messages: Anthropic.MessageParam[] = [{ role: "user", content: pregunta }];
+  const messages: Anthropic.Beta.BetaMessageParam[] = [{ role: "user", content: pregunta }];
 
   try {
     for (let turn = 0; turn < MAX_TURNS; turn++) {
-      const response = await client.messages.create({
-        model: "claude-opus-5",
+      const response = await client.beta.messages.create({
+        model: "claude-opus-5-5",
+        betas: ["server-side-fallback-2026-07-01"],
+        fallbacks: "default",
         max_tokens: 1024,
         output_config: { effort: "low" },
         system: SYSTEM_PROMPT,
         tools: ESTADISTICAS_TOOLS,
         messages,
+      });
+
+      await registrarUsoIa(supabase, {
+        endpoint: "estadisticas/asistente",
+        modulo: "estadisticas",
+        modelo: response.model,
+        inputTokens: response.usage.input_tokens,
+        outputTokens: response.usage.output_tokens,
+        userId: profile.id,
       });
 
       if (response.stop_reason === "refusal") {
@@ -57,7 +76,7 @@ export async function POST(request: Request) {
       }
 
       messages.push({ role: "assistant", content: response.content });
-      const toolResults: Anthropic.ToolResultBlockParam[] = [];
+      const toolResults: Anthropic.Beta.BetaToolResultBlockParam[] = [];
       for (const block of response.content) {
         if (block.type === "tool_use") {
           const result = await ejecutarHerramienta(supabase, block.name, block.input as Record<string, unknown>);

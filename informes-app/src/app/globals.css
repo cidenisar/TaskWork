@@ -2,5 +2,5 @@
 @import "./wireframe-ui.css";
 
 @theme inline {
-  --font-sans: var(--font-inter);
+  --font-sans: var(--font-app);
 }

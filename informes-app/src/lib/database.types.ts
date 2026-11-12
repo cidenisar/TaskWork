@@ -5,7 +5,7 @@
  * (conservar los tipos de dominio de src/lib/types.ts, que son los que usa la UI).
  */
 
-export type Rol = "tecnico" | "supervisor" | "admin";
+export type Rol = "tecnico" | "supervisor" | "admin" | "superusuario";
 export type EstadoInforme = "borrador" | "generado";
 export type EstadoRendicion = "abierta" | "cerrada";
 export type Moneda = "ARS" | "USD";
@@ -28,6 +28,7 @@ export type TableroCategoriaEquipo =
   | "cerradura"
   | "otro";
 export type TableroTipoCircuito = "220v_mono" | "380v_tri" | "24vdc" | "12vdc" | "na";
+export type TableroRolBypassUps = "entrada" | "bypass" | "salida";
 export type RackCategoriaEquipo =
   | "router"
   | "switch"
@@ -43,15 +44,46 @@ export type RackCategoriaEquipo =
   | "multiplexor"
   | "pdu_regleta"
   | "otro";
+export type TorreComunicacionCategoriaEquipo =
+  | "antena"
+  | "radioenlace"
+  | "antena_celular"
+  | "baliza"
+  | "pararrayos"
+  | "cableado_feeder"
+  | "otro";
 export type EquipoCategoria =
   | "ups"
   | "banco_baterias"
+  | "grupo_electrogeno"
   | "camara_cctv"
   | "control_acceso"
   | "impresora"
   | "telefonia"
   | "climatizacion"
+  | "fuente"
+  | "switch"
   | "otro";
+export type EstadoEquipamiento = "activo" | "baja" | "en_deposito";
+export type OrigenEntregaDeposito = "equipo_existente" | "material_libre";
+export type CondicionMaterial = "nuevo" | "usado_funcional";
+export type MotivoEntregaDeposito = "sobrante_obra" | "reemplazo_funcional" | "retorno_mantenimiento" | "otro";
+export type MotivoBaja = "rotura" | "ampliacion" | "obsolescencia" | "reemplazo" | "otro";
+export type TipoEquipoBaja = "tablero_circuito" | "rack_equipamiento" | "equipo_individual";
+/**
+ * Tipo propio del Plan de Mantenimiento — separado de `TipoEquipoBaja` a
+ * propósito: una Sala no se "da de baja" ni se "entrega a depósito" como
+ * una pieza suelta (eso es Bajas de Equipamiento/Entregas a Depósito, que
+ * siguen usando solo `TipoEquipoBaja`), pero sí necesita entrar al Plan de
+ * Mantenimiento igual que Racks y Equipos Individuales.
+ */
+export type TipoEquipoMantenimiento = "rack_equipamiento" | "equipo_individual" | "sala";
+export type SalaTipoConstruccion = "sala_interior" | "shelter" | "container" | "otro";
+/** Dónde está instalada una cámara/domo (Equipos Individuales) — determina junto con la altura qué recurso hace falta para el mantenimiento. */
+export type TipoMontajeCamara = "torre" | "columna" | "poste" | "pared" | "techo" | "otro";
+/** Nombre libre tomado de catalogo_tipos_recurso_altura — ya no es un enum fijo, un Admin puede agregar uno nuevo (ej. "Andamóvil"). */
+export type RecursoAlturaMantenimiento = string;
+export type TableroJerarquia = "principal" | "secundario";
 
 /** Helper para darle a cada tabla la forma que espera postgrest-js (incluye Relationships). */
 type Tbl<
@@ -134,6 +166,15 @@ export type CatalogoVehiculoRow = {
   foto_tarjeta_verde_url: string | null;
   vencimiento_rto: string | null;
   foto_rto_url: string | null;
+  /** Mismo criterio que vencimiento_tarjeta_verde/vencimiento_rto, pero actualizados desde el control periódico del técnico (sin foto). */
+  vencimiento_matafuego: string | null;
+  vencimiento_botiquin: string | null;
+  /** Estado general (rayones/roturas) relevado con fotos al dar de alta el vehículo — null si se cargó por el alta manual o nunca se completó. */
+  estado_alta: string | null;
+  tiene_danios_alta: boolean | null;
+  /** Galería completa de fotos del alta (todas las que se mandaron a leer con IA, no solo una representativa). */
+  fotos_exterior_urls: string[] | null;
+  fotos_interior_urls: string[] | null;
   created_at: string;
   updated_at: string;
 }
@@ -145,8 +186,62 @@ export type VehiculoServiceRow = {
   kilometraje: number;
   foto_url: string | null;
   descripcion: string | null;
+  numero_generacion: string | null;
+  pdf_url: string | null;
+  pdf_generado_at: string | null;
+  /** Galería de fotos del exterior tomadas EN este control — pasa a ser la referencia ("baseline") contra la que se compara el próximo control (ver comparar-estado). */
+  fotos_exterior_urls: string[] | null;
+  /** Fotos del interior — solo las carga el control del técnico desde el celu (el control admin del Panel nunca pidió interior). */
+  fotos_interior_urls: string[] | null;
+  estado_general: string | null;
+  tiene_danios: boolean | null;
+  /** Lo que la IA detectó de nuevo/distinto respecto del control anterior (o del alta, si es el primer control) — null si no hay nada nuevo o no hay referencia contra qué comparar. */
+  inconsistencias_detectadas: string | null;
   created_by: string | null;
   created_at: string;
+}
+
+export type NivelRiesgoViaje = "bajo" | "medio" | "alto";
+export type EstadoViaje = "pendiente" | "iniciado" | "en_punto_medio" | "finalizado";
+
+export type EvaluacionRiesgoViajeRow = {
+  id: string;
+  numero_generacion: string;
+  vehiculo_id: string;
+  conductor_nombre: string;
+  empresa: string;
+  fecha_hora: string;
+  origen: string;
+  destino: string;
+  /** Sugerido (no obligatorio) cuando el criterio de distancia es "Mayor 300 Km". */
+  punto_medio: string | null;
+  criterio_a_distancia: number;
+  criterio_b_tiempo_viaje: number;
+  criterio_c_clima: number;
+  criterio_d_tipo_ruta: number;
+  criterio_e_conocimiento: number;
+  criterio_f_comunicacion: number;
+  criterio_g_personas_vehiculo: number;
+  criterio_h_horas_trabajadas: number;
+  total: number;
+  nivel_riesgo: NivelRiesgoViaje;
+  mensaje_riesgo: string;
+  /** Pronóstico real (texto legible) del destino para la fecha del viaje — el dato de origen detrás del valor de punto del criterio C. */
+  clima_descripcion: string | null;
+  estado_viaje: EstadoViaje;
+  iniciado_at: string | null;
+  punto_medio_at: string | null;
+  finalizado_at: string | null;
+  pdf_url: string | null;
+  pdf_generado_at: string | null;
+  created_by: string;
+  created_at: string;
+}
+
+export type EvaluacionRiesgoViajeAcompananteRow = {
+  id: string;
+  evaluacion_id: string;
+  nombre_completo: string;
 }
 
 export type InformeTecnicoRow = {
@@ -169,6 +264,9 @@ export type InformeTecnicoRow = {
   created_by: string;
   created_at: string;
   estado: EstadoInforme;
+  remito_fotos_urls: string[] | null;
+  remito_numero: string | null;
+  entrega_deposito_numero_generacion: string | null;
 }
 
 export type InformeTecnicoAsignadoRow = {
@@ -239,10 +337,20 @@ export type ConfigEmailEnvioRow = {
 export type ConfigGeneralRow = {
   id: number;
   logo_empresa_url: string | null;
+  /** Nombre de la empresa contratista (ej. "SONDA") — se usa, entre otros lugares, en el rótulo del esquema unifilar de Tableros. */
+  nombre_empresa: string;
   auto_enviar_email: boolean;
   umbral_aviso_historial: UmbralAviso;
   recordatorio_semanal_archivo: boolean;
   resumen_semanal_ia: boolean;
+  liberacion_automatica_activa: boolean;
+  /** Supuestos para estimar cuántos técnicos hacen falta para cumplir el Plan de Mantenimiento (ver lib/panel/mantenimiento-dotacion.ts). */
+  pdm_horas_por_dia: number;
+  pdm_dias_habiles_anio: number;
+  pdm_horas_por_visita: number;
+  pdm_velocidad_kmh: number;
+  /** Cada cuántos días le toca un control periódico a un vehículo (ver lib/config/fleet-alerts.ts) — fijo para toda la flota, no por vehículo. */
+  vehiculo_control_frecuencia_dias: number;
 }
 
 export type AuditLogRow = {
@@ -258,7 +366,17 @@ export type TableroRow = {
   id: string;
   subsistemas: TableroTipo[];
   denominacion: string;
+  /** Cliente del tablero (ej. "YPF") — mismo catálogo compartido que Informe Técnico (catalogo_clientes), alta al vuelo. Se usa en el rótulo del esquema unifilar. */
+  cliente: string;
   ubicacion_id: string;
+  /** Principal/Secundario — null = sin clasificar. Base para sumar cargas de secundarios hacia su principal más adelante. */
+  jerarquia: TableroJerarquia | null;
+  /** El tablero del que "cuelga" este (puede ser un principal u OTRO secundario — una cadena). Solo tiene sentido cuando jerarquia='secundario'. */
+  tablero_padre_id: string | null;
+  /** Equipamiento especial que se sabe que tiene este tablero (fuente, UPS, conversor DC, etc.) — se carga una vez al dar de alta, no por visita. */
+  equipamiento_esperado: TableroCategoriaEquipo[];
+  /** true si el tablero tiene un bypass manual de UPS (3 térmicas: entrada/bypass/salida) — ver TableroRolBypassUps. */
+  tiene_bypass_ups: boolean;
   created_by: string | null;
   created_at: string;
 }
@@ -272,6 +390,12 @@ export type TableroCircuitoRow = {
   categoria_equipo: TableroCategoriaEquipo;
   tipo_circuito: TableroTipoCircuito;
   orden: number;
+  estado: EstadoEquipamiento;
+  cuerpo: string | null;
+  alimentado_por_ups: boolean;
+  rol_bypass_ups: TableroRolBypassUps | null;
+  circuito_padre_id: string | null;
+  etiqueta_cable: string | null;
   created_at: string;
 }
 
@@ -285,6 +409,23 @@ export type TableroMedicionRow = {
   pdf_url: string | null;
   pdf_generado_at: string | null;
   foto_general_url: string | null;
+  fotos_generales_urls: string[] | null;
+  dxf_url: string | null;
+  /** PDF A3 del unifilar generado por motor-unifilares — aparte de dxf_url (mismo generador) y pdf_url (informe de relevamiento normal). */
+  unifilar_pdf_url: string | null;
+  /** Estado de la generación asincrónica del unifilar (null = nunca se pidió) — ver unifilar-actions.ts y motor-unifilares/README.md. */
+  unifilar_estado: "pendiente" | "generando" | "listo" | "error" | null;
+  unifilar_error: string | null;
+  created_at: string;
+}
+
+/** Archivo suelto adjuntado a un tablero (un unifilar propio, un PDF, una foto del gabinete) — aparte del unifilar en vivo y el DXF que ya genera "Nueva Medición". */
+export type TableroAdjuntoRow = {
+  id: string;
+  tablero_id: string;
+  nombre: string;
+  archivo_url: string;
+  created_by: string | null;
   created_at: string;
 }
 
@@ -296,6 +437,9 @@ export type TableroMantenimientoRow = {
   descripcion: string;
   foto_url: string | null;
   proximo_mantenimiento: string | null;
+  numero_generacion: string | null;
+  pdf_url: string | null;
+  pdf_generado_at: string | null;
   created_by: string;
   created_at: string;
 }
@@ -312,9 +456,42 @@ export type TableroMedicionLecturaRow = {
   comentario: string | null;
 }
 
+/** Qué módulo de relevamiento con IA tiene cargado este ítem/resultado de Inspección IA (ver ModuloInspeccionIa). */
+export type ModuloInspeccionIa = "tableros" | "racks" | "equipos" | "torres" | "vehiculos" | "informe_tecnico";
+
+/** Catálogo admin-configurable de qué revisar en las fotos de un módulo, además de lo que esa IA ya identifica (ver EstadoChecklist). */
+export type CatalogoInspeccionIaRow = {
+  id: string;
+  modulo: ModuloInspeccionIa;
+  orden: number;
+  texto: string;
+  created_by: string | null;
+  created_at: string;
+}
+
+/** Catálogo admin-configurable de instrucciones extra para la lectura de tickets/comprobantes con IA en Rendición de Gastos (ver leer-tickets). */
+export type CatalogoLecturaGastosIaRow = {
+  id: string;
+  orden: number;
+  texto: string;
+  created_by: string | null;
+  created_at: string;
+}
+
+export type InspeccionIaHallazgoRow = {
+  id: string;
+  modulo: ModuloInspeccionIa;
+  registro_id: string;
+  item_id: string;
+  estado: EstadoChecklist;
+  comentario: string | null;
+}
+
 export type RackRow = {
   id: string;
   denominacion: string;
+  /** Etiqueta/chapa de inventario de YPF del rack en sí (para ServiceNow) — distinta de la denominación. */
+  etiqueta_ypf: string | null;
   ubicacion_id: string;
   created_by: string | null;
   created_at: string;
@@ -347,6 +524,19 @@ export type RackEquipamientoRow = {
   marca_modelo: string | null;
   posicion_u: string | null;
   cantidad: number;
+  /** @deprecated reemplazada por consumo_promedio_w/consumo_max_w (20261005050000) */
+  consumo_estimado_w: number | null;
+  consumo_promedio_w: number | null;
+  consumo_max_w: number | null;
+  etiqueta_ypf: string | null;
+  /** N° de serie de fábrica, distinto de etiqueta_ypf (chapa de inventario de YPF). */
+  numero_serie: string | null;
+  /** Puertos/bocas libres del equipo — manual, se completa al dar de alta. */
+  bocas_disponibles: number | null;
+  estado: EstadoEquipamiento;
+  /** Referencia "blanda" (sin FK, igual criterio que bajas_equipamiento.equipo_id): el equipo que este reemplaza, en la tabla que indique reemplaza_tipo. */
+  reemplaza_equipo_id: string | null;
+  reemplaza_tipo: TipoEquipoBaja | null;
   created_at: string;
 }
 
@@ -358,7 +548,7 @@ export type RackRelevamientoRow = {
   created_by: string;
   pdf_url: string | null;
   pdf_generado_at: string | null;
-  foto_general_url: string | null;
+  fotos_generales_urls: string[] | null;
   created_at: string;
 }
 
@@ -370,6 +560,88 @@ export type RackRelevamientoLecturaRow = {
   comentario: string | null;
 }
 
+export type TorreTipo = "autosoportada" | "arriostrada" | "monopole" | "otro";
+
+export type TorreComunicacionRow = {
+  id: string;
+  denominacion: string;
+  /** Clasificación visual de la torre, para estimar altura por tramos — null si no se estimó. */
+  tipo_torre: TorreTipo | null;
+  /** Tramos (secciones modulares) contados en las fotos del relevamiento — null si no se estimó/no es confiable. */
+  tramos_contados: number | null;
+  /** tramos_contados × largo de tramo (torre_tipo_largos) — ESTIMADA, nunca una medición real; editable por el técnico. */
+  altura_estimada_m: number | null;
+  ubicacion_id: string;
+  created_by: string | null;
+  created_at: string;
+}
+
+/** Largo de tramo (m) estándar configurado por un Admin para cada tipo de torre — "otro" no aplica, no tiene largo estándar. */
+export type TorreTipoLargoRow = {
+  id: string;
+  tipo_torre: TorreTipo;
+  largo_tramo_m: number;
+  updated_by: string | null;
+  updated_at: string;
+}
+
+export type TorreComunicacionEquipamientoRow = {
+  id: string;
+  torre_id: string;
+  numero: number;
+  categoria_equipo: TorreComunicacionCategoriaEquipo;
+  texto: string;
+  marca_modelo: string | null;
+  /** Altura en la torre, texto libre (ej. "24m") — no siempre se puede medir con precisión en el momento. */
+  altura_m: string | null;
+  etiqueta_ypf: string | null;
+  cantidad: number;
+  consumo_promedio_w: number | null;
+  consumo_max_w: number | null;
+  estado: EstadoEquipamiento;
+  created_at: string;
+}
+
+export type TorreComunicacionRelevamientoRow = {
+  id: string;
+  torre_id: string;
+  numero_generacion: string;
+  fecha: string;
+  created_by: string;
+  pdf_url: string | null;
+  pdf_generado_at: string | null;
+  fotos_generales_urls: string[] | null;
+  created_at: string;
+}
+
+export type TorreComunicacionRelevamientoLecturaRow = {
+  id: string;
+  relevamiento_id: string;
+  equipamiento_id: string;
+  estado: string | null;
+  comentario: string | null;
+}
+
+/**
+ * Sala/shelter/container — el ambiente físico, no el equipamiento que
+ * alberga. Alta única (sin tabla de relevamientos repetidos): las visitas
+ * siguientes quedan en el Plan de Mantenimiento genérico (ver
+ * MantenimientoEquipamientoRow con tipo_equipo='sala').
+ */
+export type SalaRow = {
+  id: string;
+  ubicacion_id: string;
+  denominacion: string;
+  tipo_construccion: SalaTipoConstruccion;
+  estado: "activo" | "baja";
+  numero_generacion: string;
+  fotos_generales_urls: string[] | null;
+  pdf_url: string | null;
+  pdf_generado_at: string | null;
+  created_by: string;
+  created_at: string;
+}
+
 export type EquipoRow = {
   id: string;
   ubicacion_id: string;
@@ -378,8 +650,57 @@ export type EquipoRow = {
   marca_modelo: string | null;
   numero_serie: string | null;
   cantidad: number;
+  /** @deprecated reemplazada por consumo_promedio_w/consumo_max_w (20261005050000) */
+  consumo_estimado_w: number | null;
+  consumo_promedio_w: number | null;
+  consumo_max_w: number | null;
+  etiqueta_ypf: string | null;
+  estado: EstadoEquipamiento;
+  /** Solo tiene sentido en categoria_equipo='camara_cctv' — en el resto queda null. */
+  tipo_montaje: TipoMontajeCamara | null;
+  altura_montaje_m: number | null;
+  /** Referencia "blanda" (sin FK, igual criterio que bajas_equipamiento.equipo_id): el equipo que este reemplaza, en la tabla que indique reemplaza_tipo. */
+  reemplaza_equipo_id: string | null;
+  reemplaza_tipo: TipoEquipoBaja | null;
+  /** null = dado de alta y todavía sin informe (pendiente) — ver CRITERIOS_Y_IDEAS.md sobre el alta de materiales. */
+  informe_instalacion_id: string | null;
+  fecha_alta: string | null;
   created_by: string | null;
   created_at: string;
+}
+
+/** Qué recurso hace falta para el mantenimiento según el tipo de montaje y la altura real — admin-configurable, nunca inventado por IA. */
+export type CatalogoRecursoAlturaRow = {
+  id: string;
+  tipo_montaje: TipoMontajeCamara;
+  recurso_fijo: RecursoAlturaMantenimiento | null;
+  updated_by: string | null;
+  updated_at: string;
+}
+
+/** Catálogo abierto de nombres de recurso (Escalera, Andamio/Manlift, Grupo de altura, Andamóvil, ...) — SimpleCatalogTab (id, nombre). */
+export type CatalogoTipoRecursoAlturaRow = {
+  id: string;
+  nombre: string;
+  created_at: string;
+}
+
+/** Banda "hasta tantos metros, tal recurso" por tipo de montaje — mismo criterio que catalogo_calibre_cable. */
+export type CatalogoRecursoAlturaBandaRow = {
+  id: string;
+  tipo_montaje: TipoMontajeCamara;
+  altura_hasta_m: number;
+  recurso: string;
+  created_by: string | null;
+  created_at: string;
+}
+
+export type CatalogoCalibreCableRow = {
+  id: string;
+  amperaje_max: number;
+  calibre_mm2: number;
+  updated_by: string | null;
+  updated_at: string;
 }
 
 export type EquipoRelevamientoRow = {
@@ -402,6 +723,216 @@ export type EquipoRelevamientoLecturaRow = {
   comentario: string | null;
 }
 
+export type BajaEquipamientoRow = {
+  id: string;
+  numero_generacion: string;
+  tipo_equipo: TipoEquipoBaja;
+  equipo_id: string;
+  equipo_texto: string;
+  equipo_categoria: string;
+  equipo_marca_modelo: string | null;
+  equipo_numero_serie: string | null;
+  equipo_etiqueta_ypf: string | null;
+  ubicacion_id: string;
+  motivo: MotivoBaja;
+  comentario: string | null;
+  fecha: string;
+  created_by: string;
+  pdf_url: string | null;
+  pdf_generado_at: string | null;
+  /** Confirmación de que el equipo ya llegó físicamente al depósito — distinta de la baja en sí, puede pasar días/semanas después. */
+  entregado_deposito_at: string | null;
+  entregado_deposito_por: string | null;
+  created_at: string;
+}
+
+export type EntregaDepositoRow = {
+  id: string;
+  numero_generacion: string;
+  origen: OrigenEntregaDeposito;
+  tipo_equipo: TipoEquipoBaja | null;
+  equipo_id: string | null;
+  descripcion: string;
+  categoria: string | null;
+  marca_modelo: string | null;
+  numero_serie: string | null;
+  etiqueta_ypf: string | null;
+  cantidad: number;
+  condicion: CondicionMaterial;
+  motivo: MotivoEntregaDeposito;
+  comentario: string | null;
+  ubicacion_id: string;
+  fecha: string;
+  created_by: string;
+  pdf_url: string | null;
+  pdf_generado_at: string | null;
+  fotos_evidencia_urls: string[] | null;
+  created_at: string;
+}
+
+/**
+ * Tabla huérfana: resto del viejo módulo standalone "Instalación", plegado
+ * después dentro de Informe Técnico (ver CRITERIOS_Y_IDEAS.md, sección 5).
+ * El código ya no escribe ni lee acá — se tipa solo para que "Vaciar datos
+ * de prueba" pueda borrar lo que haya quedado cargado de aquella época.
+ */
+export type InstalacionRow = {
+  id: string;
+  numero_generacion: string;
+  ubicacion_id: string;
+  fecha: string;
+  descripcion: string;
+  categoria: string | null;
+  marca_modelo: string | null;
+  numero_serie: string | null;
+  etiqueta_ypf: string | null;
+  cantidad: number;
+  comentario: string | null;
+  remito_foto_url: string | null;
+  remito_numero: string | null;
+  entrega_deposito_numero_generacion: string | null;
+  created_by: string;
+  pdf_url: string | null;
+  pdf_generado_at: string | null;
+  created_at: string;
+}
+
+/** Consumo real de tokens de una llamada a la IA — ver Configuración → Uso de IA. */
+export type IaUsoRow = {
+  id: string;
+  endpoint: string;
+  modulo: string;
+  modelo: string;
+  input_tokens: number;
+  output_tokens: number;
+  costo_estimado_usd: number;
+  created_by: string;
+  created_at: string;
+}
+
+/** Una lectura "detallada" de tablero con IA (ENCARGO.md lectura-fotos) — fotos + JSON crudo + revisado + costo, ver tableros/lecturas-ia. */
+export type TableroLecturaIaRow = {
+  id: string;
+  tablero_id: string | null;
+  medicion_id: string | null;
+  fotos_urls: string[];
+  modelo: string;
+  input_tokens: number;
+  output_tokens: number;
+  costo_estimado_usd: number;
+  json_crudo: Record<string, unknown>;
+  circuitos_adaptados: unknown[];
+  circuitos_revisados: unknown[] | null;
+  porcentaje_acierto: number | null;
+  created_by: string;
+  revisor_id: string | null;
+  created_at: string;
+}
+
+export type MantenimientoIntervaloRow = {
+  id: string;
+  tipo_equipo: TipoEquipoMantenimiento;
+  /** Valor crudo del enum de categoría del tipo_equipo correspondiente (TableroCategoriaEquipo/RackCategoriaEquipo/EquipoCategoria). */
+  categoria: string;
+  frecuencia_dias: number;
+  created_by: string | null;
+  created_at: string;
+}
+
+export type MantenimientoEquipamientoRow = {
+  id: string;
+  tipo_equipo: TipoEquipoMantenimiento;
+  equipo_id: string;
+  fecha: string;
+  descripcion: string | null;
+  foto_url: string | null;
+  numero_generacion: string | null;
+  pdf_url: string | null;
+  pdf_generado_at: string | null;
+  created_by: string;
+  created_at: string;
+}
+
+/** Catálogo de ítems de checklist por (tipo_equipo, categoria) — admin-configurable. */
+export type MantenimientoChecklistItemRow = {
+  id: string;
+  tipo_equipo: TipoEquipoMantenimiento;
+  categoria: string;
+  orden: number;
+  texto: string;
+  created_by: string | null;
+  created_at: string;
+}
+
+export type EstadoChecklist = "ok" | "no_ok" | "no_aplica";
+
+/** Respuesta de un ítem de checklist, guardada junto al mantenimiento que la generó. */
+export type MantenimientoChecklistRespuestaRow = {
+  id: string;
+  mantenimiento_id: string;
+  item_id: string;
+  estado: EstadoChecklist;
+  observacion: string | null;
+}
+
+/** Programación manual de la próxima visita — pisa (para mostrar) la fecha calculada del intervalo cuando hace falta coordinar algo puntual. */
+export type OrigenProgramacion = "manual" | "auto";
+
+export type MotivoReprogramacionMantenimiento =
+  | "clima"
+  | "sitio_inaccesible"
+  | "falta_repuesto"
+  | "equipo_no_encontrado"
+  | "seguridad_sitio"
+  | "otro";
+
+export type MantenimientoProgramacionRow = {
+  id: string;
+  tipo_equipo: TipoEquipoMantenimiento;
+  equipo_id: string;
+  fecha_programada: string;
+  asignado_a: string | null;
+  nota: string | null;
+  /** Por qué se reprograma a mano (ej. el técnico llegó al sitio y no lo pudo hacer) — null si es solo una fecha anticipada o la generó el algoritmo. */
+  motivo: MotivoReprogramacionMantenimiento | null;
+  /** 'auto' = generada por el algoritmo (Configuración → Generar programación automática), nunca se pisa a mano; 'manual' = cargada por un técnico, el algoritmo nunca la toca. */
+  origen: OrigenProgramacion;
+  created_by: string;
+  created_at: string;
+}
+
+export type InformeMaterialRow = {
+  id: string;
+  informe_id: string;
+  categoria_equipo: EquipoCategoria;
+  descripcion: string;
+  marca_modelo: string | null;
+  numero_serie: string | null;
+  etiqueta_ypf: string | null;
+  cantidad: number;
+  consumo_promedio_w: number | null;
+  consumo_max_w: number | null;
+  comentario: string | null;
+  equipo_id: string | null;
+  /** Destino alternativo a equipo_id: cuando el material es un componente de un rack ya registrado, el alta va acá en vez de a `equipos`. */
+  rack_equipamiento_id: string | null;
+  /** Foto puntual que confirma la instalación, cargada cuando "Verificar instalación" no lo encontró en las fotos generales. */
+  foto_confirmacion_url: string | null;
+  created_at: string;
+}
+
+/** Trazabilidad de materiales a granel del remito (sin alta de equipo) — ver InformeMaterialRow/equipos para eso. */
+export type InformeRemitoItemRow = {
+  id: string;
+  informe_id: string;
+  descripcion: string;
+  cantidad_esperada: number;
+  cantidad_sobrante: number;
+  /** Foto puntual que confirma la instalación, cargada cuando "Verificar instalación" no lo encontró en las fotos generales. */
+  foto_confirmacion_url: string | null;
+  created_at: string;
+}
+
 export type ClientErrorRow = {
   id: string;
   user_id: string | null;
@@ -414,6 +945,215 @@ export type ClientErrorRow = {
   user_agent: string | null;
   created_at: string;
 }
+
+export type AreaGuardiaDb = "General" | "Infraestructura" | "Datos" | "Enlaces";
+
+export type GuardiaPersonaRow = {
+  usuario_id: string;
+  area: AreaGuardiaDb;
+  orden: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type GuardiaConfigRow = {
+  id: 1;
+  entrada_min: number;
+  salida_activacion_min: number;
+  madrugada_hasta_min: number;
+  tope_media_min: number;
+  valor_media: number;
+  valor_entera: number;
+  cambio_min: number;
+  periodo_desde: string;
+  periodo_hasta: string;
+  grupo_whatsapp_nombre: string;
+  updated_at: string;
+};
+
+export type GuardiaPersonaHistRow = {
+  id: string;
+  usuario_id: string;
+  area_antes: AreaGuardiaDb | null;
+  area_despues: AreaGuardiaDb | null;
+  quien: string | null;
+  cuando: string;
+};
+
+export type GuardiaConfigHistRow = {
+  id: string;
+  campo: string;
+  antes: string | null;
+  despues: string | null;
+  quien: string | null;
+  cuando: string;
+};
+
+export type OrigenFeriadoGuardia = "NACIONAL" | "MANUAL";
+
+export type GuardiaFeriadoRow = {
+  fecha: string;
+  nombre: string;
+  origen: OrigenFeriadoGuardia;
+  marcado_por: string | null;
+  marcado_at: string;
+};
+
+export type GuardiaFeriadoHistRow = {
+  id: string;
+  fecha: string;
+  accion: "marcado" | "desmarcado";
+  quien: string | null;
+  cuando: string;
+};
+
+export type TipoCierreGuardia = "semanal" | "global";
+
+export type GuardiaPeriodoCierreRow = {
+  id: string;
+  desde: string;
+  hasta: string;
+  cerrado_at: string;
+  cerrado_por: string;
+  parametros_json: unknown;
+  resultado_json: unknown;
+  tipo: TipoCierreGuardia;
+};
+
+export type GuardiaCronogramaHistRow = {
+  id: string;
+  semana_inicio: string;
+  area: AreaGuardiaDb;
+  antes: string | null;
+  despues: string | null;
+  motivo: string;
+  quien: string | null;
+  cuando: string;
+};
+
+export type GuardiaCronogramaSemanaRow = {
+  semana_inicio: string;
+  area: AreaGuardiaDb;
+  usuario_id: string | null;
+};
+
+export type EstadoCambioGuardiaDb = "pendiente" | "aceptado" | "rechazado" | "anulado";
+export type TipoCambioGuardia = "CUBRE" | "DEVUELVE";
+
+export type GuardiaAsuncionRow = {
+  semana_inicio: string;
+  area: AreaGuardiaDb;
+  usuario_id: string;
+  /** null = todavía no apretó "Asumo la guardia". */
+  asumio_at: string | null;
+};
+
+export type GuardiaCambioRow = {
+  id: string;
+  par_id: string;
+  tipo: TipoCambioGuardia;
+  area: AreaGuardiaDb;
+  persona_id: string;
+  original_id: string;
+  desde: string;
+  hasta: string;
+  motivo: string | null;
+  estado: EstadoCambioGuardiaDb;
+  registrado_por: string;
+  registrado_at: string;
+  respondido_at: string | null;
+};
+
+export type EstadoEventoGuardia = "abierto" | "cerrado";
+export type RolParticipacionGuardia = "GUARDIA_GENERAL" | "INFRAESTRUCTURA" | "DATOS" | "ENLACES";
+export type ModalidadParticipacionGuardia = "REMOTO" | "CAMPO";
+export type PedidoParticipacionGuardia = "REVISAR" | "ASISTIR";
+export type EstadoParticipacionGuardia = "en_curso" | "terminada" | "no_contesto";
+export type ScadaGuardia = "SIN_NOVEDAD" | "CON_NOVEDAD";
+/** Catálogo editable (`guardia_tipo_alarma`) — texto libre a propósito: un evento ya registrado no se rompe si más adelante se saca ese tipo del catálogo. */
+export type TipoAlarmaGuardia = string;
+export type TicketTipoGuardia = "Incidencia" | "Ticket" | "Tarea de cambio";
+
+export type GuardiaTipoAlarmaRow = {
+  id: string;
+  nombre: string;
+  activo: boolean;
+  creado_por: string | null;
+  creado_at: string;
+};
+
+export type GuardiaEventoRow = {
+  id: string;
+  numero: number;
+  estado: EstadoEventoGuardia;
+  origen: "LLAMADA" | "MAIL";
+  tipo_alarma: TipoAlarmaGuardia;
+  sitio: string;
+  descripcion: string;
+  ticket_tipo: TicketTipoGuardia;
+  ticket_numero: string | null;
+  scada: ScadaGuardia | null;
+  ubicacion_id: string | null;
+  creado_por: string;
+  creado_at: string;
+  cerrado_at: string | null;
+  version: number;
+};
+
+export type GuardiaParticipacionRow = {
+  id: string;
+  evento_id: string;
+  usuario_id: string;
+  rol: RolParticipacionGuardia;
+  modalidad: ModalidadParticipacionGuardia | null;
+  pedido: PedidoParticipacionGuardia | null;
+  inicio_at: string;
+  acepto_at: string | null;
+  fin_at: string | null;
+  estado: EstadoParticipacionGuardia;
+  idempotencia_key: string | null;
+  version: number;
+};
+
+export type GuardiaNovedadRow = {
+  id: string;
+  evento_id: string;
+  at: string;
+  texto: string;
+  /** null = la escribió el sistema, no una persona. */
+  por: string | null;
+  idempotencia_key: string | null;
+};
+
+export type PushSubscriptionRow = {
+  id: string;
+  usuario_id: string;
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+  user_agent: string | null;
+  created_at: string;
+};
+
+export type TipoNotificacionGuardia = "activacion" | "cambio_pendiente" | "cambio_respondido" | "asuncion_semanal" | "viaje_iniciado";
+export type EstadoNotificacionGuardia = "pendiente" | "enviada" | "entregada" | "leida" | "fallida";
+
+export type GuardiaNotificacionRow = {
+  id: string;
+  usuario_id: string;
+  tipo: TipoNotificacionGuardia;
+  ref_tipo: string;
+  ref_id: string;
+  canal: string;
+  payload: { title: string; body: string; url: string };
+  estado: EstadoNotificacionGuardia;
+  intentos: number;
+  error: string | null;
+  creada_at: string;
+  enviada_at: string | null;
+  entregada_at: string | null;
+  leida_at: string | null;
+};
 
 export interface Database {
   public: {
@@ -463,6 +1203,38 @@ export interface Database {
         Partial<VehiculoServiceRow> & Pick<VehiculoServiceRow, "vehiculo_id" | "fecha" | "kilometraje">,
         Partial<VehiculoServiceRow>
       >;
+      evaluaciones_riesgo_viaje: Tbl<
+        EvaluacionRiesgoViajeRow,
+        Partial<EvaluacionRiesgoViajeRow> &
+          Pick<
+            EvaluacionRiesgoViajeRow,
+            | "numero_generacion"
+            | "vehiculo_id"
+            | "conductor_nombre"
+            | "empresa"
+            | "fecha_hora"
+            | "origen"
+            | "destino"
+            | "criterio_a_distancia"
+            | "criterio_b_tiempo_viaje"
+            | "criterio_c_clima"
+            | "criterio_d_tipo_ruta"
+            | "criterio_e_conocimiento"
+            | "criterio_f_comunicacion"
+            | "criterio_g_personas_vehiculo"
+            | "criterio_h_horas_trabajadas"
+            | "total"
+            | "nivel_riesgo"
+            | "mensaje_riesgo"
+            | "created_by"
+          >,
+        Partial<EvaluacionRiesgoViajeRow>
+      >;
+      evaluaciones_riesgo_viaje_acompanantes: Tbl<
+        EvaluacionRiesgoViajeAcompananteRow,
+        Partial<EvaluacionRiesgoViajeAcompananteRow> & Pick<EvaluacionRiesgoViajeAcompananteRow, "evaluacion_id" | "nombre_completo">,
+        Partial<EvaluacionRiesgoViajeAcompananteRow>
+      >;
       informes_tecnicos: Tbl<
         InformeTecnicoRow,
         Partial<InformeTecnicoRow> &
@@ -483,6 +1255,16 @@ export interface Database {
         InformeImagenRow,
         Partial<InformeImagenRow> & Pick<InformeImagenRow, "informe_id" | "url" | "tomada_en" | "orden">,
         Partial<InformeImagenRow>
+      >;
+      informe_materiales: Tbl<
+        InformeMaterialRow,
+        Partial<InformeMaterialRow> & Pick<InformeMaterialRow, "informe_id" | "categoria_equipo" | "descripcion">,
+        Partial<InformeMaterialRow>
+      >;
+      informe_remito_items: Tbl<
+        InformeRemitoItemRow,
+        Partial<InformeRemitoItemRow> & Pick<InformeRemitoItemRow, "informe_id" | "descripcion">,
+        Partial<InformeRemitoItemRow>
       >;
       rendiciones_gastos: Tbl<
         RendicionGastosRow,
@@ -539,6 +1321,21 @@ export interface Database {
           Pick<TableroMantenimientoRow, "tablero_id" | "fecha" | "descripcion" | "created_by">,
         Partial<TableroMantenimientoRow>
       >;
+      catalogo_inspeccion_ia: Tbl<
+        CatalogoInspeccionIaRow,
+        Partial<CatalogoInspeccionIaRow> & Pick<CatalogoInspeccionIaRow, "modulo" | "texto">,
+        Partial<CatalogoInspeccionIaRow>
+      >;
+      catalogo_lectura_gastos_ia: Tbl<
+        CatalogoLecturaGastosIaRow,
+        Partial<CatalogoLecturaGastosIaRow> & Pick<CatalogoLecturaGastosIaRow, "texto">,
+        Partial<CatalogoLecturaGastosIaRow>
+      >;
+      inspeccion_ia_hallazgos: Tbl<
+        InspeccionIaHallazgoRow,
+        Partial<InspeccionIaHallazgoRow> & Pick<InspeccionIaHallazgoRow, "modulo" | "registro_id" | "item_id" | "estado">,
+        Partial<InspeccionIaHallazgoRow>
+      >;
       racks: Tbl<RackRow, Partial<RackRow> & Pick<RackRow, "denominacion" | "ubicacion_id">, Partial<RackRow>>;
       ubicaciones: Tbl<UbicacionRow, Partial<UbicacionRow> & Pick<UbicacionRow, "provincia" | "sitio">, Partial<UbicacionRow>>;
       rack_equipamientos: Tbl<
@@ -556,6 +1353,60 @@ export interface Database {
         Partial<RackRelevamientoLecturaRow> & Pick<RackRelevamientoLecturaRow, "relevamiento_id" | "equipamiento_id">,
         Partial<RackRelevamientoLecturaRow>
       >;
+      torres_comunicacion: Tbl<
+        TorreComunicacionRow,
+        Partial<TorreComunicacionRow> & Pick<TorreComunicacionRow, "denominacion" | "ubicacion_id">,
+        Partial<TorreComunicacionRow>
+      >;
+      torre_comunicacion_equipamientos: Tbl<
+        TorreComunicacionEquipamientoRow,
+        Partial<TorreComunicacionEquipamientoRow> &
+          Pick<TorreComunicacionEquipamientoRow, "torre_id" | "numero" | "categoria_equipo" | "texto">,
+        Partial<TorreComunicacionEquipamientoRow>
+      >;
+      torre_comunicacion_relevamientos: Tbl<
+        TorreComunicacionRelevamientoRow,
+        Partial<TorreComunicacionRelevamientoRow> &
+          Pick<TorreComunicacionRelevamientoRow, "torre_id" | "numero_generacion" | "fecha" | "created_by">,
+        Partial<TorreComunicacionRelevamientoRow>
+      >;
+      torre_comunicacion_relevamiento_lecturas: Tbl<
+        TorreComunicacionRelevamientoLecturaRow,
+        Partial<TorreComunicacionRelevamientoLecturaRow> &
+          Pick<TorreComunicacionRelevamientoLecturaRow, "relevamiento_id" | "equipamiento_id">,
+        Partial<TorreComunicacionRelevamientoLecturaRow>
+      >;
+      torre_tipo_largos: Tbl<TorreTipoLargoRow, Partial<TorreTipoLargoRow> & Pick<TorreTipoLargoRow, "tipo_torre" | "largo_tramo_m">, Partial<TorreTipoLargoRow>>;
+      salas: Tbl<
+        SalaRow,
+        Partial<SalaRow> & Pick<SalaRow, "ubicacion_id" | "denominacion" | "tipo_construccion" | "numero_generacion" | "created_by">,
+        Partial<SalaRow>
+      >;
+      tablero_adjuntos: Tbl<
+        TableroAdjuntoRow,
+        Partial<TableroAdjuntoRow> & Pick<TableroAdjuntoRow, "tablero_id" | "nombre" | "archivo_url">,
+        Partial<TableroAdjuntoRow>
+      >;
+      catalogo_recurso_altura: Tbl<
+        CatalogoRecursoAlturaRow,
+        Partial<CatalogoRecursoAlturaRow> & Pick<CatalogoRecursoAlturaRow, "tipo_montaje">,
+        Partial<CatalogoRecursoAlturaRow>
+      >;
+      catalogo_tipos_recurso_altura: Tbl<
+        CatalogoTipoRecursoAlturaRow,
+        Partial<CatalogoTipoRecursoAlturaRow> & Pick<CatalogoTipoRecursoAlturaRow, "nombre">,
+        Partial<CatalogoTipoRecursoAlturaRow>
+      >;
+      catalogo_recurso_altura_bandas: Tbl<
+        CatalogoRecursoAlturaBandaRow,
+        Partial<CatalogoRecursoAlturaBandaRow> & Pick<CatalogoRecursoAlturaBandaRow, "tipo_montaje" | "altura_hasta_m" | "recurso">,
+        Partial<CatalogoRecursoAlturaBandaRow>
+      >;
+      catalogo_calibre_cable: Tbl<
+        CatalogoCalibreCableRow,
+        Partial<CatalogoCalibreCableRow> & Pick<CatalogoCalibreCableRow, "amperaje_max" | "calibre_mm2">,
+        Partial<CatalogoCalibreCableRow>
+      >;
       equipos: Tbl<
         EquipoRow,
         Partial<EquipoRow> & Pick<EquipoRow, "ubicacion_id" | "categoria_equipo" | "texto">,
@@ -571,9 +1422,155 @@ export interface Database {
         Partial<EquipoRelevamientoLecturaRow> & Pick<EquipoRelevamientoLecturaRow, "relevamiento_id" | "equipo_id">,
         Partial<EquipoRelevamientoLecturaRow>
       >;
+      bajas_equipamiento: Tbl<
+        BajaEquipamientoRow,
+        Partial<BajaEquipamientoRow> &
+          Pick<BajaEquipamientoRow, "numero_generacion" | "tipo_equipo" | "equipo_id" | "equipo_texto" | "equipo_categoria" | "ubicacion_id" | "motivo" | "fecha" | "created_by">,
+        Partial<BajaEquipamientoRow>
+      >;
+      entregas_deposito: Tbl<
+        EntregaDepositoRow,
+        Partial<EntregaDepositoRow> &
+          Pick<EntregaDepositoRow, "numero_generacion" | "origen" | "descripcion" | "condicion" | "motivo" | "ubicacion_id" | "fecha" | "created_by">,
+        Partial<EntregaDepositoRow>
+      >;
+      instalaciones: Tbl<
+        InstalacionRow,
+        Partial<InstalacionRow> & Pick<InstalacionRow, "numero_generacion" | "ubicacion_id" | "fecha" | "descripcion" | "cantidad" | "created_by">,
+        Partial<InstalacionRow>
+      >;
+      ia_uso: Tbl<
+        IaUsoRow,
+        Partial<IaUsoRow> &
+          Pick<IaUsoRow, "endpoint" | "modulo" | "modelo" | "input_tokens" | "output_tokens" | "costo_estimado_usd" | "created_by">,
+        Partial<IaUsoRow>
+      >;
+      tablero_lecturas_ia: Tbl<
+        TableroLecturaIaRow,
+        Partial<TableroLecturaIaRow> &
+          Pick<TableroLecturaIaRow, "modelo" | "input_tokens" | "output_tokens" | "costo_estimado_usd" | "json_crudo" | "circuitos_adaptados" | "created_by">,
+        Partial<TableroLecturaIaRow>
+      >;
+      mantenimiento_intervalos: Tbl<
+        MantenimientoIntervaloRow,
+        Partial<MantenimientoIntervaloRow> & Pick<MantenimientoIntervaloRow, "tipo_equipo" | "categoria" | "frecuencia_dias">,
+        Partial<MantenimientoIntervaloRow>
+      >;
+      mantenimientos_equipamiento: Tbl<
+        MantenimientoEquipamientoRow,
+        Partial<MantenimientoEquipamientoRow> &
+          Pick<MantenimientoEquipamientoRow, "tipo_equipo" | "equipo_id" | "fecha" | "created_by">,
+        Partial<MantenimientoEquipamientoRow>
+      >;
+      mantenimiento_programaciones: Tbl<
+        MantenimientoProgramacionRow,
+        Partial<MantenimientoProgramacionRow> &
+          Pick<MantenimientoProgramacionRow, "tipo_equipo" | "equipo_id" | "fecha_programada" | "created_by">,
+        Partial<MantenimientoProgramacionRow>
+      >;
+      mantenimiento_checklist_items: Tbl<
+        MantenimientoChecklistItemRow,
+        Partial<MantenimientoChecklistItemRow> & Pick<MantenimientoChecklistItemRow, "tipo_equipo" | "categoria" | "texto">,
+        Partial<MantenimientoChecklistItemRow>
+      >;
+      mantenimiento_checklist_respuestas: Tbl<
+        MantenimientoChecklistRespuestaRow,
+        Partial<MantenimientoChecklistRespuestaRow> & Pick<MantenimientoChecklistRespuestaRow, "mantenimiento_id" | "item_id" | "estado">,
+        Partial<MantenimientoChecklistRespuestaRow>
+      >;
+      guardia_persona: Tbl<
+        GuardiaPersonaRow,
+        Partial<GuardiaPersonaRow> & Pick<GuardiaPersonaRow, "usuario_id" | "area">,
+        Partial<GuardiaPersonaRow>
+      >;
+      guardia_config: Tbl<GuardiaConfigRow, Partial<GuardiaConfigRow> & Pick<GuardiaConfigRow, "id">, Partial<GuardiaConfigRow>>;
+      guardia_persona_hist: Tbl<
+        GuardiaPersonaHistRow,
+        Partial<GuardiaPersonaHistRow> & Pick<GuardiaPersonaHistRow, "usuario_id">,
+        Partial<GuardiaPersonaHistRow>
+      >;
+      guardia_config_hist: Tbl<
+        GuardiaConfigHistRow,
+        Partial<GuardiaConfigHistRow> & Pick<GuardiaConfigHistRow, "campo">,
+        Partial<GuardiaConfigHistRow>
+      >;
+      guardia_feriado: Tbl<
+        GuardiaFeriadoRow,
+        Partial<GuardiaFeriadoRow> & Pick<GuardiaFeriadoRow, "fecha" | "nombre" | "origen">,
+        Partial<GuardiaFeriadoRow>
+      >;
+      guardia_periodo_cierre: Tbl<
+        GuardiaPeriodoCierreRow,
+        Partial<GuardiaPeriodoCierreRow> & Pick<GuardiaPeriodoCierreRow, "desde" | "hasta" | "cerrado_por" | "parametros_json" | "resultado_json">,
+        Partial<GuardiaPeriodoCierreRow>
+      >;
+      guardia_tipo_alarma: Tbl<GuardiaTipoAlarmaRow, Partial<GuardiaTipoAlarmaRow> & Pick<GuardiaTipoAlarmaRow, "nombre">, Partial<GuardiaTipoAlarmaRow>>;
+      guardia_feriado_hist: Tbl<
+        GuardiaFeriadoHistRow,
+        Partial<GuardiaFeriadoHistRow> & Pick<GuardiaFeriadoHistRow, "fecha" | "accion">,
+        Partial<GuardiaFeriadoHistRow>
+      >;
+      guardia_cronograma_hist: Tbl<
+        GuardiaCronogramaHistRow,
+        Partial<GuardiaCronogramaHistRow> & Pick<GuardiaCronogramaHistRow, "semana_inicio" | "area" | "motivo">,
+        Partial<GuardiaCronogramaHistRow>
+      >;
+      guardia_asuncion: Tbl<
+        GuardiaAsuncionRow,
+        Partial<GuardiaAsuncionRow> & Pick<GuardiaAsuncionRow, "semana_inicio" | "area" | "usuario_id">,
+        Partial<GuardiaAsuncionRow>
+      >;
+      guardia_cronograma_semana: Tbl<
+        GuardiaCronogramaSemanaRow,
+        Partial<GuardiaCronogramaSemanaRow> & Pick<GuardiaCronogramaSemanaRow, "semana_inicio" | "area">,
+        Partial<GuardiaCronogramaSemanaRow>
+      >;
+      guardia_cambio: Tbl<
+        GuardiaCambioRow,
+        Partial<GuardiaCambioRow> & Pick<GuardiaCambioRow, "tipo" | "area" | "persona_id" | "original_id" | "desde" | "hasta" | "registrado_por">,
+        Partial<GuardiaCambioRow>
+      >;
+      guardia_evento: Tbl<
+        GuardiaEventoRow,
+        Partial<GuardiaEventoRow> &
+          Pick<GuardiaEventoRow, "numero" | "tipo_alarma" | "sitio" | "descripcion" | "ticket_tipo" | "creado_por">,
+        Partial<GuardiaEventoRow>
+      >;
+      guardia_participacion: Tbl<
+        GuardiaParticipacionRow,
+        Partial<GuardiaParticipacionRow> & Pick<GuardiaParticipacionRow, "evento_id" | "usuario_id" | "rol" | "inicio_at">,
+        Partial<GuardiaParticipacionRow>
+      >;
+      guardia_novedad: Tbl<
+        GuardiaNovedadRow,
+        Partial<GuardiaNovedadRow> & Pick<GuardiaNovedadRow, "evento_id" | "texto">,
+        Partial<GuardiaNovedadRow>
+      >;
+      push_subscriptions: Tbl<
+        PushSubscriptionRow,
+        Partial<PushSubscriptionRow> & Pick<PushSubscriptionRow, "usuario_id" | "endpoint" | "p256dh" | "auth">,
+        Partial<PushSubscriptionRow>
+      >;
+      guardia_notificacion: Tbl<
+        GuardiaNotificacionRow,
+        Partial<GuardiaNotificacionRow> & Pick<GuardiaNotificacionRow, "usuario_id" | "tipo" | "ref_tipo" | "ref_id" | "payload">,
+        Partial<GuardiaNotificacionRow>
+      >;
     };
     Views: Record<string, never>;
-    Functions: Record<string, never>;
+    Functions: {
+      /** Única puerta de entrada para registrar una llamada — valida guardia general, numera y crea evento+participación+novedad en una sola transacción (ver la migración). */
+      guardia_crear_evento: {
+        Args: {
+          p_tipo_alarma: TipoAlarmaGuardia;
+          p_sitio: string;
+          p_descripcion: string;
+          p_ticket_tipo: TicketTipoGuardia;
+          p_ticket_numero: string | null;
+        };
+        Returns: GuardiaEventoRow;
+      };
+    };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;
   };

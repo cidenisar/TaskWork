@@ -13,6 +13,12 @@ const PATHS: Record<string, React.ReactNode> = {
       <path d="M8 11V7a4 4 0 0 1 8 0v4" />
     </>
   ),
+  calendar: (
+    <>
+      <rect x="4" y="5.5" width="16" height="14" rx="2" />
+      <path d="M4 10h16M8 3.5v3M16 3.5v3" />
+    </>
+  ),
   edit: (
     <>
       <path d="M4 20h4L18.5 9.5a1.5 1.5 0 0 0 0-2.12l-1.88-1.88a1.5 1.5 0 0 0-2.12 0L4 15v5Z" />
@@ -63,8 +69,17 @@ const PATHS: Record<string, React.ReactNode> = {
       <path d="m14.5 6.5 3-1 1 1-1 3-3 1-1-1Z" />
     </>
   ),
+  settings: (
+    <>
+      <path d="M4 7h10" />
+      <circle cx="17" cy="7" r="2" />
+      <path d="M20 17H10" />
+      <circle cx="7" cy="17" r="2" />
+    </>
+  ),
   check: <path d="m5 12.5 4.5 4.5L19.5 7" />,
   "chevron-right": <path d="m9 5 7 7-7 7" />,
+  "chevron-left": <path d="m15 5-7 7 7 7" />,
   x: (
     <>
       <path d="m6 6 12 12" />
@@ -187,6 +202,76 @@ const PATHS: Record<string, React.ReactNode> = {
   "arrow-left": <path d="M19 12H5m0 0 6-6m-6 6 6 6" />,
   "arrow-right": <path d="M5 12h14m0 0-6-6m6 6-6 6" />,
   plus: <path d="M12 5v14M5 12h14" />,
+  box: (
+    <>
+      <path d="M3 8 12 3l9 5-9 5-9-5Z" />
+      <path d="M3 8v8l9 5 9-5V8" />
+      <path d="M12 13v8" />
+    </>
+  ),
+  trash: (
+    <>
+      <path d="M5 7h14M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+      <path d="M7 7l1 13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1l1-13" />
+      <path d="M10 11v6M14 11v6" />
+    </>
+  ),
+  sun: (
+    <>
+      <circle cx="12" cy="12" r="4.2" />
+      <path d="M12 2.5v3M12 18.5v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2.5 12h3M18.5 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1" />
+    </>
+  ),
+  moon: <path d="M20 14.5A8.5 8.5 0 1 1 9.5 4 6.8 6.8 0 0 0 20 14.5Z" />,
+  users: (
+    <>
+      <circle cx="9" cy="8.5" r="3.2" />
+      <path d="M3 19.5c0-3.3 2.7-5.5 6-5.5s6 2.2 6 5.5" />
+      <path d="M16 9a3 3 0 1 0-1-5.8" />
+      <path d="M21 19.5c0-2.6-1.7-4.6-4-5.3" />
+    </>
+  ),
+  clock: (
+    <>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M12 7.5V12l3.2 2" />
+    </>
+  ),
+  home: (
+    <>
+      <path d="M5 10.5V20h14v-9.5" />
+      <path d="M3 12 12 4l9 8" />
+      <path d="M10 20v-5.5h4V20" />
+    </>
+  ),
+  shuffle: (
+    <>
+      <path d="M4 6h3.5l6 6 6-6H17" />
+      <path d="m17 3 3 3-3 3" />
+      <path d="M4 18h3.5l6-6" />
+      <path d="m17 21 3-3-3-3" />
+    </>
+  ),
+  help: (
+    <>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M9.5 9.3a2.5 2.5 0 1 1 3.8 2.1c-.7.45-1.3.9-1.3 1.8v.3" />
+      <circle cx="12" cy="17" r="0.6" fill="currentColor" stroke="none" />
+    </>
+  ),
+  user: (
+    <>
+      <circle cx="12" cy="8.5" r="3.5" />
+      <path d="M5 20.5c0-3.6 2.9-6 7-6s7 2.4 7 6" />
+    </>
+  ),
+  "log-out": (
+    <>
+      <path d="M9 4H6A1.5 1.5 0 0 0 4.5 5.5v13A1.5 1.5 0 0 0 6 20h3" />
+      <path d="m16 16 4-4-4-4" />
+      <path d="M20 12H9" />
+    </>
+  ),
 };
 
 export type IconName = keyof typeof PATHS;
@@ -203,6 +288,7 @@ export function Icon({ name, size = 16, style, className }: { name: IconName; si
       strokeLinecap="round"
       strokeLinejoin="round"
       className={className}
+      data-icon={name}
       style={{ display: "inline-block", verticalAlign: "-3px", flexShrink: 0, ...style }}
       aria-hidden="true"
     >
