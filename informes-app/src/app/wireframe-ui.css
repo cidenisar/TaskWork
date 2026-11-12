@@ -434,6 +434,22 @@ textarea {
   min-height: 90px;
 }
 
+/* Input numérico chico "de al lado" (ej. orden de rotación de guardia,
+   personas-guardia-card.tsx) — el padding/ancho de un input normal (arriba)
+   no deja lugar para el dígito junto a las flechitas nativas del navegador
+   en un campo tan angosto. Saca el padding grande y el spinner nativo, deja
+   solo flechitas discretas en navegadores que lo soportan (Chrome/Safari). */
+input[type='number'].input-chico {
+  width: 46px;
+  padding: 6px 4px;
+  text-align: center;
+  -moz-appearance: textfield;
+}
+input[type='number'].input-chico::-webkit-inner-spin-button,
+input[type='number'].input-chico::-webkit-outer-spin-button {
+  margin-left: 2px;
+}
+
 /* AutocompleteInput (src/components/ui/autocomplete-input.tsx) — reemplaza
    <input list="..."> + <datalist>, cuyo soporte nativo es demasiado
    disparejo entre navegadores/celulares para confiarle un campo importante. */

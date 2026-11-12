@@ -101,12 +101,13 @@ export function PersonasGuardiaCard({ personas: initial }: { personas: PersonaGu
                     {activa && (
                       <input
                         type="number"
+                        className="input-chico"
                         value={ordenEdit[`${p.id}:${area}`] ?? String(ordenDe(p, area))}
                         onChange={(e) => setOrdenEdit((prev) => ({ ...prev, [`${p.id}:${area}`]: e.target.value }))}
                         onBlur={() => commitOrden(p, area)}
                         disabled={busy}
                         title={`Orden de rotación dentro de ${area}`}
-                        style={{ width: 50 }}
+                        onWheel={(e) => e.currentTarget.blur()}
                       />
                     )}
                   </label>
