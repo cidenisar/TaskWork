@@ -18,21 +18,23 @@
  * (--on-cta) y cualquier texto naranja va con --cta-ink.
  */
 :root {
-  --bg: #f6f8fb;
-  --panel: #ffffff;
-  --panel-2: #f0f3f8;
-  --border: #dde3ec;
-  --border-soft: #e8edf4;
+  /* Fondo "Azul profundo" (elegido por Ivan 11/11): el claro casi blanco encandilaba. */
+  --bg: #92aedb;
+  --panel: #f5f8fe;
+  --panel-2: #dfe7f5;
+  --border: #8aa3cf;
+  --border-soft: #bccbe5;
   /* Borde de los campos de carga (input/textarea/select) — más marcado que
      --border a propósito: en el celular (sobre todo con luz de sol) el campo
      tiene que notarse sin depender del fondo de la tarjeta. */
   --field-border: #aeb9cb;
   /* Fondo de los campos — un salto de luminosidad respecto de la tarjeta,
      para que el campo se vea aunque no se distinga el borde. */
-  --field-bg: #f4f7fb;
+  --field-bg: #ecf1fa;
   --text: #0f1a2b;
-  --text-dim: #475569;
-  --text-faint: #5b6779;
+  /* Más oscuros que antes: también van directo sobre el fondo azul y tienen que pasar 4.5:1. */
+  --text-dim: #2f3d52;
+  --text-faint: #38465b;
   --accent: #1d4ed8;
   --accent-2: #c02a2a;
   --danger-solid: #c02a2a;
@@ -2469,6 +2471,124 @@ textarea {
 @keyframes lg-pop { from { opacity: 0; transform: scale(0.5) rotate(-12deg); } }
 @keyframes lg-flota { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
 @keyframes lg-brillo { 0%, 70% { transform: translateX(-120%); } 100% { transform: translateX(120%); } }
+
+/* ===== Fondo vivo + botón "Volver" (11/11/2026) ===== */
+/* Luces suaves que se mueven lento detrás de todo (las dos imágenes). */
+html {
+  background: var(--bg);
+}
+body {
+  background: transparent;
+  position: relative;
+}
+body .panel-shell {
+  background: transparent;
+}
+body::before,
+body::after {
+  content: "";
+  position: fixed;
+  z-index: -1;
+  width: 70vmax;
+  height: 70vmax;
+  border-radius: 50%;
+  pointer-events: none;
+  filter: blur(10px);
+}
+body::before {
+  top: -25vmax;
+  left: -20vmax;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0) 62%);
+  animation: fx-deriva-a 28s ease-in-out infinite alternate;
+}
+body::after {
+  bottom: -30vmax;
+  right: -22vmax;
+  background: radial-gradient(circle, rgba(37, 99, 235, 0.35), rgba(37, 99, 235, 0) 62%);
+  animation: fx-deriva-b 34s ease-in-out infinite alternate;
+}
+:root[data-theme='dark'] body::before {
+  background: radial-gradient(circle, rgba(59, 130, 246, 0.16), rgba(59, 130, 246, 0) 62%);
+}
+:root[data-theme='dark'] body::after {
+  background: radial-gradient(circle, rgba(249, 115, 22, 0.08), rgba(249, 115, 22, 0) 62%);
+}
+/* La pantalla de login tiene su propio fondo. */
+body:has(.lg-screen)::before,
+body:has(.lg-screen)::after {
+  display: none;
+}
+
+/* Barra azul: un brillo que cruza lento */
+.mz-header {
+  overflow: hidden;
+}
+.mz-header::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(110deg, transparent 35%, rgba(255, 255, 255, 0.12) 50%, transparent 65%);
+  transform: translateX(-100%);
+  animation: fx-brillo-barra 9s 1s ease-in-out infinite;
+}
+
+/* Más elementos que entran escalonados */
+.module-card:nth-child(7), .kpi-card:nth-child(7), .hist-item:nth-child(7) { animation-delay: 0.3s; }
+.module-card:nth-child(8), .kpi-card:nth-child(8), .hist-item:nth-child(8) { animation-delay: 0.35s; }
+.module-card:nth-child(9), .hist-item:nth-child(9) { animation-delay: 0.4s; }
+.module-card:nth-child(10), .hist-item:nth-child(10) { animation-delay: 0.45s; }
+.module-card:nth-child(n + 11), .hist-item:nth-child(n + 11) { animation-delay: 0.5s; }
+.page-heading,
+.mz-saludo {
+  animation: fx-aparece 0.6s cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+}
+
+/* "Volver al inicio" como botón */
+.back.mz-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 18px;
+  padding: 7px 16px 7px 7px;
+  border-radius: 999px;
+  background: var(--panel);
+  border: 1px solid var(--border-soft);
+  box-shadow: 0 2px 8px rgba(11, 42, 91, 0.12);
+  color: var(--accent);
+  font-size: 14px;
+  font-weight: 700;
+  transition: transform 0.2s, box-shadow 0.2s, background 0.2s, color 0.2s;
+  animation: fx-entra-izq 0.45s cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+}
+.back.mz-back svg {
+  width: 28px;
+  height: 28px;
+  padding: 7px;
+  box-sizing: border-box;
+  border-radius: 50%;
+  background: var(--accent-grad);
+  color: #fff;
+  flex: none;
+}
+.back.mz-back:hover {
+  color: var(--text);
+  transform: translateY(-1px);
+  box-shadow: 0 8px 20px rgba(11, 42, 91, 0.2);
+}
+.back.mz-back:hover svg {
+  transform: translateX(-3px);
+}
+.back.mz-back:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  outline-offset: 2px;
+}
+
+@keyframes fx-deriva-a { from { transform: translate(0, 0) scale(1); } to { transform: translate(18vmax, 12vmax) scale(1.15); } }
+@keyframes fx-deriva-b { from { transform: translate(0, 0) scale(1.1); } to { transform: translate(-16vmax, -14vmax) scale(0.95); } }
+@keyframes fx-brillo-barra { 0%, 60% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
+@keyframes fx-aparece { from { opacity: 0; transform: translateY(-8px); } }
+@keyframes fx-entra-izq { from { opacity: 0; transform: translateX(-14px); } }
 
 /* Quien pidió "reducir movimiento" en su aparato no ve nada de esto. */
 @media (prefers-reduced-motion: reduce) {
