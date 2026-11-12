@@ -140,7 +140,7 @@ export async function POST(req: NextRequest) {
   }
 
   if (process.env.GROQ_API_KEY) {
-    const modelo = process.env.GROQ_MODEL || "meta-llama/llama-4-scout-17b-16e-instruct";
+    const modelo = process.env.GROQ_MODEL || "qwen/qwen3.8-27b";
     tareas.push(
       medir("Groq (gratis)", modelo, () => openAiCompat("https://api.groq.com/openai/v1/chat/completions", process.env.GROQ_API_KEY!, modelo, dataUri)),
     );
