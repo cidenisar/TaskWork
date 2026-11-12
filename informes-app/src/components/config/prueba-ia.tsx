@@ -28,6 +28,36 @@ interface Fila {
 
 const fmt = (n: number | null | undefined) => (typeof n === "number" ? `$ ${n.toLocaleString("es-AR")}` : "—");
 
+/**
+ * Esquema "combinado" propuesto: Cloudflare principal + Groq de control.
+ * Si las dos leen igual fecha y monto → se acepta. Si difieren → esos
+ * campos quedan marcados para revisar. Si una falla → se usa la otra.
+ */
+function combinada(resultados: Resultado[]): { texto: string; tono: "ok" | "revisar" | "error" } {
+  const usable = (r?: Resultado) => (r && r.ok && r.comprobantes && r.comprobantes.length > 0 ? r : undefined);
+  const cf = usable(resultados.find((r) => r.proveedor.startsWith("Cloudflare")));
+  const gq = usable(resultados.find((r) => r.proveedor.startsWith("Groq")));
+  if (!cf && !gq) return { texto: "Fallaron las dos → carga manual", tono: "error" };
+  if (!cf || !gq) {
+    const una = (cf ?? gq)!;
+    return { texto: `Solo respondió ${una.proveedor.split(" ")[0]} → se usa esa, sin control`, tono: "revisar" };
+  }
+  const a = cf.comprobantes as Comprobante[];
+  const b = gq.comprobantes as Comprobante[];
+  const avisos: string[] = [];
+  if (a.length !== b.length) avisos.push(`cantidad de comprobantes (${a.length} vs ${b.length})`);
+  for (let i = 0; i < Math.min(a.length, b.length); i++) {
+    const pre = a.length > 1 ? `#${i + 1} ` : "";
+    if ((a[i].monto ?? null) !== (b[i].monto ?? null)) avisos.push(`${pre}monto (${fmt(a[i].monto)} vs ${fmt(b[i].monto)})`);
+    if ((a[i].fecha ?? null) !== (b[i].fecha ?? null)) avisos.push(`${pre}fecha (${a[i].fecha ?? "—"} vs ${b[i].fecha ?? "—"})`);
+  }
+  if (avisos.length === 0) {
+    const resumen = a.map((c) => `${c.fecha ?? "—"} · ${fmt(c.monto)}`).join(" | ");
+    return { texto: `Coinciden ✓ ${resumen}`, tono: "ok" };
+  }
+  return { texto: `Marcar para revisar: ${avisos.join("; ")}`, tono: "revisar" };
+}
+
 export function PruebaIa() {
   const [filas, setFilas] = useState<Fila[]>([]);
   const [corriendo, setCorriendo] = useState(false);
@@ -127,6 +157,16 @@ export function PruebaIa() {
                       })}
                     </tbody>
                   </table>
+                  {(() => {
+                    const c = combinada(f.resultados);
+                    const color = c.tono === "ok" ? "#1a7f37" : c.tono === "revisar" ? "#9a6700" : "#b42318";
+                    const fondo = c.tono === "ok" ? "#dafbe1" : c.tono === "revisar" ? "#fff8c5" : "#ffebe9";
+                    return (
+                      <div style={{ marginTop: 8, padding: "6px 10px", borderRadius: 6, background: fondo, color, fontSize: 13 }}>
+                        <strong>Combinada (Cloudflare + Groq):</strong> {c.texto}
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
             </div>
