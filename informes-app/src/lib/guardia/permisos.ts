@@ -19,10 +19,10 @@
 import type { Rol } from "@/lib/types";
 import type { AreaGuardia } from "./cronograma";
 
-/** La persona de guardia (general o técnica) tiene esta área en `guardia_persona` — null si no hace guardia ("Sin guardia") o no es técnico. */
+/** Las áreas de `guardia_persona` que cubre esta persona — vacío si no hace guardia o no es técnico. Un técnico puede cubrir más de una (su sector + la General que los coordina, pedido de Ivan 12/11). */
 export interface ContextoGuardia {
   rol: Rol;
-  area: AreaGuardia | null;
+  areas: AreaGuardia[];
 }
 
 /** Admin, supervisor o superusuario — la "oficina" del HANDOFF. Mismo criterio que `is_admin_or_supervisor()` en SQL. */
@@ -30,14 +30,14 @@ export function esOficina(rol: Rol): boolean {
   return rol === "admin" || rol === "supervisor" || rol === "superusuario";
 }
 
-/** Solo quien tiene el área "General" puede registrar la llamada, activar guardias técnicas y cerrar el evento. */
+/** Solo quien cubre el área "General" puede registrar la llamada, activar guardias técnicas y cerrar el evento (puede cubrir otra área además, no cambia esto). */
 export function esGuardiaGeneral(ctx: ContextoGuardia): boolean {
-  return ctx.rol === "tecnico" && ctx.area === "General";
+  return ctx.rol === "tecnico" && ctx.areas.includes("General");
 }
 
-/** Cualquier técnico de guardia (general o de un área técnica) — alguien que SÍ hace guardia. */
+/** Cualquier técnico de guardia (general o de un área técnica, una o varias) — alguien que SÍ hace guardia. */
 export function esDeGuardia(ctx: ContextoGuardia): boolean {
-  return ctx.rol === "tecnico" && ctx.area !== null;
+  return ctx.rol === "tecnico" && ctx.areas.length > 0;
 }
 
 export function puedeRegistrarLlamada(ctx: ContextoGuardia): boolean {

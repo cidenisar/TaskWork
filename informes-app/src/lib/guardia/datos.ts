@@ -63,10 +63,10 @@ export async function cargarParametros(supabase: Client): Promise<ParametrosGuar
   };
 }
 
-/** El área de guardia de ESTE usuario (null = no hace ninguna) — para armar su `ContextoGuardia` en cada Server Action, nunca confiando en lo que mande el cliente. */
-export async function cargarAreaDe(supabase: Client, usuarioId: string): Promise<AreaGuardia | null> {
-  const { data } = await supabase.from("guardia_persona").select("area").eq("usuario_id", usuarioId).maybeSingle();
-  return (data?.area as AreaGuardia | undefined) ?? null;
+/** Las áreas de guardia de ESTE usuario ([] = no hace ninguna) — para armar su `ContextoGuardia` en cada Server Action, nunca confiando en lo que mande el cliente. Puede tener más de una (su sector + la General). */
+export async function cargarAreasDe(supabase: Client, usuarioId: string): Promise<AreaGuardia[]> {
+  const { data } = await supabase.from("guardia_persona").select("area").eq("usuario_id", usuarioId);
+  return (data ?? []).map((d) => d.area as AreaGuardia);
 }
 
 /** Nombre del grupo de WhatsApp al que se avisan las novedades — solo para mostrarlo en pantalla (un link wa.me no puede apuntar a un grupo), ver Parámetros. */
@@ -125,7 +125,8 @@ async function cargarParticipacionesDelPeriodo(supabase: Client, desde: string, 
 export interface FilaLiquidacionPersona {
   usuarioId: string;
   nombre: string;
-  area: AreaGuardia;
+  /** Una o varias áreas juntas ("General + Infraestructura") — string y no `AreaGuardia` porque una persona puede cubrir más de una (HANDOFF; pedido de Ivan 12/11). Snapshots viejos de `guardia_periodo_cierre` guardaron un solo `AreaGuardia`, que sigue siendo un string válido acá. */
+  area: string;
   detalle: FichaPersonaDetalle;
 }
 
@@ -171,13 +172,14 @@ export async function calcularLiquidacion(supabase: Client, desde: string, hasta
   const idsPersonas = [...new Set([...personas.map((p) => p.id), ...idsConActividad])];
   const { data: perfiles } = idsPersonas.length > 0 ? await supabase.from("profiles").select("id, nombre_completo").in("id", idsPersonas) : { data: [] };
   const nombrePorId = new Map((perfiles ?? []).map((p) => [p.id, p.nombre_completo]));
-  const areaPorId = new Map(personas.map((p) => [p.id, p.area]));
+  const areasPorId = new Map<string, AreaGuardia[]>();
+  for (const p of personas) areasPorId.set(p.id, [...(areasPorId.get(p.id) ?? []), p.area]);
 
   return idsPersonas
     .map((id) => ({
       usuarioId: id,
       nombre: nombrePorId.get(id) ?? "—",
-      area: areaPorId.get(id) ?? "General",
+      area: (areasPorId.get(id) ?? ["General"]).join(" + "),
       detalle: resultado[id] ?? { porDia: {}, totalMinutos: 0, totalCentesimas: 0, totalFrancos: 0 },
     }))
     .sort((a, b) => a.nombre.localeCompare(b.nombre));

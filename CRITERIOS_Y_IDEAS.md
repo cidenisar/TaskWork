@@ -1979,3 +1979,80 @@ automatizar el aviso a WhatsApp? ¿Qué hacer con la revisión de SCADA?
   cómo quedó (ej. "quedó sin novedad", "normalizado") — ese texto es a la
   vez el registro del cierre y lo que se comparte afuera, nunca un string
   fijo tipo "Evento cerrado." que no dice nada para reenviar.
+
+## 32. Pasar de "una fila por persona" a "una fila por (persona, categoría)": dos bugs silenciosos que hay que buscar a propósito, no esperar a que avisen
+
+**Contexto:** `informes-app`, módulo Guardia General — una tabla
+(`guardia_persona`, PK `usuario_id`) modelaba a propósito "cada técnico
+hace UNA guardia" con una fila por persona. Un pedido real del negocio
+("hay técnicos que hacen la guardia de su sector Y ADEMÁS la General, que
+coordina los sectores") rompió ese supuesto: hubo que pasar a PK
+`(usuario_id, area)` — cero o más filas por persona, una por categoría que
+cubre. El cambio de esquema en sí fue trivial (`drop constraint` + `add
+primary key`); lo que importa es la lista de lugares donde "como antes
+nunca había más de una fila por persona" estaba asumido EN SILENCIO, sin
+que nada lo dijera explícito, y que hay que salir a buscar a propósito
+porque ninguno de los dos tira un error en el caso común (0 o 1 fila):
+
+- **Una función SQL que devuelve un escalar con un `select ... where
+  clave = x` sin `limit`, cuando `clave` deja de ser única, no falla al
+  migrar el esquema — falla en producción la primera vez que alguien
+  real tiene 2 filas**, con un error de Postgres genérico ("more than one
+  row returned by a subquery used as an expression") que no apunta a la
+  causa real. El mismo problema del lado de Supabase-JS es `.maybeSingle()`
+  (o `.single()`): tira/da error apenas hay más de una fila. La única
+  forma de no descubrirlo en producción es grepear TODO uso de
+  `.maybeSingle()`/`.single()`/subquery escalar sobre la tabla que va a
+  pasar a tener N filas, ANTES de aplicar la migración, y decidir para
+  cada uno si de verdad necesita "una sola" (entonces agregar
+  `order by ... limit 1` a propósito, documentando que es determinístico
+  pero no "la única") o si en realidad necesita convertirse en una lista.
+- **Peor que el crash: una función que responde "¿esta persona tiene rol
+  X?" indirectamente, a través de "¿cuál es SU categoría?" (singular),
+  puede dar un FALSO NEGATIVO silencioso con 2+ filas** — si el orden de
+  desempate no es el que casualmente se necesitaba, devuelve la OTRA
+  categoría y la pregunta "¿es X?" sale `false` para alguien que sí lo es.
+  Esto es más peligroso que el crash de arriba porque no corta nada, no
+  tira error, simplemente deniega acceso a quien debería tenerlo. El
+  arreglo correcto no es "ordenar mejor" — es cambiar la pregunta de
+  "¿cuál es tu categoría?" (singular, mal planteada para N filas) a
+  "¿tenés AL MENOS UNA fila con categoría X?" (`exists(select 1 from ...
+  where usuario_id = x and categoria = 'X')`), que da la respuesta
+  correcta sin importar cuántas otras categorías tenga esa persona.
+- **Un `Map` armado con `.map((fila) => [fila.id, fila])` para buscar "la
+  fila de tal id" asume, también en silencio, que hay como máximo una
+  fila por id — con 2+ filas para el mismo id, el `Map` simplemente se
+  queda con la ÚLTIMA y pierde las demás, sin ningún error ni warning.**
+  Aparece tanto en UI (una lista que muestra "la" categoría de cada
+  persona) como en cálculos server-side (un `Map<id, categoria>` usado
+  para enriquecer resultados). El arreglo es agrupar en un array
+  (`Map<id, Categoria[]>`, empujando en vez de asignar) en todo punto
+  donde se construye un `Map` keyed por el mismo campo que ahora puede
+  repetirse — buscar literalmente `new Map(...).map(... => [x.id, ...])`
+  sobre la tabla/entidad afectada es la forma de encontrarlos todos de
+  una, en vez de esperar a que un usuario reporte "a tal persona le falta
+  una de sus dos categorías en tal pantalla".
+- **La buena noticia, y por qué vale la pena revisar el motor antes de
+  asumir que el cambio es grande: si la lógica de negocio YA estaba
+  escrita "por categoría" (recibe la categoría como parámetro explícito
+  en cada llamada, nunca la deriva de "la" categoría de la persona),
+  soporta N filas por persona SIN NINGÚN CAMBIO.** En este caso, todo el
+  motor de rotación/cronograma ya filtraba una lista plana por `area` en
+  cada función — una persona con 2 filas simplemente aparece en las 2
+  listas filtradas, cada una independiente, porque nunca hubo un punto
+  donde el código preguntara "¿cuál es la ÚNICA área de esta persona?".
+  Antes de estimar el alcance de este tipo de cambio como "hay que
+  tocar todo lo que usa esta tabla", separar primero qué funciones ya
+  reciben la categoría como parámetro (no tocar) de las que derivan "la"
+  categoría de la entidad (sí tocar) — grep de la función/tipo que
+  representa "la categoría de X" es más preciso que grep de la tabla
+  entera.
+- **Un tipo de dato puro que antes decía `area: AreaGuardia | null` para
+  "la categoría de esta persona (o ninguna)" pasa a `areas:
+  AreaGuardia[]` — y las dos funciones booleanas que lo leían (`esX(ctx)
+  { return ctx.area === 'X' }`, `tieneCategoria(ctx) { return ctx.area !==
+  null }`) cambian a `.includes('X')`/`.length > 0`, sin que el resto de
+  su firma ni de quien las llama necesite cambiar.** Mismo patrón que
+  cualquier ensanche de tipo puro: el cambio se queda contenido en la
+  definición y en el cuerpo de esas dos funciones, no se filtra a cada
+  lugar que las llama.

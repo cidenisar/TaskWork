@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { requireProfile } from "@/lib/auth";
-import { cargarAreaDe } from "@/lib/guardia/datos";
+import { cargarAreasDe } from "@/lib/guardia/datos";
 import { esGuardiaGeneral, esDeGuardia } from "@/lib/guardia/permisos";
 import { horaGuardiaIso } from "@/lib/guardia/reloj";
 import { Icon, StatusDot } from "@/components/icon";
@@ -12,8 +12,8 @@ import { AsuncionSemanal } from "@/components/guardia/asuncion-semanal";
 export default async function GuardiaPage() {
   const profile = await requireProfile();
   const supabase = await createClient();
-  const area = await cargarAreaDe(supabase, profile.id);
-  const ctx = { rol: profile.rol, area };
+  const areas = await cargarAreasDe(supabase, profile.id);
+  const ctx = { rol: profile.rol, areas };
 
   if (!esDeGuardia(ctx) && profile.rol === "tecnico") {
     return (
@@ -61,7 +61,7 @@ export default async function GuardiaPage() {
     <div>
       <div className="page-heading">
         <h1>Guardia General</h1>
-        <p>{area ? `Vos hacés la guardia de ${area}` : "Vista de oficina"}</p>
+        <p>{areas.length > 0 ? `Vos hacés la guardia de ${areas.join(" y ")}` : "Vista de oficina"}</p>
       </div>
 
       {asuncionPendiente && <AsuncionSemanal semanaInicio={asuncionPendiente.semana_inicio} area={asuncionPendiente.area} />}

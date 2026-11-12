@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireProfile } from "@/lib/auth";
 import { horaGuardiaIso } from "@/lib/guardia/reloj";
 import { guardiaDe, type AreaGuardia } from "@/lib/guardia/cronograma";
-import { cargarCronograma, cargarCambiosAceptados, cargarParametros, cargarAreaDe } from "@/lib/guardia/datos";
+import { cargarCronograma, cargarCambiosAceptados, cargarParametros, cargarAreasDe } from "@/lib/guardia/datos";
 import { esGuardiaGeneral } from "@/lib/guardia/permisos";
 import { notificar } from "@/lib/guardia/notificar";
 import type {
@@ -416,8 +416,8 @@ export async function marcarFeriadoHoyAction(nombre: string): Promise<AccionResu
   const profile = await requireProfile();
   const supabase = await createClient();
 
-  const area = await cargarAreaDe(supabase, profile.id);
-  if (!esGuardiaGeneral({ rol: profile.rol, area })) return { success: false, error: "Solo la guardia general puede marcar un feriado desde el celular." };
+  const areas = await cargarAreasDe(supabase, profile.id);
+  if (!esGuardiaGeneral({ rol: profile.rol, areas })) return { success: false, error: "Solo la guardia general puede marcar un feriado desde el celular." };
 
   const fecha = horaGuardiaIso().slice(0, 10);
   const { error } = await supabase.from("guardia_feriado").insert({ fecha, nombre: nombre.trim() || "Feriado", origen: "MANUAL", marcado_por: profile.id });

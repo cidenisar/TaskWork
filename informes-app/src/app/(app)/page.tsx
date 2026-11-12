@@ -4,7 +4,7 @@ import { headers } from "next/headers";
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { puedeGestionarBajas, puedeGestionarDeposito, puedeVerPanel } from "@/lib/types";
-import { cargarAreaDe } from "@/lib/guardia/datos";
+import { cargarAreasDe } from "@/lib/guardia/datos";
 import { esOficina } from "@/lib/guardia/permisos";
 import { ModuleIcon } from "@/components/module-icon";
 import { Icon } from "@/components/icon";
@@ -51,8 +51,8 @@ export default async function HomePage() {
   // guardia ni es oficina no le aplica para nada, así que directamente no aparece (mismo
   // criterio que Estadísticas/Configuración, que un técnico ni ve en el Panel).
   const supabase = await createClient();
-  const areaGuardia = await cargarAreaDe(supabase, profile.id);
-  const muestraGuardia = areaGuardia !== null || esOficina(profile.rol);
+  const areasGuardia = await cargarAreasDe(supabase, profile.id);
+  const muestraGuardia = areasGuardia.length > 0 || esOficina(profile.rol);
 
   return (
     <div>
@@ -150,7 +150,7 @@ export default async function HomePage() {
             </div>
             <div className="module-title">Guardia General</div>
             <div className="module-sub">
-              {areaGuardia ? `Tu guardia de ${areaGuardia} — eventos, novedades y cambios` : "Eventos de guardia de las cuatro áreas"}
+              {areasGuardia.length > 0 ? `Tu guardia de ${areasGuardia.join(" y ")} — eventos, novedades y cambios` : "Eventos de guardia de las cuatro áreas"}
             </div>
           </Link>
         )}

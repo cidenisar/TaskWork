@@ -1,6 +1,6 @@
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { cargarAreaDe, cargarPeriodoVigente, calcularLiquidacion } from "@/lib/guardia/datos";
+import { cargarAreasDe, cargarPeriodoVigente, calcularLiquidacion } from "@/lib/guardia/datos";
 import { formatActivaciones } from "@/lib/guardia/motor";
 import { formatMinutosHoras } from "@/lib/guardia/liquidacion";
 
@@ -13,9 +13,9 @@ function fmtFecha(fecha: string): string {
 export default async function MisHorasPage() {
   const profile = await requireProfile();
   const supabase = await createClient();
-  const area = await cargarAreaDe(supabase, profile.id);
+  const areas = await cargarAreasDe(supabase, profile.id);
 
-  if (!area) {
+  if (areas.length === 0) {
     return (
       <div>
         <div className="page-heading">

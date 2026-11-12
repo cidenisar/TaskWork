@@ -14,64 +14,57 @@ export interface AccionResult {
 }
 
 /**
- * Asignar a alguien a una guardia (o quitársela, `area: null` = "Sin
- * guardia") — HANDOFF §7.4. Reescribe el cronograma desde la SEMANA QUE
- * VIENE para el área que la persona deja y la que entra (nunca el pasado
- * ni la semana en curso, salvo que esa persona ya no esté en la lista de
- * esa área — eso lo decide `regenerarDesde`, no este action).
+ * Prender o apagar UNA guardia de un técnico (`activo: false` = "Sin
+ * guardia" en esa área) sin tocar sus otras áreas — HANDOFF §7.4, ampliado
+ * 12/11 para que un técnico pueda cubrir su sector Y la General a la vez
+ * (pedido de Ivan). Reescribe el cronograma de ESA área desde la SEMANA
+ * QUE VIENE (nunca el pasado ni la semana en curso, salvo que esa persona
+ * ya no esté en la lista de esa área — eso lo decide `regenerarDesde`, no
+ * este action).
  */
-export async function asignarPersonaDeGuardiaAction(
+export async function asignarAreaDeGuardiaAction(
   usuarioId: string,
   nombreCompleto: string,
-  areaNueva: AreaGuardia | null,
+  area: AreaGuardia,
+  activo: boolean,
   orden: number,
 ): Promise<AccionResult> {
   const profile = await requireAdminOrSupervisor();
   const supabase = await createClient();
 
-  const { data: actual } = await supabase.from("guardia_persona").select("area, orden").eq("usuario_id", usuarioId).maybeSingle();
-  const areaAnterior = (actual?.area as AreaGuardia | undefined) ?? null;
-  if (areaAnterior === areaNueva && actual?.orden === orden) return { success: true };
+  const { data: actual } = await supabase.from("guardia_persona").select("orden").eq("usuario_id", usuarioId).eq("area", area).maybeSingle();
+  const estabaActivo = actual !== null;
+  if (estabaActivo === activo && (!activo || actual?.orden === orden)) return { success: true };
 
-  if (areaNueva === null) {
-    const { error } = await supabase.from("guardia_persona").delete().eq("usuario_id", usuarioId);
+  if (!activo) {
+    const { error } = await supabase.from("guardia_persona").delete().eq("usuario_id", usuarioId).eq("area", area);
     if (error) return { success: false, error: error.message };
   } else {
-    const { error } = await supabase
-      .from("guardia_persona")
-      .upsert({ usuario_id: usuarioId, area: areaNueva satisfies AreaGuardiaDb, orden });
+    const { error } = await supabase.from("guardia_persona").upsert({ usuario_id: usuarioId, area: area satisfies AreaGuardiaDb, orden });
     if (error) return { success: false, error: error.message };
   }
 
   await supabase.from("guardia_persona_hist").insert({
     usuario_id: usuarioId,
-    area_antes: areaAnterior,
-    area_despues: areaNueva,
+    area_antes: estabaActivo ? area : null,
+    area_despues: activo ? area : null,
     quien: profile.id,
   });
 
-  const areasAfectadas = [...new Set([areaAnterior, areaNueva].filter((a): a is AreaGuardia => a !== null))];
-  if (areasAfectadas.length > 0) {
-    const [cronogramaAntes, personas, parametros] = await Promise.all([cargarCronograma(supabase), cargarPersonas(supabase), cargarParametros(supabase)]);
-    const semanaActual = inicioSemana(horaGuardiaIso(), parametros.cambioMin);
-    let cronogramaNuevo = cronogramaAntes;
-    for (const area of areasAfectadas) {
-      cronogramaNuevo = regenerarDesde(cronogramaNuevo, personas, area, semanaActual);
-    }
-    for (const area of areasAfectadas) {
-      const cambios = celdasCambiadas(cronogramaAntes, cronogramaNuevo, area);
-      for (const c of cambios) {
-        await supabase.from("guardia_cronograma_semana").upsert({ semana_inicio: c.semanaInicio, area, usuario_id: c.despues });
-        await supabase.from("guardia_cronograma_hist").insert({
-          semana_inicio: c.semanaInicio,
-          area,
-          antes: c.antes,
-          despues: c.despues,
-          motivo: `Rehecho por cambio de guardia de ${nombreCompleto}`,
-          quien: profile.id,
-        });
-      }
-    }
+  const [cronogramaAntes, personas, parametros] = await Promise.all([cargarCronograma(supabase), cargarPersonas(supabase), cargarParametros(supabase)]);
+  const semanaActual = inicioSemana(horaGuardiaIso(), parametros.cambioMin);
+  const cronogramaNuevo = regenerarDesde(cronogramaAntes, personas, area, semanaActual);
+  const cambios = celdasCambiadas(cronogramaAntes, cronogramaNuevo, area);
+  for (const c of cambios) {
+    await supabase.from("guardia_cronograma_semana").upsert({ semana_inicio: c.semanaInicio, area, usuario_id: c.despues });
+    await supabase.from("guardia_cronograma_hist").insert({
+      semana_inicio: c.semanaInicio,
+      area,
+      antes: c.antes,
+      despues: c.despues,
+      motivo: `Rehecho por cambio de guardia de ${nombreCompleto}`,
+      quien: profile.id,
+    });
   }
 
   revalidatePath("/panel/guardia/personas");

@@ -1,6 +1,6 @@
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { cargarAreaDe } from "@/lib/guardia/datos";
+import { cargarAreasDe } from "@/lib/guardia/datos";
 import { esGuardiaGeneral } from "@/lib/guardia/permisos";
 import { fetchTodasLasUbicaciones } from "@/lib/ubicaciones/fetch-todas";
 import { NuevoEventoGuardiaForm } from "@/components/guardia/nuevo-evento-form";
@@ -8,9 +8,9 @@ import { NuevoEventoGuardiaForm } from "@/components/guardia/nuevo-evento-form";
 export default async function NuevoEventoGuardiaPage() {
   const profile = await requireProfile();
   const supabase = await createClient();
-  const area = await cargarAreaDe(supabase, profile.id);
+  const areas = await cargarAreasDe(supabase, profile.id);
 
-  if (!esGuardiaGeneral({ rol: profile.rol, area })) {
+  if (!esGuardiaGeneral({ rol: profile.rol, areas })) {
     return (
       <div className="card">
         <p className="empty-note">Solo la guardia general puede registrar una llamada.</p>
