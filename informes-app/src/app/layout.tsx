@@ -30,7 +30,10 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="es" className={`${fuente.variable}`}>
+    // suppressHydrationWarning: el script del <head> agrega `data-theme="dark"` antes de hidratar.
+    // Sin esto React toma la diferencia como error de hidratación, re-renderiza desde el cliente
+    // y borra el atributo: el tema oscuro se perdía al recargar (guía de Next "preventing flash").
+    <html lang="es" className={`${fuente.variable}`} suppressHydrationWarning>
       <head>
         {/* Antes del primer render: evita el parpadeo del tema claro por defecto si el usuario había elegido oscuro. */}
         <script dangerouslySetInnerHTML={{ __html: SCRIPT_TEMA_INICIAL }} />

@@ -18,21 +18,23 @@
  * (--on-cta) y cualquier texto naranja va con --cta-ink.
  */
 :root {
-  --bg: #f6f8fb;
-  --panel: #ffffff;
-  --panel-2: #f0f3f8;
-  --border: #dde3ec;
-  --border-soft: #e8edf4;
+  /* Fondo "Azul profundo" (elegido por Ivan 11/11): el claro casi blanco encandilaba. */
+  --bg: #92aedb;
+  --panel: #f5f8fe;
+  --panel-2: #dfe7f5;
+  --border: #8aa3cf;
+  --border-soft: #bccbe5;
   /* Borde de los campos de carga (input/textarea/select) — más marcado que
      --border a propósito: en el celular (sobre todo con luz de sol) el campo
      tiene que notarse sin depender del fondo de la tarjeta. */
   --field-border: #aeb9cb;
   /* Fondo de los campos — un salto de luminosidad respecto de la tarjeta,
      para que el campo se vea aunque no se distinga el borde. */
-  --field-bg: #f4f7fb;
+  --field-bg: #ecf1fa;
   --text: #0f1a2b;
-  --text-dim: #475569;
-  --text-faint: #5b6779;
+  /* Más oscuros que antes: también van directo sobre el fondo azul y tienen que pasar 4.5:1. */
+  --text-dim: #2f3d52;
+  --text-faint: #38465b;
   --accent: #1d4ed8;
   --accent-2: #c02a2a;
   --danger-solid: #c02a2a;
@@ -331,11 +333,20 @@ body {
 @media (min-width: 1024px) {
   .list-grid {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    /* minmax(0, 1fr), no 1fr: con 1fr la columna no puede ser más angosta que
+       el título más largo (va en una sola línea) y la grilla se salía de la tarjeta. */
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;
+  }
+  .list-grid > * {
+    min-width: 0;
   }
   .list-grid > .hist-item {
     margin-bottom: 0;
+  }
+  /* En dos columnas el título puede ir en dos renglones: si no, se corta y no se ve el estado del PDF. */
+  .list-grid .hist-title {
+    white-space: normal;
   }
 }
 
@@ -2300,6 +2311,293 @@ textarea {
 @keyframes mz-draw26 { from { stroke-dashoffset: 26; } to { stroke-dashoffset: 0; } }
 @keyframes mz-nudge { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(3px); } }
 @keyframes mz-ring { from { transform: scale(1); opacity: 0.7; } to { transform: scale(1.35, 1.7); opacity: 0; } }
+
+/* ===== Login "C4 · Marca al costado" + monograma TW (11/11/2026) =====
+   Fondo azul en los dos temas; la tarjeta usa .card, así sigue el tema. */
+.lg-screen {
+  position: relative;
+  min-height: 100vh;
+  min-height: 100dvh;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  box-sizing: border-box;
+  background: linear-gradient(125deg, #0b2a5b 0%, #163c9e 58%, #2563eb 100%);
+  background-size: 160% 160%;
+  animation: lg-fondo 18s ease-in-out infinite alternate;
+}
+.lg-rings {
+  position: absolute;
+  pointer-events: none;
+}
+.lg-rings circle {
+  stroke: rgba(255, 255, 255, 0.08);
+  stroke-width: 2;
+}
+.lg-rings .lg-ring-cta {
+  stroke: rgba(253, 186, 116, 0.22);
+  stroke-dasharray: 14 10;
+}
+.lg-rings-a {
+  width: 620px;
+  right: -180px;
+  top: -160px;
+  animation: lg-gira 60s linear infinite;
+}
+.lg-rings-b {
+  width: 560px;
+  left: -200px;
+  bottom: -240px;
+  animation: lg-gira 80s linear infinite reverse;
+}
+.lg-inner {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 110px;
+  width: 100%;
+  max-width: 1080px;
+}
+.lg-brand {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-width: 440px;
+  color: #fff;
+  animation: lg-entra-izq 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+}
+.lg-mark {
+  position: relative;
+  width: 76px;
+  height: 76px;
+  border-radius: 21px;
+  overflow: hidden;
+  background: linear-gradient(135deg, #fb923c, #f97316 55%, #ea580c);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 10px 26px rgba(249, 115, 22, 0.4);
+  animation: lg-pop 0.6s 0.15s cubic-bezier(0.3, 1.5, 0.5, 1) backwards, lg-flota 5s 1s ease-in-out infinite;
+}
+.lg-mark span {
+  font-weight: 800;
+  font-size: 32px;
+  letter-spacing: -1px;
+  color: #1c0a00;
+}
+/* Brillo que cruza el logo cada tanto */
+.lg-mark::after {
+  content: "";
+  position: absolute;
+  inset: -20%;
+  background: linear-gradient(115deg, transparent 40%, rgba(255, 255, 255, 0.55) 50%, transparent 60%);
+  transform: translateX(-120%);
+  animation: lg-brillo 4.5s 1.2s ease-in-out infinite;
+}
+.lg-name {
+  margin: 0;
+  font-size: 52px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  line-height: 1.05;
+  color: #fff;
+}
+.lg-tag {
+  margin: 0;
+  font-size: 18px;
+  line-height: 1.5;
+  color: #dce6fb;
+}
+.lg-card {
+  width: 420px;
+  max-width: 100%;
+  flex: none;
+  animation: lg-entra-der 0.7s 0.12s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+}
+.lg-card .card {
+  margin: 0;
+  padding: 32px;
+  border-radius: 20px;
+  box-shadow: 0 24px 60px rgba(8, 20, 48, 0.35);
+}
+.lg-card input {
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.lg-card input:focus {
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+.lg-card .btn-primary {
+  min-height: 48px;
+  font-size: 15px;
+}
+
+@media (max-width: 760px) {
+  .lg-screen {
+    align-items: flex-start;
+    padding: 56px 20px 32px;
+  }
+  .lg-inner {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 30px;
+  }
+  .lg-brand {
+    padding: 0 6px;
+    animation-name: lg-entra-arriba;
+  }
+  .lg-mark {
+    width: 56px;
+    height: 56px;
+    border-radius: 16px;
+  }
+  .lg-mark span {
+    font-size: 23px;
+  }
+  .lg-name {
+    font-size: 34px;
+  }
+  .lg-tag {
+    font-size: 15px;
+  }
+  .lg-card {
+    width: 100%;
+    animation-name: lg-entra-abajo;
+  }
+  .lg-card .card {
+    padding: 24px;
+  }
+}
+
+@keyframes lg-fondo { from { background-position: 0% 30%; } to { background-position: 100% 70%; } }
+@keyframes lg-gira { to { transform: rotate(360deg); } }
+@keyframes lg-entra-izq { from { opacity: 0; transform: translateX(-28px); } }
+@keyframes lg-entra-der { from { opacity: 0; transform: translateX(28px); } }
+@keyframes lg-entra-arriba { from { opacity: 0; transform: translateY(-18px); } }
+@keyframes lg-entra-abajo { from { opacity: 0; transform: translateY(22px); } }
+@keyframes lg-pop { from { opacity: 0; transform: scale(0.5) rotate(-12deg); } }
+@keyframes lg-flota { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+@keyframes lg-brillo { 0%, 70% { transform: translateX(-120%); } 100% { transform: translateX(120%); } }
+
+/* ===== Fondo vivo + botón "Volver" (11/11/2026) ===== */
+/* Luces suaves que se mueven lento detrás de todo (las dos imágenes). */
+html {
+  background: var(--bg);
+}
+body {
+  background: transparent;
+  position: relative;
+}
+body .panel-shell {
+  background: transparent;
+}
+body::before,
+body::after {
+  content: "";
+  position: fixed;
+  z-index: -1;
+  width: 70vmax;
+  height: 70vmax;
+  border-radius: 50%;
+  pointer-events: none;
+  filter: blur(10px);
+}
+body::before {
+  top: -25vmax;
+  left: -20vmax;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0) 62%);
+  animation: fx-deriva-a 28s ease-in-out infinite alternate;
+}
+body::after {
+  bottom: -30vmax;
+  right: -22vmax;
+  background: radial-gradient(circle, rgba(37, 99, 235, 0.35), rgba(37, 99, 235, 0) 62%);
+  animation: fx-deriva-b 34s ease-in-out infinite alternate;
+}
+:root[data-theme='dark'] body::before {
+  background: radial-gradient(circle, rgba(59, 130, 246, 0.16), rgba(59, 130, 246, 0) 62%);
+}
+:root[data-theme='dark'] body::after {
+  background: radial-gradient(circle, rgba(249, 115, 22, 0.08), rgba(249, 115, 22, 0) 62%);
+}
+/* La pantalla de login tiene su propio fondo. */
+body:has(.lg-screen)::before,
+body:has(.lg-screen)::after {
+  display: none;
+}
+
+/* Barra azul: un brillo que cruza lento */
+.mz-header {
+  overflow: hidden;
+}
+.mz-header::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(110deg, transparent 35%, rgba(255, 255, 255, 0.12) 50%, transparent 65%);
+  transform: translateX(-100%);
+  animation: fx-brillo-barra 9s 1s ease-in-out infinite;
+}
+
+/* Más elementos que entran escalonados */
+.module-card:nth-child(7), .kpi-card:nth-child(7), .hist-item:nth-child(7) { animation-delay: 0.3s; }
+.module-card:nth-child(8), .kpi-card:nth-child(8), .hist-item:nth-child(8) { animation-delay: 0.35s; }
+.module-card:nth-child(9), .hist-item:nth-child(9) { animation-delay: 0.4s; }
+.module-card:nth-child(10), .hist-item:nth-child(10) { animation-delay: 0.45s; }
+.module-card:nth-child(n + 11), .hist-item:nth-child(n + 11) { animation-delay: 0.5s; }
+.page-heading,
+.mz-saludo {
+  animation: fx-aparece 0.6s cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+}
+
+/* "Volver al inicio" como botón */
+.back.mz-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 18px;
+  padding: 7px 16px 7px 7px;
+  border-radius: 999px;
+  background: var(--panel);
+  border: 1px solid var(--border-soft);
+  box-shadow: 0 2px 8px rgba(11, 42, 91, 0.12);
+  color: var(--accent);
+  font-size: 14px;
+  font-weight: 700;
+  transition: transform 0.2s, box-shadow 0.2s, background 0.2s, color 0.2s;
+  animation: fx-entra-izq 0.45s cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+}
+.back.mz-back svg {
+  width: 28px;
+  height: 28px;
+  padding: 7px;
+  box-sizing: border-box;
+  border-radius: 50%;
+  background: var(--accent-grad);
+  color: #fff;
+  flex: none;
+}
+.back.mz-back:hover {
+  color: var(--text);
+  transform: translateY(-1px);
+  box-shadow: 0 8px 20px rgba(11, 42, 91, 0.2);
+}
+.back.mz-back:hover svg {
+  transform: translateX(-3px);
+}
+.back.mz-back:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  outline-offset: 2px;
+}
+
+@keyframes fx-deriva-a { from { transform: translate(0, 0) scale(1); } to { transform: translate(18vmax, 12vmax) scale(1.15); } }
+@keyframes fx-deriva-b { from { transform: translate(0, 0) scale(1.1); } to { transform: translate(-16vmax, -14vmax) scale(0.95); } }
+@keyframes fx-brillo-barra { 0%, 60% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
+@keyframes fx-aparece { from { opacity: 0; transform: translateY(-8px); } }
+@keyframes fx-entra-izq { from { opacity: 0; transform: translateX(-14px); } }
 
 /* Quien pidió "reducir movimiento" en su aparato no ve nada de esto. */
 @media (prefers-reduced-motion: reduce) {
