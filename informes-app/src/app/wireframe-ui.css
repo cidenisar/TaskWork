@@ -2301,6 +2301,175 @@ textarea {
 @keyframes mz-nudge { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(3px); } }
 @keyframes mz-ring { from { transform: scale(1); opacity: 0.7; } to { transform: scale(1.35, 1.7); opacity: 0; } }
 
+/* ===== Login "C4 · Marca al costado" + monograma TW (11/11/2026) =====
+   Fondo azul en los dos temas; la tarjeta usa .card, así sigue el tema. */
+.lg-screen {
+  position: relative;
+  min-height: 100vh;
+  min-height: 100dvh;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  box-sizing: border-box;
+  background: linear-gradient(125deg, #0b2a5b 0%, #163c9e 58%, #2563eb 100%);
+  background-size: 160% 160%;
+  animation: lg-fondo 18s ease-in-out infinite alternate;
+}
+.lg-rings {
+  position: absolute;
+  pointer-events: none;
+}
+.lg-rings circle {
+  stroke: rgba(255, 255, 255, 0.08);
+  stroke-width: 2;
+}
+.lg-rings .lg-ring-cta {
+  stroke: rgba(253, 186, 116, 0.22);
+  stroke-dasharray: 14 10;
+}
+.lg-rings-a {
+  width: 620px;
+  right: -180px;
+  top: -160px;
+  animation: lg-gira 60s linear infinite;
+}
+.lg-rings-b {
+  width: 560px;
+  left: -200px;
+  bottom: -240px;
+  animation: lg-gira 80s linear infinite reverse;
+}
+.lg-inner {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 110px;
+  width: 100%;
+  max-width: 1080px;
+}
+.lg-brand {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-width: 440px;
+  color: #fff;
+  animation: lg-entra-izq 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+}
+.lg-mark {
+  position: relative;
+  width: 76px;
+  height: 76px;
+  border-radius: 21px;
+  overflow: hidden;
+  background: linear-gradient(135deg, #fb923c, #f97316 55%, #ea580c);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 10px 26px rgba(249, 115, 22, 0.4);
+  animation: lg-pop 0.6s 0.15s cubic-bezier(0.3, 1.5, 0.5, 1) backwards, lg-flota 5s 1s ease-in-out infinite;
+}
+.lg-mark span {
+  font-weight: 800;
+  font-size: 32px;
+  letter-spacing: -1px;
+  color: #1c0a00;
+}
+/* Brillo que cruza el logo cada tanto */
+.lg-mark::after {
+  content: "";
+  position: absolute;
+  inset: -20%;
+  background: linear-gradient(115deg, transparent 40%, rgba(255, 255, 255, 0.55) 50%, transparent 60%);
+  transform: translateX(-120%);
+  animation: lg-brillo 4.5s 1.2s ease-in-out infinite;
+}
+.lg-name {
+  margin: 0;
+  font-size: 52px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  line-height: 1.05;
+  color: #fff;
+}
+.lg-tag {
+  margin: 0;
+  font-size: 18px;
+  line-height: 1.5;
+  color: #dce6fb;
+}
+.lg-card {
+  width: 420px;
+  max-width: 100%;
+  flex: none;
+  animation: lg-entra-der 0.7s 0.12s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+}
+.lg-card .card {
+  margin: 0;
+  padding: 32px;
+  border-radius: 20px;
+  box-shadow: 0 24px 60px rgba(8, 20, 48, 0.35);
+}
+.lg-card input {
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.lg-card input:focus {
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+.lg-card .btn-primary {
+  min-height: 48px;
+  font-size: 15px;
+}
+
+@media (max-width: 760px) {
+  .lg-screen {
+    align-items: flex-start;
+    padding: 56px 20px 32px;
+  }
+  .lg-inner {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 30px;
+  }
+  .lg-brand {
+    padding: 0 6px;
+    animation-name: lg-entra-arriba;
+  }
+  .lg-mark {
+    width: 56px;
+    height: 56px;
+    border-radius: 16px;
+  }
+  .lg-mark span {
+    font-size: 23px;
+  }
+  .lg-name {
+    font-size: 34px;
+  }
+  .lg-tag {
+    font-size: 15px;
+  }
+  .lg-card {
+    width: 100%;
+    animation-name: lg-entra-abajo;
+  }
+  .lg-card .card {
+    padding: 24px;
+  }
+}
+
+@keyframes lg-fondo { from { background-position: 0% 30%; } to { background-position: 100% 70%; } }
+@keyframes lg-gira { to { transform: rotate(360deg); } }
+@keyframes lg-entra-izq { from { opacity: 0; transform: translateX(-28px); } }
+@keyframes lg-entra-der { from { opacity: 0; transform: translateX(28px); } }
+@keyframes lg-entra-arriba { from { opacity: 0; transform: translateY(-18px); } }
+@keyframes lg-entra-abajo { from { opacity: 0; transform: translateY(22px); } }
+@keyframes lg-pop { from { opacity: 0; transform: scale(0.5) rotate(-12deg); } }
+@keyframes lg-flota { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+@keyframes lg-brillo { 0%, 70% { transform: translateX(-120%); } 100% { transform: translateX(120%); } }
+
 /* Quien pidió "reducir movimiento" en su aparato no ve nada de esto. */
 @media (prefers-reduced-motion: reduce) {
   *,
