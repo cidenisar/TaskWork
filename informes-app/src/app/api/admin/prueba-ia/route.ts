@@ -60,7 +60,14 @@ async function medir(proveedor: string, modelo: string, fn: () => Promise<string
 }
 
 /** Llamada estilo OpenAI (Groq, Mistral). */
-async function openAiCompat(url: string, key: string, modelo: string, dataUri: string, reintento = true): Promise<string> {
+async function openAiCompat(
+  url: string,
+  key: string,
+  modelo: string,
+  dataUri: string,
+  reintento = true,
+  extra: Record<string, unknown> = {},
+): Promise<string> {
   const res = await fetch(url, {
     method: "POST",
     headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
@@ -68,6 +75,7 @@ async function openAiCompat(url: string, key: string, modelo: string, dataUri: s
       model: modelo,
       temperature: 0,
       max_tokens: 1500,
+      ...extra,
       messages: [
         {
           role: "user",
@@ -85,12 +93,14 @@ async function openAiCompat(url: string, key: string, modelo: string, dataUri: s
     const seg = Number(body.match(/try again in ([\d.]+)s/i)?.[1] ?? res.headers.get("retry-after") ?? NaN);
     if (Number.isFinite(seg) && seg <= 30) {
       await new Promise((r) => setTimeout(r, Math.ceil(seg * 1000) + 500));
-      return openAiCompat(url, key, modelo, dataUri, false);
+      return openAiCompat(url, key, modelo, dataUri, false, extra);
     }
   }
   if (!res.ok) throw new Error(`HTTP ${res.status}: ${body.slice(0, 300)}`);
-  const json = JSON.parse(body) as { choices?: { message?: { content?: string } }[] };
-  return json.choices?.[0]?.message?.content ?? "";
+  const json = JSON.parse(body) as { choices?: { message?: { content?: string | null; reasoning?: string | null } }[] };
+  const msg = json.choices?.[0]?.message;
+  // Modelos que "piensan": si no llegaron a escribir la respuesta, mostrar al menos lo que razonaron.
+  return msg?.content || (msg?.reasoning ? `[sin respuesta final] ${msg.reasoning}` : "");
 }
 
 export async function POST(req: NextRequest) {
@@ -158,7 +168,10 @@ export async function POST(req: NextRequest) {
     const modelo = process.env.OPENROUTER_MODEL || "nvidia/nemotron-3.5-super-vl:free";
     tareas.push(
       medir("OpenRouter (gratis)", modelo, () =>
-        openAiCompat("https://openrouter.ai/api/v1/chat/completions", process.env.OPENROUTER_API_KEY!, modelo, dataUri),
+        openAiCompat("https://openrouter.ai/api/v1/chat/completions", process.env.OPENROUTER_API_KEY!, modelo, dataUri, true, {
+          max_tokens: 4000,
+          reasoning: { enabled: false },
+        }),
       ),
     );
   }
