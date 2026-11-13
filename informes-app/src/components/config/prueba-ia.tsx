@@ -29,33 +29,56 @@ interface Fila {
 const fmt = (n: number | null | undefined) => (typeof n === "number" ? `$ ${n.toLocaleString("es-AR")}` : "—");
 
 /**
- * Esquema "combinado" propuesto: Cloudflare principal + Groq de control.
- * Si las dos leen igual fecha y monto → se acepta. Si difieren → esos
- * campos quedan marcados para revisar. Si una falla → se usa la otra.
+ * Esquema "combinado": votan las IAs gratis (todas menos Claude). Por cada
+ * comprobante, si al menos 2 coinciden en fecha y monto → se acepta ese
+ * valor. Si no hay mayoría → se marca para revisar. Si responde una sola →
+ * se usa esa, sin control. Si no responde ninguna → carga manual.
  */
 function combinada(resultados: Resultado[]): { texto: string; tono: "ok" | "revisar" | "error" } {
-  const usable = (r?: Resultado) => (r && r.ok && r.comprobantes && r.comprobantes.length > 0 ? r : undefined);
-  const cf = usable(resultados.find((r) => r.proveedor.startsWith("Cloudflare")));
-  const gq = usable(resultados.find((r) => r.proveedor.startsWith("Groq")));
-  if (!cf && !gq) return { texto: "Fallaron las dos → carga manual", tono: "error" };
-  if (!cf || !gq) {
-    const una = (cf ?? gq)!;
-    return { texto: `Solo respondió ${una.proveedor.split(" ")[0]} → se usa esa, sin control`, tono: "revisar" };
-  }
-  const a = cf.comprobantes as Comprobante[];
-  const b = gq.comprobantes as Comprobante[];
+  const gratis = resultados.filter(
+    (r) => !r.proveedor.startsWith("Claude") && r.ok && r.comprobantes && r.comprobantes.length > 0,
+  );
+  const nombre = (r: Resultado) => r.proveedor.split(" ")[0];
+  if (gratis.length === 0) return { texto: "No respondió ninguna IA gratis → carga manual", tono: "error" };
+  if (gratis.length === 1) return { texto: `Solo respondió ${nombre(gratis[0])} → se usa esa, sin control`, tono: "revisar" };
+
+  // Cantidad de comprobantes: la que más se repite.
+  const cuentas = gratis.map((r) => r.comprobantes!.length);
+  const cant = [...cuentas].sort((a, b) => cuentas.filter((x) => x === b).length - cuentas.filter((x) => x === a).length)[0];
+  const deAcuerdoCant = gratis.filter((r) => r.comprobantes!.length === cant);
   const avisos: string[] = [];
-  if (a.length !== b.length) avisos.push(`cantidad de comprobantes (${a.length} vs ${b.length})`);
-  for (let i = 0; i < Math.min(a.length, b.length); i++) {
-    const pre = a.length > 1 ? `#${i + 1} ` : "";
-    if ((a[i].monto ?? null) !== (b[i].monto ?? null)) avisos.push(`${pre}monto (${fmt(a[i].monto)} vs ${fmt(b[i].monto)})`);
-    if ((a[i].fecha ?? null) !== (b[i].fecha ?? null)) avisos.push(`${pre}fecha (${a[i].fecha ?? "—"} vs ${b[i].fecha ?? "—"})`);
+  if (deAcuerdoCant.length < 2) avisos.push(`cantidad de comprobantes (${cuentas.join(" / ")})`);
+
+  const aceptados: string[] = [];
+  for (let i = 0; i < cant; i++) {
+    const pre = cant > 1 ? `#${i + 1} ` : "";
+    for (const campo of ["monto", "fecha"] as const) {
+      const votos = new Map<string, string[]>();
+      for (const r of gratis) {
+        const c = (r.comprobantes as Comprobante[])[i];
+        if (!c) continue;
+        const v = String(c[campo] ?? "—");
+        votos.set(v, [...(votos.get(v) ?? []), nombre(r)]);
+      }
+      const [ganador, quienes] = [...votos.entries()].sort((a, b) => b[1].length - a[1].length)[0] ?? ["—", []];
+      const mostrar = (v: string) => (campo === "monto" && v !== "—" ? fmt(Number(v)) : v);
+      if (quienes.length >= 2) {
+        if (campo === "monto") aceptados.push(`${pre}${mostrar(ganador)}`);
+        else aceptados[aceptados.length - 1] += ` · ${mostrar(ganador)}`;
+        if (votos.size > 1) {
+          const disidentes = [...votos.entries()].filter(([v]) => v !== ganador).map(([v, q]) => `${q.join("/")} dijo ${mostrar(v)}`);
+          avisos.push(`${pre}${campo}: mayoría ${quienes.join("+")}, ${disidentes.join(", ")} (se toma la mayoría)`);
+        }
+      } else {
+        if (campo === "monto") aceptados.push(`${pre}?`);
+        avisos.push(`${pre}${campo} sin mayoría (${[...votos.entries()].map(([v, q]) => `${q.join("/")}: ${mostrar(v)}`).join("; ")})`);
+      }
+    }
   }
-  if (avisos.length === 0) {
-    const resumen = a.map((c) => `${c.fecha ?? "—"} · ${fmt(c.monto)}`).join(" | ");
-    return { texto: `Coinciden ✓ ${resumen}`, tono: "ok" };
-  }
-  return { texto: `Marcar para revisar: ${avisos.join("; ")}`, tono: "revisar" };
+  const sinMayoria = avisos.some((a) => a.includes("sin mayoría") || a.startsWith("cantidad"));
+  if (sinMayoria) return { texto: `Marcar para revisar: ${avisos.join("; ")}`, tono: "revisar" };
+  const base = `${gratis.length === 3 ? "Mayoría" : "Coinciden"} ✓ ${aceptados.join(" | ")}`;
+  return { texto: avisos.length ? `${base} — ojo: ${avisos.join("; ")}` : base, tono: "ok" };
 }
 
 export function PruebaIa() {
@@ -163,7 +186,7 @@ export function PruebaIa() {
                     const fondo = c.tono === "ok" ? "#dafbe1" : c.tono === "revisar" ? "#fff8c5" : "#ffebe9";
                     return (
                       <div style={{ marginTop: 8, padding: "6px 10px", borderRadius: 6, background: fondo, color, fontSize: 13 }}>
-                        <strong>Combinada (Cloudflare + Groq):</strong> {c.texto}
+                        <strong>Combinada (IAs gratis):</strong> {c.texto}
                       </div>
                     );
                   })()}
