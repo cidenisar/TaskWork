@@ -334,6 +334,27 @@ export type ConfigEmailEnvioRow = {
   activo: boolean;
 }
 
+export type ModoIa = "combinada" | "en_orden";
+export type ConfigIaRow = {
+  id: number;
+  claude_activo: boolean;
+  cloudflare_activo: boolean;
+  groq_activo: boolean;
+  openrouter_activo: boolean;
+  nvidia_activo: boolean;
+  modo: ModoIa;
+  updated_at: string;
+  updated_by: string | null;
+};
+export type ConfigIaHistRow = {
+  id: string;
+  campo: string;
+  valor_antes: string | null;
+  valor_despues: string | null;
+  quien: string | null;
+  cuando: string;
+};
+
 export type ConfigGeneralRow = {
   id: number;
   logo_empresa_url: string | null;
@@ -1556,6 +1577,8 @@ export interface Database {
         Partial<GuardiaNotificacionRow> & Pick<GuardiaNotificacionRow, "usuario_id" | "tipo" | "ref_tipo" | "ref_id" | "payload">,
         Partial<GuardiaNotificacionRow>
       >;
+      config_ia: Tbl<ConfigIaRow, Partial<ConfigIaRow>, Partial<ConfigIaRow>>;
+      config_ia_hist: Tbl<ConfigIaHistRow, Partial<ConfigIaHistRow> & Pick<ConfigIaHistRow, "campo">, Partial<ConfigIaHistRow>>;
     };
     Views: Record<string, never>;
     Functions: {

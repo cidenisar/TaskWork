@@ -103,6 +103,15 @@ export default async function ConfiguracionHubPage() {
           <div className="module-title">Uso de IA</div>
           <div className="module-sub">Gasto estimado de tokens de IA, por módulo y por día</div>
         </Link>
+        {profile.rol === "superusuario" && (
+          <Link href="/configuracion/ia" className="module-card">
+            <div className="module-ico">
+              <ModuleIcon name="resumen-ia" />
+            </div>
+            <div className="module-title">IA</div>
+            <div className="module-sub">Prender o apagar Claude y las IAs gratuitas, y cómo se combinan</div>
+          </Link>
+        )}
       </div>
     </div>
   );
