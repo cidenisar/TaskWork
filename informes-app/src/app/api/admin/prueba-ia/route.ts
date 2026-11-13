@@ -154,6 +154,24 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  if (process.env.OPENROUTER_API_KEY) {
+    const modelo = process.env.OPENROUTER_MODEL || "nvidia/nemotron-3.5-super-vl:free";
+    tareas.push(
+      medir("OpenRouter (gratis)", modelo, () =>
+        openAiCompat("https://openrouter.ai/api/v1/chat/completions", process.env.OPENROUTER_API_KEY!, modelo, dataUri),
+      ),
+    );
+  }
+
+  if (process.env.NVIDIA_API_KEY) {
+    const modelo = process.env.NVIDIA_MODEL || "z-ai/glm-5.3-flash";
+    tareas.push(
+      medir("NVIDIA NIM (gratis)", modelo, () =>
+        openAiCompat("https://integrate.api.nvidia.com/v1/chat/completions", process.env.NVIDIA_API_KEY!, modelo, dataUri),
+      ),
+    );
+  }
+
   if (process.env.MISTRAL_API_KEY) {
     const modelo = process.env.MISTRAL_MODEL || "mistral-small-latest";
     tareas.push(
