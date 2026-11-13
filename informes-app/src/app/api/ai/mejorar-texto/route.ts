@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
-import Anthropic from "@anthropic-ai/sdk";
+import { crearMensajeIa, hayAlgunaIaConfigurada, mensajeErrorIa } from "@/lib/ai/motor";
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { registrarUsoIa } from "@/lib/ai/registrar-uso";
 import { verificarLimiteIa } from "@/lib/ai/rate-limit";
 
 /**
@@ -20,9 +19,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "No hay texto para mejorar." }, { status: 400 });
   }
 
-  if (!process.env.ANTHROPIC_API_KEY) {
+  if (!hayAlgunaIaConfigurada()) {
     return NextResponse.json(
-      { error: "La mejora con IA no está configurada en este entorno (falta ANTHROPIC_API_KEY)." },
+      { error: "La mejora con IA no está configurada en este entorno (falta la clave de alguna IA)." },
       { status: 503 },
     );
   }
@@ -35,8 +34,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const client = new Anthropic();
-    const response = await client.beta.messages.create({
+    const response = await crearMensajeIa(supabase, { endpoint: "ai/mejorar-texto", modulo: "mejorar-texto", userId: profile.id, tipo: "texto" }, {
       model: "claude-opus-5-5",
       betas: ["server-side-fallback-2026-07-01"],
       fallbacks: "default",
@@ -57,22 +55,13 @@ export async function POST(request: Request) {
       messages: [{ role: "user", content: texto }],
     });
 
-    await registrarUsoIa(supabase, {
-      endpoint: "ai/mejorar-texto",
-      modulo: "mejorar-texto",
-      modelo: response.model,
-      inputTokens: response.usage.input_tokens,
-      outputTokens: response.usage.output_tokens,
-      userId: profile.id,
-    });
-
     const textBlock = response.content.find((b) => b.type === "text");
     if (response.stop_reason === "refusal" || !textBlock) {
       return NextResponse.json({ error: "No se pudo mejorar el texto." }, { status: 502 });
     }
 
     return NextResponse.json({ mejorado: textBlock.text.trim() });
-  } catch {
-    return NextResponse.json({ error: "No se pudo contactar al servicio de IA." }, { status: 502 });
+  } catch (err) {
+    return NextResponse.json({ error: mensajeErrorIa(err) }, { status: 502 });
   }
 }

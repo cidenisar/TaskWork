@@ -2057,3 +2057,15 @@ porque ninguno de los dos tira un error en el caso común (0 o 1 fila):
   cualquier ensanche de tipo puro: el cambio se queda contenido en la
   definición y en el cuerpo de esas dos funciones, no se filtra a cada
   lugar que las llama.
+
+## 33. IA sin costo: varias IAs gratuitas "votando" + un enchufe único, en vez de atar la app a un proveedor
+
+Contexto (Informes, 13/11/2026): el área no puede pagar productos fuera del contrato marco, así que se probó reemplazar Claude por IAs con plan gratis para leer fotos (tickets, equipos, etc.).
+
+- **Medir con fotos reales antes de decidir.** Una página temporal solo-admin que manda la MISMA foto a todas las IAs y muestra lo que leyó cada una al lado de la referencia (Claude). Con 7 tickets ya aparecieron los errores típicos de los modelos chicos: fecha dada vuelta (03/11 → 11 de marzo), dígitos del monto mezclados ($292.820 → $238.220), centavos perdidos, un gasto inventado de más, la dirección tomada como nombre del comercio.
+- **Combinarlas atrapa justo esos errores.** Votación campo por campo: se acepta el valor en el que coinciden al menos dos; sin mayoría, se marca para revisar. En la prueba ninguna foto salió "aprobada" con un error.
+- **Los planes gratis cambian sin aviso.** En semanas: Groq dio de baja el modelo de visión que usábamos (404 `model_not_found`), Mistral pasó a exigir plan pago para sacar la clave y GitHub Models cerró. Por eso el modelo de cada proveedor tiene que ser una variable de entorno (`GROQ_MODEL`, etc.), no una constante en el código, y la app no puede depender de una sola IA.
+- **Los límites por minuto pegan antes de lo que parece.** Groq gratis: ~7.000 tokens de entrada por minuto, una foto ~2.300 → unas 3 fotos por minuto. Hay que reintentar solo cuando el 429 pide esperar poco (≤30 s) y si no, seguir con las otras.
+- **Modelos que "piensan" (razonamiento):** pueden gastar todo `max_tokens` razonando y devolver la respuesta vacía. En OpenRouter se apaga con `reasoning: { enabled: false }`.
+- **Diseño:** un "enchufe" (`lib/ai/motor.ts`) que recibe el MISMO pedido que antes iba a Claude y devuelve una respuesta con la misma forma, así cada ruta cambia 3 líneas. Interruptores por proveedor + modo (combinada / en orden) en una tabla singleton con historial, solo Superusuario, con valores por defecto que dejan la app exactamente como estaba. Si la tabla falta o falla, se comporta como antes.
+- **Dónde NO alcanza lo gratis:** pedidos grandes (varias fotos + reglas largas + respuesta estructurada extensa, como la lectura de tableros/unifilares) no entran en los límites por minuto de los planes gratis, y la calidad cae mucho con imágenes cargadas de detalle.

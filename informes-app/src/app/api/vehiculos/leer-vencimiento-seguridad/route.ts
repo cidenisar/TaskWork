@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
+import { crearMensajeIa, hayAlgunaIaConfigurada, mensajeErrorIa } from "@/lib/ai/motor";
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { registrarUsoIa } from "@/lib/ai/registrar-uso";
 import { verificarLimiteIa } from "@/lib/ai/rate-limit";
 
 /**
@@ -47,8 +47,8 @@ export async function POST(req: NextRequest) {
   const profile = await requireProfile();
   const supabase = await createClient();
 
-  if (!process.env.ANTHROPIC_API_KEY) {
-    return NextResponse.json({ error: "La lectura de fotos con IA no está configurada en este entorno (falta ANTHROPIC_API_KEY)." }, { status: 503 });
+  if (!hayAlgunaIaConfigurada()) {
+    return NextResponse.json({ error: "La lectura de fotos con IA no está configurada en este entorno (falta la clave de alguna IA)." }, { status: 503 });
   }
 
   const limite = await verificarLimiteIa(supabase, profile.id);
@@ -74,8 +74,7 @@ export async function POST(req: NextRequest) {
   };
 
   try {
-    const client = new Anthropic();
-    const response = await client.beta.messages.create({
+    const response = await crearMensajeIa(supabase, { endpoint: "vehiculos/leer-vencimiento-seguridad", modulo: "vehiculos", userId: profile.id }, {
       model: "claude-opus-5-5",
       betas: ["server-side-fallback-2026-07-01"],
       fallbacks: "default",
@@ -103,15 +102,6 @@ export async function POST(req: NextRequest) {
           ],
         },
       ],
-    });
-
-    await registrarUsoIa(supabase, {
-      endpoint: "vehiculos/leer-vencimiento-seguridad",
-      modulo: "vehiculos",
-      modelo: response.model,
-      inputTokens: response.usage.input_tokens,
-      outputTokens: response.usage.output_tokens,
-      userId: profile.id,
     });
 
     const textBlock = response.content.find((b) => b.type === "text");
@@ -154,6 +144,6 @@ export async function POST(req: NextRequest) {
         { status: 502 },
       );
     }
-    return NextResponse.json({ error: "No se pudo contactar al servicio de IA." }, { status: 502 });
+    return NextResponse.json({ error: mensajeErrorIa(err) }, { status: 502 });
   }
 }

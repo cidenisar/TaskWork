@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import Anthropic from "@anthropic-ai/sdk";
+import { crearMensajeIa, hayAlgunaIaConfigurada, mensajeErrorIa } from "@/lib/ai/motor";
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { registrarUsoIa } from "@/lib/ai/registrar-uso";
 import { verificarLimiteIa } from "@/lib/ai/rate-limit";
 
 /** Tope de fotos de evidencia que se mandan a esta verificación — más que esto no suma precisión y encarece/alenta la llamada. */
@@ -40,8 +39,8 @@ export async function POST(req: NextRequest) {
   const profile = await requireProfile();
   const supabase = await createClient();
 
-  if (!process.env.ANTHROPIC_API_KEY) {
-    return NextResponse.json({ error: "La verificación con IA no está configurada en este entorno (falta ANTHROPIC_API_KEY)." }, { status: 503 });
+  if (!hayAlgunaIaConfigurada()) {
+    return NextResponse.json({ error: "La verificación con IA no está configurada en este entorno (falta la clave de alguna IA)." }, { status: 503 });
   }
 
   const limite = await verificarLimiteIa(supabase, profile.id);
@@ -78,8 +77,7 @@ export async function POST(req: NextRequest) {
   const listado = items.map((it, i) => `${i + 1}. [clave: ${it.key}] ${it.descripcion}`).join("\n");
 
   try {
-    const client = new Anthropic();
-    const response = await client.messages.create({
+    const response = await crearMensajeIa(supabase, { endpoint: "informe-tecnico/verificar-instalacion", modulo: "informe_tecnico", userId: profile.id }, {
       model: "claude-opus-5",
       max_tokens: 4096,
       output_config: { effort: "medium" },
@@ -111,15 +109,6 @@ export async function POST(req: NextRequest) {
       ],
     });
 
-    await registrarUsoIa(supabase, {
-      endpoint: "informe-tecnico/verificar-instalacion",
-      modulo: "informe_tecnico",
-      modelo: response.model,
-      inputTokens: response.usage.input_tokens,
-      outputTokens: response.usage.output_tokens,
-      userId: profile.id,
-    });
-
     const textBlock = response.content.find((b) => b.type === "text");
     if (response.stop_reason === "refusal" || !textBlock) {
       await logDiagnostico(supabase, profile.id, `verificar-instalacion: stop_reason=${response.stop_reason}, sin bloque de texto utilizable`);
@@ -141,6 +130,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ resultados });
   } catch (err) {
     await logDiagnostico(supabase, profile.id, err instanceof Error ? err.message : "Error desconocido verificando instalación", err instanceof Error ? err.stack : undefined);
-    return NextResponse.json({ error: "No se pudo verificar la instalación." }, { status: 502 });
+    const sinIa = err instanceof Error && /IA prendida|Ninguna IA respondió/.test(err.message);
+    return NextResponse.json({ error: sinIa ? mensajeErrorIa(err) : "No se pudo verificar la instalación." }, { status: 502 });
   }
 }
