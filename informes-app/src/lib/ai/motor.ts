@@ -81,6 +81,21 @@ export async function obtenerConfigIa(supabase: Supabase): Promise<ConfigIa> {
   }
 }
 
+/**
+ * Para las funciones que usan "herramientas" de Claude (el asistente de
+ * Estadísticas y la lectura detallada de tableros): las IAs gratuitas no
+ * las entienden, así que solo pueden correr con Claude. Con este chequeo
+ * respetan el interruptor de Configuración → IA en vez de llamar a Claude
+ * igual y gastar sin que nadie lo sepa.
+ */
+export async function claudeDisponible(supabase: Supabase): Promise<boolean> {
+  const config = await obtenerConfigIa(supabase);
+  return config.activos.claude && proveedorConfigurado("claude");
+}
+
+export const MENSAJE_SOLO_CLAUDE =
+  "Esta función necesita Claude y está apagada en Configuración → IA — pedile a un Superusuario que la prenda.";
+
 // ---------------------------------------------------------------------------
 // Llamadas a cada proveedor
 // ---------------------------------------------------------------------------

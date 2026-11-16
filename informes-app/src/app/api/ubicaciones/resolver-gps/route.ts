@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import Anthropic from "@anthropic-ai/sdk";
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { distanciaMetros } from "@/lib/geo";
 import { labelUbicacion, type Ubicacion } from "@/components/ubicaciones/types";
-import { registrarUsoIa } from "@/lib/ai/registrar-uso";
+import { crearMensajeIa, hayAlgunaIaConfigurada } from "@/lib/ai/motor";
 import { verificarLimiteIa } from "@/lib/ai/rate-limit";
 
 /**
@@ -119,7 +118,7 @@ export async function POST(req: NextRequest) {
   }
 
   let localidad = localidadCruda;
-  if (localidadCruda && process.env.ANTHROPIC_API_KEY && (await verificarLimiteIa(supabase, profile.id)).permitido) {
+  if (localidadCruda && hayAlgunaIaConfigurada() && (await verificarLimiteIa(supabase, profile.id)).permitido) {
     const { data: localidadesData } = await supabase
       .from("ubicaciones")
       .select("localidad")
@@ -128,8 +127,7 @@ export async function POST(req: NextRequest) {
     const localidadesConocidas = [...new Set((localidadesData ?? []).map((u) => u.localidad).filter((l): l is string => !!l))];
     if (localidadesConocidas.length > 0) {
       try {
-        const client = new Anthropic();
-        const response = await client.messages.create({
+        const response = await crearMensajeIa(supabase, { endpoint: "ubicaciones/resolver-gps", modulo: "ubicaciones", userId: profile.id, tipo: "texto" }, {
           model: "claude-haiku-4-5",
           max_tokens: 60,
           system:
@@ -145,17 +143,9 @@ export async function POST(req: NextRequest) {
             },
           ],
         });
-        await registrarUsoIa(supabase, {
-          endpoint: "ubicaciones/resolver-gps",
-          modulo: "ubicaciones",
-          modelo: response.model,
-          inputTokens: response.usage.input_tokens,
-          outputTokens: response.usage.output_tokens,
-          userId: profile.id,
-        });
-
         const textBlock = response.content.find((b) => b.type === "text");
-        const sugerida = textBlock && "text" in textBlock ? textBlock.text.trim() : "";
+        // Las IAs gratuitas a veces devuelven el nombre entre comillas o con punto final.
+        const sugerida = textBlock ? textBlock.text.trim().replace(/^["'`\s]+|["'`.\s]+$/g, "") : "";
         if (sugerida && sugerida !== "NINGUNA" && localidadesConocidas.includes(sugerida)) {
           localidad = sugerida;
         }

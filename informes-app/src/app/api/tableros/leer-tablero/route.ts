@@ -3,6 +3,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { registrarUsoIa } from "@/lib/ai/registrar-uso";
+import { claudeDisponible, MENSAJE_SOLO_CLAUDE } from "@/lib/ai/motor";
 import { verificarLimiteIa } from "@/lib/ai/rate-limit";
 import { TABLERO_FOTO_IA_MAX } from "@/components/tableros/types";
 import {
@@ -46,6 +47,11 @@ export async function POST(req: NextRequest) {
 
   if (!process.env.ANTHROPIC_API_KEY) {
     return NextResponse.json({ error: "La lectura de fotos con IA no está configurada en este entorno (falta ANTHROPIC_API_KEY)." }, { status: 503 });
+  }
+
+  // Usa herramientas de Claude (tool use): las IAs gratuitas no las soportan, así que respeta el interruptor de Claude.
+  if (!(await claudeDisponible(supabase))) {
+    return NextResponse.json({ error: MENSAJE_SOLO_CLAUDE }, { status: 503 });
   }
 
   const limite = await verificarLimiteIa(supabase, profile.id);

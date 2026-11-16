@@ -5,6 +5,7 @@ import { puedeVerEstadisticas } from "@/lib/types";
 import { createClient } from "@/lib/supabase/server";
 import { ESTADISTICAS_TOOLS, ejecutarHerramienta } from "@/lib/estadisticas/tools";
 import { registrarUsoIa } from "@/lib/ai/registrar-uso";
+import { claudeDisponible, MENSAJE_SOLO_CLAUDE } from "@/lib/ai/motor";
 import { verificarLimiteIa } from "@/lib/ai/rate-limit";
 
 const SYSTEM_PROMPT =
@@ -35,6 +36,11 @@ export async function POST(request: Request) {
   }
 
   const supabase = await createClient();
+
+  // Usa herramientas de Claude (tool use): las IAs gratuitas no las soportan, así que respeta el interruptor de Claude.
+  if (!(await claudeDisponible(supabase))) {
+    return NextResponse.json({ error: MENSAJE_SOLO_CLAUDE }, { status: 503 });
+  }
 
   const limite = await verificarLimiteIa(supabase, profile.id);
   if (!limite.permitido) {

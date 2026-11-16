@@ -1,6 +1,5 @@
 "use server";
 
-import Anthropic from "@anthropic-ai/sdk";
 import { revalidatePath } from "next/cache";
 import { requireProfile, requireAdmin } from "@/lib/auth";
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
@@ -19,6 +18,7 @@ import { buildMantenimientoFilename } from "@/lib/pdf/filename";
 import { obtenerDestinatariosAutoEnvio } from "@/lib/email/destinatarios-auto-envio";
 import { enviarPdfPorEmail } from "@/lib/email/enviar-pdf";
 import { verificarLimiteIa } from "@/lib/ai/rate-limit";
+import { crearMensajeIa, hayAlgunaIaConfigurada } from "@/lib/ai/motor";
 import type {
   MotivoBaja,
   MotivoEntregaDeposito,
@@ -54,17 +54,22 @@ interface Watts {
  * en los hechos consume en uso normal (ej. una notebook con cargador de
  * 65W consume mucho menos que eso la mayoría del tiempo).
  */
-async function estimarWatts(items: { texto: string; marcaModelo: string | null; categoriaLabel: string }[]): Promise<Watts[]> {
+async function estimarWatts(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+  items: { texto: string; marcaModelo: string | null; categoriaLabel: string }[],
+): Promise<Watts[]> {
   if (items.length === 0) return [];
-  if (!process.env.ANTHROPIC_API_KEY) return items.map(() => ({ promedio: null, max: null }));
+  if (!hayAlgunaIaConfigurada()) return items.map(() => ({ promedio: null, max: null }));
 
   const listado = items
     .map((it, i) => `${i + 1}. [${it.categoriaLabel}] ${it.texto}${it.marcaModelo ? ` — marca/modelo: ${it.marcaModelo}` : " — sin marca/modelo legible"}`)
     .join("\n");
 
   try {
-    const client = new Anthropic();
-    const response = await client.messages.create({
+    // tipo "texto": es una ESTIMACIÓN por conocimiento general, no una lectura — varias IAs casi nunca dan el mismo número
+    // exacto, así que no se vota: responde la primera IA prendida (en orden de prioridad).
+    const response = await crearMensajeIa(supabase, { endpoint: "ubicaciones/estimar-consumo", modulo: "ubicaciones", userId, tipo: "texto" }, {
       model: "claude-opus-5",
       max_tokens: 2048,
       output_config: { effort: "low" },
@@ -128,6 +133,8 @@ export async function estimarConsumoRacksAction(rackIds: string[]): Promise<Esti
   if (!pendientes || pendientes.length === 0) return { success: true, estimados: 0, sinDato: 0 };
 
   const watts = await estimarWatts(
+    supabase,
+    profile.id,
     pendientes.map((p) => ({ texto: p.texto, marcaModelo: p.marca_modelo, categoriaLabel: RACK_CATEGORIA_LABEL[p.categoria_equipo] })),
   );
 
@@ -166,6 +173,8 @@ export async function estimarConsumoEquiposAction(ubicacionIds: string[]): Promi
   if (!pendientes || pendientes.length === 0) return { success: true, estimados: 0, sinDato: 0 };
 
   const watts = await estimarWatts(
+    supabase,
+    profile.id,
     pendientes.map((p) => ({ texto: p.texto, marcaModelo: p.marca_modelo, categoriaLabel: EQUIPO_CATEGORIA_LABEL[p.categoria_equipo] })),
   );
 
