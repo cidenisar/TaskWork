@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requireProfile } from "@/lib/auth";
 import { LockedPanel } from "@/components/locked-panel";
 import { createClient } from "@/lib/supabase/server";
@@ -43,6 +44,13 @@ export default async function ConfiguracionIaPage() {
         modo={config.modo}
         historial={historial}
       />
+      <div className="card">
+        <div className="section-label">Comparación de lecturas</div>
+        <p className="hint" style={{ margin: "0 0 8px" }}>
+          Qué leyó cada IA sobre la misma foto y cuánto coincide con Claude o con lo votado, para mejorar las instrucciones.
+        </p>
+        <Link href="/configuracion/ia/comparacion">Ver comparación →</Link>
+      </div>
     </div>
   );
 }

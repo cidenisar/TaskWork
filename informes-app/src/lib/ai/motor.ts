@@ -1,7 +1,8 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { createClient } from "@/lib/supabase/server";
-import type { ConfigIaRow, ModoIa } from "@/lib/database.types";
+import type { ConfigIaRow, IaLecturaPorIa, ModoIa } from "@/lib/database.types";
 import { registrarUsoIa } from "./registrar-uso";
+import { normalizarValor } from "./comparar";
 
 /**
  * "Enchufe" único de IA. Las rutas le pasan el MISMO pedido que antes le
@@ -222,12 +223,6 @@ function extraerJson(texto: string): unknown | undefined {
 
 const esObjeto = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 
-function normalizar(v: unknown): string {
-  if (typeof v === "string") return v.trim().toLowerCase().replace(/\s+/g, " ");
-  if (typeof v === "number") return String(Math.round(v * 100) / 100);
-  return JSON.stringify(v ?? null);
-}
-
 /**
  * Combina las respuestas (ya ordenadas por prioridad) campo por campo.
  * Exportada para poder probarla aparte.
@@ -262,7 +257,7 @@ export function votar(valores: unknown[], ruta: string, dudosos: string[]): unkn
 
   const grupos = new Map<string, unknown[]>();
   for (const v of presentes) {
-    const n = normalizar(v);
+    const n = normalizarValor(v);
     grupos.set(n, [...(grupos.get(n) ?? []), v]);
   }
   const mejor = [...grupos.values()].sort((a, b) => b.length - a.length)[0];
@@ -274,6 +269,42 @@ export function votar(valores: unknown[], ruta: string, dudosos: string[]): unkn
 // ---------------------------------------------------------------------------
 // Punto de entrada
 // ---------------------------------------------------------------------------
+
+/**
+ * Deja constancia de lo que leyó cada IA (sin la foto) para compararlas en
+ * Configuración → IA → Comparación. Best-effort: un fallo acá nunca debe
+ * romper la lectura que el técnico está esperando.
+ */
+async function guardarLectura(
+  supabase: Supabase,
+  d: {
+    endpoint: string;
+    modulo: string;
+    userId: string;
+    modo: string;
+    proveedores: string[];
+    fallaron: string[];
+    dudosos: string[];
+    resultado: unknown;
+    porIa: IaLecturaPorIa;
+  },
+) {
+  try {
+    await supabase.from("ia_lectura").insert({
+      endpoint: d.endpoint,
+      modulo: d.modulo,
+      user_id: d.userId,
+      modo: d.modo,
+      proveedores: d.proveedores,
+      fallaron: d.fallaron,
+      dudosos: d.dudosos,
+      resultado: d.resultado,
+      por_ia: d.porIa,
+    });
+  } catch {
+    // el registro es best-effort
+  }
+}
 
 export interface RespuestaIa {
   model: string;
@@ -345,7 +376,10 @@ export async function crearMensajeIa(
     }
   }
 
+  const registroBase = { endpoint: ctx.endpoint, modulo: ctx.modulo, userId: ctx.userId, modo: config.modo };
+
   if (exitos.length === 0) {
+    if (tipo === "json") await guardarLectura(supabase, { ...registroBase, proveedores: [], fallaron, dudosos: [], resultado: null, porIa: {} });
     // Con Claude como única IA, se relanza su error original para conservar
     // los mensajes de siempre (clave inválida, sin crédito, saturado).
     if (disponibles.length === 1 && ultimoErrorClaude) throw ultimoErrorClaude;
@@ -354,14 +388,28 @@ export async function crearMensajeIa(
 
   const dudosos: string[] = [];
   let texto: string;
+  let resultado: unknown;
   if (tipo === "texto") {
     texto = exitos[0].salida.texto;
   } else if (exitos.length === 1) {
     // Se devuelve el JSON ya limpio (sin "<think>", bloques markdown, etc. que agregan algunas gratuitas).
-    texto = JSON.stringify(exitos[0].json);
+    resultado = exitos[0].json;
+    texto = JSON.stringify(resultado);
     if (config.modo === "combinada" && tipo === "json" && disponibles.length > 1) dudosos.push("*sin-control: respondió una sola IA");
   } else {
-    texto = JSON.stringify(votar(exitos.map((e) => e.json), "", dudosos));
+    resultado = votar(exitos.map((e) => e.json), "", dudosos);
+    texto = JSON.stringify(resultado);
+  }
+
+  if (tipo === "json") {
+    await guardarLectura(supabase, {
+      ...registroBase,
+      proveedores: exitos.map((e) => e.id),
+      fallaron,
+      dudosos,
+      resultado,
+      porIa: Object.fromEntries(exitos.map((e) => [e.id, { modelo: e.salida.modelo, json: e.json }])),
+    });
   }
 
   return {

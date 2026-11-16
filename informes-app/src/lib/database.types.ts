@@ -354,6 +354,21 @@ export type ConfigIaHistRow = {
   quien: string | null;
   cuando: string;
 };
+/** Lo que leyó cada IA en una lectura (sin la foto) — Configuración → IA → Comparación. */
+export type IaLecturaPorIa = Record<string, { modelo: string; json: unknown }>;
+export type IaLecturaRow = {
+  id: string;
+  created_at: string;
+  endpoint: string;
+  modulo: string;
+  user_id: string | null;
+  modo: string;
+  proveedores: string[];
+  fallaron: string[];
+  dudosos: string[];
+  resultado: unknown;
+  por_ia: IaLecturaPorIa;
+};
 
 export type ConfigGeneralRow = {
   id: number;
@@ -1579,6 +1594,7 @@ export interface Database {
       >;
       config_ia: Tbl<ConfigIaRow, Partial<ConfigIaRow>, Partial<ConfigIaRow>>;
       config_ia_hist: Tbl<ConfigIaHistRow, Partial<ConfigIaHistRow> & Pick<ConfigIaHistRow, "campo">, Partial<ConfigIaHistRow>>;
+      ia_lectura: Tbl<IaLecturaRow, Partial<IaLecturaRow> & Pick<IaLecturaRow, "endpoint" | "modulo" | "modo">, Partial<IaLecturaRow>>;
     };
     Views: Record<string, never>;
     Functions: {

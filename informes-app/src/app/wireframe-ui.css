@@ -439,6 +439,47 @@ textarea {
    no deja lugar para el dígito junto a las flechitas nativas del navegador
    en un campo tan angosto. Saca el padding grande y el spinner nativo, deja
    solo flechitas discretas en navegadores que lo soportan (Chrome/Safari). */
+/* Configuración → IA → Comparación (src/app/(app)/configuracion/ia/comparacion) */
+.cmp-scroll {
+  overflow-x: auto;
+}
+.cmp-resumen,
+.cmp-tabla {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.cmp-resumen th,
+.cmp-resumen td,
+.cmp-tabla th,
+.cmp-tabla td {
+  padding: 5px 8px;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--field-border);
+}
+.cmp-tabla td.dif {
+  background: color-mix(in srgb, var(--warn) 18%, transparent);
+  font-weight: 600;
+}
+.cmp-tabla td.falta {
+  color: var(--text-faint);
+  font-style: italic;
+}
+.cmp-ruta {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  word-break: break-all;
+}
+.cmp-lectura {
+  border-top: 1px solid var(--field-border);
+  padding: 10px 0;
+}
+.cmp-lectura > summary {
+  cursor: pointer;
+  font-size: 13.5px;
+}
+
 input[type='number'].input-chico {
   width: 46px;
   padding: 6px 4px;

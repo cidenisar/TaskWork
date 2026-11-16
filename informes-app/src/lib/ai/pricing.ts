@@ -11,7 +11,9 @@ export const PRECIO_IA_USD_POR_MTOK: Record<string, { entrada: number; salida: n
 };
 
 export function calcularCostoUsd(modelo: string, inputTokens: number, outputTokens: number): number {
-  const precio = PRECIO_IA_USD_POR_MTOK[modelo];
+  // La API devuelve el id con fecha ("claude-haiku-4-5-20251001"): se busca por prefijo. Las IAs gratuitas ("groq:...") no coinciden → $0.
+  const clave = Object.keys(PRECIO_IA_USD_POR_MTOK).find((k) => modelo === k || modelo.startsWith(`${k}-`));
+  const precio = clave ? PRECIO_IA_USD_POR_MTOK[clave] : undefined;
   if (!precio) return 0;
   return (inputTokens * precio.entrada + outputTokens * precio.salida) / 1_000_000;
 }
