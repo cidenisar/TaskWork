@@ -350,7 +350,7 @@ button.panel-nav-item {
 /* Panel → Tareas pendientes (src/app/panel/tareas) */
 .tareas-layout {
   display: grid;
-  grid-template-columns: minmax(250px, 340px) 1fr;
+  grid-template-columns: minmax(220px, 280px) 1fr;
   gap: 16px;
   align-items: start;
 }
@@ -458,9 +458,116 @@ button.panel-nav-item {
   width: 100%;
   text-align: left;
   padding: 6px 8px;
-  border: 1px solid var(--border, #d0d5dd);
+  border: 1px solid var(--field-border);
   border-radius: 6px;
   background: transparent;
   color: inherit;
   cursor: pointer;
+}
+
+/* Tareas: filas compactas agrupadas por sitio */
+.tareas-barra {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.tareas-grupos {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+.tarea-grupo {
+  border: 1px solid var(--field-border);
+  border-radius: 8px;
+}
+.tarea-grupo > summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  cursor: pointer;
+  list-style-position: inside;
+}
+.tarea-grupo-titulo {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+.tarea-grupo-titulo strong {
+  font-size: 14px;
+}
+.tarea-grupo-conteo {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.tarea-grupo-cuerpo {
+  padding: 0 12px 10px;
+  border-top: 1px solid var(--field-border);
+}
+.tarea-grupo-alta {
+  margin-top: 8px;
+}
+.tarea-compacta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 4px 16px;
+  padding: 6px 0;
+}
+.tarea-compacta .tarea-principal {
+  flex: 1 1 340px;
+  min-width: 0;
+}
+.tarea-compacta .tarea-texto {
+  font-size: 13.5px;
+}
+.tarea-compacta .tarea-botones {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.tarea-compacta .tarea-acciones,
+.tarea-compacta .tarea-equipo {
+  margin-top: 0;
+}
+.tarea-nueva {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  max-width: 520px;
+  padding: 10px;
+  border: 1px solid var(--field-border);
+  border-radius: 8px;
+}
+.tarea-nueva-sitio {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Vista General con el cuadro de Tareas pendientes: cinco cuadros en fila en pantalla ancha */
+.kpi-grid.kpi-grid-5 {
+  grid-template-columns: repeat(5, 1fr);
+}
+@media (max-width: 1280px) {
+  .kpi-grid.kpi-grid-5 {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+@media (max-width: 900px) {
+  .kpi-grid.kpi-grid-5 {
+    grid-template-columns: 1fr 1fr;
+  }
 }

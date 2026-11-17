@@ -9,6 +9,8 @@ import { JerarquiaSitioPicker } from "@/components/panel/jerarquia-sitio-picker"
 import { SitioDetalleCard } from "@/components/panel/sitio-detalle-card";
 import { EstadoViajeBadge } from "@/components/riesgo-viaje/badges";
 import { getNovedadesGuardiaHoy } from "@/lib/panel/novedades-guardia";
+import { cargarResumenTareasPanel } from "@/lib/tareas/resumen-panel";
+import { diasDesde, DIAS_TAREA_VIEJA } from "@/lib/tareas/puro";
 
 function fmtHoy(): string {
   return new Date().toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
@@ -84,10 +86,13 @@ export default async function PanelPage({ searchParams }: { searchParams: Promis
   const sp = await searchParams;
   const profile = await requireProfile();
   const supabase = await createClient();
-  const [overview, novedadesGuardia] = await Promise.all([
+  const [overview, novedadesGuardia, tareas] = await Promise.all([
     getPanelOverview(supabase, profile.rol !== "tecnico"),
     getNovedadesGuardiaHoy(supabase),
+    // Tareas pendientes: solo para la oficina (la pantalla a la que lleva es de Admin/Supervisor).
+    profile.rol !== "tecnico" ? cargarResumenTareasPanel(supabase) : Promise.resolve(null),
   ]);
+  const ahora = new Date();
   const { kpis, equipoPorModulo, sitios, vencimientos, mantenimientoPendiente, viajesActivos, guardiaAhora } = overview;
 
   const filtros: FiltrosJerarquia = { region: sp.region, provincia: sp.provincia, localidad: sp.localidad, sitio: sp.sitio };
@@ -127,7 +132,7 @@ export default async function PanelPage({ searchParams }: { searchParams: Promis
         <div className="panel-topbar-meta">{fmtHoy()}</div>
       </div>
 
-      <div className="kpi-grid">
+      <div className={tareas ? "kpi-grid kpi-grid-5" : "kpi-grid"}>
         <div className="kpi-card kpi-card-multi">
           <div className="kpi-multi-title">Equipamiento relevado</div>
           <div className="kpi-multi-rows">
@@ -168,6 +173,23 @@ export default async function PanelPage({ searchParams }: { searchParams: Promis
             <FilaKpi num={kpis.mantenimiento.reprogramados} label="Reprogramados" href="/panel/mantenimientos?filtro=reprogramado" />
           </div>
         </div>
+
+        {tareas && (
+          <div className="kpi-card kpi-card-multi">
+            <div className="kpi-multi-title">Tareas pendientes</div>
+            <div className="kpi-multi-rows">
+              <FilaKpi num={tareas.abiertas} label="Abiertas" href="/panel/tareas" />
+              <FilaKpi
+                num={tareas.viejas}
+                label={`Con más de ${DIAS_TAREA_VIEJA} días`}
+                color={tareas.viejas > 0 ? "var(--accent-2)" : undefined}
+                href="/panel/tareas"
+              />
+              <FilaKpi num={tareas.resueltasRecientes} label="Resueltas (30 días)" color="var(--ok)" href="/panel/tareas?estado=cerradas" />
+              <FilaKpi num={tareas.bajasRecientes} label="Dadas de baja (30 días)" href="/panel/tareas?estado=cerradas" />
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="panel-grid-3">
@@ -250,6 +272,41 @@ export default async function PanelPage({ searchParams }: { searchParams: Promis
           )}
         </div>
       </div>
+
+      {tareas && (
+        <div className="card" style={{ marginTop: 18 }}>
+          <div className="panel-card-title">
+            <h2>Últimas tareas cargadas</h2>
+            <Link href="/panel/tareas" className="panel-card-count">
+              ver todas →
+            </Link>
+          </div>
+          {tareas.ultimas.length === 0 ? (
+            <div className="empty-note">Todavía no se cargó ninguna tarea.</div>
+          ) : (
+            <div>
+              {tareas.ultimas.map((t) => {
+                const dias = diasDesde(t.creadaAt, ahora);
+                return (
+                  <div className="panel-venc-row" key={t.id}>
+                    <div className="panel-venc-info">
+                      <div className="panel-venc-nombre">{t.texto}</div>
+                      <div className="panel-venc-tipo">
+                        {t.lugar} · {t.informeNumero ? `Informe ${t.informeNumero}` : "cargada a mano"}
+                      </div>
+                    </div>
+                    <div className="panel-venc-dias">
+                      <span className={`venc-badge ${t.estado === "abierta" ? "warn" : "ok"}`}>
+                        {t.estado === "abierta" ? (dias === 0 ? "hoy" : `hace ${dias} d`) : t.estado === "resuelta" ? "resuelta" : "dada de baja"}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="card" style={{ marginTop: 18 }}>
         <div className="panel-card-title">

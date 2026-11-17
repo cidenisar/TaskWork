@@ -36,7 +36,7 @@ export function lineasDeTareas(texto: string | null | undefined): string[] {
       .replace(/^\s*(?:[-*•·]+|\d+[.)])\s+/, "")
       .replace(/\s+/g, " ")
       .trim();
-    if (!linea) continue;
+    if (!linea || /^[-*•·]+$/.test(linea)) continue; // vacía, o una viñeta suelta sin texto
     const clave = normalizarTarea(linea);
     if (vistas.has(clave)) continue;
     vistas.add(clave);
@@ -208,4 +208,44 @@ export function resumenPorLocalidad(tareas: TareaParaResumen[], ahora: Date): Re
   return [...mapa.values()]
     .map(({ _sitios, ...r }) => ({ ...r, sitios: _sitios.size }))
     .sort((a, b) => b.abiertas - a.abiertas || a.region.localeCompare(b.region, "es") || a.localidad.localeCompare(b.localidad, "es"));
+}
+
+/** El texto con una viñeta ("• ") al inicio de cada línea — cómo se escribe y se guarda el campo del informe. */
+export function conVinetas(lineas: string[]): string {
+  return lineas.map((l) => `• ${l}`).join("\n");
+}
+
+/**
+ * Comportamiento de lista al escribir en el campo de tareas: cada Enter abre una línea nueva con
+ * viñeta, y un Enter sobre una viñeta vacía la quita y sale de la lista. Recibe el texto anterior,
+ * el nuevo y dónde quedó el cursor; devuelve el texto final y la nueva posición del cursor.
+ */
+export function aplicarVinetas(anterior: string, nuevo: string, cursor: number): { texto: string; cursor: number } {
+  const insertoSalto = nuevo.length === anterior.length + 1 && nuevo[cursor - 1] === "\n";
+  if (!insertoSalto) return { texto: nuevo, cursor };
+  const antes = nuevo.slice(0, cursor - 1);
+  const despues = nuevo.slice(cursor);
+  const inicioLinea = antes.lastIndexOf("\n") + 1;
+  const lineaPrevia = antes.slice(inicioLinea);
+  if (/^•\s*$/.test(lineaPrevia)) {
+    // Enter sobre una viñeta vacía: se saca la viñeta y no se abre otra.
+    const texto = antes.slice(0, inicioLinea) + despues;
+    return { texto, cursor: inicioLinea };
+  }
+  const texto = `${antes}\n• ${despues}`;
+  return { texto, cursor: antes.length + 3 };
+}
+
+export interface GrupoSitio<T> {
+  ubicacionId: string;
+  tareas: T[];
+}
+
+/** Agrupa tareas por sitio. Dentro de cada grupo, la más vieja primero; los grupos, por su tarea más vieja (lo más urgente arriba). */
+export function agruparPorSitio<T extends { ubicacionId: string; created_at: string }>(tareas: T[]): GrupoSitio<T>[] {
+  const mapa = new Map<string, T[]>();
+  for (const t of tareas) mapa.set(t.ubicacionId, [...(mapa.get(t.ubicacionId) ?? []), t]);
+  return [...mapa.entries()]
+    .map(([ubicacionId, ts]) => ({ ubicacionId, tareas: [...ts].sort((a, b) => a.created_at.localeCompare(b.created_at)) }))
+    .sort((a, b) => a.tareas[0].created_at.localeCompare(b.tareas[0].created_at));
 }

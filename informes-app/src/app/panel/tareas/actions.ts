@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { requireAdminOrSupervisor } from "@/lib/auth";
 import { logAudit } from "@/lib/config/audit";
+import { labelUbicacion, type Ubicacion } from "@/components/ubicaciones/types";
+import { lineasDeTareas, normalizarTarea } from "@/lib/tareas/puro";
 import { resolverEquipo } from "@/lib/equipamiento/resolver-equipo";
 import { buscarEquipoReemplazoAction } from "@/app/(app)/informe-tecnico/nuevo/materiales-picker-actions";
 import type { MotivoCierreTarea, TipoEquipoBaja } from "@/lib/database.types";
@@ -156,4 +158,57 @@ export async function vincularEquipoAction(tareaId: string, equipo: { tipo: Tipo
   );
   revalidatePath("/panel/tareas");
   return { success: true };
+}
+
+export interface UbicacionParaTarea {
+  id: string;
+  label: string;
+}
+
+/** Sitios que coinciden con lo escrito (sitio, localidad, provincia, planta u oficina), para elegir dónde cargar una tarea. */
+export async function buscarUbicacionesParaTareaAction(query: string): Promise<UbicacionParaTarea[]> {
+  await requireAdminOrSupervisor();
+  // Se quitan los caracteres que en un filtro .or() de PostgREST son sintaxis (coma, paréntesis, comodines).
+  const q = query.trim().replace(/[,()%_*\\]/g, " ").replace(/\s+/g, " ");
+  if (q.length < 2) return [];
+  const supabase = await createClient();
+  const like = `%${q}%`;
+  const { data } = await supabase
+    .from("ubicaciones")
+    .select("id, pais, region, provincia, localidad, sitio, planta, oficina, lat, lng")
+    .or(`sitio.ilike.${like},localidad.ilike.${like},provincia.ilike.${like},planta.ilike.${like},oficina.ilike.${like}`)
+    .order("sitio")
+    .limit(15);
+  return (data ?? []).map((u) => ({ id: u.id, label: labelUbicacion(u as Ubicacion) }));
+}
+
+/**
+ * Carga a mano una o más tareas (una por línea) en un sitio, sin informe de origen — para lo que la
+ * oficina detecta por otro lado. Las que ya están abiertas en ese sitio no se duplican.
+ */
+export async function crearTareaAction(ubicacionId: string, texto: string): Promise<TareaActionResult & { creadas?: number }> {
+  const profile = await requireAdminOrSupervisor();
+  const lineas = lineasDeTareas(texto);
+  if (!ubicacionId) return { success: false, error: "Elegí el sitio." };
+  if (lineas.length === 0) return { success: false, error: "Escribí la tarea." };
+  if (lineas.some((l) => l.length > 500)) return { success: false, error: "Cada tarea puede tener hasta 500 caracteres." };
+
+  const supabase = await createClient();
+  const { data: sitio } = await supabase.from("ubicaciones").select("id").eq("id", ubicacionId).maybeSingle();
+  if (!sitio) return { success: false, error: "No se encontró el sitio." };
+
+  const { data: abiertas } = await supabase.from("tareas_pendientes").select("texto").eq("ubicacion_id", ubicacionId).eq("estado", "abierta");
+  const yaEstan = new Set((abiertas ?? []).map((t) => normalizarTarea(t.texto)));
+  const nuevas = lineas.filter((l) => !yaEstan.has(normalizarTarea(l)));
+  if (nuevas.length === 0) return { success: false, error: "Esa tarea ya está abierta en este sitio." };
+
+  const { error } = await supabase
+    .from("tareas_pendientes")
+    .insert(nuevas.map((t) => ({ ubicacion_id: ubicacionId, texto: t, created_by: profile.id })));
+  if (error) return { success: false, error: error.message };
+
+  await logAudit(supabase, profile, `Cargó ${nuevas.length} tarea${nuevas.length === 1 ? "" : "s"} pendiente${nuevas.length === 1 ? "" : "s"}: "${resumen(nuevas[0])}"${nuevas.length > 1 ? " y otras" : ""}`);
+  revalidatePath("/panel/tareas");
+  revalidatePath("/panel");
+  return { success: true, creadas: nuevas.length };
 }

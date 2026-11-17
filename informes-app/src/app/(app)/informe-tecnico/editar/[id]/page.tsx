@@ -3,6 +3,7 @@ import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { EditarInformeTecnicoWizard } from "@/components/informe-tecnico/wizard-editar";
 import { fetchTodasLasUbicaciones } from "@/lib/ubicaciones/fetch-todas";
+import { conVinetas, lineasDeTareas } from "@/lib/tareas/puro";
 
 export default async function EditarInformePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -73,7 +74,7 @@ export default async function EditarInformePage({ params }: { params: Promise<{ 
           oficinaNueva: "",
           gps: null,
           descripcionTrabajo: informe.descripcion_trabajo ?? "",
-          tareasPendientes: informe.tareas_pendientes ?? "",
+          tareasPendientes: conVinetas(lineasDeTareas(informe.tareas_pendientes)),
           tareasResueltasIds: [],
         }}
         initialTecnicos={(asignadosRes.data ?? []).map((t) => ({

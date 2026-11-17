@@ -12,6 +12,7 @@ import { CATEGORIA_EQUIPO_LABEL } from "@/components/equipos/types";
 import { ejecutarBaja } from "@/lib/equipamiento/dar-de-baja";
 import { buscarEquipoDuplicado } from "@/lib/equipos/duplicados";
 import { sincronizarTareasDelInforme } from "@/lib/tareas/sincronizar";
+import { conVinetas, lineasDeTareas } from "@/lib/tareas/puro";
 import { resolverTareasDeLaVisita } from "@/lib/tareas/resolver-visita";
 import type { EquipoCategoria, EstadoChecklist, RackCategoriaEquipo, TipoEquipoBaja, TipoMontajeCamara } from "@/lib/database.types";
 
@@ -184,6 +185,7 @@ export async function crearInformeTecnicoAction(formData: FormData): Promise<Cre
   } catch {
     return { success: false, error: "Datos inválidos." };
   }
+  const tareasLineas = lineasDeTareas(payload.tareasPendientes);
 
   if (!payload.titulo?.trim() || !payload.fecha || !payload.cliente?.trim() || !payload.proyecto?.trim()) {
     return { success: false, error: "Faltan campos obligatorios (título, fecha, cliente, proyecto)." };
@@ -191,7 +193,7 @@ export async function crearInformeTecnicoAction(formData: FormData): Promise<Cre
   if (payload.materiales.length > 0 && !payload.ubicacionId) {
     return { success: false, error: "Elegí una ubicación para poder agregar materiales/equipos." };
   }
-  if (payload.tareasPendientes?.trim() && !payload.ubicacionId) {
+  if (lineasDeTareas(payload.tareasPendientes).length > 0 && !payload.ubicacionId) {
     return { success: false, error: "Elegí una ubicación para poder guardar las tareas pendientes." };
   }
 
@@ -249,7 +251,7 @@ export async function crearInformeTecnicoAction(formData: FormData): Promise<Cre
         ubicacion: ubicacionResuelta.ubicacionTexto,
         ubicacion_id: ubicacionResuelta.ubicacionId,
         descripcion_trabajo: payload.descripcionTrabajo.trim() || null,
-        tareas_pendientes: payload.tareasPendientes.trim() || null,
+        tareas_pendientes: tareasLineas.length > 0 ? conVinetas(tareasLineas) : null,
         created_by: profile.id,
         estado: "borrador",
       })
@@ -647,10 +649,7 @@ export async function crearInformeTecnicoAction(formData: FormData): Promise<Cre
     }
   }
 
-  const tareasPendientes = payload.tareasPendientes
-    .split("\n")
-    .map((s) => s.trim())
-    .filter(Boolean);
+  const tareasPendientes = tareasLineas;
 
   // Antes del PDF: lo tildado como "resuelta en esta visita" se cierra y sale listado en el PDF.
   const tareasResueltas = await resolverTareasDeLaVisita(supabase, {

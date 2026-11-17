@@ -1,7 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  agruparPorSitio,
+  aplicarVinetas,
   armarArbol,
+  conVinetas,
   coincideConRuta,
   diasDesde,
   lineasDeTareas,
@@ -143,4 +146,36 @@ test("resumenPorLocalidad: cuenta solo abiertas, sitios distintos, viejas y la m
   assert.deepEqual(filas[0], { region: "NOA", provincia: "Mendoza", localidad: "Malargüe", sitios: 2, abiertas: 3, viejas: 1, masAntiguaDias: 45 });
   assert.equal(filas[1].localidad, SIN_LOCALIDAD);
   assert.equal(filas[1].abiertas, 1);
+});
+
+test("conVinetas: una viñeta por línea, y lineasDeTareas la vuelve a sacar", () => {
+  assert.equal(conVinetas(["A", "B"]), "• A\n• B");
+  assert.deepEqual(lineasDeTareas(conVinetas(["Cambiar batería", "Revisar 10.5 kV"])), ["Cambiar batería", "Revisar 10.5 kV"]);
+  assert.deepEqual(lineasDeTareas("•"), []); // una viñeta sola no es una tarea
+  assert.deepEqual(lineasDeTareas("• "), []);
+});
+
+test("aplicarVinetas: Enter abre otra viñeta; Enter en viñeta vacía sale de la lista; el resto pasa igual", () => {
+  // Enter al final de "• A" → nueva viñeta
+  assert.deepEqual(aplicarVinetas("• A", "• A\n", 4), { texto: "• A\n• ", cursor: 6 });
+  // Enter en medio del texto parte la línea y la segunda mitad lleva viñeta
+  assert.deepEqual(aplicarVinetas("• AB", "• A\nB", 4), { texto: "• A\n• B", cursor: 6 });
+  // Enter sobre viñeta vacía → se quita
+  assert.deepEqual(aplicarVinetas("• A\n• ", "• A\n• \n", 7), { texto: "• A\n", cursor: 4 });
+  // escribir una letra no toca nada
+  assert.deepEqual(aplicarVinetas("• ", "• x", 3), { texto: "• x", cursor: 3 });
+  // pegar varias líneas de golpe no se reformatea
+  assert.deepEqual(aplicarVinetas("", "a\nb", 3), { texto: "a\nb", cursor: 3 });
+});
+
+test("agruparPorSitio: una entrada por sitio, la tarea más vieja primero y el grupo más urgente arriba", () => {
+  const g = agruparPorSitio([
+    { ubicacionId: "b", created_at: hace(3), n: 1 },
+    { ubicacionId: "a", created_at: hace(1), n: 2 },
+    { ubicacionId: "b", created_at: hace(9), n: 3 },
+    { ubicacionId: "a", created_at: hace(2), n: 4 },
+  ]);
+  assert.deepEqual(g.map((x) => x.ubicacionId), ["b", "a"]); // b tiene la de hace 9 días
+  assert.deepEqual(g[0].tareas.map((x) => x.n), [3, 1]);
+  assert.deepEqual(g[1].tareas.map((x) => x.n), [4, 2]);
 });

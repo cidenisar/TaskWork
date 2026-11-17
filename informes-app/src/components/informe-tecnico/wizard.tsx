@@ -1,5 +1,6 @@
 "use client";
 
+import { lineasDeTareas } from "@/lib/tareas/puro";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Stepper, type WizardStep } from "@/components/ui/stepper";
@@ -91,7 +92,7 @@ export function InformeTecnicoWizard({
     if (!form.fecha) return "Falta la Fecha.";
     if (!form.cliente.trim()) return "Falta el Cliente.";
     if (!form.proyecto.trim()) return "Falta el Proyecto.";
-    if (form.tareasPendientes.trim() && !form.ubicacionId) return "Elegí la Ubicación para poder guardar las tareas pendientes.";
+    if (lineasDeTareas(form.tareasPendientes).length > 0 && !form.ubicacionId) return "Elegí la Ubicación para poder guardar las tareas pendientes.";
     return null;
   }
 

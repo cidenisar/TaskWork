@@ -7,6 +7,7 @@ import { buildInformeTecnicoFilename } from "@/lib/pdf/filename";
 import { resolverUbicacionId, tagGpsSiFalta, type PayloadGps } from "@/lib/ubicaciones/resolver";
 import { CATEGORIA_EQUIPO_LABEL } from "@/components/equipos/types";
 import { sincronizarTareasDelInforme } from "@/lib/tareas/sincronizar";
+import { conVinetas, lineasDeTareas } from "@/lib/tareas/puro";
 import { resolverTareasDeLaVisita } from "@/lib/tareas/resolver-visita";
 import type { EstadoChecklist } from "@/lib/database.types";
 
@@ -81,6 +82,7 @@ export async function actualizarInformeTecnicoAction(
   } catch {
     return { success: false, error: "Datos inválidos." };
   }
+  const tareasLineas = lineasDeTareas(payload.tareasPendientes);
   if (!payload.titulo?.trim() || !payload.fecha || !payload.cliente?.trim() || !payload.proyecto?.trim()) {
     return { success: false, error: "Faltan campos obligatorios (título, fecha, cliente, proyecto)." };
   }
@@ -141,7 +143,7 @@ export async function actualizarInformeTecnicoAction(
   // Las tareas pendientes se agrupan por ubicación: sin una no hay dónde ponerlas. Si en esta edición no se tocó
   // la ubicación, vale la que el informe ya tenía.
   const ubicacionDeLasTareas = ubicacionIdFinal ?? informeActual.ubicacion_id;
-  if (payload.tareasPendientes.trim() && !ubicacionDeLasTareas) {
+  if (lineasDeTareas(payload.tareasPendientes).length > 0 && !ubicacionDeLasTareas) {
     return { success: false, error: "Elegí una ubicación para poder guardar las tareas pendientes." };
   }
 
@@ -177,7 +179,7 @@ export async function actualizarInformeTecnicoAction(
       ubicacion: ubicacionTextoFinal,
       ...(ubicacionIdFinal !== undefined ? { ubicacion_id: ubicacionIdFinal } : {}),
       descripcion_trabajo: payload.descripcionTrabajo.trim() || null,
-      tareas_pendientes: payload.tareasPendientes.trim() || null,
+      tareas_pendientes: tareasLineas.length > 0 ? conVinetas(tareasLineas) : null,
     })
     .eq("id", informeId);
   if (updErr) return { success: false, error: `No se pudo actualizar el informe: ${updErr.message}` };
@@ -288,10 +290,7 @@ export async function actualizarInformeTecnicoAction(
     }
   }
 
-  const tareasPendientes = payload.tareasPendientes
-    .split("\n")
-    .map((s) => s.trim())
-    .filter(Boolean);
+  const tareasPendientes = tareasLineas;
 
   // Antes del PDF: lo tildado como "resuelta en esta visita" se cierra y sale listado en el PDF.
   // Con el cliente del USUARIO, no el service role: la función SQL toma quién cierra de auth.uid().

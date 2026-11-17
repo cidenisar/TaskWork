@@ -4,7 +4,9 @@ import { createClient } from "@/lib/supabase/server";
 import { cargarTareasPanel, type TareaPanel } from "@/lib/tareas/cargar";
 import { AccionesTarea } from "@/components/panel/tareas/acciones-tarea";
 import { VincularEquipo } from "@/components/panel/tareas/vincular-equipo";
+import { AgregarTarea } from "@/components/panel/tareas/agregar-tarea";
 import {
+  agruparPorSitio,
   armarArbol,
   coincideConRuta,
   diasDesde,
@@ -15,6 +17,7 @@ import {
 } from "@/lib/tareas/puro";
 
 const MAX_LISTA = 100;
+const MAX_GRUPOS = 60;
 const NIVELES_RUTA = ["region", "provincia", "localidad", "sitio"] as const;
 
 function hrefRuta(ruta: RutaTareas): string {
@@ -83,40 +86,45 @@ function lugar(t: TareaPanel): string {
   return [t.provincia, t.localidad, t.sitio, t.planta, t.oficina].filter(Boolean).join(" · ");
 }
 
-function FilaTarea({ t, ahora }: { t: TareaPanel; ahora: Date }) {
+function FilaTarea({ t, ahora, conLugar }: { t: TareaPanel; ahora: Date; conLugar: boolean }) {
   const abierta = t.estado === "abierta";
   const dias = diasDesde(t.created_at, ahora);
   const tono = dias > DIAS_TAREA_VIEJA * 2 ? "danger" : dias > DIAS_TAREA_VIEJA ? "warn" : "ok";
   return (
-    <li className="tarea-item">
-      <div className="tarea-texto">{t.texto}</div>
-      <div className="item-sub">{lugar(t)}</div>
-      <div className="item-sub">
-        {abierta ? (
-          <>
-            <span className={`venc-badge ${tono}`}>hace {dias} {dias === 1 ? "día" : "días"}</span>
-            {t.informe && <> · Informe {t.informe.numero}</>}
-          </>
-        ) : (
-          <>
-            {t.estado === "resuelta" ? "Resuelta" : "Dada de baja"}
-            {t.motivo_cierre && t.estado === "descartada" && <> — {MOTIVO_CIERRE_LABEL[t.motivo_cierre]}</>}
-            {t.cerradaPor && <> · por {t.cerradaPor}</>}
-            {t.cerrada_at && <> · {fmtFecha(t.cerrada_at)}</>}
-            {t.informeCierre && <> · en la visita del Informe {t.informeCierre.numero}</>}
-            {t.informe && <> · anotada en el Informe {t.informe.numero}</>}
-            {t.comentario_cierre && <> · “{t.comentario_cierre}”</>}
-          </>
-        )}
+    <li className="tarea-item tarea-compacta">
+      <div className="tarea-principal">
+        <div className="tarea-texto">{t.texto}</div>
+        <div className="item-sub">
+          {conLugar && <>{lugar(t)} · </>}
+          {abierta ? (
+            <>
+              <span className={`venc-badge ${tono}`}>hace {dias} {dias === 1 ? "día" : "días"}</span>
+              {t.informe ? <> · Informe {t.informe.numero}</> : <> · cargada a mano</>}
+            </>
+          ) : (
+            <>
+              {t.estado === "resuelta" ? "Resuelta" : "Dada de baja"}
+              {t.motivo_cierre && t.estado === "descartada" && <> — {MOTIVO_CIERRE_LABEL[t.motivo_cierre]}</>}
+              {t.cerradaPor && <> · por {t.cerradaPor}</>}
+              {t.cerrada_at && <> · {fmtFecha(t.cerrada_at)}</>}
+              {t.informeCierre && <> · en la visita del Informe {t.informeCierre.numero}</>}
+              {t.informe && <> · anotada en el Informe {t.informe.numero}</>}
+              {t.comentario_cierre && <> · “{t.comentario_cierre}”</>}
+              {t.equipo && <> · Equipo: {t.equipo.texto}</>}
+            </>
+          )}
+        </div>
       </div>
-      {abierta ? (
-        <VincularEquipo tareaId={t.id} ubicacionId={t.ubicacionId} equipo={t.equipo} />
-      ) : (
-        t.equipo && <div className="item-sub">Equipo: {t.equipo.texto}</div>
-      )}
-      <AccionesTarea id={t.id} abierta={abierta} />
+      <div className="tarea-botones">
+        {abierta && <VincularEquipo tareaId={t.id} ubicacionId={t.ubicacionId} equipo={t.equipo} />}
+        <AccionesTarea id={t.id} abierta={abierta} />
+      </div>
     </li>
   );
+}
+
+function nombreSitio(t: TareaPanel): string {
+  return [t.oficina, t.planta, t.sitio].filter((v, i, arr) => v && arr.indexOf(v) === i).join(" · ");
 }
 
 export default async function PanelTareasPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
@@ -140,6 +148,8 @@ export default async function PanelTareasPage({ searchParams }: { searchParams: 
     ? cerradas
     : abiertas.filter((t) => coincideConRuta(t, ruta)); // ya vienen de la más vieja a la más nueva: lo más urgente arriba
 
+  const grupos = verCerradas ? [] : agruparPorSitio(lista);
+
   const migas: { nombre: string; ruta: RutaTareas }[] = [];
   let acumulada: RutaTareas = {};
   for (const k of NIVELES_RUTA) {
@@ -158,9 +168,12 @@ export default async function PanelTareasPage({ searchParams }: { searchParams: 
             resuelven o se dan de baja.
           </p>
         </div>
-        <a className="btn btn-secondary" href={hrefExcel(ruta)} download>
-          Descargar plan de visita (Excel)
-        </a>
+        <div className="tareas-barra">
+          <AgregarTarea />
+          <a className="btn btn-secondary" href={hrefExcel(ruta)} download>
+            Descargar plan de visita (Excel)
+          </a>
+        </div>
       </div>
 
       <div className="kpi-grid">
@@ -214,14 +227,48 @@ export default async function PanelTareasPage({ searchParams }: { searchParams: 
           </div>
           {lista.length === 0 ? (
             <p className="empty-note">{verCerradas ? "Todavía no se cerró ninguna." : "No hay tareas abiertas acá."}</p>
-          ) : (
+          ) : verCerradas ? (
             <ul className="tareas-lista">
               {lista.slice(0, MAX_LISTA).map((t) => (
-                <FilaTarea key={t.id} t={t} ahora={ahora} />
+                <FilaTarea key={t.id} t={t} ahora={ahora} conLugar />
               ))}
             </ul>
+          ) : (
+            <div className="tareas-grupos">
+              {grupos.slice(0, MAX_GRUPOS).map((g) => {
+                const primera = g.tareas[0];
+                const viejasGrupo = g.tareas.filter((t) => diasDesde(t.created_at, ahora) > DIAS_TAREA_VIEJA).length;
+                return (
+                  <details key={g.ubicacionId} className="tarea-grupo" open={grupos.length <= 3}>
+                    <summary>
+                      <span className="tarea-grupo-titulo">
+                        <strong>{nombreSitio(primera)}</strong>
+                        <span className="item-sub">{[primera.region, primera.provincia, primera.localidad].filter(Boolean).join(" · ")}</span>
+                      </span>
+                      <span className="tarea-grupo-conteo">
+                        {g.tareas.length}
+                        {viejasGrupo > 0 && <span className="venc-badge warn">{viejasGrupo} viejas</span>}
+                      </span>
+                    </summary>
+                    <div className="tarea-grupo-cuerpo">
+                      <ul className="tareas-lista">
+                        {g.tareas.map((t) => (
+                          <FilaTarea key={t.id} t={t} ahora={ahora} conLugar={false} />
+                        ))}
+                      </ul>
+                      <div className="tarea-grupo-alta">
+                        <AgregarTarea compacto sitio={{ id: g.ubicacionId, label: nombreSitio(primera) }} />
+                      </div>
+                    </div>
+                  </details>
+                );
+              })}
+            </div>
           )}
-          {lista.length > MAX_LISTA && <p className="hint">Se muestran las primeras {MAX_LISTA} de {lista.length}: filtrá por ubicación para ver el resto.</p>}
+          {verCerradas && lista.length > MAX_LISTA && <p className="hint">Se muestran las primeras {MAX_LISTA} de {lista.length}.</p>}
+          {!verCerradas && grupos.length > MAX_GRUPOS && (
+            <p className="hint">Se muestran los {MAX_GRUPOS} sitios con la tarea más vieja, de {grupos.length}: filtrá por ubicación para ver el resto.</p>
+          )}
         </section>
       </div>
     </div>

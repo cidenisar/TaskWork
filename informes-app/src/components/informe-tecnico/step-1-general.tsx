@@ -6,6 +6,8 @@ import { Icon, StatusDot } from "@/components/icon";
 import { AutocompleteInput } from "@/components/ui/autocomplete-input";
 import { UbicacionFields } from "@/components/ubicaciones/ubicacion-fields";
 import { PendientesDelSitio } from "./pendientes-del-sitio";
+import { TareasTextarea } from "./tareas-textarea";
+import { conVinetas, lineasDeTareas } from "@/lib/tareas/puro";
 
 interface SpeechRecognitionResultLike {
   0: { transcript: string };
@@ -19,7 +21,7 @@ interface SpeechRecognitionLike {
   continuous: boolean;
   interimResults: boolean;
   onresult: ((e: SpeechRecognitionEventLike) => void) | null;
-  onerror: (() => void) | null;
+  onerror: ((e: { error?: string }) => void) | null;
   onend: (() => void) | null;
   start(): void;
   stop(): void;
@@ -38,7 +40,8 @@ function useDictadoIA(value: string, onChange: (v: string) => void, modo: "descr
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
 
   async function mejorarConIA() {
-    const texto = value.trim();
+    // En la lista de tareas la IA trabaja sobre las líneas limpias y la viñeta se vuelve a poner al volver.
+    const texto = modo === "lista_tareas" ? lineasDeTareas(value).join("\n") : value.trim();
     if (!texto) return;
     setAiBusy(true);
     setAiNote(null);
@@ -56,7 +59,7 @@ function useDictadoIA(value: string, onChange: (v: string) => void, modo: "descr
           </>,
         );
       } else {
-        onChange(data.mejorado);
+        onChange(modo === "lista_tareas" ? conVinetas(lineasDeTareas(data.mejorado)) : data.mejorado);
         setAiNote(
           <>
             <Icon name="lightbulb" size={13} /> Texto corregido con IA. Revisalo antes de continuar.
@@ -99,14 +102,27 @@ function useDictadoIA(value: string, onChange: (v: string) => void, modo: "descr
       recognition.lang = "es-AR";
       recognition.continuous = true;
       recognition.interimResults = false;
+      // Lo que ya estaba escrito al empezar a dictar; lo dictado se arma siempre desde el
+      // principio de la sesión (e.results acumula todo), así no se pisa ni se duplica.
+      const base = value.trim();
       recognition.onresult = (e) => {
-        let text = "";
-        for (let i = e.resultIndex; i < e.results.length; i++) {
-          text += e.results[i][0].transcript;
-        }
-        onChange((value.trim() ? value.trim() + " " : "") + text.trim());
+        let dictado = "";
+        for (let i = 0; i < e.results.length; i++) dictado += e.results[i][0].transcript;
+        onChange((base ? base + " " : "") + dictado.trim());
       };
-      recognition.onerror = () => setDictating(false);
+      recognition.onerror = (ev) => {
+        setDictating(false);
+        const motivo = ev?.error;
+        if (motivo === "no-speech" || motivo === "aborted") return; // silencio o corte voluntario: no es un fallo
+        setAiNote(
+          <>
+            <Icon name="warning" size={13} />{" "}
+            {motivo === "not-allowed" || motivo === "service-not-allowed"
+              ? "No hay permiso para usar el micrófono. Habilitalo para este sitio en el navegador y probá de nuevo."
+              : "No se pudo dictar por voz. Probá de nuevo o escribí directamente."}
+          </>,
+        );
+      };
       recognition.onend = () => setDictating(false);
       recognition.start();
       recognitionRef.current = recognition;
@@ -316,10 +332,10 @@ export function Step1General({
           </label>
           <DictadoIAControles ia={tareasIA} />
         </div>
-        <textarea
+        <TareasTextarea
           placeholder={"Una tarea por línea, ej:\nConexionado de cables en unidad exterior\nOrden y limpieza en sala de energía"}
           value={form.tareasPendientes}
-          onChange={(e) => onChange({ tareasPendientes: e.target.value })}
+          onChange={(v) => onChange({ tareasPendientes: v })}
         />
         {tareasIA.aiNote && (
           <div className="ai-note">

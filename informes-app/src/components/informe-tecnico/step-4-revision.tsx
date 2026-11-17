@@ -1,5 +1,6 @@
 "use client";
 
+import { lineasDeTareas } from "@/lib/tareas/puro";
 import { useRef, useState, type Dispatch, type SetStateAction } from "react";
 import type { ImagenInforme, Tecnico, Vehiculo } from "@/lib/types";
 import { labelUbicacionDesdeForm, type EmailDestinatario, type InformeFormState } from "./types";
@@ -154,10 +155,7 @@ export function Step4Revision({
       return next;
     });
   }
-  const tareas = form.tareasPendientes
-    .split("\n")
-    .map((s) => s.trim())
-    .filter(Boolean);
+  const tareas = lineasDeTareas(form.tareasPendientes);
   const vehText = vehiculos.length ? vehiculos.map((v) => (v.marcaModelo ? `${v.patente} (${v.marcaModelo})` : v.patente)).join(", ") : "—";
   const seguridad = tecnicos.filter((t) => t.esSeguridad);
   const hallazgosNoOk = hallazgos.filter((h) => h.estado === "no_ok");
