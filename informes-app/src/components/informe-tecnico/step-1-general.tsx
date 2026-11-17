@@ -316,7 +316,10 @@ export function Step1General({
             <span>{tareasIA.aiNote}</span>
           </div>
         )}
-        <div className="hint">Se listan en el PDF como viñetas, una por línea.</div>
+        <div className="hint">
+          Se listan en el PDF, una por línea, y quedan en Panel → Tareas pendientes agrupadas por ubicación — por eso hace falta
+          elegir la Ubicación si anotás alguna.
+        </div>
       </div>
     </div>
   );

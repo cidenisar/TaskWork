@@ -6,6 +6,7 @@ import { renderInformeTecnicoPdf } from "@/lib/pdf/render";
 import { buildInformeTecnicoFilename } from "@/lib/pdf/filename";
 import { resolverUbicacionId, tagGpsSiFalta, type PayloadGps } from "@/lib/ubicaciones/resolver";
 import { CATEGORIA_EQUIPO_LABEL } from "@/components/equipos/types";
+import { sincronizarTareasDelInforme } from "@/lib/tareas/sincronizar";
 import type { EstadoChecklist } from "@/lib/database.types";
 
 interface PayloadTecnico {
@@ -86,7 +87,7 @@ export async function actualizarInformeTecnicoAction(
   // Para un Administrador, `supabase` ya es la service role client de arriba.
   const { data: informeActual, error: fetchErr } = await supabase
     .from("informes_tecnicos")
-    .select("numero_generacion, provincia, ubicacion, remito_fotos_urls, remito_numero, entrega_deposito_numero_generacion")
+    .select("numero_generacion, provincia, ubicacion, ubicacion_id, remito_fotos_urls, remito_numero, entrega_deposito_numero_generacion")
     .eq("id", informeId)
     .single();
   if (fetchErr || !informeActual) {
@@ -132,6 +133,13 @@ export async function actualizarInformeTecnicoAction(
     provinciaFinal = ubicacionRow.provincia;
     ubicacionTextoFinal = [ubicacionRow.oficina, ubicacionRow.planta, ubicacionRow.sitio].filter(Boolean).join(" - ") || null;
     ubicacionIdFinal = resuelta.id;
+  }
+
+  // Las tareas pendientes se agrupan por ubicación: sin una no hay dónde ponerlas. Si en esta edición no se tocó
+  // la ubicación, vale la que el informe ya tenía.
+  const ubicacionDeLasTareas = ubicacionIdFinal ?? informeActual.ubicacion_id;
+  if (payload.tareasPendientes.trim() && !ubicacionDeLasTareas) {
+    return { success: false, error: "Elegí una ubicación para poder guardar las tareas pendientes." };
   }
 
   const tipoInformeFinal =
@@ -341,6 +349,13 @@ export async function actualizarInformeTecnicoAction(
     const { data: signed } = await supabase.storage.from("informes-pdf").createSignedUrl(pdfPath, 60 * 60);
     pdfUrl = signed?.signedUrl ?? null;
   }
+
+  await sincronizarTareasDelInforme(supabase, {
+    informeId,
+    ubicacionId: ubicacionDeLasTareas,
+    texto: payload.tareasPendientes,
+    userId: profile.id,
+  });
 
   return { success: true, pdfUrl };
 }

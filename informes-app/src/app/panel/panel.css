@@ -346,3 +346,88 @@ button.panel-nav-item {
   max-width: 1600px;
   margin: 0 auto;
 }
+
+/* Panel → Tareas pendientes (src/app/panel/tareas) */
+.tareas-layout {
+  display: grid;
+  grid-template-columns: minmax(250px, 340px) 1fr;
+  gap: 16px;
+  align-items: start;
+}
+@media (max-width: 900px) {
+  .tareas-layout {
+    grid-template-columns: 1fr;
+  }
+}
+.tareas-solapas {
+  display: flex;
+  gap: 16px;
+  margin: 4px 0 12px;
+  font-size: 14px;
+}
+.tareas-solapas a.sel,
+.tareas-arbol a.sel {
+  font-weight: 700;
+  text-decoration: underline;
+}
+.tareas-arbol-lista {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.tareas-arbol-lista .tareas-arbol-lista {
+  padding-left: 14px;
+}
+.tareas-arbol summary,
+.tareas-hoja {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  cursor: pointer;
+  font-size: 13.5px;
+}
+.tareas-hoja {
+  cursor: default;
+}
+.tareas-conteo {
+  display: inline-flex;
+  align-items: center;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.tareas-lista {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.tarea-item {
+  padding: 10px 0;
+  border-top: 1px solid var(--field-border);
+}
+.tarea-item:first-child {
+  border-top: none;
+}
+.tarea-texto {
+  font-size: 14px;
+  font-weight: 600;
+}
+.tarea-acciones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+  align-items: center;
+}
+.tarea-cierre {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  max-width: 420px;
+}
+.tarea-cierre-botones {
+  display: flex;
+  gap: 8px;
+}

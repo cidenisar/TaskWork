@@ -11,6 +11,7 @@ import { crearEntregaDepositoLote, type MaterialLoteDeposito } from "@/lib/depos
 import { CATEGORIA_EQUIPO_LABEL } from "@/components/equipos/types";
 import { ejecutarBaja } from "@/lib/equipamiento/dar-de-baja";
 import { buscarEquipoDuplicado } from "@/lib/equipos/duplicados";
+import { sincronizarTareasDelInforme } from "@/lib/tareas/sincronizar";
 import type { EquipoCategoria, EstadoChecklist, RackCategoriaEquipo, TipoEquipoBaja, TipoMontajeCamara } from "@/lib/database.types";
 
 /** Mismo chequeo que buscarEquipoDuplicado, pero para un componente dentro de un rack puntual. */
@@ -186,6 +187,9 @@ export async function crearInformeTecnicoAction(formData: FormData): Promise<Cre
   }
   if (payload.materiales.length > 0 && !payload.ubicacionId) {
     return { success: false, error: "Elegí una ubicación para poder agregar materiales/equipos." };
+  }
+  if (payload.tareasPendientes?.trim() && !payload.ubicacionId) {
+    return { success: false, error: "Elegí una ubicación para poder guardar las tareas pendientes." };
   }
 
   const supabase = await createClient();
@@ -717,6 +721,14 @@ export async function crearInformeTecnicoAction(formData: FormData): Promise<Cre
     const { data: signed } = await supabase.storage.from("informes-pdf").createSignedUrl(pdfPath, 60 * 60);
     pdfUrl = signed?.signedUrl ?? null;
   }
+
+  // Las tareas pendientes pasan a ser filas (Panel → Tareas pendientes). Va aparte del PDF: aunque el PDF falle, las tareas quedan.
+  await sincronizarTareasDelInforme(supabase, {
+    informeId: informeId!,
+    ubicacionId: ubicacionResuelta.ubicacionId,
+    texto: payload.tareasPendientes,
+    userId: profile.id,
+  });
 
   let emailEnviado = false;
   if (config?.auto_enviar_email && payload.emailsSeleccionados.length && process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD) {

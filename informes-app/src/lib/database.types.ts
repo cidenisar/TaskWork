@@ -354,6 +354,22 @@ export type ConfigIaHistRow = {
   quien: string | null;
   cuando: string;
 };
+export type EstadoTarea = "abierta" | "resuelta" | "descartada";
+export type MotivoCierreTarea = "resuelta_en_visita" | "resuelta_aparte" | "equipo_dado_de_baja" | "ya_no_aplica" | "duplicada";
+/** Una tarea pendiente de un sitio (nace en un informe técnico) — Panel → Tareas pendientes. */
+export type TareaPendienteRow = {
+  id: string;
+  ubicacion_id: string;
+  informe_id: string | null;
+  texto: string;
+  estado: EstadoTarea;
+  motivo_cierre: MotivoCierreTarea | null;
+  comentario_cierre: string | null;
+  cerrada_at: string | null;
+  cerrada_por: string | null;
+  created_by: string | null;
+  created_at: string;
+};
 /** Lo que leyó cada IA en una lectura (sin la foto) — Configuración → IA → Comparación. */
 export type IaLecturaPorIa = Record<string, { modelo: string; json: unknown }>;
 export type IaLecturaRow = {
@@ -1594,6 +1610,11 @@ export interface Database {
       >;
       config_ia: Tbl<ConfigIaRow, Partial<ConfigIaRow>, Partial<ConfigIaRow>>;
       config_ia_hist: Tbl<ConfigIaHistRow, Partial<ConfigIaHistRow> & Pick<ConfigIaHistRow, "campo">, Partial<ConfigIaHistRow>>;
+      tareas_pendientes: Tbl<
+        TareaPendienteRow,
+        Partial<TareaPendienteRow> & Pick<TareaPendienteRow, "ubicacion_id" | "texto">,
+        Partial<TareaPendienteRow>
+      >;
       ia_lectura: Tbl<IaLecturaRow, Partial<IaLecturaRow> & Pick<IaLecturaRow, "endpoint" | "modulo" | "modo">, Partial<IaLecturaRow>>;
     };
     Views: Record<string, never>;

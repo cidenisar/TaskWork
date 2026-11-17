@@ -91,6 +91,7 @@ export function InformeTecnicoWizard({
     if (!form.fecha) return "Falta la Fecha.";
     if (!form.cliente.trim()) return "Falta el Cliente.";
     if (!form.proyecto.trim()) return "Falta el Proyecto.";
+    if (form.tareasPendientes.trim() && !form.ubicacionId) return "Elegí la Ubicación para poder guardar las tareas pendientes.";
     return null;
   }
 
