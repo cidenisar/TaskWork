@@ -367,6 +367,8 @@ export type TareaPendienteRow = {
   comentario_cierre: string | null;
   cerrada_at: string | null;
   cerrada_por: string | null;
+  /** Informe en cuya visita se resolvió (solo si motivo_cierre = resuelta_en_visita). */
+  informe_cierre_id: string | null;
   created_by: string | null;
   created_at: string;
 };
@@ -1629,6 +1631,11 @@ export interface Database {
           p_ticket_numero: string | null;
         };
         Returns: GuardiaEventoRow;
+      };
+      /** Cierra tareas abiertas del sitio del informe como "resuelta en visita" — única puerta para el técnico (ver la migración). */
+      resolver_tareas_en_visita: {
+        Args: { p_informe_id: string; p_tarea_ids: string[] };
+        Returns: { tarea_id: string; tarea_texto: string }[];
       };
     };
     Enums: Record<string, never>;

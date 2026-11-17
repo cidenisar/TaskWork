@@ -5,6 +5,7 @@ import type { CatalogosInforme, InformeFormState } from "./types";
 import { Icon, StatusDot } from "@/components/icon";
 import { AutocompleteInput } from "@/components/ui/autocomplete-input";
 import { UbicacionFields } from "@/components/ubicaciones/ubicacion-fields";
+import { PendientesDelSitio } from "./pendientes-del-sitio";
 
 interface SpeechRecognitionResultLike {
   0: { transcript: string };
@@ -150,10 +151,13 @@ export function Step1General({
   form,
   onChange,
   catalogos,
+  informeId,
 }: {
   form: InformeFormState;
   onChange: (patch: Partial<InformeFormState>) => void;
   catalogos: CatalogosInforme;
+  /** Al editar: el informe que se está editando (sus propias tareas no se ofrecen como "pendientes"). */
+  informeId?: string;
 }) {
   const descripcionIA = useDictadoIA(form.descripcionTrabajo, (v) => onChange({ descripcionTrabajo: v }));
   const tareasIA = useDictadoIA(form.tareasPendientes, (v) => onChange({ tareasPendientes: v }), "lista_tareas");
@@ -262,14 +266,14 @@ export function Step1General({
         provincias={catalogos.provincias}
         provinciaFiltro={form.provinciaFiltro}
         onProvinciaFiltroChange={(p) =>
-          onChange({ provinciaFiltro: p, ubicacionId: "", localidadNueva: "", sitioNueva: "", plantaNueva: "", oficinaNueva: "" })
+          onChange({ provinciaFiltro: p, ubicacionId: "", localidadNueva: "", sitioNueva: "", plantaNueva: "", oficinaNueva: "", tareasResueltasIds: [] })
         }
         ubicacionId={form.ubicacionId}
         onUbicacionIdChange={(id) =>
           onChange(
             id === "__new"
-              ? { ubicacionId: id }
-              : { ubicacionId: id, localidadNueva: "", sitioNueva: "", plantaNueva: "", oficinaNueva: "" },
+              ? { ubicacionId: id, tareasResueltasIds: [] }
+              : { ubicacionId: id, localidadNueva: "", sitioNueva: "", plantaNueva: "", oficinaNueva: "", tareasResueltasIds: [] },
           )
         }
         localidadNueva={form.localidadNueva}
@@ -299,6 +303,12 @@ export function Step1General({
           </div>
         )}
       </div>
+      <PendientesDelSitio
+        ubicacionId={form.ubicacionId}
+        informeId={informeId}
+        seleccion={form.tareasResueltasIds}
+        onChange={(ids) => onChange({ tareasResueltasIds: ids })}
+      />
       <div className="field">
         <div className="field-label-row">
           <label>

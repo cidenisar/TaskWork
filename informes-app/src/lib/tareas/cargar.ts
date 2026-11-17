@@ -18,6 +18,8 @@ export interface TareaPanel {
   cerradaPor: string | null;
   created_at: string;
   informe: { id: string; numero: string; titulo: string } | null;
+  /** Informe de la visita donde se resolvió (solo si motivo_cierre = resuelta_en_visita). */
+  informeCierre: { id: string; numero: string } | null;
   ubicacionId: string;
   region: string;
   provincia: string;
@@ -27,7 +29,7 @@ export interface TareaPanel {
   oficina: string | null;
 }
 
-const CAMPOS = "id, texto, estado, motivo_cierre, comentario_cierre, cerrada_at, cerrada_por, created_at, informe_id, ubicacion_id";
+const CAMPOS = "id, texto, estado, motivo_cierre, comentario_cierre, cerrada_at, cerrada_por, created_at, informe_id, informe_cierre_id, ubicacion_id";
 
 async function enLotes<T>(ids: string[], consulta: (lote: string[]) => Promise<T[]>): Promise<T[]> {
   const unicos = [...new Set(ids)];
@@ -53,6 +55,7 @@ export async function cargarTareasPanel(supabase: Supabase): Promise<TareaPanel[
     cerrada_por: string | null;
     created_at: string;
     informe_id: string | null;
+    informe_cierre_id: string | null;
     ubicacion_id: string;
   }[] = [];
 
@@ -87,7 +90,7 @@ export async function cargarTareasPanel(supabase: Supabase): Promise<TareaPanel[
       },
     ),
     enLotes(
-      filas.flatMap((f) => (f.informe_id ? [f.informe_id] : [])),
+      filas.flatMap((f) => [f.informe_id, f.informe_cierre_id].filter((x): x is string => !!x)),
       async (lote) => {
         const { data, error } = await supabase.from("informes_tecnicos").select("id, numero_generacion, titulo").in("id", lote);
         if (error) throw error;
@@ -111,6 +114,7 @@ export async function cargarTareasPanel(supabase: Supabase): Promise<TareaPanel[
     const u = ubicacionPorId.get(f.ubicacion_id);
     if (!u) return []; // la ubicación ya no existe (se borra en cascada): no hay dónde mostrarla
     const inf = f.informe_id ? informePorId.get(f.informe_id) : undefined;
+    const infCierre = f.informe_cierre_id ? informePorId.get(f.informe_cierre_id) : undefined;
     return [
       {
         id: f.id,
@@ -122,6 +126,7 @@ export async function cargarTareasPanel(supabase: Supabase): Promise<TareaPanel[
         cerradaPor: f.cerrada_por ? (nombrePorId.get(f.cerrada_por) ?? null) : null,
         created_at: f.created_at,
         informe: inf ? { id: inf.id, numero: inf.numero_generacion, titulo: inf.titulo } : null,
+        informeCierre: infCierre ? { id: infCierre.id, numero: infCierre.numero_generacion } : null,
         ubicacionId: f.ubicacion_id,
         region: u.region,
         provincia: u.provincia,

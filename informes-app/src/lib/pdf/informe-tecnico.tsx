@@ -78,6 +78,8 @@ export interface InformePdfProps {
   ubicacion: string | null;
   descripcionTrabajo: string | null;
   tareasPendientes: string[];
+  /** Pendientes de visitas anteriores que se resolvieron en esta visita. */
+  tareasResueltas?: string[];
   tecnicos: InformePdfTecnico[];
   vehiculos: InformePdfVehiculo[];
   imagenes: InformePdfImagen[];
@@ -106,6 +108,7 @@ export function InformeTecnicoPdf(props: InformePdfProps) {
     ubicacion,
     descripcionTrabajo,
     tareasPendientes,
+    tareasResueltas = [],
     tecnicos,
     vehiculos,
     imagenes,
@@ -285,6 +288,18 @@ export function InformeTecnicoPdf(props: InformePdfProps) {
               </View>
             ))}
           </View>
+        )}
+
+        {tareasResueltas.length > 0 && (
+          <>
+            <Text style={commonStyles.sectionTitle}>Tareas resueltas en esta visita</Text>
+            {tareasResueltas.map((t, i) => (
+              <View style={styles.bulletRow} key={i}>
+                <Text style={styles.bulletDot}>•</Text>
+                <Text style={styles.bulletText}>{t}</Text>
+              </View>
+            ))}
+          </>
         )}
 
         {tareasPendientes.length > 0 && (

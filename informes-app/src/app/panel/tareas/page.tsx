@@ -95,7 +95,8 @@ function FilaTarea({ t, ahora }: { t: TareaPanel; ahora: Date }) {
             {t.motivo_cierre && t.estado === "descartada" && <> — {MOTIVO_CIERRE_LABEL[t.motivo_cierre]}</>}
             {t.cerradaPor && <> · por {t.cerradaPor}</>}
             {t.cerrada_at && <> · {fmtFecha(t.cerrada_at)}</>}
-            {t.informe && <> · Informe {t.informe.numero}</>}
+            {t.informeCierre && <> · en la visita del Informe {t.informeCierre.numero}</>}
+            {t.informe && <> · anotada en el Informe {t.informe.numero}</>}
             {t.comentario_cierre && <> · “{t.comentario_cierre}”</>}
           </>
         )}

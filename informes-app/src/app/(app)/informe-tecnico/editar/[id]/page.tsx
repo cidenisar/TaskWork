@@ -74,6 +74,7 @@ export default async function EditarInformePage({ params }: { params: Promise<{ 
           gps: null,
           descripcionTrabajo: informe.descripcion_trabajo ?? "",
           tareasPendientes: informe.tareas_pendientes ?? "",
+          tareasResueltasIds: [],
         }}
         initialTecnicos={(asignadosRes.data ?? []).map((t) => ({
           nombre: t.tecnico_nombre,

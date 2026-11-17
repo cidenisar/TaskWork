@@ -119,7 +119,7 @@ export function EditarInformeTecnicoWizard({
       </div>
       <Stepper steps={STEPS} current={step} />
 
-      {step === 1 && <Step1General form={form} onChange={patchForm} catalogos={catalogos} />}
+      {step === 1 && <Step1General form={form} onChange={patchForm} catalogos={catalogos} informeId={informeId} />}
       {step === 2 && (
         <Step2Equipo
           tecnicos={tecnicos}

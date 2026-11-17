@@ -7,6 +7,7 @@ import { buildInformeTecnicoFilename } from "@/lib/pdf/filename";
 import { resolverUbicacionId, tagGpsSiFalta, type PayloadGps } from "@/lib/ubicaciones/resolver";
 import { CATEGORIA_EQUIPO_LABEL } from "@/components/equipos/types";
 import { sincronizarTareasDelInforme } from "@/lib/tareas/sincronizar";
+import { resolverTareasDeLaVisita } from "@/lib/tareas/resolver-visita";
 import type { EstadoChecklist } from "@/lib/database.types";
 
 interface PayloadTecnico {
@@ -36,6 +37,8 @@ interface Payload {
   gps: PayloadGps | null;
   descripcionTrabajo: string;
   tareasPendientes: string;
+  /** Pendientes del sitio tildados como "resuelta en esta visita". */
+  tareasResueltasIds?: string[];
   tecnicos: PayloadTecnico[];
   vehiculos: PayloadVehiculo[];
 }
@@ -290,6 +293,14 @@ export async function actualizarInformeTecnicoAction(
     .map((s) => s.trim())
     .filter(Boolean);
 
+  // Antes del PDF: lo tildado como "resuelta en esta visita" se cierra y sale listado en el PDF.
+  // Con el cliente del USUARIO, no el service role: la función SQL toma quién cierra de auth.uid().
+  const tareasResueltas = await resolverTareasDeLaVisita(await createClient(), {
+    informeId: informeId,
+    tareaIds: payload.tareasResueltasIds ?? [],
+    userId: profile.id,
+  });
+
   const pdfBuffer = await renderInformeTecnicoPdf({
     numeroGeneracion,
     titulo: payload.titulo.trim(),
@@ -303,6 +314,7 @@ export async function actualizarInformeTecnicoAction(
     ubicacion: ubicacionTextoFinal,
     descripcionTrabajo: payload.descripcionTrabajo.trim() || null,
     tareasPendientes,
+    tareasResueltas,
     tecnicos: payload.tecnicos.map((t) => ({
       nombre: t.nombre.trim(),
       torre: t.torre?.trim() || null,

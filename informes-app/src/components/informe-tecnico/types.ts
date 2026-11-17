@@ -21,6 +21,8 @@ export interface InformeFormState {
   gps: GpsCapturado | null;
   descripcionTrabajo: string;
   tareasPendientes: string;
+  /** Pendientes del sitio (de visitas anteriores) que el técnico tildó como resueltas en esta visita. */
+  tareasResueltasIds: string[];
 }
 
 export const EMPTY_FORM: InformeFormState = {
@@ -41,6 +43,7 @@ export const EMPTY_FORM: InformeFormState = {
   gps: null,
   descripcionTrabajo: "",
   tareasPendientes: "",
+  tareasResueltasIds: [],
 };
 
 export interface CatalogosInforme {

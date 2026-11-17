@@ -2669,3 +2669,24 @@ body:has(.lg-screen)::after {
     stroke-dashoffset: 0;
   }
 }
+
+/* Pendientes del sitio en el formulario del informe (components/informe-tecnico/pendientes-del-sitio.tsx) */
+.pendientes-sitio-lista {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.pendiente-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-weight: normal;
+  cursor: pointer;
+}
+.pendiente-item input[type='checkbox'] {
+  margin-top: 3px;
+  flex: none;
+}

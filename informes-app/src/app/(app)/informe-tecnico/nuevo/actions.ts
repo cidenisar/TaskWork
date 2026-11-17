@@ -12,6 +12,7 @@ import { CATEGORIA_EQUIPO_LABEL } from "@/components/equipos/types";
 import { ejecutarBaja } from "@/lib/equipamiento/dar-de-baja";
 import { buscarEquipoDuplicado } from "@/lib/equipos/duplicados";
 import { sincronizarTareasDelInforme } from "@/lib/tareas/sincronizar";
+import { resolverTareasDeLaVisita } from "@/lib/tareas/resolver-visita";
 import type { EquipoCategoria, EstadoChecklist, RackCategoriaEquipo, TipoEquipoBaja, TipoMontajeCamara } from "@/lib/database.types";
 
 /** Mismo chequeo que buscarEquipoDuplicado, pero para un componente dentro de un rack puntual. */
@@ -94,6 +95,8 @@ interface Payload {
   gps: PayloadGps | null;
   descripcionTrabajo: string;
   tareasPendientes: string;
+  /** Pendientes del sitio tildados como "resuelta en esta visita". */
+  tareasResueltasIds?: string[];
   tecnicos: PayloadTecnico[];
   vehiculos: PayloadVehiculo[];
   imagenes: PayloadImagenMeta[];
@@ -649,6 +652,13 @@ export async function crearInformeTecnicoAction(formData: FormData): Promise<Cre
     .map((s) => s.trim())
     .filter(Boolean);
 
+  // Antes del PDF: lo tildado como "resuelta en esta visita" se cierra y sale listado en el PDF.
+  const tareasResueltas = await resolverTareasDeLaVisita(supabase, {
+    informeId: informeId!,
+    tareaIds: payload.tareasResueltasIds ?? [],
+    userId: profile.id,
+  });
+
   const hallazgosConfirmados = (payload.hallazgos ?? []).filter((h) => h.estado);
   let hallazgosPdf: { texto: string; estado: EstadoChecklist; comentario: string | null }[] = [];
   if (hallazgosConfirmados.length > 0) {
@@ -678,6 +688,7 @@ export async function crearInformeTecnicoAction(formData: FormData): Promise<Cre
     ubicacion: ubicacionResuelta.ubicacionTexto,
     descripcionTrabajo: payload.descripcionTrabajo.trim() || null,
     tareasPendientes,
+    tareasResueltas,
     tecnicos: payload.tecnicos.map((t) => ({
       nombre: t.nombre.trim(),
       torre: t.torre?.trim() || null,
