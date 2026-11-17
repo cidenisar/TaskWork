@@ -369,6 +369,9 @@ export type TareaPendienteRow = {
   cerrada_por: string | null;
   /** Informe en cuya visita se resolvió (solo si motivo_cierre = resuelta_en_visita). */
   informe_cierre_id: string | null;
+  /** Equipo al que apunta la tarea (referencia blanda: vive en 3 tablas). Ambos van juntos o ninguno. */
+  equipo_tipo: TipoEquipoBaja | null;
+  equipo_id: string | null;
   created_by: string | null;
   created_at: string;
 };

@@ -167,3 +167,45 @@ export function coincideConRuta(t: Pick<TareaParaArbol, "region" | "provincia" |
   if (ruta.sitio !== undefined && t.sitio !== ruta.sitio) return false;
   return true;
 }
+
+// ---------------------------------------------------------------------------
+// Resumen por localidad (hoja extra del Excel y mail semanal)
+// ---------------------------------------------------------------------------
+
+export interface TareaParaResumen extends TareaParaArbol {
+  ubicacionId: string;
+}
+
+export interface ResumenLocalidad {
+  region: string;
+  provincia: string;
+  localidad: string;
+  sitios: number;
+  abiertas: number;
+  viejas: number;
+  /** Días de la tarea abierta más antigua. */
+  masAntiguaDias: number;
+}
+
+/** Una fila por región + provincia + localidad con tareas ABIERTAS, de más a menos pendientes. */
+export function resumenPorLocalidad(tareas: TareaParaResumen[], ahora: Date): ResumenLocalidad[] {
+  const mapa = new Map<string, ResumenLocalidad & { _sitios: Set<string> }>();
+  for (const t of tareas) {
+    if (t.estado !== "abierta") continue;
+    const localidad = t.localidad ?? SIN_LOCALIDAD;
+    const clave = [t.region, t.provincia, localidad].join("|");
+    const dias = diasDesde(t.created_at, ahora);
+    let r = mapa.get(clave);
+    if (!r) {
+      r = { region: t.region, provincia: t.provincia, localidad, sitios: 0, abiertas: 0, viejas: 0, masAntiguaDias: 0, _sitios: new Set() };
+      mapa.set(clave, r);
+    }
+    r.abiertas += 1;
+    if (dias > DIAS_TAREA_VIEJA) r.viejas += 1;
+    r.masAntiguaDias = Math.max(r.masAntiguaDias, dias);
+    r._sitios.add(t.ubicacionId);
+  }
+  return [...mapa.values()]
+    .map(({ _sitios, ...r }) => ({ ...r, sitios: _sitios.size }))
+    .sort((a, b) => b.abiertas - a.abiertas || a.region.localeCompare(b.region, "es") || a.localidad.localeCompare(b.localidad, "es"));
+}

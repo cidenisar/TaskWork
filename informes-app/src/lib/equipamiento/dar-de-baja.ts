@@ -4,6 +4,7 @@ import { nuevoNumeroGeneracionBaja } from "@/lib/bajas/numero-generacion";
 import { renderBajaPdf } from "@/lib/pdf/render";
 import { buildBajaFilename } from "@/lib/pdf/filename";
 import { resolverEquipo, TABLA_POR_TIPO } from "./resolver-equipo";
+import { cerrarTareasPorBajaDeEquipo } from "@/lib/tareas/cerrar-por-baja";
 import { obtenerDestinatariosAutoEnvio } from "@/lib/email/destinatarios-auto-envio";
 import { enviarPdfPorEmail } from "@/lib/email/enviar-pdf";
 import type { MotivoBaja, TipoEquipoBaja } from "@/lib/database.types";
@@ -85,6 +86,14 @@ export async function ejecutarBaja(
   if (!bajaId) return { success: false, error: "No se pudo asignar un número de generación único. Probá de nuevo." };
 
   await service.from(TABLA_POR_TIPO[payload.tipoEquipo]).update({ estado: "baja" }).eq("id", payload.equipoId);
+
+  // Las tareas pendientes vinculadas a este equipo se cierran solas (se pueden reabrir desde el Panel).
+  await cerrarTareasPorBajaDeEquipo(service, {
+    tipoEquipo: payload.tipoEquipo,
+    equipoId: payload.equipoId,
+    numeroBaja: numeroGeneracion,
+    userId: payload.realizadoPorProfileId,
+  });
 
   // Logo de la empresa (cabecera del PDF), igual que el resto de los módulos.
   const { data: config } = await service.from("config_general").select("logo_empresa_url").eq("id", 1).single();

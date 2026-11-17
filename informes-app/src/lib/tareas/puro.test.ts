@@ -7,6 +7,7 @@ import {
   lineasDeTareas,
   normalizarTarea,
   planSincronizacion,
+  resumenPorLocalidad,
   SIN_LOCALIDAD,
   type TareaExistente,
   type TareaParaArbol,
@@ -124,4 +125,22 @@ test("coincideConRuta: ruta vacía incluye todo; cada nivel filtra; sin localida
   assert.equal(coincideConRuta(tarea, { provincia: "Salta" }), false);
   assert.equal(coincideConRuta(tarea, { localidad: SIN_LOCALIDAD }), true);
   assert.equal(coincideConRuta(t({}), { localidad: SIN_LOCALIDAD }), false);
+});
+
+test("resumenPorLocalidad: cuenta solo abiertas, sitios distintos, viejas y la más antigua", () => {
+  const r = (over: Partial<TareaParaArbol>, ubicacionId: string) => ({ ...t(over), ubicacionId });
+  const filas = resumenPorLocalidad(
+    [
+      r({ created_at: hace(2) }, "u1"),
+      r({ created_at: hace(45) }, "u1"),
+      r({ created_at: hace(5), sitio: "Planta B" }, "u2"),
+      r({ estado: "resuelta", created_at: hace(90) }, "u1"), // cerrada: no cuenta
+      r({ localidad: null, provincia: "Salta", region: "NOA", created_at: hace(3) }, "u3"),
+    ],
+    AHORA,
+  );
+  assert.equal(filas.length, 2);
+  assert.deepEqual(filas[0], { region: "NOA", provincia: "Mendoza", localidad: "Malargüe", sitios: 2, abiertas: 3, viejas: 1, masAntiguaDias: 45 });
+  assert.equal(filas[1].localidad, SIN_LOCALIDAD);
+  assert.equal(filas[1].abiertas, 1);
 });

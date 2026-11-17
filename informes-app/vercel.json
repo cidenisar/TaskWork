@@ -11,6 +11,10 @@
     {
       "path": "/api/cron/guardia-reintentar-notificaciones",
       "schedule": "30 11 * * *"
+    },
+    {
+      "path": "/api/cron/tareas-resumen-semanal",
+      "schedule": "0 11 * * 1"
     }
   ]
 }

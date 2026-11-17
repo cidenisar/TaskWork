@@ -3,6 +3,7 @@ import { requireAdminOrSupervisor } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { cargarTareasPanel, type TareaPanel } from "@/lib/tareas/cargar";
 import { AccionesTarea } from "@/components/panel/tareas/acciones-tarea";
+import { VincularEquipo } from "@/components/panel/tareas/vincular-equipo";
 import {
   armarArbol,
   coincideConRuta,
@@ -71,6 +72,13 @@ function Arbol({ nodos, ruta }: { nodos: NodoArbol[]; ruta: RutaTareas }) {
 const fmtFecha = (iso: string) =>
   new Date(iso).toLocaleDateString("es-AR", { timeZone: "America/Argentina/Buenos_Aires", day: "2-digit", month: "2-digit", year: "numeric" });
 
+function hrefExcel(ruta: RutaTareas): string {
+  const p = new URLSearchParams();
+  for (const k of NIVELES_RUTA) if (ruta[k] !== undefined) p.set(k, ruta[k]!);
+  const qs = p.toString();
+  return qs ? `/api/tareas/excel?${qs}` : "/api/tareas/excel";
+}
+
 function lugar(t: TareaPanel): string {
   return [t.provincia, t.localidad, t.sitio, t.planta, t.oficina].filter(Boolean).join(" · ");
 }
@@ -101,6 +109,11 @@ function FilaTarea({ t, ahora }: { t: TareaPanel; ahora: Date }) {
           </>
         )}
       </div>
+      {abierta ? (
+        <VincularEquipo tareaId={t.id} ubicacionId={t.ubicacionId} equipo={t.equipo} />
+      ) : (
+        t.equipo && <div className="item-sub">Equipo: {t.equipo.texto}</div>
+      )}
       <AccionesTarea id={t.id} abierta={abierta} />
     </li>
   );
@@ -145,6 +158,9 @@ export default async function PanelTareasPage({ searchParams }: { searchParams: 
             resuelven o se dan de baja.
           </p>
         </div>
+        <a className="btn btn-secondary" href={hrefExcel(ruta)} download>
+          Descargar plan de visita (Excel)
+        </a>
       </div>
 
       <div className="kpi-grid">
