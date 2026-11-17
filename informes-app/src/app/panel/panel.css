@@ -557,17 +557,54 @@ button.panel-nav-item {
   gap: 8px;
 }
 
-/* Vista General con el cuadro de Tareas pendientes: cinco cuadros en fila en pantalla ancha */
+/* Vista General con el cuadro de Tareas pendientes: los cinco cuadros van en una sola fila (laptop incluida). */
 .kpi-grid.kpi-grid-5 {
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
 }
-@media (max-width: 1280px) {
+.kpi-grid.kpi-grid-5 .kpi-card {
+  padding: 12px 14px;
+}
+@media (max-width: 1000px) {
   .kpi-grid.kpi-grid-5 {
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
-@media (max-width: 900px) {
+@media (max-width: 700px) {
   .kpi-grid.kpi-grid-5 {
     grid-template-columns: 1fr 1fr;
+  }
+}
+
+/* Títulos de las tarjetas de la grilla de tres (Riesgo de Viaje / Guardia / Mantenimiento): una sola línea
+   y misma altura, así los contenidos de abajo quedan alineados aunque el título sea largo o lleve un botón. */
+.panel-grid-3 .panel-card-title {
+  min-height: 34px;
+  flex-wrap: nowrap;
+}
+.panel-grid-3 .panel-card-title h2 {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.panel-grid-3 .panel-card-title .btn,
+.panel-grid-3 .panel-card-title .panel-card-count {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+/* Barra superior del Panel: en pantallas medianas los botones pasan a una segunda línea en vez de
+   quedar escondidos detrás de un scroll sin barra (Estadísticas y Configuración no se veían). */
+@media (min-width: 721px) {
+  .mz-header-inner.mz-full .mz-nav {
+    flex-wrap: wrap;
+    overflow-x: visible;
+    row-gap: 0;
+  }
+  .mz-header-inner.mz-full .mz-nav-item {
+    min-height: 38px;
+    padding: 0 10px;
   }
 }

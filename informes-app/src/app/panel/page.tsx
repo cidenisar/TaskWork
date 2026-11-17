@@ -273,6 +273,34 @@ export default async function PanelPage({ searchParams }: { searchParams: Promis
         </div>
       </div>
 
+      <div className="card" style={{ marginTop: 18 }}>
+        <div className="panel-card-title">
+          <h2>Novedades de guardia — hoy</h2>
+          <span className="panel-card-count">
+            {novedadesGuardia.length} novedad{novedadesGuardia.length === 1 ? "" : "es"}
+          </span>
+        </div>
+        {novedadesGuardia.length === 0 ? (
+          <div className="empty-note">Sin novedades de guardia hoy, en ninguna de las cuatro áreas.</div>
+        ) : (
+          <div>
+            {novedadesGuardia.map((n) => (
+              <Link href={`/guardia/evento/${n.eventoId}`} className="panel-venc-row panel-venc-row-link" key={n.id}>
+                <div className="panel-venc-info">
+                  <div className="panel-venc-nombre">{n.texto}</div>
+                  <div className="panel-venc-tipo">
+                    Evento #{n.eventoNumero} · {n.tipoAlarma} · {n.sitio}
+                  </div>
+                </div>
+                <div className="panel-venc-dias">
+                  <span className={`venc-badge ${n.estadoEvento === "abierto" ? "warn" : "ok"}`}>{fmtHora(n.at)}</span>
+                </div>
+              </Link>
+            ))}
+          </div>
+        )}
+      </div>
+
       {tareas && (
         <div className="card" style={{ marginTop: 18 }}>
           <div className="panel-card-title">
@@ -307,34 +335,6 @@ export default async function PanelPage({ searchParams }: { searchParams: Promis
           )}
         </div>
       )}
-
-      <div className="card" style={{ marginTop: 18 }}>
-        <div className="panel-card-title">
-          <h2>Novedades de guardia — hoy</h2>
-          <span className="panel-card-count">
-            {novedadesGuardia.length} novedad{novedadesGuardia.length === 1 ? "" : "es"}
-          </span>
-        </div>
-        {novedadesGuardia.length === 0 ? (
-          <div className="empty-note">Sin novedades de guardia hoy, en ninguna de las cuatro áreas.</div>
-        ) : (
-          <div>
-            {novedadesGuardia.map((n) => (
-              <Link href={`/guardia/evento/${n.eventoId}`} className="panel-venc-row panel-venc-row-link" key={n.id}>
-                <div className="panel-venc-info">
-                  <div className="panel-venc-nombre">{n.texto}</div>
-                  <div className="panel-venc-tipo">
-                    Evento #{n.eventoNumero} · {n.tipoAlarma} · {n.sitio}
-                  </div>
-                </div>
-                <div className="panel-venc-dias">
-                  <span className={`venc-badge ${n.estadoEvento === "abierto" ? "warn" : "ok"}`}>{fmtHora(n.at)}</span>
-                </div>
-              </Link>
-            ))}
-          </div>
-        )}
-      </div>
 
       <div className="panel-grid-2">
         <div className="card">
