@@ -353,6 +353,16 @@ export function UbicacionFields({
           />
         </div>
       )}
+      {sitioEl && sitioEl !== "__new" && plantaEl !== "__new" && plantasDelSitio.length <= 1 && oficinaEl !== "__new" && (
+        <div className="field">
+          <button type="button" className="ai-btn" disabled={disabled} onClick={() => elegirPlanta("__new")}>
+            + Agregar una planta u oficina nueva en este sitio
+          </button>
+          <div className="hint" style={{ marginTop: 4 }}>
+            Si el lugar donde trabajaste es otro dentro de «{sitioEl}» y no está en la lista, creala acá.
+          </div>
+        </div>
+      )}
       {plantaEl === "__new" && (
         <div className="grid2">
           <div className="field">
@@ -384,6 +394,13 @@ export function UbicacionFields({
               disabled={disabled}
             />
           </div>
+          {filasDelSitio.length > 0 && (
+            <div className="field">
+              <button type="button" className="ai-btn" disabled={disabled} onClick={() => elegirSitio(sitioEl)}>
+                Cancelar: usar el lugar que ya existe
+              </button>
+            </div>
+          )}
         </div>
       )}
       {plantaEl && plantaEl !== "__new" && oficinasDeLaPlanta.length > 1 && (
@@ -401,6 +418,13 @@ export function UbicacionFields({
           />
         </div>
       )}
+      {plantaEl && plantaEl !== "__new" && oficinaEl !== "__new" && oficinasDeLaPlanta.length <= 1 && (
+        <div className="field">
+          <button type="button" className="ai-btn" disabled={disabled} onClick={() => elegirOficina("__new")}>
+            + Agregar una oficina nueva en esta planta
+          </button>
+        </div>
+      )}
       {oficinaEl === "__new" && (
         <div className="field">
           <div className="hint" style={{ margin: "0 0 6px" }}>
@@ -416,6 +440,9 @@ export function UbicacionFields({
             onChange={(e) => onOficinaNuevaChange(e.target.value)}
             disabled={disabled}
           />
+          <button type="button" className="ai-btn" style={{ marginTop: 6 }} disabled={disabled} onClick={() => elegirPlantaInterno(plantaEl, filasDelSitio)}>
+            Cancelar: usar la planta que ya existe
+          </button>
         </div>
       )}
       {sitioEl === "__new" && (
