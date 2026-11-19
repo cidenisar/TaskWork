@@ -1,4 +1,5 @@
 import { INSTRUCCION_BATERIAS_IA, CAMPOS_BATERIA_JSON, parseDatosBateriaIa } from "@/lib/baterias/ia";
+import { completarConPrevios } from "@/lib/baterias/previos";
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { crearMensajeIa, hayAlgunaIaConfigurada, mensajeErrorIa } from "@/lib/ai/motor";
@@ -218,8 +219,7 @@ export async function POST(req: NextRequest) {
 
     const categoriasValidas = new Set<string>(CATEGORIA_EQUIPO_OPCIONES);
 
-    return NextResponse.json({
-      equipos: equipos
+    const lista = equipos
         .filter((e) => e && typeof e.texto === "string" && e.texto.trim())
         .map((e, i) => ({
           numero: Number.isFinite(e.numero) ? e.numero : i + 1,
@@ -235,7 +235,15 @@ export async function POST(req: NextRequest) {
           posibleObsolescencia:
             typeof e.posibleObsolescencia === "string" && e.posibleObsolescencia.trim() ? e.posibleObsolescencia.trim().slice(0, 300) : null,
           bateria: parseDatosBateriaIa(e, categoriasValidas.has(e.categoriaEquipo) ? e.categoriaEquipo : "otro"),
-        })),
+        }));
+
+    // Si ya se cargó otro equipo del mismo modelo, se aprovecha lo que ya se sabe de sus baterías (no pisa lo que leyó la foto).
+    const equiposConBateria = await Promise.all(
+      lista.map(async (e) => ({ ...e, bateria: await completarConPrevios(supabase, e.categoriaEquipo, e.marcaModelo, e.bateria) })),
+    );
+
+    return NextResponse.json({
+      equipos: equiposConBateria,
       hallazgos: parseHallazgosDetectados(resultado?.hallazgos, hallazgosItems),
     });
   } catch (err) {

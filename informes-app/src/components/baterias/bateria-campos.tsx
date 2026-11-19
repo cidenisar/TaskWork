@@ -73,19 +73,19 @@ export function BateriaCampos({
 }) {
   const rol = rolBateria(categoria);
   const [buscando, setBuscando] = useState(false);
-  const [resultadoBusqueda, setResultadoBusqueda] = useState<{ texto: string; url: string | null; esError: boolean } | null>(null);
+  const [resultadoBusqueda, setResultadoBusqueda] = useState<{ texto: string; url: string | null; esError: boolean; deCargaPrevia?: boolean } | null>(null);
   if (!rol) return null;
 
-  async function buscarEnInternet() {
+  async function buscarEnInternet(soloInternet = false) {
     setBuscando(true);
     setResultadoBusqueda(null);
     try {
       const res = await fetch("/api/baterias/buscar-modelo", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ categoria, marcaModelo }),
+        body: JSON.stringify({ categoria, marcaModelo, soloInternet }),
       });
-      const data = (await res.json()) as { error?: string; datos?: DatosModeloBateria };
+      const data = (await res.json()) as { error?: string; datos?: DatosModeloBateria; origen?: "previos" | "internet" };
       if (!res.ok || !data.datos) {
         setResultadoBusqueda({ texto: data.error || "No se pudo buscar en internet.", url: null, esError: true });
         return;
@@ -100,7 +100,7 @@ export function BateriaCampos({
       if (d.upsBaterias && rol === "ups") patch.upsBaterias = d.upsBaterias;
       if (d.potenciaNominal && !datos.potenciaNominal.trim()) patch.potenciaNominal = d.potenciaNominal;
       if (Object.keys(patch).length > 0) onChange(patch);
-      setResultadoBusqueda({ texto: d.nota || (Object.keys(patch).length > 0 ? "Datos cargados." : "No se encontró información de este modelo."), url: d.fuenteUrl, esError: false });
+      setResultadoBusqueda({ texto: d.nota || (Object.keys(patch).length > 0 ? "Datos cargados." : "No se encontró información de este modelo."), url: d.fuenteUrl, esError: false, deCargaPrevia: data.origen === "previos" });
     } catch {
       setResultadoBusqueda({ texto: "No se pudo buscar en internet.", url: null, esError: true });
     } finally {
@@ -247,6 +247,14 @@ export function BateriaCampos({
       {resultadoBusqueda && (
         <div className="hint" style={{ margin: 0, color: resultadoBusqueda.esError ? "var(--danger, #c0392b)" : undefined }}>
           {resultadoBusqueda.texto}
+          {resultadoBusqueda.deCargaPrevia && (
+            <>
+              {" "}
+              <button type="button" className="link-btn" onClick={() => void buscarEnInternet(true)} disabled={buscando || disabled}>
+                Buscar en internet igual
+              </button>
+            </>
+          )}
           {resultadoBusqueda.url && (
             <>
               {" "}
