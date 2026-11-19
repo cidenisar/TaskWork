@@ -70,7 +70,7 @@ export async function POST(req: NextRequest) {
       model: "claude-opus-5-5",
       betas: ["server-side-fallback-2026-07-01"],
       fallbacks: "default",
-      max_tokens: 4096,
+      max_tokens: 6144,
       output_config: { effort: "medium" },
       system:
         "Sos un inspector técnico que ayuda a un técnico de campo a detectar qué hay para REPARAR o MEJORAR en una sala técnica, " +
