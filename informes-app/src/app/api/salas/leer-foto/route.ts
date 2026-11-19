@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { crearMensajeIa, hayAlgunaIaConfigurada, mensajeErrorIa } from "@/lib/ai/motor";
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { SALA_FOTO_GENERAL_MAX, SALA_TIPO_CONSTRUCCION_LABEL, SALA_TIPO_CONSTRUCCION_OPCIONES } from "@/components/salas/types";
+import { SALA_FOTO_IA_POR_TANDA, SALA_TIPO_CONSTRUCCION_LABEL, SALA_TIPO_CONSTRUCCION_OPCIONES } from "@/components/salas/types";
 import type { SalaTipoConstruccion } from "@/lib/database.types";
 import { instruccionInspeccionIa, INSTRUCCION_RESPUESTA_HALLAZGOS, parseHallazgosDetectados } from "@/lib/inspeccion-ia/prompt";
 import { verificarLimiteIa } from "@/lib/ai/rate-limit";
@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
   const formData = await req.formData();
   const files = formData.getAll("fotos").filter((f): f is File => f instanceof File);
   if (files.length === 0) return NextResponse.json({ error: "Falta al menos una foto." }, { status: 400 });
-  if (files.length > SALA_FOTO_GENERAL_MAX) return NextResponse.json({ error: `Máximo ${SALA_FOTO_GENERAL_MAX} fotos por lectura.` }, { status: 400 });
+  if (files.length > SALA_FOTO_IA_POR_TANDA) return NextResponse.json({ error: `Máximo ${SALA_FOTO_IA_POR_TANDA} fotos por pedido (la pantalla las manda en tandas).` }, { status: 400 });
 
   const tipoRaw = formData.get("tipoConstruccion");
   const tipo = typeof tipoRaw === "string" && (SALA_TIPO_CONSTRUCCION_OPCIONES as string[]).includes(tipoRaw) ? (tipoRaw as SalaTipoConstruccion) : null;
@@ -63,7 +63,9 @@ export async function POST(req: NextRequest) {
   const contexto =
     `Es ${tipo ? `un/a ${SALA_TIPO_CONSTRUCCION_LABEL[tipo].toLowerCase()}` : "una sala técnica, shelter o container"} de una instalación de ` +
     "energía y comunicaciones (equipos de radio, UPS, baterías, tableros, racks, aire acondicionado). " +
-    (imagenes.length > 1 ? `Te paso ${imagenes.length} fotos de la MISMA sala (distintos ángulos): combinalas como una sola inspección.` : "");
+    (imagenes.length > 1
+      ? `Te paso ${imagenes.length} fotos de la MISMA sala (distintos ángulos; la sala puede ser grande y tener más fotos que se evalúan aparte): combinalas como una sola inspección.`
+      : "");
 
   try {
     const response = await crearMensajeIa(supabase, { endpoint: "salas/leer-foto", modulo: "salas", userId: profile.id }, {

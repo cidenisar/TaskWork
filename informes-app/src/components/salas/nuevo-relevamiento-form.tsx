@@ -15,7 +15,7 @@ import { mezclarHallazgos, type HallazgoInspeccionIa } from "@/lib/inspeccion-ia
 import { HallazgosInspeccionIaSection } from "@/components/inspeccion-ia/hallazgos-section";
 import { conVinetas, lineasDeTareas } from "@/lib/tareas/puro";
 import { TareasTextarea } from "@/components/informe-tecnico/tareas-textarea";
-import { SALA_FOTO_GENERAL_MAX, SALA_TIPO_CONSTRUCCION_OPCIONES, SALA_TIPO_CONSTRUCCION_LABEL } from "./types";
+import { SALA_FOTO_GENERAL_MAX, SALA_FOTO_IA_POR_TANDA, SALA_TIPO_CONSTRUCCION_OPCIONES, SALA_TIPO_CONSTRUCCION_LABEL } from "./types";
 
 /**
  * Alta/relevamiento de una Sala/Shelter/Container — a diferencia de
@@ -101,35 +101,57 @@ export function NuevoRelevamientoSalaForm({
     setIaBusy(true);
     setIaNote(null);
     try {
-      const fd = new FormData();
-      for (let i = 0; i < fotosGenerales.length; i++) {
-        const jpeg = await resizeImageToJpeg(fotosGenerales[i]);
-        fd.append("fotos", jpeg, `sala-${i + 1}.jpg`);
+      // Las fotos se mandan en tandas (ver SALA_FOTO_IA_POR_TANDA) y los resultados se combinan: un punto
+      // detectado en cualquier tanda se mantiene aunque otra tanda (otra zona de la sala) no lo vea.
+      const tandas: File[][] = [];
+      for (let i = 0; i < fotosGenerales.length; i += SALA_FOTO_IA_POR_TANDA) tandas.push(fotosGenerales.slice(i, i + SALA_FOTO_IA_POR_TANDA));
+
+      let acumulados = hallazgos;
+      let obsActuales = lineasDeTareas(observaciones);
+      let obsNuevas = 0;
+      let tandasOk = 0;
+      let primerError: string | null = null;
+
+      for (let t = 0; t < tandas.length; t++) {
+        setIaNote(tandas.length > 1 ? `Analizando fotos… tanda ${t + 1} de ${tandas.length}` : null);
+        const fd = new FormData();
+        for (let i = 0; i < tandas[t].length; i++) {
+          const jpeg = await resizeImageToJpeg(tandas[t][i]);
+          fd.append("fotos", jpeg, `sala-${t * SALA_FOTO_IA_POR_TANDA + i + 1}.jpg`);
+        }
+        if (tipoConstruccion) fd.append("tipoConstruccion", tipoConstruccion);
+        const res = await fetch("/api/salas/leer-foto", { method: "POST", body: fd });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          primerError = primerError ?? (data.error || "No se pudo analizar las fotos.");
+          if (res.status === 429) break; // tope de uso: seguir solo lo empeora
+          continue;
+        }
+        tandasOk++;
+        acumulados = mezclarHallazgos(acumulados, data.hallazgos ?? []);
+        const propuestas: string[] = data.observaciones ?? [];
+        const nuevas = propuestas.filter((o) => !obsActuales.some((a) => a.toLowerCase() === o.toLowerCase()));
+        obsNuevas += nuevas.length;
+        obsActuales = [...obsActuales, ...nuevas];
+        setHallazgos(acumulados);
+        if (nuevas.length > 0) setObservaciones(conVinetas(obsActuales));
       }
-      if (tipoConstruccion) fd.append("tipoConstruccion", tipoConstruccion);
-      const res = await fetch("/api/salas/leer-foto", { method: "POST", body: fd });
-      const data = await res.json();
-      if (!res.ok) {
-        setIaNote(data.error || "No se pudo analizar las fotos.");
+
+      if (tandasOk === 0) {
+        setIaNote(primerError || "No se pudo analizar las fotos.");
         return;
       }
-      const nuevos: HallazgoInspeccionIa[] = data.hallazgos ?? [];
-      const combinados = mezclarHallazgos(hallazgos, nuevos);
-      setHallazgos(combinados);
-      // Las observaciones se SUMAN a lo que ya haya escrito quien releva, sin repetir líneas.
-      const propuestas: string[] = data.observaciones ?? [];
-      const actuales = lineasDeTareas(observaciones);
-      const nuevasObs = propuestas.filter((o) => !actuales.some((a) => a.toLowerCase() === o.toLowerCase()));
-      if (nuevasObs.length > 0) setObservaciones(conVinetas([...actuales, ...nuevasObs]));
-      const detectados = combinados.filter((h) => h.estado === "no_ok").length;
+      const detectados = acumulados.filter((h) => h.estado === "no_ok").length;
       setIaNote(
         `Se analizaron ${fotosGenerales.length} foto${fotosGenerales.length === 1 ? "" : "s"}: ` +
           (detectados > 0 ? `⚠ ${detectados} punto${detectados === 1 ? "" : "s"} para reparar o mejorar` : "ningún punto de la lista con problema") +
-          (nuevasObs.length > 0 ? ` y ${nuevasObs.length} observación${nuevasObs.length === 1 ? "" : "es"} más` : "") +
-          ". Revisalo antes de guardar: la IA propone, vos confirmás.",
+          (obsNuevas > 0 ? ` y ${obsNuevas} observación${obsNuevas === 1 ? "" : "es"} más` : "") +
+          "." +
+          (tandasOk < tandas.length ? ` ⚠ ${tandas.length - tandasOk} de ${tandas.length} tandas de fotos no se pudieron analizar${primerError ? ` (${primerError})` : ""} — probá de nuevo.` : "") +
+          " Revisalo antes de guardar: la IA propone, vos confirmás.",
       );
     } catch (err) {
-      setIaNote("No se pudo analizar las fotos.");
+      setIaNote(err instanceof Error ? err.message : "No se pudo analizar las fotos.");
       reportarErrorCliente(err instanceof Error ? err.message : "Error analizando fotos de sala con IA", "leer-foto-sala");
     } finally {
       setIaBusy(false);

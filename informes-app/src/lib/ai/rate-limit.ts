@@ -9,10 +9,13 @@ import type { createClient } from "@/lib/supabase/server";
  * golpee el endpoint sin parar, porque cada llamada gasta crédito real de
  * la cuenta de Anthropic (ver CRITERIOS_Y_IDEAS.md §27.4).
  */
+// Ojo: con varias IAs prendidas (modo "combinada") cada lectura suma un renglón POR IA en `ia_uso`, no uno por
+// lectura. Una sala con 14 fotos se analiza en 3 tandas: son ~12 renglones. Los topes tienen que dar para
+// analizar una sala grande dos veces seguidas sin frenar al técnico, y siguen cortando un script en loop.
 const VENTANA_CORTA_MIN = 5;
-const MAX_EN_VENTANA_CORTA = 20;
+const MAX_EN_VENTANA_CORTA = 40;
 const VENTANA_LARGA_MIN = 24 * 60;
-const MAX_EN_VENTANA_LARGA = 150;
+const MAX_EN_VENTANA_LARGA = 300;
 
 export type ResultadoLimiteIa = { permitido: true } | { permitido: false; error: string };
 
