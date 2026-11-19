@@ -1,3 +1,4 @@
+import { INSTRUCCION_BATERIAS_IA, CAMPOS_BATERIA_JSON, parseDatosBateriaIa } from "@/lib/baterias/ia";
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { crearMensajeIa, hayAlgunaIaConfigurada, mensajeErrorIa } from "@/lib/ai/motor";
@@ -164,11 +165,12 @@ export async function POST(req: NextRequest) {
         "una afirmación categórica.\n\n" +
         "No inventes equipos que no estén en la foto, y no adivines una marca/modelo/serie/etiqueta que no puedas justificar por lo " +
         'que ves — pero "texto" y "categoriaEquipo" son obligatorios en todos los casos, con tu mejor estimación visual si hace falta.' +
+        INSTRUCCION_BATERIAS_IA +
         `${instruccionHallazgos}\n\n` +
         'Respondé ÚNICAMENTE con un JSON válido: un objeto {"equipos": [...], "hallazgos": [...]} donde "equipos" es un array de ' +
         'objetos {"texto": string, "categoriaEquipo": string, "marcaModelo": string, "numeroSerie": string, "etiquetaYpf": string, ' +
         '"identificado": boolean, "consumoPromedioW": number | null, "consumoMaxW": number | null, "posibleObsolescencia": string | ' +
-        `null} y ${INSTRUCCION_RESPUESTA_HALLAZGOS}. Sin texto antes ni después, sin bloque de código markdown.`,
+        `null, ${CAMPOS_BATERIA_JSON}} y ${INSTRUCCION_RESPUESTA_HALLAZGOS}. Sin texto antes ni después, sin bloque de código markdown.`,
       messages: [
         {
           role: "user",
@@ -225,6 +227,7 @@ export async function POST(req: NextRequest) {
           consumoMaxW: Number.isFinite(e.consumoMaxW) && (e.consumoMaxW as number) > 0 ? (e.consumoMaxW as number) : null,
           posibleObsolescencia:
             typeof e.posibleObsolescencia === "string" && e.posibleObsolescencia.trim() ? e.posibleObsolescencia.trim().slice(0, 300) : null,
+          bateria: parseDatosBateriaIa(e, categoriasValidas.has(e.categoriaEquipo) ? e.categoriaEquipo : "otro"),
         })),
       hallazgos: parseHallazgosDetectados(resultado?.hallazgos, hallazgosItems),
     });

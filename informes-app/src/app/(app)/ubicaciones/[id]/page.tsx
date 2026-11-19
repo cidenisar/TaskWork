@@ -1,3 +1,4 @@
+import { columnasADatosBateria, resumenBateria } from "@/lib/baterias/types";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { requireProfile } from "@/lib/auth";
@@ -83,7 +84,7 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
     supabase
       .from("equipos")
       .select(
-        "id, categoria_equipo, texto, marca_modelo, numero_serie, etiqueta_ypf, cantidad, consumo_promedio_w, consumo_max_w, tipo_montaje, altura_montaje_m, ubicacion_id, estado",
+        "id, categoria_equipo, texto, marca_modelo, numero_serie, etiqueta_ypf, cantidad, consumo_promedio_w, consumo_max_w, tipo_montaje, altura_montaje_m, ubicacion_id, estado, bateria_destino, bateria_cantidad, bateria_origen, bateria_tipo, ups_baterias, potencia_nominal, alimentado_por_tipo, alimentado_por_id",
       )
       .in("ubicacion_id", siblingIds)
       .order("texto"),
@@ -719,7 +720,17 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
                     const recurso = calcularRecursoAltura(e.tipo_montaje, e.altura_montaje_m, recursoAlturaConfig);
                     return (
                       <tr key={e.id}>
-                        <td>{e.texto}</td>
+                        <td>
+                          {e.texto}
+                          {(() => {
+                            const bateria = resumenBateria(e.categoria_equipo, e.cantidad, columnasADatosBateria(e));
+                            return bateria ? (
+                              <div className="hist-meta">
+                                <Icon name="battery" size={11} /> {bateria}
+                              </div>
+                            ) : null;
+                          })()}
+                        </td>
                         {hayVariasPlantas && <td>{labelPorUbicacionId.get(e.ubicacion_id)}</td>}
                         <td>{EQUIPO_CATEGORIA_LABEL[e.categoria_equipo]}</td>
                         <td>{e.marca_modelo || "—"}</td>

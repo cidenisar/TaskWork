@@ -10,6 +10,8 @@ import { TIPO_MONTAJE_OPCIONES, TIPO_MONTAJE_LABEL, calcularRecursoAltura, type 
 import type { EquipoCategoria } from "@/lib/database.types";
 import { Icon } from "@/components/icon";
 import { reportarErrorCliente } from "@/lib/client-error-report";
+import { BateriaCampos, fuenteUnicaDeClase, useFuentesBateria } from "@/components/baterias/bateria-campos";
+import { DATOS_BATERIA_VACIOS, type DatosBateria } from "@/lib/baterias/types";
 
 /**
  * `revisar`/`posibleObsolescencia` son transitorios de UI (igual criterio
@@ -32,6 +34,7 @@ const MATERIAL_BASE: MaterialAltaItem = {
   consumoMaxW: null,
   tipoMontaje: null,
   alturaMontajeM: null,
+  bateria: DATOS_BATERIA_VACIOS,
   revisar: false,
   posibleObsolescencia: null,
 };
@@ -55,6 +58,7 @@ export function AltaMaterialForm({
   const [gps, setGps] = useState<GpsCapturado | null>(null);
   const [fecha, setFecha] = useState(() => new Date().toISOString().slice(0, 10));
   const [materiales, setMateriales] = useState<MaterialAltaItem[]>([{ ...MATERIAL_BASE }]);
+  const fuentesBateria = useFuentesBateria(ubicacionId);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [exito, setExito] = useState<string | null>(null);
@@ -102,6 +106,7 @@ export function AltaMaterialForm({
         consumoPromedioW: number | null;
         consumoMaxW: number | null;
         posibleObsolescencia: string | null;
+        bateria: DatosBateria;
       }[] = data.equipos ?? [];
       if (detectados.length === 0) {
         setIaNote("No se detectó ningún material/equipo en las fotos — probá con otras o cargalo a mano.");
@@ -120,6 +125,7 @@ export function AltaMaterialForm({
           consumoMaxW: d.consumoMaxW,
           revisar: d.identificado !== true,
           posibleObsolescencia: d.posibleObsolescencia,
+          bateria: vincularBancoDetectado(d.bateria),
         })),
       ]);
       const sinEtiqueta = detectados.filter((d) => d.identificado !== true).length;
@@ -135,6 +141,13 @@ export function AltaMaterialForm({
     } finally {
       setIaBusy(false);
     }
+  }
+
+  /** Un banco recién detectado se vincula solo si en el sitio hay UN solo rectificador/UPS del tipo al que parece servir. */
+  function vincularBancoDetectado(b: DatosBateria): DatosBateria {
+    if (b.alimentadoPorId) return b;
+    const candidata = fuenteUnicaDeClase(fuentesBateria, b.bateriaDestino);
+    return candidata ? { ...b, alimentadoPorTipo: candidata.tipo, alimentadoPorId: candidata.id } : b;
   }
 
   function actualizar(i: number, patch: Partial<MaterialAltaItem>) {
@@ -183,6 +196,7 @@ export function AltaMaterialForm({
         consumoMaxW: m.consumoMaxW,
         tipoMontaje: m.tipoMontaje,
         alturaMontajeM: m.alturaMontajeM,
+        bateria: m.bateria,
       })),
     });
     setBusy(false);
@@ -367,6 +381,14 @@ export function AltaMaterialForm({
                 <input type="text" placeholder="N° inventario" value={m.etiquetaYpf} onChange={(e) => actualizar(i, { etiquetaYpf: e.target.value })} disabled={busy} />
               </div>
             </div>
+
+            <BateriaCampos
+              categoria={m.categoriaEquipo}
+              datos={m.bateria}
+              onChange={(patch) => actualizar(i, { bateria: { ...m.bateria, ...patch } })}
+              fuentes={fuentesBateria}
+              disabled={busy}
+            />
 
             {m.categoriaEquipo === "camara_cctv" && (
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-end" }}>

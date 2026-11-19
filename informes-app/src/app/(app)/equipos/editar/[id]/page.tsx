@@ -1,3 +1,4 @@
+import { columnasADatosBateria } from "@/lib/baterias/types";
 import { notFound } from "next/navigation";
 import { requireAdmin } from "@/lib/auth";
 import { createServiceRoleClient } from "@/lib/supabase/server";
@@ -27,7 +28,7 @@ export default async function EditarRelevamientoEquiposPage({ params }: { params
   const { data: equiposData } = equipoIds.length
     ? await service
         .from("equipos")
-        .select("id, categoria_equipo, texto, marca_modelo, numero_serie, etiqueta_ypf, cantidad, consumo_promedio_w, consumo_max_w, tipo_montaje, altura_montaje_m")
+        .select("id, categoria_equipo, texto, marca_modelo, numero_serie, etiqueta_ypf, cantidad, consumo_promedio_w, consumo_max_w, tipo_montaje, altura_montaje_m, bateria_destino, bateria_cantidad, bateria_origen, bateria_tipo, ups_baterias, potencia_nominal, alimentado_por_tipo, alimentado_por_id")
         .in("id", equipoIds)
     : { data: [] };
   const equiposPorId = new Map((equiposData ?? []).map((e) => [e.id, e]));
@@ -49,6 +50,7 @@ export default async function EditarRelevamientoEquiposPage({ params }: { params
         consumoMaxW: eq.consumo_max_w,
         tipoMontaje: eq.tipo_montaje,
         alturaMontajeM: eq.altura_montaje_m,
+        bateria: columnasADatosBateria(eq),
         estado: l.estado ?? "",
         comentario: l.comentario ?? "",
         eliminada: false,

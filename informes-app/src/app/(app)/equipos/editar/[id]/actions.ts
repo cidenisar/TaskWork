@@ -8,6 +8,7 @@ import { resolverUbicacionId, tagGpsSiFalta, type PayloadUbicacionNueva, type Pa
 import { calcularResumenEquipos } from "@/components/equipos/types";
 import { logAudit } from "@/lib/config/audit";
 import type { EquipoCategoria, EstadoChecklist, TipoMontajeCamara } from "@/lib/database.types";
+import { datosBateriaAColumnas, DATOS_BATERIA_VACIOS, type DatosBateria } from "@/lib/baterias/types";
 
 interface PayloadLecturaEditable {
   lecturaId: string;
@@ -22,6 +23,7 @@ interface PayloadLecturaEditable {
   consumoMaxW: number | null;
   tipoMontaje: TipoMontajeCamara | null;
   alturaMontajeM: number | null;
+  bateria?: DatosBateria;
   estado: string;
   comentario: string;
   /** true = sacarla de este relevamiento (no borra el equipo en sí, solo la lectura). */
@@ -116,6 +118,7 @@ export async function actualizarRelevamientoEquiposAction(
         consumo_max_w: Number.isFinite(l.consumoMaxW) && (l.consumoMaxW as number) > 0 ? l.consumoMaxW : null,
         tipo_montaje: l.tipoMontaje,
         altura_montaje_m: Number.isFinite(l.alturaMontajeM) && (l.alturaMontajeM as number) >= 0 ? l.alturaMontajeM : null,
+        ...datosBateriaAColumnas(l.categoriaEquipo, l.bateria ?? DATOS_BATERIA_VACIOS),
       })
       .eq("id", l.equipoId);
     if (equipoErr) return { success: false, error: `No se pudo actualizar "${l.texto}": ${equipoErr.message}` };

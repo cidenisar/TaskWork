@@ -9,6 +9,7 @@ import { resolverEquipo } from "@/lib/equipamiento/resolver-equipo";
 import { nuevoNumeroGeneracionEntrega } from "@/lib/deposito/numero-generacion";
 import { labelUbicacion } from "@/components/ubicaciones/types";
 import type { EquipoCategoria, TipoMontajeCamara } from "@/lib/database.types";
+import { datosBateriaAColumnas, type DatosBateria } from "@/lib/baterias/types";
 
 export interface PayloadMaterialAlta {
   categoriaEquipo: EquipoCategoria;
@@ -21,6 +22,8 @@ export interface PayloadMaterialAlta {
   consumoMaxW: number | null;
   tipoMontaje: TipoMontajeCamara | null;
   alturaMontajeM: number | null;
+  /** Baterías / potencia (banco, UPS, rectificador) — ver lib/baterias. */
+  bateria: DatosBateria;
 }
 
 export interface DarDeAltaMaterialesPayload {
@@ -87,6 +90,7 @@ export async function darDeAltaMaterialesAction(payload: DarDeAltaMaterialesPayl
       consumo_max_w: m.consumoMaxW,
       tipo_montaje: m.tipoMontaje,
       altura_montaje_m: m.alturaMontajeM,
+      ...datosBateriaAColumnas(m.categoriaEquipo, m.bateria),
       fecha_alta: payload.fecha,
       informe_instalacion_id: null,
       created_by: profile.id,

@@ -1,4 +1,5 @@
 import type { RackCategoriaEquipo } from "@/lib/database.types";
+import type { DatosBateria } from "@/lib/baterias/types";
 
 /**
  * Máximo de fotos que se pueden mandar juntas a la lectura con IA de un
@@ -63,6 +64,8 @@ export interface EquipamientoItem {
   numeroSerie: string;
   /** Puertos/bocas libres del equipo — manual (la IA no lo infiere con confianza desde una foto), se completa al dar de alta. */
   bocasDisponibles: number | null;
+  /** Baterías / potencia — solo para banco de baterías, UPS y rectificador (ver lib/baterias). Ausente = sin datos. */
+  bateria?: DatosBateria;
   /**
    * Consumo típico ESTIMADO por IA en Watts a partir de la marca/modelo
    * (nunca una medición real, a diferencia de la corriente de Tableros) —

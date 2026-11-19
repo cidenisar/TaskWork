@@ -209,6 +209,12 @@ const PATHS: Record<string, React.ReactNode> = {
       <path d="M12 13v8" />
     </>
   ),
+  battery: (
+    <>
+      <rect x="3" y="8" width="16" height="9" rx="2" />
+      <path d="M21 11v3M7 11v3M11 11v3" />
+    </>
+  ),
   trash: (
     <>
       <path d="M5 7h14M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />

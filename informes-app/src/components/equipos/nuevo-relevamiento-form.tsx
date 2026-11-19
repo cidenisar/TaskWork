@@ -24,6 +24,8 @@ import { TIPO_MONTAJE_OPCIONES, TIPO_MONTAJE_LABEL, calcularRecursoAltura, type 
 import { mezclarHallazgos, type HallazgoInspeccionIa } from "@/lib/inspeccion-ia/types";
 import { HallazgosInspeccionIaSection } from "@/components/inspeccion-ia/hallazgos-section";
 import type { EstadoChecklist } from "@/lib/database.types";
+import { BateriaCampos, fuenteUnicaDeClase, useFuentesBateria } from "@/components/baterias/bateria-campos";
+import { DATOS_BATERIA_VACIOS, type DatosBateria } from "@/lib/baterias/types";
 
 interface LecturaState {
   estado: string;
@@ -41,6 +43,7 @@ const EQUIPO_NUEVO_BASE = {
   consumoMaxW: null as number | null,
   tipoMontaje: null,
   alturaMontajeM: null,
+  bateria: DATOS_BATERIA_VACIOS,
 };
 
 export function NuevoRelevamientoEquiposForm({
@@ -67,6 +70,7 @@ export function NuevoRelevamientoEquiposForm({
   const [gps, setGps] = useState<GpsCapturado | null>(null);
   const [fecha, setFecha] = useState(() => new Date().toISOString().slice(0, 10));
   const [equipos, setEquipos] = useState<EquipoItem[]>([]);
+  const fuentesBateria = useFuentesBateria(ubicacionId);
   const [lecturas, setLecturas] = useState<Record<number, LecturaState>>({});
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -183,6 +187,7 @@ export function NuevoRelevamientoEquiposForm({
         consumoPromedioW: number | null;
         consumoMaxW: number | null;
         posibleObsolescencia: string | null;
+        bateria: DatosBateria;
       }[] = data.equipos ?? [];
       if (detectados.length === 0) {
         setIaNote(
@@ -208,6 +213,7 @@ export function NuevoRelevamientoEquiposForm({
           alturaMontajeM: null,
           revisar: d.identificado !== true,
           posibleObsolescencia: d.posibleObsolescencia,
+          bateria: vincularBancoDetectado(d.bateria),
         })),
       ]);
       const hallazgosNuevos: HallazgoInspeccionIa[] = data.hallazgos ?? [];
@@ -272,6 +278,17 @@ export function NuevoRelevamientoEquiposForm({
       },
     ]);
     setDepositoResultados((prev) => prev.filter((d) => d.id !== item.id));
+  }
+
+  /** Un banco recién detectado se vincula solo si en el sitio hay UN solo rectificador/UPS del tipo al que parece servir. */
+  function vincularBancoDetectado(b: DatosBateria): DatosBateria {
+    if (b.alimentadoPorId) return b;
+    const candidata = fuenteUnicaDeClase(fuentesBateria, b.bateriaDestino);
+    return candidata ? { ...b, alimentadoPorTipo: candidata.tipo, alimentadoPorId: candidata.id } : b;
+  }
+
+  function actualizarBateria(i: number, patch: Partial<DatosBateria>) {
+    setEquipos((prev) => prev.map((e, idx) => (idx === i ? { ...e, bateria: { ...(e.bateria ?? DATOS_BATERIA_VACIOS), ...patch } } : e)));
   }
 
   function agregarEquipo() {
@@ -350,6 +367,7 @@ export function NuevoRelevamientoEquiposForm({
               consumoMaxW: e.consumoMaxW,
               tipoMontaje: e.tipoMontaje,
               alturaMontajeM: e.alturaMontajeM,
+              bateria: e.bateria ?? DATOS_BATERIA_VACIOS,
               estado: l.estado,
               comentario: l.comentario,
               desdeDeposito: e.desdeDeposito ?? false,
@@ -755,6 +773,13 @@ export function NuevoRelevamientoEquiposForm({
                           <Icon name="x" size={12} />
                         </button>
                       </div>
+                      <BateriaCampos
+                        categoria={e.categoriaEquipo}
+                        datos={e.bateria ?? DATOS_BATERIA_VACIOS}
+                        onChange={(patch) => actualizarBateria(i, patch)}
+                        fuentes={fuentesBateria}
+                        disabled={submitting}
+                      />
                       {e.categoriaEquipo === "camara_cctv" && (
                         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-end" }}>
                           <div className="field" style={{ marginBottom: 0, width: 150 }}>

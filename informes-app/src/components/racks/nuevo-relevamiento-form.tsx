@@ -25,6 +25,8 @@ import {
 import { mezclarHallazgos, type HallazgoInspeccionIa } from "@/lib/inspeccion-ia/types";
 import { HallazgosInspeccionIaSection } from "@/components/inspeccion-ia/hallazgos-section";
 import type { EstadoChecklist } from "@/lib/database.types";
+import { BateriaCampos, fuenteUnicaDeClase, useFuentesBateria } from "@/components/baterias/bateria-campos";
+import { DATOS_BATERIA_VACIOS, type DatosBateria } from "@/lib/baterias/types";
 
 interface LecturaState {
   estado: string;
@@ -42,6 +44,7 @@ const EQUIPO_NUEVO_BASE = {
   consumoPromedioW: null as number | null,
   consumoMaxW: null as number | null,
   bocasDisponibles: null as number | null,
+  bateria: DATOS_BATERIA_VACIOS,
 };
 
 export function NuevoRelevamientoForm({
@@ -57,6 +60,7 @@ export function NuevoRelevamientoForm({
 }) {
   const [provinciaFiltro, setProvinciaFiltro] = useState("");
   const [ubicacionId, setUbicacionId] = useState<string>(""); // "" = sin elegir, "__new" = crear
+  const fuentesBateria = useFuentesBateria(ubicacionId);
   const [localidadNueva, setLocalidadNueva] = useState("");
   const [sitioNueva, setSitioNueva] = useState("");
   const [plantaNueva, setPlantaNueva] = useState("");
@@ -210,6 +214,7 @@ export function NuevoRelevamientoForm({
         consumoPromedioW: number | null;
         consumoMaxW: number | null;
         posibleObsolescencia: string | null;
+        bateria: DatosBateria;
       }[] = data.equipos ?? [];
       if (detectados.length === 0) {
         setIaNote(
@@ -237,6 +242,7 @@ export function NuevoRelevamientoForm({
           bocasDisponibles: null,
           revisar: d.identificado !== true,
           posibleObsolescencia: d.posibleObsolescencia,
+          bateria: vincularBancoDetectado(d.bateria),
         })),
       ]);
       const hallazgosNuevos: HallazgoInspeccionIa[] = data.hallazgos ?? [];
@@ -301,6 +307,17 @@ export function NuevoRelevamientoForm({
       setEscaneandoBusy(false);
       setEscaneando(null);
     }
+  }
+
+  /** Un banco recién detectado se vincula solo si en el sitio hay UN solo rectificador/UPS del tipo al que parece servir. */
+  function vincularBancoDetectado(b: DatosBateria): DatosBateria {
+    if (b.alimentadoPorId) return b;
+    const candidata = fuenteUnicaDeClase(fuentesBateria, b.bateriaDestino);
+    return candidata ? { ...b, alimentadoPorTipo: candidata.tipo, alimentadoPorId: candidata.id } : b;
+  }
+
+  function actualizarBateria(i: number, patch: Partial<DatosBateria>) {
+    setEquipamiento((prev) => prev.map((e, idx) => (idx === i ? { ...e, bateria: { ...(e.bateria ?? DATOS_BATERIA_VACIOS), ...patch } } : e)));
   }
 
   function agregarEquipo() {
@@ -392,6 +409,7 @@ export function NuevoRelevamientoForm({
               consumoPromedioW: e.consumoPromedioW,
               consumoMaxW: e.consumoMaxW,
               bocasDisponibles: e.bocasDisponibles,
+              bateria: e.bateria ?? DATOS_BATERIA_VACIOS,
               estado: l.estado,
               comentario: l.comentario,
             };
@@ -884,6 +902,13 @@ export function NuevoRelevamientoForm({
                           <Icon name="x" size={12} />
                         </button>
                       </div>
+                      <BateriaCampos
+                        categoria={e.categoriaEquipo}
+                        datos={e.bateria ?? DATOS_BATERIA_VACIOS}
+                        onChange={(patch) => actualizarBateria(i, patch)}
+                        fuentes={fuentesBateria}
+                        disabled={submitting}
+                      />
                     </div>
                   ) : (
                     <div className="item-name">

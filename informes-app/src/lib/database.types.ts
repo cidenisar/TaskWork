@@ -69,6 +69,12 @@ export type OrigenEntregaDeposito = "equipo_existente" | "material_libre";
 export type CondicionMaterial = "nuevo" | "usado_funcional";
 export type MotivoEntregaDeposito = "sobrante_obra" | "reemplazo_funcional" | "retorno_mantenimiento" | "otro";
 export type MotivoBaja = "rotura" | "ampliacion" | "obsolescencia" | "reemplazo" | "otro";
+export type BateriaDestino = "rectificador" | "ups";
+export type BateriaOrigen = "contadas" | "por_modelo" | "manual";
+export type UpsBaterias = "internas" | "banco_externo";
+/** Dónde vive el rectificador/UPS al que se vincula un banco: equipo suelto o componente de un rack. */
+export type TipoFuenteBateria = "equipo_individual" | "rack_equipamiento";
+
 export type TipoEquipoBaja = "tablero_circuito" | "rack_equipamiento" | "equipo_individual";
 /**
  * Tipo propio del Plan de Mantenimiento — separado de `TipoEquipoBaja` a
@@ -593,6 +599,16 @@ export type RackEquipamientoRow = {
   /** Puertos/bocas libres del equipo — manual, se completa al dar de alta. */
   bocas_disponibles: number | null;
   estado: EstadoEquipamiento;
+  /** Baterías — ver supabase/migrations/20261119040000_baterias_rectificador_ups.sql. bateria_cantidad es POR UNIDAD (total = cantidad × bateria_cantidad). */
+  bateria_destino: BateriaDestino | null;
+  bateria_cantidad: number | null;
+  bateria_origen: BateriaOrigen | null;
+  bateria_tipo: string | null;
+  ups_baterias: UpsBaterias | null;
+  potencia_nominal: string | null;
+  /** Vínculo (referencia blanda, sin FK) del banco con el rectificador/UPS al que pertenece. */
+  alimentado_por_tipo: TipoFuenteBateria | null;
+  alimentado_por_id: string | null;
   /** Referencia "blanda" (sin FK, igual criterio que bajas_equipamiento.equipo_id): el equipo que este reemplaza, en la tabla que indique reemplaza_tipo. */
   reemplaza_equipo_id: string | null;
   reemplaza_tipo: TipoEquipoBaja | null;
@@ -726,6 +742,16 @@ export type EquipoRow = {
   /** null = dado de alta y todavía sin informe (pendiente) — ver CRITERIOS_Y_IDEAS.md sobre el alta de materiales. */
   informe_instalacion_id: string | null;
   fecha_alta: string | null;
+  /** Baterías — ver supabase/migrations/20261119040000_baterias_rectificador_ups.sql. bateria_cantidad es POR UNIDAD (total = cantidad × bateria_cantidad). */
+  bateria_destino: BateriaDestino | null;
+  bateria_cantidad: number | null;
+  bateria_origen: BateriaOrigen | null;
+  bateria_tipo: string | null;
+  ups_baterias: UpsBaterias | null;
+  potencia_nominal: string | null;
+  /** Vínculo (referencia blanda, sin FK) del banco con el rectificador/UPS al que pertenece. */
+  alimentado_por_tipo: TipoFuenteBateria | null;
+  alimentado_por_id: string | null;
   created_by: string | null;
   created_at: string;
 }

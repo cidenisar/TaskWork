@@ -15,6 +15,8 @@ import type { Ubicacion } from "@/components/ubicaciones/types";
 import type { EquipoCategoria, TipoMontajeCamara } from "@/lib/database.types";
 import { CATEGORIA_EQUIPO_OPCIONES, CATEGORIA_EQUIPO_LABEL, ESTADO_OPCIONES } from "./types";
 import { TIPO_MONTAJE_OPCIONES, TIPO_MONTAJE_LABEL } from "@/lib/equipos/recurso-altura";
+import { BateriaCampos, useFuentesBateria } from "@/components/baterias/bateria-campos";
+import { DATOS_BATERIA_VACIOS, type DatosBateria } from "@/lib/baterias/types";
 
 export interface LecturaEditable {
   lecturaId: string;
@@ -29,6 +31,7 @@ export interface LecturaEditable {
   consumoMaxW: number | null;
   tipoMontaje: TipoMontajeCamara | null;
   alturaMontajeM: number | null;
+  bateria: DatosBateria;
   estado: string;
   comentario: string;
   eliminada: boolean;
@@ -56,6 +59,7 @@ export function EditarRelevamientoEquiposForm({
   const router = useRouter();
   const [provinciaFiltro, setProvinciaFiltro] = useState(initialProvinciaFiltro);
   const [ubicacionId, setUbicacionId] = useState(initialUbicacionId);
+  const fuentesBateria = useFuentesBateria(ubicacionId);
   const [localidadNueva, setLocalidadNueva] = useState("");
   const [sitioNueva, setSitioNueva] = useState("");
   const [plantaNueva, setPlantaNueva] = useState("");
@@ -126,6 +130,7 @@ export function EditarRelevamientoEquiposForm({
           consumoMaxW: l.consumoMaxW,
           tipoMontaje: l.tipoMontaje,
           alturaMontajeM: l.alturaMontajeM,
+          bateria: l.bateria,
           estado: l.estado,
           comentario: l.comentario,
           eliminada: l.eliminada,
@@ -236,6 +241,14 @@ export function EditarRelevamientoEquiposForm({
                   />
                 </div>
               </div>
+
+              <BateriaCampos
+                categoria={l.categoriaEquipo}
+                datos={l.bateria ?? DATOS_BATERIA_VACIOS}
+                onChange={(patch) => patchLectura(i, { bateria: { ...(l.bateria ?? DATOS_BATERIA_VACIOS), ...patch } })}
+                fuentes={fuentesBateria}
+                disabled={submitting || l.eliminada}
+              />
 
               {l.categoriaEquipo === "camara_cctv" && (
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-end" }}>

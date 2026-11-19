@@ -1,4 +1,5 @@
 import type { EquipoCategoria, TipoMontajeCamara } from "@/lib/database.types";
+import type { DatosBateria } from "@/lib/baterias/types";
 
 /** Máximo de fotos que se pueden mandar juntas a la lectura con IA (distintos equipos sueltos, o distintos ángulos del mismo). */
 export const EQUIPO_FOTO_IA_MAX = 7;
@@ -62,6 +63,8 @@ export interface EquipoItem {
    */
   tipoMontaje: TipoMontajeCamara | null;
   alturaMontajeM: number | null;
+  /** Baterías / potencia — solo para banco de baterías, UPS y fuente/rectificador (ver lib/baterias). Ausente = sin datos. */
+  bateria?: DatosBateria;
   /**
    * Solo transitorio en el form (no se persiste): true cuando lo cargó la
    * lectura de foto con IA sin encontrar una etiqueta/chapa legible, así el

@@ -12,6 +12,7 @@ import { enviarPdfPorEmail } from "@/lib/email/enviar-pdf";
 import { puedeGestionarDeposito } from "@/lib/types";
 import { labelUbicacion } from "@/components/ubicaciones/types";
 import type { EquipoCategoria, EstadoChecklist, TipoMontajeCamara } from "@/lib/database.types";
+import { datosBateriaAColumnas, DATOS_BATERIA_VACIOS, type DatosBateria } from "@/lib/baterias/types";
 
 interface PayloadHallazgo {
   itemId: string;
@@ -31,6 +32,7 @@ interface PayloadLectura {
   consumoMaxW: number | null;
   tipoMontaje: TipoMontajeCamara | null;
   alturaMontajeM: number | null;
+  bateria?: DatosBateria;
   estado: string;
   comentario: string;
   /** true si este equipo se trajo desde depósito para instalarlo acá — ver más abajo. */
@@ -147,6 +149,7 @@ export async function crearRelevamientoEquiposAction(formData: FormData): Promis
         consumo_max_w: Number.isFinite(l.consumoMaxW) && (l.consumoMaxW as number) > 0 ? l.consumoMaxW : null,
         tipo_montaje: l.tipoMontaje,
         altura_montaje_m: Number.isFinite(l.alturaMontajeM) && (l.alturaMontajeM as number) >= 0 ? l.alturaMontajeM : null,
+        ...datosBateriaAColumnas(l.categoriaEquipo, l.bateria ?? DATOS_BATERIA_VACIOS),
         created_by: profile.id,
       })
       .select("id")

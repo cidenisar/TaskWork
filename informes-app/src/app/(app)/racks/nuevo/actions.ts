@@ -1,5 +1,6 @@
 "use server";
 
+import { datosBateriaAColumnas, DATOS_BATERIA_VACIOS, type DatosBateria } from "@/lib/baterias/types";
 import { createClient } from "@/lib/supabase/server";
 import { requireProfile } from "@/lib/auth";
 import { nuevoNumeroGeneracionRack } from "@/lib/racks/numero-generacion";
@@ -30,6 +31,7 @@ interface PayloadLectura {
   consumoPromedioW: number | null;
   consumoMaxW: number | null;
   bocasDisponibles: number | null;
+  bateria?: DatosBateria;
   estado: string;
   comentario: string;
 }
@@ -146,6 +148,7 @@ export async function crearRelevamientoRackAction(formData: FormData): Promise<C
         consumo_promedio_w: Number.isFinite(l.consumoPromedioW) && (l.consumoPromedioW as number) > 0 ? l.consumoPromedioW : null,
         consumo_max_w: Number.isFinite(l.consumoMaxW) && (l.consumoMaxW as number) > 0 ? l.consumoMaxW : null,
         bocas_disponibles: Number.isFinite(l.bocasDisponibles) && (l.bocasDisponibles as number) >= 0 ? l.bocasDisponibles : null,
+        ...datosBateriaAColumnas(l.categoriaEquipo, l.bateria ?? DATOS_BATERIA_VACIOS),
       })
       .select("id")
       .single();
