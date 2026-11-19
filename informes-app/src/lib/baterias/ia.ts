@@ -15,8 +15,11 @@ export const INSTRUCCION_BATERIAS_IA =
   "gabinete, marca, carteles) no alcanzan — no lo adivines.\n" +
   '- "bateriaCantidad": en un banco, la cantidad de baterías (monoblocks o elementos) que CONTÁS en la foto, uno por uno. Solo si ves el ' +
   "banco completo; si hay baterías tapadas, fuera de cuadro o en otro estante que no se ve, devolvé null (un número parcial es peor que " +
-  "ninguno). En una UPS, cuántas baterías internas lleva ESE modelo según su especificación — solo si reconocés el modelo con confianza; " +
-  "si no, null.\n" +
+  "ninguno). Si el modelo que se lee es un gabinete/módulo de baterías armado de fábrica (trae un número fijo de baterías), la cantidad " +
+  'es la del modelo y el origen es "por_modelo". Un modelo de batería suelta (un monoblock) NO dice cuántas hay en el banco: eso depende ' +
+  "de la instalación — con tensión de cada batería y tensión del sistema legibles (ej. baterías de 12 V en un sistema de 48 Vcc = 4 por " +
+  "tira) podés calcular las de UNA tira, pero solo devolvé el total si ves cuántas tiras hay; si no, null. En una UPS, cuántas baterías " +
+  "internas lleva ESE modelo según su especificación — solo si reconocés el modelo con confianza; si no, null.\n" +
   '- "bateriaOrigen": "contadas" si "bateriaCantidad" salió de contar en la foto, "por_modelo" si la dedujiste del modelo; null si ' +
   '"bateriaCantidad" es null.\n' +
   '- "bateriaTipo": tensión y capacidad de cada batería si se lee en su etiqueta (ej. "12 V 150 Ah"), o la conocés con confianza por el ' +

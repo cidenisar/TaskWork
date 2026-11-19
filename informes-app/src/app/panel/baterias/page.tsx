@@ -136,6 +136,7 @@ export default async function PanelBateriasPage({ searchParams }: { searchParams
                         id={f.id}
                         categoria={f.categoria}
                         texto={f.texto}
+                        marcaModelo={f.marcaModelo}
                         ubicacionId={f.ubicacionId}
                         datos={f.datos}
                       />

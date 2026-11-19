@@ -244,6 +244,7 @@ export function EditarRelevamientoEquiposForm({
 
               <BateriaCampos
                 categoria={l.categoriaEquipo}
+                marcaModelo={l.marcaModelo}
                 datos={l.bateria ?? DATOS_BATERIA_VACIOS}
                 onChange={(patch) => patchLectura(i, { bateria: { ...(l.bateria ?? DATOS_BATERIA_VACIOS), ...patch } })}
                 fuentes={fuentesBateria}

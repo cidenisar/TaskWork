@@ -775,6 +775,7 @@ export function NuevoRelevamientoEquiposForm({
                       </div>
                       <BateriaCampos
                         categoria={e.categoriaEquipo}
+                        marcaModelo={e.marcaModelo}
                         datos={e.bateria ?? DATOS_BATERIA_VACIOS}
                         onChange={(patch) => actualizarBateria(i, patch)}
                         fuentes={fuentesBateria}

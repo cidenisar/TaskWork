@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Icon } from "@/components/icon";
+import type { DatosModeloBateria } from "@/lib/baterias/buscar-modelo";
 import { buscarFuentesDeBateriaAction, type FuenteBateriaOpcion } from "@/app/(app)/ubicaciones/baterias-actions";
 import {
   BATERIA_DESTINO_LABEL,
@@ -60,15 +61,52 @@ export function BateriaCampos({
   onChange,
   fuentes,
   disabled,
+  marcaModelo,
 }: {
   categoria: string;
   datos: DatosBateria;
   onChange: (patch: Partial<DatosBateria>) => void;
   fuentes: FuenteBateriaOpcion[];
   disabled?: boolean;
+  /** Marca/modelo del equipo: con esto se habilita "Buscar en internet" las baterías de ese modelo. */
+  marcaModelo?: string;
 }) {
   const rol = rolBateria(categoria);
+  const [buscando, setBuscando] = useState(false);
+  const [resultadoBusqueda, setResultadoBusqueda] = useState<{ texto: string; url: string | null; esError: boolean } | null>(null);
   if (!rol) return null;
+
+  async function buscarEnInternet() {
+    setBuscando(true);
+    setResultadoBusqueda(null);
+    try {
+      const res = await fetch("/api/baterias/buscar-modelo", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ categoria, marcaModelo }),
+      });
+      const data = (await res.json()) as { error?: string; datos?: DatosModeloBateria };
+      if (!res.ok || !data.datos) {
+        setResultadoBusqueda({ texto: data.error || "No se pudo buscar en internet.", url: null, esError: true });
+        return;
+      }
+      const d = data.datos;
+      const patch: Partial<DatosBateria> = {};
+      if (d.bateriaCantidad) {
+        patch.bateriaCantidad = d.bateriaCantidad;
+        patch.bateriaOrigen = "por_modelo";
+      }
+      if (d.bateriaTipo && !datos.bateriaTipo.trim()) patch.bateriaTipo = d.bateriaTipo;
+      if (d.upsBaterias && rol === "ups") patch.upsBaterias = d.upsBaterias;
+      if (d.potenciaNominal && !datos.potenciaNominal.trim()) patch.potenciaNominal = d.potenciaNominal;
+      if (Object.keys(patch).length > 0) onChange(patch);
+      setResultadoBusqueda({ texto: d.nota || (Object.keys(patch).length > 0 ? "Datos cargados." : "No se encontró información de este modelo."), url: d.fuenteUrl, esError: false });
+    } catch {
+      setResultadoBusqueda({ texto: "No se pudo buscar en internet.", url: null, esError: true });
+    } finally {
+      setBuscando(false);
+    }
+  }
 
   const candidatas = datos.bateriaDestino ? fuentes.filter((f) => f.clase === datos.bateriaDestino) : fuentes;
   const vinculada = datos.alimentadoPorTipo && datos.alimentadoPorId ? claveFuente(datos.alimentadoPorTipo, datos.alimentadoPorId) : "";
@@ -188,6 +226,37 @@ export function BateriaCampos({
         )}
         {rol === "rectificador" && campoPotencia}
       </div>
+      {marcaModelo !== undefined && (
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          <button
+            type="button"
+            className="ai-btn"
+            onClick={() => void buscarEnInternet()}
+            disabled={disabled || buscando || !marcaModelo.trim()}
+            title={marcaModelo.trim() ? "Busca la hoja de datos del modelo en internet" : "Cargá primero la marca/modelo"}
+          >
+            <Icon name="search" size={13} /> {buscando ? "Buscando en internet..." : rol === "rectificador" ? "Buscar potencia del modelo en internet" : "Buscar baterías del modelo en internet"}
+          </button>
+          {!marcaModelo.trim() && (
+            <span className="hint" style={{ margin: 0 }}>
+              Cargá la marca/modelo para poder buscar.
+            </span>
+          )}
+        </div>
+      )}
+      {resultadoBusqueda && (
+        <div className="hint" style={{ margin: 0, color: resultadoBusqueda.esError ? "var(--danger, #c0392b)" : undefined }}>
+          {resultadoBusqueda.texto}
+          {resultadoBusqueda.url && (
+            <>
+              {" "}
+              <a href={resultadoBusqueda.url} target="_blank" rel="noopener noreferrer">
+                Ver la fuente
+              </a>
+            </>
+          )}
+        </div>
+      )}
       {datos.bateriaCantidad && datos.bateriaOrigen === "por_modelo" && (
         <div className="hint" style={{ color: "var(--warn)", margin: 0 }}>
           <Icon name="warning" size={12} /> La cantidad de baterías la dedujo la IA por el modelo — verificala en el equipo antes de guardar.

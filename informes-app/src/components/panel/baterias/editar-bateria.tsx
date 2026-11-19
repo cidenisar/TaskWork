@@ -13,12 +13,13 @@ interface Props {
   id: string;
   categoria: string;
   texto: string;
+  marcaModelo: string;
   ubicacionId: string;
   datos: DatosBateria;
 }
 
 /** El formulario vive en un componente aparte para que la lista de rectificadores/UPS del sitio solo se pida cuando se abre (no una vez por fila). */
-function Formulario({ tipo, id, categoria, texto, ubicacionId, datos: datosIniciales, onCerrar }: Props & { onCerrar: () => void }) {
+function Formulario({ tipo, id, categoria, texto, marcaModelo, ubicacionId, datos: datosIniciales, onCerrar }: Props & { onCerrar: () => void }) {
   const router = useRouter();
   const [datos, setDatos] = useState<DatosBateria>(datosIniciales);
   const [busy, setBusy] = useState(false);
@@ -49,6 +50,7 @@ function Formulario({ tipo, id, categoria, texto, ubicacionId, datos: datosInici
         </p>
         <BateriaCampos
           categoria={categoria}
+          marcaModelo={marcaModelo}
           datos={datos}
           onChange={(patch) => setDatos((prev) => ({ ...prev, ...patch }))}
           fuentes={fuentes}

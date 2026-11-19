@@ -384,6 +384,7 @@ export function AltaMaterialForm({
 
             <BateriaCampos
               categoria={m.categoriaEquipo}
+              marcaModelo={m.marcaModelo}
               datos={m.bateria}
               onChange={(patch) => actualizar(i, { bateria: { ...m.bateria, ...patch } })}
               fuentes={fuentesBateria}
