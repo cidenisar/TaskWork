@@ -10,7 +10,11 @@ import { VerPdfLink } from "@/components/ver-pdf-link";
 import { obtenerUrlPdfSalaAction } from "@/app/(app)/salas/historial/actions";
 import { UbicacionFields, type GpsCapturado } from "@/components/ubicaciones/ubicacion-fields";
 import type { Ubicacion } from "@/components/ubicaciones/types";
-import type { SalaTipoConstruccion } from "@/lib/database.types";
+import type { EstadoChecklist, SalaTipoConstruccion } from "@/lib/database.types";
+import { mezclarHallazgos, type HallazgoInspeccionIa } from "@/lib/inspeccion-ia/types";
+import { HallazgosInspeccionIaSection } from "@/components/inspeccion-ia/hallazgos-section";
+import { conVinetas, lineasDeTareas } from "@/lib/tareas/puro";
+import { TareasTextarea } from "@/components/informe-tecnico/tareas-textarea";
 import { SALA_FOTO_GENERAL_MAX, SALA_TIPO_CONSTRUCCION_OPCIONES, SALA_TIPO_CONSTRUCCION_LABEL } from "./types";
 
 /**
@@ -20,7 +24,15 @@ import { SALA_FOTO_GENERAL_MAX, SALA_TIPO_CONSTRUCCION_OPCIONES, SALA_TIPO_CONST
  * construcción y fotos. Las visitas siguientes (limpieza, obra civil,
  * arreglos) quedan en el Plan de Mantenimiento, no acá.
  */
-export function NuevoRelevamientoSalaForm({ ubicaciones, provincias }: { ubicaciones: Ubicacion[]; provincias: string[] }) {
+export function NuevoRelevamientoSalaForm({
+  ubicaciones,
+  provincias,
+  catalogoHallazgos,
+}: {
+  ubicaciones: Ubicacion[];
+  provincias: string[];
+  catalogoHallazgos: { id: string; texto: string }[];
+}) {
   const [provinciaFiltro, setProvinciaFiltro] = useState("");
   const [ubicacionId, setUbicacionId] = useState<string>(""); // "" = sin elegir, "__new" = crear
   const [localidadNueva, setLocalidadNueva] = useState("");
@@ -34,6 +46,13 @@ export function NuevoRelevamientoSalaForm({ ubicaciones, provincias }: { ubicaci
   const [fotosGenerales, setFotosGenerales] = useState<File[]>([]);
   const fotoCameraInputRef = useRef<HTMLInputElement>(null);
   const fotoGaleriaInputRef = useRef<HTMLInputElement>(null);
+  // Inspección IA: puntos del catálogo (los completa la IA y los confirma quien releva) + observaciones libres.
+  const [hallazgos, setHallazgos] = useState<HallazgoInspeccionIa[]>(() =>
+    catalogoHallazgos.map((h) => ({ itemId: h.id, texto: h.texto, estado: null, comentario: "" })),
+  );
+  const [observaciones, setObservaciones] = useState("");
+  const [iaBusy, setIaBusy] = useState(false);
+  const [iaNote, setIaNote] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<{ salaId: string; numeroGeneracion: string; pdfUrl: string | null } | null>(null);
@@ -67,6 +86,53 @@ export function NuevoRelevamientoSalaForm({ ubicaciones, provincias }: { ubicaci
       setSitioNueva("");
       setPlantaNueva("");
       setOficinaNueva("");
+    }
+  }
+
+  function setEstadoHallazgo(itemId: string, estado: EstadoChecklist) {
+    setHallazgos((prev) => prev.map((h) => (h.itemId === itemId ? { ...h, estado } : h)));
+  }
+  function setComentarioHallazgo(itemId: string, comentario: string) {
+    setHallazgos((prev) => prev.map((h) => (h.itemId === itemId ? { ...h, comentario } : h)));
+  }
+
+  async function analizarConIa() {
+    if (fotosGenerales.length === 0) return;
+    setIaBusy(true);
+    setIaNote(null);
+    try {
+      const fd = new FormData();
+      for (let i = 0; i < fotosGenerales.length; i++) {
+        const jpeg = await resizeImageToJpeg(fotosGenerales[i]);
+        fd.append("fotos", jpeg, `sala-${i + 1}.jpg`);
+      }
+      if (tipoConstruccion) fd.append("tipoConstruccion", tipoConstruccion);
+      const res = await fetch("/api/salas/leer-foto", { method: "POST", body: fd });
+      const data = await res.json();
+      if (!res.ok) {
+        setIaNote(data.error || "No se pudo analizar las fotos.");
+        return;
+      }
+      const nuevos: HallazgoInspeccionIa[] = data.hallazgos ?? [];
+      const combinados = mezclarHallazgos(hallazgos, nuevos);
+      setHallazgos(combinados);
+      // Las observaciones se SUMAN a lo que ya haya escrito quien releva, sin repetir líneas.
+      const propuestas: string[] = data.observaciones ?? [];
+      const actuales = lineasDeTareas(observaciones);
+      const nuevasObs = propuestas.filter((o) => !actuales.some((a) => a.toLowerCase() === o.toLowerCase()));
+      if (nuevasObs.length > 0) setObservaciones(conVinetas([...actuales, ...nuevasObs]));
+      const detectados = combinados.filter((h) => h.estado === "no_ok").length;
+      setIaNote(
+        `Se analizaron ${fotosGenerales.length} foto${fotosGenerales.length === 1 ? "" : "s"}: ` +
+          (detectados > 0 ? `⚠ ${detectados} punto${detectados === 1 ? "" : "s"} para reparar o mejorar` : "ningún punto de la lista con problema") +
+          (nuevasObs.length > 0 ? ` y ${nuevasObs.length} observación${nuevasObs.length === 1 ? "" : "es"} más` : "") +
+          ". Revisalo antes de guardar: la IA propone, vos confirmás.",
+      );
+    } catch (err) {
+      setIaNote("No se pudo analizar las fotos.");
+      reportarErrorCliente(err instanceof Error ? err.message : "Error analizando fotos de sala con IA", "leer-foto-sala");
+    } finally {
+      setIaBusy(false);
     }
   }
 
@@ -104,6 +170,10 @@ export function NuevoRelevamientoSalaForm({ ubicaciones, provincias }: { ubicaci
           denominacion: denominacion.trim(),
           tipoConstruccion,
           fecha,
+          hallazgos: hallazgos
+            .filter((h) => h.estado !== null)
+            .map((h) => ({ itemId: h.itemId, estado: h.estado, comentario: h.comentario.trim() })),
+          observaciones,
         }),
       );
       for (let i = 0; i < fotosGenerales.length; i++) {
@@ -139,6 +209,9 @@ export function NuevoRelevamientoSalaForm({ ubicaciones, provincias }: { ubicaci
     setDenominacion("");
     setTipoConstruccion("");
     setFotosGenerales([]);
+    setHallazgos(catalogoHallazgos.map((h) => ({ itemId: h.id, texto: h.texto, estado: null, comentario: "" })));
+    setObservaciones("");
+    setIaNote(null);
   }
 
   return (
@@ -265,6 +338,43 @@ export function NuevoRelevamientoSalaForm({ ubicaciones, provincias }: { ubicaci
                 </div>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {ubicacionId && (
+        <div className="card">
+          <div className="section-label">Inspección IA — qué reparar o mejorar</div>
+          <div className="hint" style={{ margin: "-2px 0 10px" }}>
+            Sacá las fotos de la sala (puerta, techo y paredes, piso, aire acondicionado, tableros, racks, cableado) y tocá analizar: la IA
+            revisa una lista de puntos y suma lo que vea de más. Después confirmás o corregís cada uno.
+          </div>
+          <button
+            type="button"
+            className="ai-btn"
+            onClick={() => void analizarConIa()}
+            disabled={submitting || iaBusy || fotosGenerales.length === 0}
+          >
+            <Icon name="ai" size={13} />{" "}
+            {iaBusy ? "Analizando..." : fotosGenerales.length === 0 ? "Cargá fotos para analizar" : `Analizar ${fotosGenerales.length} foto${fotosGenerales.length === 1 ? "" : "s"} con IA`}
+          </button>
+          {iaNote && (
+            <div className="ai-note" style={{ marginTop: 10 }}>
+              <span>{iaNote}</span>
+            </div>
+          )}
+          <div style={{ marginTop: 12 }}>
+            <HallazgosInspeccionIaSection hallazgos={hallazgos} onEstado={setEstadoHallazgo} onComentario={setComentarioHallazgo} disabled={submitting} />
+          </div>
+          <div className="field" style={{ marginBottom: 0 }}>
+            <label>
+              Otras cosas para reparar o mejorar <span className="opt">(opcional)</span>
+            </label>
+            <TareasTextarea
+              value={observaciones}
+              onChange={setObservaciones}
+              placeholder={"Una por línea, ej:\nCable de datos colgando frente al rack\nSellar el pasacables del lado norte"}
+            />
           </div>
         </div>
       )}

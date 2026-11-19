@@ -516,7 +516,7 @@ export type TableroMedicionLecturaRow = {
 }
 
 /** Qué módulo de relevamiento con IA tiene cargado este ítem/resultado de Inspección IA (ver ModuloInspeccionIa). */
-export type ModuloInspeccionIa = "tableros" | "racks" | "equipos" | "torres" | "vehiculos" | "informe_tecnico";
+export type ModuloInspeccionIa = "tableros" | "racks" | "equipos" | "torres" | "salas" | "vehiculos" | "informe_tecnico";
 
 /** Catálogo admin-configurable de qué revisar en las fotos de un módulo, además de lo que esa IA ya identifica (ver EstadoChecklist). */
 export type CatalogoInspeccionIaRow = {
@@ -695,6 +695,8 @@ export type SalaRow = {
   estado: "activo" | "baja";
   numero_generacion: string;
   fotos_generales_urls: string[] | null;
+  /** Lo que se ve para reparar o mejorar y no entra en los puntos de inspección (lo propone la IA, lo revisa quien releva). */
+  observaciones: string | null;
   pdf_url: string | null;
   pdf_generado_at: string | null;
   created_by: string;

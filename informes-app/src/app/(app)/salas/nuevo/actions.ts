@@ -8,7 +8,14 @@ import { buildSalaFilename } from "@/lib/pdf/filename";
 import { resolverUbicacionId, tagGpsSiFalta, type PayloadUbicacionNueva, type PayloadGps } from "@/lib/ubicaciones/resolver";
 import { obtenerDestinatariosAutoEnvio } from "@/lib/email/destinatarios-auto-envio";
 import { enviarPdfPorEmail } from "@/lib/email/enviar-pdf";
-import type { SalaTipoConstruccion } from "@/lib/database.types";
+import { lineasDeTareas } from "@/lib/tareas/puro";
+import type { EstadoChecklist, SalaTipoConstruccion } from "@/lib/database.types";
+
+interface PayloadHallazgo {
+  itemId: string;
+  estado: EstadoChecklist;
+  comentario: string;
+}
 
 export interface CrearSalaPayload {
   ubicacionId: string | null;
@@ -17,6 +24,10 @@ export interface CrearSalaPayload {
   denominacion: string;
   tipoConstruccion: SalaTipoConstruccion;
   fecha: string;
+  /** Inspección IA: solo los puntos que quien releva confirmó o corrigió. */
+  hallazgos?: PayloadHallazgo[];
+  /** Otras cosas para reparar o mejorar (una por línea; acepta viñetas). */
+  observaciones?: string;
 }
 
 export interface CrearSalaResult {
@@ -81,6 +92,23 @@ export async function crearSalaAction(formData: FormData): Promise<CrearSalaResu
   }
   if (!salaId) return { success: false, error: "No se pudo asignar un número de generación único. Probá de nuevo." };
 
+  // Inspección IA (opcional): puntos confirmados del catálogo y observaciones libres.
+  const observaciones = lineasDeTareas(payload.observaciones);
+  if (payload.hallazgos && payload.hallazgos.length > 0) {
+    await supabase.from("inspeccion_ia_hallazgos").insert(
+      payload.hallazgos.map((h) => ({
+        modulo: "salas" as const,
+        registro_id: salaId!,
+        item_id: h.itemId,
+        estado: h.estado,
+        comentario: h.comentario.trim() || null,
+      })),
+    );
+  }
+  if (observaciones.length > 0) {
+    await supabase.from("salas").update({ observaciones: observaciones.join("\n") }).eq("id", salaId);
+  }
+
   // Fotos generales (opcional): mismo patrón que Tableros — se suben antes
   // de generar el PDF para poder adjuntarlas ahí.
   const fotosFiles = formData.getAll("fotoGeneral").filter((f): f is File => f instanceof File);
@@ -110,6 +138,22 @@ export async function crearSalaAction(formData: FormData): Promise<CrearSalaResu
     }
   }
 
+  const hallazgosConfirmados = (payload.hallazgos ?? []).filter((h) => h.estado);
+  let hallazgosPdf: { texto: string; estado: EstadoChecklist; comentario: string | null }[] = [];
+  if (hallazgosConfirmados.length > 0) {
+    const { data: hallazgosCatalogo } = await supabase
+      .from("catalogo_inspeccion_ia")
+      .select("id, texto")
+      .in(
+        "id",
+        hallazgosConfirmados.map((h) => h.itemId),
+      );
+    const textoPorId = new Map((hallazgosCatalogo ?? []).map((h) => [h.id, h.texto]));
+    hallazgosPdf = hallazgosConfirmados
+      .map((h) => ({ texto: textoPorId.get(h.itemId), estado: h.estado, comentario: h.comentario.trim() || null }))
+      .filter((h): h is { texto: string; estado: EstadoChecklist; comentario: string | null } => !!h.texto);
+  }
+
   const pdfBuffer = await renderSalaPdf({
     numeroGeneracion,
     region: ubicacionRow.region,
@@ -122,6 +166,8 @@ export async function crearSalaAction(formData: FormData): Promise<CrearSalaResu
     tipoConstruccion: payload.tipoConstruccion,
     fecha: payload.fecha,
     fotosGeneralesBuffers: fotosGeneralesBuffers.length > 0 ? fotosGeneralesBuffers : null,
+    hallazgos: hallazgosPdf,
+    observaciones,
     logoBuffer,
     appName: "TaskWork",
     realizoNombre: profile.nombreCompleto,

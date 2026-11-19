@@ -18,6 +18,7 @@ type TabId =
   | "iaracks"
   | "iaequipos"
   | "iatorres"
+  | "iasalas"
   | "iavehiculos"
   | "iainformetecnico"
   | "ialecturagastos"
@@ -35,6 +36,7 @@ const TABS: { id: TabId; label: React.ReactNode }[] = [
   { id: "iaracks", label: "Inspección IA — Racks" },
   { id: "iaequipos", label: "Inspección IA — Equipos" },
   { id: "iatorres", label: "Inspección IA — Torres" },
+  { id: "iasalas", label: "Inspección IA — Salas / Shelters" },
   { id: "iavehiculos", label: "Inspección IA — Vehículos" },
   { id: "iainformetecnico", label: "Inspección IA — Informe Técnico" },
   { id: "ialecturagastos", label: "Lectura de Tickets IA — Gastos" },
@@ -58,6 +60,7 @@ export interface CatalogosData {
   inspeccionIaRacks: InspeccionIaItem[];
   inspeccionIaEquipos: InspeccionIaItem[];
   inspeccionIaTorres: InspeccionIaItem[];
+  inspeccionIaSalas: InspeccionIaItem[];
   inspeccionIaVehiculos: InspeccionIaItem[];
   inspeccionIaInformeTecnico: InspeccionIaItem[];
   lecturaGastosIa: LecturaGastosIaItem[];
@@ -104,6 +107,7 @@ export function CatalogosCard({ data }: { data: CatalogosData }) {
       {tab === "iaracks" && <InspeccionIaTab modulo="racks" items={data.inspeccionIaRacks} />}
       {tab === "iaequipos" && <InspeccionIaTab modulo="equipos" items={data.inspeccionIaEquipos} />}
       {tab === "iatorres" && <InspeccionIaTab modulo="torres" items={data.inspeccionIaTorres} />}
+      {tab === "iasalas" && <InspeccionIaTab modulo="salas" items={data.inspeccionIaSalas} />}
       {tab === "iavehiculos" && <InspeccionIaTab modulo="vehiculos" items={data.inspeccionIaVehiculos} />}
       {tab === "iainformetecnico" && <InspeccionIaTab modulo="informe_tecnico" items={data.inspeccionIaInformeTecnico} />}
       {tab === "ialecturagastos" && <LecturaGastosIaTab items={data.lecturaGastosIa} />}

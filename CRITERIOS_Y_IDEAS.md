@@ -2121,3 +2121,13 @@ Contexto (Informes, 13/11/2026): el área no puede pagar productos fuera del con
 - **Sacar la lógica pura a su propio archivo (`lib/ai/votar.ts`)** para probarla sin cargar el cliente de IA ni la base; con los casos reales del bug como tests.
 - **Carga que puede quedar incompleta → permitir completarla después.** Un dato identificador (N° de serie) que no se pudo leer en el momento no puede obligar a rehacer el alta: una acción que solo llena lo que está en blanco (nunca pisa), con el mismo chequeo de duplicados y con el permiso angosto (quien lo cargó mientras siga pendiente, o la oficina).
 - **Un "no lo cargué porque ya existía" silencioso confunde:** si el sistema omite un duplicado, decir cuál (con qué criterio coincidió), no solo contar cuántos se cargaron.
+
+## 38. Sumar un módulo a la Inspección IA: lo que hay que tocar, y el PDF que se regenera al editar
+
+**Contexto:** `informes-app`, Salas / Shelters / Containers (19/11/2026). La Inspección IA ya existía para Tableros, Racks, Equipos y Torres; Salas no tenía lectura con IA.
+
+- **Un catálogo vacío no detecta nada.** La IA solo evalúa los puntos que un Admin cargó en Configuración → Catálogos, y casi todos los módulos estaban con el catálogo vacío. Al sumar un módulo, precargar una lista inicial razonable (una migración que inserta solo si el módulo no tiene ninguno, editable después) en vez de dejarlo en blanco.
+- **La lista cerrada no cubre todo → sumar un campo libre "para reparar o mejorar".** La IA propone hasta N observaciones concretas que no entran en la lista; quien releva las revisa. Se guardan como texto y salen en el PDF.
+- **Dónde hay que tocar para un módulo nuevo:** el tipo `ModuloInspeccionIa`, el mapa de rutas a revalidar de las acciones de Configuración, la pestaña del catálogo (tipo de pestaña + lista + página que carga los ítems), la ruta `/api/<modulo>/leer-foto`, el formulario (estado, mezcla de resultados entre tandas, payload), la acción de guardado (tabla `inspeccion_ia_hallazgos` con el nombre del módulo) y el PDF.
+- **Si editar regenera el PDF, la edición tiene que volver a leer lo que se cargó al crear.** La pantalla de edición de la sala no tiene la inspección, pero regenera el PDF: sin releer los hallazgos y las observaciones guardados, el PDF nuevo los habría perdido sin ningún error. Todo dato que sale en el PDF y no se edita en esa pantalla se carga de la base al regenerar.
+- **La IA propone, quien releva confirma:** cada punto con tres estados (hallazgo / sin novedad / no se pudo evaluar) y comentario, y las observaciones en un campo editable. Nunca se escribe en la base directo desde la IA.

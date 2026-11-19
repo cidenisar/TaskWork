@@ -12,6 +12,7 @@ const RUTA_NUEVO_POR_MODULO: Record<ModuloInspeccionIa, string> = {
   racks: "/racks/nuevo",
   equipos: "/equipos/nuevo",
   torres: "/torres-comunicacion/nuevo",
+  salas: "/salas/nuevo",
   vehiculos: "/panel/vehiculos/nuevo",
   informe_tecnico: "/informe-tecnico/nuevo",
 };

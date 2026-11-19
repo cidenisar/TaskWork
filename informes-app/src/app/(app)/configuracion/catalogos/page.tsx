@@ -77,6 +77,7 @@ export default async function ConfiguracionCatalogosPage() {
           inspeccionIaRacks: porModulo("racks"),
           inspeccionIaEquipos: porModulo("equipos"),
           inspeccionIaTorres: porModulo("torres"),
+          inspeccionIaSalas: porModulo("salas"),
           inspeccionIaVehiculos: porModulo("vehiculos"),
           inspeccionIaInformeTecnico: porModulo("informe_tecnico"),
           lecturaGastosIa: lecturaGastosIaRes.data ?? [],

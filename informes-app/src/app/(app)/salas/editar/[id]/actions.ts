@@ -6,7 +6,7 @@ import { logAudit } from "@/lib/config/audit";
 import { renderSalaPdf } from "@/lib/pdf/render";
 import { buildSalaFilename } from "@/lib/pdf/filename";
 import { resolverUbicacionId, tagGpsSiFalta, type PayloadGps } from "@/lib/ubicaciones/resolver";
-import type { SalaTipoConstruccion } from "@/lib/database.types";
+import type { EstadoChecklist, SalaTipoConstruccion } from "@/lib/database.types";
 
 interface Payload {
   ubicacionId: string; // "" = no se tocó la ubicación en esta edición, "__new" = crear una
@@ -53,7 +53,7 @@ export async function actualizarSalaAction(salaId: string, formData: FormData): 
 
   const { data: salaActual, error: fetchErr } = await service
     .from("salas")
-    .select("ubicacion_id, numero_generacion, fotos_generales_urls")
+    .select("ubicacion_id, numero_generacion, fotos_generales_urls, observaciones")
     .eq("id", salaId)
     .single();
   if (fetchErr || !salaActual) return { success: false, error: "No se encontró la sala." };
@@ -109,6 +109,28 @@ export async function actualizarSalaAction(salaId: string, formData: FormData): 
     if (blob) fotosGeneralesBuffers.push(Buffer.from(await blob.arrayBuffer()));
   }
 
+  // La inspección (Inspección IA + observaciones) se cargó al relevar y acá no se edita: se conserva
+  // para que el PDF regenerado no la pierda.
+  const { data: hallazgosGuardados } = await service
+    .from("inspeccion_ia_hallazgos")
+    .select("item_id, estado, comentario")
+    .eq("modulo", "salas")
+    .eq("registro_id", salaId);
+  let hallazgosPdf: { texto: string; estado: EstadoChecklist; comentario: string | null }[] = [];
+  if (hallazgosGuardados && hallazgosGuardados.length > 0) {
+    const { data: catalogo } = await service
+      .from("catalogo_inspeccion_ia")
+      .select("id, texto")
+      .in(
+        "id",
+        hallazgosGuardados.map((h) => h.item_id),
+      );
+    const textoPorId = new Map((catalogo ?? []).map((c) => [c.id, c.texto]));
+    hallazgosPdf = hallazgosGuardados
+      .map((h) => ({ texto: textoPorId.get(h.item_id), estado: h.estado as EstadoChecklist, comentario: h.comentario }))
+      .filter((h): h is { texto: string; estado: EstadoChecklist; comentario: string | null } => !!h.texto);
+  }
+
   const { data: config } = await service.from("config_general").select("logo_empresa_url").eq("id", 1).single();
   let logoBuffer: Buffer | null = null;
   if (config?.logo_empresa_url) {
@@ -132,6 +154,8 @@ export async function actualizarSalaAction(salaId: string, formData: FormData): 
     tipoConstruccion: payload.tipoConstruccion,
     fecha: payload.fecha,
     fotosGeneralesBuffers: fotosGeneralesBuffers.length > 0 ? fotosGeneralesBuffers : null,
+    hallazgos: hallazgosPdf,
+    observaciones: (salaActual.observaciones ?? "").split("\n").filter(Boolean),
     logoBuffer,
     appName: "TaskWork",
     realizoNombre: profile.nombreCompleto,
