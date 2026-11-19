@@ -18,6 +18,7 @@ import { calcularRecursoAltura, TIPO_MONTAJE_LABEL, construirConfigRecursoAltura
 import { EstimarConsumoButton } from "@/components/ubicaciones/estimar-consumo-button";
 import { estimarConsumoRacksAction, estimarConsumoEquiposAction } from "../actions";
 import { puedeGestionarBajas, puedeGestionarDeposito, puedeVerPanel } from "@/lib/types";
+import { EliminarEquipoButton } from "@/components/equipos/eliminar-equipo-button";
 import { DarDeBajaButton } from "@/components/bajas/dar-de-baja-button";
 import { DescargarBajaBoton } from "@/components/bajas/descargar-boton";
 import { MOTIVO_BAJA_LABEL, TIPO_EQUIPO_BAJA_LABEL } from "@/components/bajas/types";
@@ -762,6 +763,9 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
                             {puedeBajas && <DarDeBajaButton tipoEquipo="equipo_individual" equipoId={e.id} equipoTexto={e.texto} />}
                             {puedeDeposito && (
                               <EntregarADepositoButton tipoEquipo="equipo_individual" equipoId={e.id} equipoTexto={e.texto} />
+                            )}
+                            {(profile.rol === "admin" || profile.rol === "superusuario") && (
+                              <EliminarEquipoButton equipoId={e.id} equipoTexto={e.texto} />
                             )}
                           </div>
                         </td>
