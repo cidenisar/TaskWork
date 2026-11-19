@@ -356,6 +356,8 @@ export type ConfigIaHistRow = {
 };
 export type EstadoTarea = "abierta" | "resuelta" | "descartada";
 export type MotivoCierreTarea = "resuelta_en_visita" | "resuelta_aparte" | "equipo_dado_de_baja" | "ya_no_aplica" | "duplicada";
+/** A qué puede apuntar una tarea: el equipamiento que se da de baja, o una sala/shelter/container. */
+export type TipoEquipoTarea = TipoEquipoBaja | "sala";
 /** Una tarea pendiente de un sitio (nace en un informe técnico) — Panel → Tareas pendientes. */
 export type TareaPendienteRow = {
   id: string;
@@ -370,7 +372,7 @@ export type TareaPendienteRow = {
   /** Informe en cuya visita se resolvió (solo si motivo_cierre = resuelta_en_visita). */
   informe_cierre_id: string | null;
   /** Equipo al que apunta la tarea (referencia blanda: vive en 3 tablas). Ambos van juntos o ninguno. */
-  equipo_tipo: TipoEquipoBaja | null;
+  equipo_tipo: TipoEquipoTarea | null;
   equipo_id: string | null;
   created_by: string | null;
   created_at: string;

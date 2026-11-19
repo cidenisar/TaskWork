@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { buscarEquiposParaTareaAction, vincularEquipoAction, type EquipoParaTarea } from "@/app/panel/tareas/actions";
-import type { TipoEquipoBaja } from "@/lib/database.types";
+import type { TipoEquipoTarea } from "@/lib/database.types";
 
 /**
  * Vínculo de una tarea abierta con un equipo del sitio. Si el equipo se da de
@@ -16,7 +16,7 @@ export function VincularEquipo({
 }: {
   tareaId: string;
   ubicacionId: string;
-  equipo: { tipo: TipoEquipoBaja; id: string; texto: string } | null;
+  equipo: { tipo: TipoEquipoTarea; id: string; texto: string } | null;
 }) {
   const [buscando, setBuscando] = useState(false);
   const [query, setQuery] = useState("");
@@ -42,7 +42,7 @@ export function VincularEquipo({
     };
   }, [buscando, query, ubicacionId]);
 
-  async function guardar(e: { tipo: TipoEquipoBaja; id: string } | null) {
+  async function guardar(e: { tipo: TipoEquipoTarea; id: string } | null) {
     setBusy(true);
     setError(null);
     try {

@@ -8,14 +8,15 @@ import { labelUbicacion, type Ubicacion } from "@/components/ubicaciones/types";
 import { lineasDeTareas, normalizarTarea } from "@/lib/tareas/puro";
 import { resolverEquipo } from "@/lib/equipamiento/resolver-equipo";
 import { buscarEquipoReemplazoAction } from "@/app/(app)/informe-tecnico/nuevo/materiales-picker-actions";
-import type { MotivoCierreTarea, TipoEquipoBaja } from "@/lib/database.types";
+import { SALA_TIPO_CONSTRUCCION_LABEL } from "@/components/salas/types";
+import type { MotivoCierreTarea, TipoEquipoTarea } from "@/lib/database.types";
 
 export interface TareaActionResult {
   success: boolean;
   error?: string;
 }
 
-const TIPOS_EQUIPO: TipoEquipoBaja[] = ["tablero_circuito", "rack_equipamiento", "equipo_individual"];
+const TIPOS_EQUIPO: TipoEquipoTarea[] = ["tablero_circuito", "rack_equipamiento", "equipo_individual", "sala"];
 const MOTIVOS_BAJA: MotivoCierreTarea[] = ["equipo_dado_de_baja", "ya_no_aplica", "duplicada"];
 
 const resumen = (texto: string) => (texto.length > 120 ? `${texto.slice(0, 117)}...` : texto);
@@ -73,7 +74,7 @@ export async function reabrirTareaAction(id: string): Promise<TareaActionResult>
 }
 
 export interface EquipoParaTarea {
-  tipo: TipoEquipoBaja;
+  tipo: TipoEquipoTarea;
   id: string;
   texto: string;
   detalle: string;
@@ -92,6 +93,19 @@ export async function buscarEquiposParaTareaAction(ubicacionId: string, query: s
 
   const base = await buscarEquipoReemplazoAction(ubicacionId, q);
   const equipos: EquipoParaTarea[] = base.map((e) => ({ tipo: e.tipo, id: e.id, texto: e.texto, detalle: e.detalle }));
+
+  // Salas / shelters / containers del sitio: no son "equipamiento" para la baja, pero sí entran al Plan de Mantenimiento.
+  const likeSala = `%${q.replace(/[%_]/g, "\\$&")}%`;
+  const { data: salas } = await supabase
+    .from("salas")
+    .select("id, denominacion, tipo_construccion")
+    .eq("ubicacion_id", ubicacionId)
+    .eq("estado", "activo")
+    .ilike("denominacion", likeSala)
+    .limit(10);
+  for (const s of salas ?? []) {
+    equipos.push({ tipo: "sala", id: s.id, texto: s.denominacion, detalle: SALA_TIPO_CONSTRUCCION_LABEL[s.tipo_construccion] });
+  }
 
   const { data: tableros } = await supabase.from("tableros").select("id, denominacion").eq("ubicacion_id", ubicacionId);
   const idsTablero = (tableros ?? []).map((t) => t.id);
@@ -122,7 +136,7 @@ export async function buscarEquiposParaTareaAction(ubicacionId: string, query: s
  * del lado del servidor que el equipo exista, esté activo y sea del MISMO sitio
  * que la tarea: no se confía en lo que mande el navegador.
  */
-export async function vincularEquipoAction(tareaId: string, equipo: { tipo: TipoEquipoBaja; id: string } | null): Promise<TareaActionResult> {
+export async function vincularEquipoAction(tareaId: string, equipo: { tipo: TipoEquipoTarea; id: string } | null): Promise<TareaActionResult> {
   const profile = await requireAdminOrSupervisor();
   const supabase = await createClient();
 
@@ -133,7 +147,14 @@ export async function vincularEquipoAction(tareaId: string, equipo: { tipo: Tipo
   let textoEquipo: string | null = null;
   if (equipo) {
     if (!TIPOS_EQUIPO.includes(equipo.tipo)) return { success: false, error: "Tipo de equipo inválido." };
-    const resuelto = await resolverEquipo(createServiceRoleClient(), equipo.tipo, equipo.id);
+    const service = createServiceRoleClient();
+    let resuelto: { texto: string; ubicacionId: string; estadoActual: string } | null;
+    if (equipo.tipo === "sala") {
+      const { data: sala } = await service.from("salas").select("denominacion, ubicacion_id, estado").eq("id", equipo.id).maybeSingle();
+      resuelto = sala ? { texto: sala.denominacion, ubicacionId: sala.ubicacion_id, estadoActual: sala.estado } : null;
+    } else {
+      resuelto = await resolverEquipo(service, equipo.tipo, equipo.id);
+    }
     if (!resuelto) return { success: false, error: "No se encontró el equipo." };
     if (resuelto.ubicacionId !== tarea.ubicacion_id) return { success: false, error: "El equipo es de otro sitio que la tarea." };
     if (resuelto.estadoActual === "baja") return { success: false, error: "Ese equipo ya está dado de baja." };

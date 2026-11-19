@@ -1,5 +1,5 @@
 import type { createClient } from "@/lib/supabase/server";
-import type { EstadoTarea, MotivoCierreTarea, TipoEquipoBaja } from "@/lib/database.types";
+import type { EstadoTarea, MotivoCierreTarea, TipoEquipoTarea } from "@/lib/database.types";
 
 type Supabase = Awaited<ReturnType<typeof createClient>>;
 
@@ -21,7 +21,7 @@ export interface TareaPanel {
   /** Informe de la visita donde se resolvió (solo si motivo_cierre = resuelta_en_visita). */
   informeCierre: { id: string; numero: string } | null;
   /** Equipo al que está vinculada (texto actual del equipo; null si no tiene o ya no existe). */
-  equipo: { tipo: TipoEquipoBaja; id: string; texto: string } | null;
+  equipo: { tipo: TipoEquipoTarea; id: string; texto: string } | null;
   ubicacionId: string;
   region: string;
   provincia: string;
@@ -58,7 +58,7 @@ export async function cargarTareasPanel(supabase: Supabase): Promise<TareaPanel[
     created_at: string;
     informe_id: string | null;
     informe_cierre_id: string | null;
-    equipo_tipo: TipoEquipoBaja | null;
+    equipo_tipo: TipoEquipoTarea | null;
     equipo_id: string | null;
     ubicacion_id: string;
   }[] = [];
@@ -84,15 +84,22 @@ export async function cargarTareasPanel(supabase: Supabase): Promise<TareaPanel[
   if (errCerradas) throw errCerradas;
   filas.push(...(cerradas ?? []));
 
-  const idsEquipo = (tipo: TipoEquipoBaja) => filas.flatMap((f) => (f.equipo_tipo === tipo && f.equipo_id ? [f.equipo_id] : []));
+  const idsEquipo = (tipo: TipoEquipoTarea) => filas.flatMap((f) => (f.equipo_tipo === tipo && f.equipo_id ? [f.equipo_id] : []));
   const textosEquipo = (tabla: "equipos" | "rack_equipamientos" | "tablero_circuitos", ids: string[]) =>
     enLotes(ids, async (lote) => {
       const { data, error } = await supabase.from(tabla).select("id, texto").in("id", lote);
       if (error) throw error;
       return data ?? [];
     });
+  // Las salas guardan su nombre en "denominacion", no en "texto".
+  const textosSala = (ids: string[]) =>
+    enLotes(ids, async (lote) => {
+      const { data, error } = await supabase.from("salas").select("id, denominacion").in("id", lote);
+      if (error) throw error;
+      return (data ?? []).map((s) => ({ id: s.id, texto: s.denominacion }));
+    });
 
-  const [ubicaciones, informes, personas, eqSueltos, eqRack, eqCircuitos] = await Promise.all([
+  const [ubicaciones, informes, personas, eqSueltos, eqRack, eqCircuitos, eqSalas] = await Promise.all([
     enLotes(
       filas.map((f) => f.ubicacion_id),
       async (lote) => {
@@ -120,8 +127,9 @@ export async function cargarTareasPanel(supabase: Supabase): Promise<TareaPanel[
     textosEquipo("equipos", idsEquipo("equipo_individual")),
     textosEquipo("rack_equipamientos", idsEquipo("rack_equipamiento")),
     textosEquipo("tablero_circuitos", idsEquipo("tablero_circuito")),
+    textosSala(idsEquipo("sala")),
   ]);
-  const textoEquipoPorId = new Map([...eqSueltos, ...eqRack, ...eqCircuitos].map((e) => [e.id, e.texto]));
+  const textoEquipoPorId = new Map([...eqSueltos, ...eqRack, ...eqCircuitos, ...eqSalas].map((e) => [e.id, e.texto]));
   const ubicacionPorId = new Map(ubicaciones.map((u) => [u.id, u]));
   const informePorId = new Map(informes.map((i) => [i.id, i]));
   const nombrePorId = new Map(personas.map((p) => [p.id, p.nombre_completo]));
