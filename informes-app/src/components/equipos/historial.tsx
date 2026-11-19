@@ -14,6 +14,8 @@ export interface HistorialRelevamientoRow {
   numeroGeneracion: string;
   fecha: string;
   ubicacionLabel: string;
+  /** Nombres de los equipos que tiene el relevamiento (vacío si es un relevamiento viejo sin detalle). */
+  equipos: string[];
   pdfDisponible: boolean;
   fotoDisponible: boolean;
 }
@@ -40,7 +42,7 @@ export function HistorialEquipos({
   const filtrados = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return relevamientos;
-    return relevamientos.filter((r) => `${r.numeroGeneracion} ${r.ubicacionLabel}`.toLowerCase().includes(q));
+    return relevamientos.filter((r) => `${r.numeroGeneracion} ${r.ubicacionLabel} ${r.equipos.join(" ")}`.toLowerCase().includes(q));
   }, [relevamientos, query]);
 
   async function verPdf(id: string) {
@@ -89,7 +91,7 @@ export function HistorialEquipos({
 
       <div className="card">
         <div className="hint" style={{ margin: "0 0 8px" }}>
-          <Icon name="search" size={13} /> Buscá por ubicación o N° de generación...
+          <Icon name="search" size={13} /> Buscá por equipo, ubicación o N° de generación...
         </div>
         <input
           type="text"
@@ -115,6 +117,12 @@ export function HistorialEquipos({
                         {r.pdfDisponible ? "PDF disponible" : "Solo registro"}
                       </span>
                     </div>
+                    {r.equipos.length > 0 && (
+                      <div className="hist-meta" style={{ fontWeight: 600 }}>
+                        {r.equipos.slice(0, 3).join(" · ")}
+                        {r.equipos.length > 3 && ` · +${r.equipos.length - 3} más`}
+                      </div>
+                    )}
                     <div className="hist-meta">
                       {r.numeroGeneracion} · {fmtFecha(r.fecha)}
                     </div>
