@@ -3,7 +3,8 @@
 import { useRef, useState } from "react";
 import { crearSalaAction } from "@/app/(app)/salas/nuevo/actions";
 import { reportarErrorCliente } from "@/lib/client-error-report";
-import { resizeImagesToBudget } from "@/lib/image-resize";
+import { resizeImageToJpeg, resizeImagesToBudget } from "@/lib/image-resize";
+import { createClient as createBrowserClient } from "@/lib/supabase/client";
 import { ErrorNote, SuccessNote } from "@/components/notes";
 import { Icon } from "@/components/icon";
 import { VerPdfLink } from "@/components/ver-pdf-link";
@@ -17,7 +18,10 @@ import { conVinetas, lineasDeTareas } from "@/lib/tareas/puro";
 import { TareasTextarea } from "@/components/informe-tecnico/tareas-textarea";
 import { SALA_FOTO_GENERAL_MAX, SALA_FOTO_IA_POR_TANDA, SALA_TIPO_CONSTRUCCION_OPCIONES, SALA_TIPO_CONSTRUCCION_LABEL } from "./types";
 
-/** Tope del total de fotos que se mandan al guardar (el pedido completo no puede pasar de ~4,5 MB en Vercel). */
+/**
+ * Tope del total de fotos que se mandan en UN pedido a la IA (el cuerpo de un pedido no puede pasar de ~4,5 MB en Vercel).
+ * Las fotos para GUARDAR no pasan por acá: se suben directo al almacenamiento, a calidad completa.
+ */
 const PRESUPUESTO_FOTOS_BYTES = 3_500_000;
 
 /**
@@ -57,6 +61,9 @@ export function NuevoRelevamientoSalaForm({
   const [iaBusy, setIaBusy] = useState(false);
   const [iaNote, setIaNote] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [progresoFotos, setProgresoFotos] = useState<string | null>(null);
+  // Fotos ya subidas al almacenamiento temporal: si guardar falla y se reintenta con las mismas fotos, no se vuelven a subir.
+  const subidasRef = useRef<{ firma: string; rutas: string[] } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<{ salaId: string; numeroGeneracion: string; pdfUrl: string | null } | null>(null);
 
@@ -160,6 +167,44 @@ export function NuevoRelevamientoSalaForm({
     }
   }
 
+  /**
+   * Sube las fotos directo desde el celular al almacenamiento (sin pasar por el servidor de la app): el pedido que
+   * guarda la sala solo lleva las rutas. Así no hay tope de tamaño por pedido y las fotos se guardan a calidad
+   * completa (1600 px). Tarda más con muchas fotos, pero no falla ni pierde calidad.
+   */
+  async function subirFotosAlAlmacenamiento(): Promise<string[]> {
+    const firma = fotosGenerales.map((f) => `${f.name}:${f.size}:${f.lastModified}`).join("|");
+    if (subidasRef.current?.firma === firma) return subidasRef.current.rutas;
+
+    const supabase = createBrowserClient();
+    const { data: sesion } = await supabase.auth.getUser();
+    if (!sesion.user) throw new Error("Tu sesión venció — volvé a iniciar sesión y probá de nuevo.");
+
+    const lote = crypto.randomUUID();
+    const total = fotosGenerales.length;
+    const rutas: string[] = new Array(total);
+    const pendientes = fotosGenerales.map((_, i) => i);
+    let hechas = 0;
+    setProgresoFotos(`Subiendo fotos 0 de ${total}…`);
+
+    async function trabajador() {
+      while (pendientes.length > 0) {
+        const i = pendientes.shift()!;
+        const jpeg = await resizeImageToJpeg(fotosGenerales[i], 1600, 0.85);
+        const ruta = `${sesion.user!.id}/salas/tmp/${lote}/general-${i + 1}.jpg`;
+        const { error: upErr } = await supabase.storage.from("informe-fotos").upload(ruta, jpeg, { contentType: "image/jpeg", upsert: true });
+        if (upErr) throw new Error(`No se pudo subir la foto ${i + 1}: ${upErr.message}`);
+        rutas[i] = ruta;
+        hechas++;
+        setProgresoFotos(`Subiendo fotos ${hechas} de ${total}…`);
+      }
+    }
+    await Promise.all([trabajador(), trabajador(), trabajador()]);
+
+    subidasRef.current = { firma, rutas };
+    return rutas;
+  }
+
   async function guardar() {
     setError(null);
     if (!ubicacionId) {
@@ -200,16 +245,19 @@ export function NuevoRelevamientoSalaForm({
           observaciones,
         }),
       );
-      // Las fotos van en el mismo pedido que crea la sala y genera el PDF: Vercel rechaza los pedidos de más de
-      // ~4,5 MB, así que se achican hasta que entren juntas (con 14 fotos a tamaño completo no entraban).
+      // Las fotos NO viajan en este pedido (Vercel rechaza los de más de ~4,5 MB): se suben aparte, a calidad
+      // completa, y acá solo van sus rutas.
+      let fotosTmp: string[] = [];
       try {
-        const jpegs = await resizeImagesToBudget(fotosGenerales, PRESUPUESTO_FOTOS_BYTES);
-        jpegs.forEach((jpeg, i) => fd.append("fotoGeneral", jpeg, `general-${i + 1}.jpg`));
+        fotosTmp = await subirFotosAlAlmacenamiento();
       } catch (err) {
-        setError(err instanceof Error ? err.message : "No se pudo leer una de las fotos.");
+        setError(err instanceof Error ? err.message : "No se pudieron subir las fotos.");
+        setProgresoFotos(null);
         setSubmitting(false);
         return;
       }
+      setProgresoFotos(null);
+      fd.set("payload", JSON.stringify({ ...JSON.parse(fd.get("payload") as string), fotosTmp }));
       const res = await crearSalaAction(fd);
       if (!res.success) {
         const mensaje = res.error || "No se pudo guardar la sala.";
@@ -217,6 +265,7 @@ export function NuevoRelevamientoSalaForm({
         reportarErrorCliente(mensaje, "crear-sala");
         return;
       }
+      subidasRef.current = null; // ya se movieron a su lugar definitivo
       setSuccess({ salaId: res.salaId!, numeroGeneracion: res.numeroGeneracion!, pdfUrl: res.pdfUrl ?? null });
     } catch (err) {
       const mensaje = err instanceof Error ? err.message : "Ocurrió un error inesperado guardando la sala.";
@@ -224,10 +273,12 @@ export function NuevoRelevamientoSalaForm({
       reportarErrorCliente(mensaje, "crear-sala", err instanceof Error ? err.stack : undefined);
     } finally {
       setSubmitting(false);
+      setProgresoFotos(null);
     }
   }
 
   function empezarOtra() {
+    subidasRef.current = null;
     setSuccess(null);
     setUbicacionId("");
     setDenominacion("");
@@ -422,7 +473,7 @@ export function NuevoRelevamientoSalaForm({
         <div className="footer-nav">
           <span />
           <button type="button" className="btn btn-primary" onClick={guardar} disabled={submitting}>
-            {submitting ? "Guardando..." : "Guardar sala"}
+            {submitting ? (progresoFotos ?? "Guardando...") : "Guardar sala"}
           </button>
         </div>
       )}

@@ -9,6 +9,7 @@ import { resolverUbicacionId, tagGpsSiFalta, type PayloadUbicacionNueva, type Pa
 import { obtenerDestinatariosAutoEnvio } from "@/lib/email/destinatarios-auto-envio";
 import { enviarPdfPorEmail } from "@/lib/email/enviar-pdf";
 import { lineasDeTareas } from "@/lib/tareas/puro";
+import { SALA_FOTO_GENERAL_MAX } from "@/components/salas/types";
 import type { EstadoChecklist, SalaTipoConstruccion } from "@/lib/database.types";
 
 interface PayloadHallazgo {
@@ -28,6 +29,8 @@ export interface CrearSalaPayload {
   hallazgos?: PayloadHallazgo[];
   /** Otras cosas para reparar o mejorar (una por línea; acepta viñetas). */
   observaciones?: string;
+  /** Rutas (en el bucket informe-fotos) de las fotos que el navegador ya subió: no viajan en el pedido (límite de ~4,5 MB). */
+  fotosTmp?: string[];
 }
 
 export interface CrearSalaResult {
@@ -109,11 +112,21 @@ export async function crearSalaAction(formData: FormData): Promise<CrearSalaResu
     await supabase.from("salas").update({ observaciones: observaciones.join("\n") }).eq("id", salaId);
   }
 
-  // Fotos generales (opcional): mismo patrón que Tableros — se suben antes
-  // de generar el PDF para poder adjuntarlas ahí.
-  const fotosFiles = formData.getAll("fotoGeneral").filter((f): f is File => f instanceof File);
-  const fotosGeneralesBuffers: Buffer[] = await Promise.all(fotosFiles.map(async (f) => Buffer.from(await f.arrayBuffer())));
-  // Se suben en paralelo (con 14 fotos, una por una era lo que más tardaba); el orden se conserva.
+  // Fotos generales (opcional): se leen antes de generar el PDF para poder adjuntarlas ahí.
+  // Las fotos ya las subió el navegador directo al almacenamiento (ruta temporal propia): acá se leen de ahí, se
+  // guardan en su lugar definitivo y se borran las temporales. Solo se aceptan rutas de la carpeta propia del usuario.
+  const prefijoTmp = `${profile.id}/salas/tmp/`;
+  const rutasTmp = (payload.fotosTmp ?? [])
+    .filter((r) => typeof r === "string" && r.startsWith(prefijoTmp) && !r.includes(".."))
+    .slice(0, SALA_FOTO_GENERAL_MAX);
+  const descargadas: (Buffer | null)[] = await Promise.all(
+    rutasTmp.map(async (ruta): Promise<Buffer | null> => {
+      const { data } = await supabase.storage.from("informe-fotos").download(ruta);
+      return data ? Buffer.from(await data.arrayBuffer()) : null;
+    }),
+  );
+  const fotosGeneralesBuffers: Buffer[] = descargadas.filter((b): b is Buffer => b !== null);
+  // Se suben en paralelo a su lugar definitivo (el orden se conserva).
   const subidas = await Promise.all(
     fotosGeneralesBuffers.map(async (buffer, i) => {
       const fotoPath = `${profile.id}/salas/${salaId}/general-${i + 1}.jpg`;
@@ -122,6 +135,7 @@ export async function crearSalaAction(formData: FormData): Promise<CrearSalaResu
     }),
   );
   const fotosGeneralesUrls: string[] = subidas.filter((p): p is string => p !== null);
+  if (rutasTmp.length > 0) await supabase.storage.from("informe-fotos").remove(rutasTmp); // best-effort: las temporales ya no hacen falta
   if (fotosGeneralesUrls.length > 0) {
     await supabase.from("salas").update({ fotos_generales_urls: fotosGeneralesUrls }).eq("id", salaId);
   }
