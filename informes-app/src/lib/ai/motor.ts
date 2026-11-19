@@ -2,7 +2,9 @@ import Anthropic from "@anthropic-ai/sdk";
 import type { createClient } from "@/lib/supabase/server";
 import type { ConfigIaRow, IaLecturaPorIa, ModoIa } from "@/lib/database.types";
 import { registrarUsoIa } from "./registrar-uso";
-import { normalizarValor } from "./comparar";
+import { votar } from "./votar";
+
+export { votar };
 
 /**
  * "Enchufe" único de IA. Las rutas le pasan el MISMO pedido que antes le
@@ -234,51 +236,6 @@ function extraerJson(texto: string): unknown | undefined {
     }
   }
   return undefined;
-}
-
-const esObjeto = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
-
-/**
- * Combina las respuestas (ya ordenadas por prioridad) campo por campo.
- * Exportada para poder probarla aparte.
- */
-export function votar(valores: unknown[], ruta: string, dudosos: string[]): unknown {
-  const presentes = valores.filter((v) => v !== undefined);
-  if (presentes.length === 0) return undefined;
-
-  if (presentes.every(Array.isArray)) {
-    const largos = (presentes as unknown[][]).map((a) => a.length);
-    const cuenta = (n: number) => largos.filter((x) => x === n).length;
-    const largo = [...largos].sort((a, b) => cuenta(b) - cuenta(a))[0];
-    if (presentes.length >= 2 && cuenta(largo) < 2) dudosos.push(`${ruta || "raiz"}[cantidad]`);
-    const candidatos = valores.map((v) => (Array.isArray(v) && v.length === largo ? v : undefined));
-    return Array.from({ length: largo }, (_, i) => votar(candidatos.map((a) => a?.[i]), `${ruta}[${i}]`, dudosos));
-  }
-
-  if (presentes.every(esObjeto)) {
-    const claves: string[] = [];
-    for (const o of presentes as Record<string, unknown>[]) for (const k of Object.keys(o)) if (!claves.includes(k)) claves.push(k);
-    const salida: Record<string, unknown> = {};
-    for (const k of claves) {
-      const v = votar(
-        valores.map((o) => (esObjeto(o) ? o[k] : undefined)),
-        ruta ? `${ruta}.${k}` : k,
-        dudosos,
-      );
-      if (v !== undefined) salida[k] = v;
-    }
-    return salida;
-  }
-
-  const grupos = new Map<string, unknown[]>();
-  for (const v of presentes) {
-    const n = normalizarValor(v);
-    grupos.set(n, [...(grupos.get(n) ?? []), v]);
-  }
-  const mejor = [...grupos.values()].sort((a, b) => b.length - a.length)[0];
-  if (mejor.length >= 2) return mejor[0];
-  if (presentes.length >= 2) dudosos.push(ruta || "raiz");
-  return presentes[0];
 }
 
 // ---------------------------------------------------------------------------

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   buscarMaterialesPendientesAction,
+  completarIdentificadoresMaterialAction,
   devolverMaterialPendienteADepositoAction,
   type MaterialPendiente,
 } from "@/app/panel/materiales/alta-actions";
@@ -30,6 +31,11 @@ export function MaterialesPendientes() {
   const [confirmandoId, setConfirmandoId] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Completar el N° de serie / etiqueta YPF que quedó en blanco al dar de alta.
+  const [completandoId, setCompletandoId] = useState<string | null>(null);
+  const [serieNueva, setSerieNueva] = useState("");
+  const [ypfNueva, setYpfNueva] = useState("");
+  const [errorCompletar, setErrorCompletar] = useState<string | null>(null);
 
   useEffect(() => {
     buscarMaterialesPendientesAction().then(setPendientes);
@@ -47,6 +53,28 @@ export function MaterialesPendientes() {
     }
     setPendientes((prev) => (prev ?? []).filter((p) => p.id !== id));
     router.refresh();
+  }
+
+  function empezarACompletar(id: string) {
+    setCompletandoId(id);
+    setSerieNueva("");
+    setYpfNueva("");
+    setErrorCompletar(null);
+  }
+
+  async function guardarIdentificadores(p: MaterialPendiente) {
+    setBusyId(p.id);
+    setErrorCompletar(null);
+    const res = await completarIdentificadoresMaterialAction(p.id, serieNueva, ypfNueva);
+    setBusyId(null);
+    if (!res.success) {
+      setErrorCompletar(res.error || "No se pudo guardar.");
+      return;
+    }
+    setPendientes((prev) =>
+      (prev ?? []).map((x) => (x.id === p.id ? { ...x, numeroSerie: res.numeroSerie ?? x.numeroSerie, etiquetaYpf: res.etiquetaYpf ?? x.etiquetaYpf } : x)),
+    );
+    setCompletandoId(null);
   }
 
   if (pendientes === null) {
@@ -78,6 +106,36 @@ export function MaterialesPendientes() {
                 <div className="hist-meta">
                   {p.ubicacionLabel} · dado de alta el {fmtFecha(p.fechaAlta)}
                 </div>
+                {(!p.numeroSerie || !p.etiquetaYpf) &&
+                  (completandoId === p.id ? (
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-end", marginTop: 8 }}>
+                      {!p.numeroSerie && (
+                        <div className="field" style={{ marginBottom: 0, width: 160 }}>
+                          <label style={{ fontSize: 11 }}>N° de serie</label>
+                          <input type="text" value={serieNueva} onChange={(e) => setSerieNueva(e.target.value)} disabled={busyId === p.id} />
+                        </div>
+                      )}
+                      {!p.etiquetaYpf && (
+                        <div className="field" style={{ marginBottom: 0, width: 130 }}>
+                          <label style={{ fontSize: 11 }}>Etiqueta YPF</label>
+                          <input type="text" value={ypfNueva} onChange={(e) => setYpfNueva(e.target.value)} disabled={busyId === p.id} />
+                        </div>
+                      )}
+                      <button type="button" className="btn btn-primary btn-sm" onClick={() => guardarIdentificadores(p)} disabled={busyId === p.id || (!serieNueva.trim() && !ypfNueva.trim())}>
+                        {busyId === p.id ? "Guardando..." : "Guardar"}
+                      </button>
+                      <button type="button" className="btn btn-secondary btn-sm" onClick={() => setCompletandoId(null)} disabled={busyId === p.id}>
+                        Cancelar
+                      </button>
+                      {errorCompletar && <div className="error-text" style={{ width: "100%" }}>{errorCompletar}</div>}
+                    </div>
+                  ) : (
+                    <div style={{ marginTop: 6 }}>
+                      <button type="button" className="ai-btn" onClick={() => empezarACompletar(p.id)}>
+                        {!p.numeroSerie && !p.etiquetaYpf ? "Completar N° de serie / etiqueta YPF" : !p.numeroSerie ? "Completar N° de serie" : "Completar etiqueta YPF"}
+                      </button>
+                    </div>
+                  ))}
               </div>
             </div>
             <div className="hist-actions">

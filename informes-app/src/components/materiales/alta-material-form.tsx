@@ -190,7 +190,13 @@ export function AltaMaterialForm({
       setError(res.error || "No se pudo dar de alta.");
       return;
     }
-    setExito(`Se dio de alta ${res.cantidadDadaDeAlta} material${res.cantidadDadaDeAlta === 1 ? "" : "es"}.`);
+    const omitidos = res.omitidosPorDuplicado ?? [];
+    setExito(
+      `Se dio de alta ${res.cantidadDadaDeAlta} material${res.cantidadDadaDeAlta === 1 ? "" : "es"}.` +
+        (omitidos.length > 0
+          ? ` No se repitió ${omitidos.length === 1 ? "este, que ya estaba" : "estos, que ya estaban"} dado${omitidos.length === 1 ? "" : "s"} de alta en el sitio (mismo N° de serie o etiqueta YPF): ${omitidos.join(", ")}.`
+          : ""),
+    );
     setMateriales([{ ...MATERIAL_BASE }]);
     setUbicacionId("");
     setSitioNueva("");

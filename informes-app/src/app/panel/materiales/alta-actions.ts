@@ -35,6 +35,8 @@ export interface DarDeAltaMaterialesResult {
   success: boolean;
   error?: string;
   cantidadDadaDeAlta?: number;
+  /** Descripciones de los materiales que NO se cargaron porque ya estaban dados de alta en ese sitio (mismo N° de serie o etiqueta YPF). */
+  omitidosPorDuplicado?: string[];
 }
 
 /**
@@ -59,6 +61,7 @@ export async function darDeAltaMaterialesAction(payload: DarDeAltaMaterialesPayl
   if (payload.gps) await tagGpsSiFalta(supabase, ubicacionId, payload.gps, profile.id);
 
   let dadosDeAlta = 0;
+  const omitidosPorDuplicado: string[] = [];
   for (const m of payload.materiales) {
     if (!m.descripcion.trim()) continue;
     const marcaModelo = m.marcaModelo.trim() || null;
@@ -66,7 +69,11 @@ export async function darDeAltaMaterialesAction(payload: DarDeAltaMaterialesPayl
     const etiquetaYpf = m.etiquetaYpf.trim() || null;
 
     const equipoExistente = await buscarEquipoDuplicado(supabase, ubicacionId, numeroSerie ?? "", etiquetaYpf ?? "");
-    if (equipoExistente) continue; // ya está dado de alta (con ese mismo N° de serie/etiqueta en este sitio) — no duplicar
+    if (equipoExistente) {
+      // ya está dado de alta (con ese mismo N° de serie/etiqueta en este sitio) — no duplicar, pero se avisa cuál
+      omitidosPorDuplicado.push(m.descripcion.trim());
+      continue;
+    }
 
     const { error } = await supabase.from("equipos").insert({
       ubicacion_id: ubicacionId,
@@ -87,10 +94,19 @@ export async function darDeAltaMaterialesAction(payload: DarDeAltaMaterialesPayl
     if (!error) dadosDeAlta++;
   }
 
-  if (dadosDeAlta === 0) return { success: false, error: "No se dio de alta ningún material — ¿ya estaban todos cargados?" };
+  if (dadosDeAlta === 0) {
+    return {
+      success: false,
+      error:
+        omitidosPorDuplicado.length > 0
+          ? `Ya estaba dado de alta en este sitio (mismo N° de serie o etiqueta YPF), no se repitió: ${omitidosPorDuplicado.join(", ")}.`
+          : "No se dio de alta ningún material — revisá que tengan descripción.",
+      omitidosPorDuplicado,
+    };
+  }
 
   revalidatePath("/panel/materiales");
-  return { success: true, cantidadDadaDeAlta: dadosDeAlta };
+  return { success: true, cantidadDadaDeAlta: dadosDeAlta, omitidosPorDuplicado };
 }
 
 export interface MaterialPendiente {
@@ -222,4 +238,87 @@ export async function devolverMaterialPendienteADepositoAction(equipoId: string)
   revalidatePath("/panel/materiales");
   revalidatePath("/entregas-deposito/historial");
   return { success: true };
+}
+
+export interface CompletarIdentificadoresResult {
+  success: boolean;
+  error?: string;
+  numeroSerie?: string | null;
+  etiquetaYpf?: string | null;
+}
+
+/**
+ * Completa DESPUÉS del alta el N° de serie y/o la etiqueta YPF de un material que se cargó sin ellos
+ * (la foto no se leía, no tenía a mano la chapa, etc.). Solo llena lo que está en blanco: nunca
+ * pisa un dato ya cargado. Lo puede hacer quien dio de alta el material mientras siga pendiente
+ * de adjuntar a un informe, o la oficina (Admin/Supervisor) en cualquier momento.
+ *
+ * Usa el service role porque `equipos` solo se actualiza por RLS desde Admin; el gate real está acá.
+ * Avisa si el N° de serie o la etiqueta YPF ya los tiene OTRO equipo activo del mismo sitio (sería el
+ * mismo equipo cargado dos veces).
+ */
+export async function completarIdentificadoresMaterialAction(
+  equipoId: string,
+  numeroSerie: string,
+  etiquetaYpf: string,
+): Promise<CompletarIdentificadoresResult> {
+  const profile = await requireProfile();
+  const serieNueva = numeroSerie.trim().slice(0, 60);
+  const ypfNueva = etiquetaYpf.trim().slice(0, 40);
+  if (!serieNueva && !ypfNueva) return { success: false, error: "Escribí el N° de serie o la etiqueta YPF." };
+
+  let service: ReturnType<typeof createServiceRoleClient>;
+  try {
+    service = createServiceRoleClient();
+  } catch {
+    return { success: false, error: "Falta configurar SUPABASE_SERVICE_ROLE_KEY en el servidor." };
+  }
+
+  const { data: equipo } = await service
+    .from("equipos")
+    .select("id, ubicacion_id, estado, created_by, informe_instalacion_id, numero_serie, etiqueta_ypf")
+    .eq("id", equipoId)
+    .maybeSingle();
+  if (!equipo) return { success: false, error: "No se encontró el material." };
+
+  const esOficina = profile.rol === "admin" || profile.rol === "superusuario" || profile.rol === "supervisor";
+  const esDuenoPendiente = equipo.created_by === profile.id && equipo.informe_instalacion_id === null;
+  if (!esOficina && !esDuenoPendiente) {
+    return { success: false, error: "Este material ya no se puede completar desde acá (puede que ya esté adjunto a un informe) — pedíselo a la oficina." };
+  }
+  if (equipo.estado !== "activo") return { success: false, error: "Este material ya no está activo." };
+
+  // Solo se llenan los campos que hoy están en blanco.
+  const cambios: { numero_serie?: string; etiqueta_ypf?: string } = {};
+  if (serieNueva && !equipo.numero_serie) cambios.numero_serie = serieNueva;
+  if (ypfNueva && !equipo.etiqueta_ypf) cambios.etiqueta_ypf = ypfNueva;
+  if (Object.keys(cambios).length === 0) return { success: false, error: "Ese dato ya estaba cargado: no se pisa." };
+
+  // ¿Otro equipo activo del mismo sitio ya tiene ese identificador?
+  for (const [columna, valor, nombre] of [
+    ["numero_serie", cambios.numero_serie, "N° de serie"],
+    ["etiqueta_ypf", cambios.etiqueta_ypf, "etiqueta YPF"],
+  ] as const) {
+    if (!valor) continue;
+    const { data: otro } = await service
+      .from("equipos")
+      .select("id")
+      .eq("ubicacion_id", equipo.ubicacion_id)
+      .eq("estado", "activo")
+      .eq(columna, valor)
+      .neq("id", equipoId)
+      .limit(1)
+      .maybeSingle();
+    if (otro) return { success: false, error: `Ya hay otro equipo cargado en este sitio con ese ${nombre}: puede ser el mismo equipo dado de alta dos veces.` };
+  }
+
+  const { error } = await service.from("equipos").update(cambios).eq("id", equipoId);
+  if (error) return { success: false, error: `No se pudo guardar: ${error.message}` };
+
+  revalidatePath("/panel/materiales");
+  return {
+    success: true,
+    numeroSerie: cambios.numero_serie ?? equipo.numero_serie,
+    etiquetaYpf: cambios.etiqueta_ypf ?? equipo.etiqueta_ypf,
+  };
 }
