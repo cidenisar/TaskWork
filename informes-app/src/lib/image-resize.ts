@@ -4,7 +4,7 @@
  * necesidad; a este tamaño se sigue leyendo perfecto una etiqueta o un
  * amperaje impreso).
  */
-export async function resizeImageToJpeg(file: File, maxW = 1600): Promise<Blob> {
+export async function resizeImageToJpeg(file: File, maxW = 1600, calidad = 0.85): Promise<Blob> {
   const objectUrl = URL.createObjectURL(file);
   const img = await new Promise<HTMLImageElement>((resolve, reject) => {
     const el = new Image();
@@ -41,6 +41,35 @@ export async function resizeImageToJpeg(file: File, maxW = 1600): Promise<Blob> 
   ctx.drawImage(img, 0, 0, w, h);
 
   return new Promise((resolve, reject) =>
-    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("No se pudo procesar la imagen"))), "image/jpeg", 0.85),
+    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("No se pudo procesar la imagen"))), "image/jpeg", calidad),
+  );
+}
+
+/**
+ * Achica un grupo de fotos hasta que, JUNTAS, entren en `presupuestoBytes`. Sirve cuando las fotos viajan en el
+ * cuerpo de un mismo pedido al servidor: Vercel rechaza los pedidos de más de ~4,5 MB (sin dejar ningún error en
+ * los registros de la app: el navegador solo ve "An unexpected response was received from the server"). Prueba
+ * anchos cada vez más chicos y se queda con el primero que entra; si ni el más chico entra, avisa.
+ */
+export async function resizeImagesToBudget(
+  files: File[],
+  presupuestoBytes: number,
+  anchos: number[] = [1280, 1024, 800, 640],
+  calidad = 0.75,
+): Promise<Blob[]> {
+  if (files.length === 0) return [];
+  let ultimo: Blob[] = [];
+  for (const ancho of anchos) {
+    ultimo = [];
+    let total = 0;
+    for (const f of files) {
+      const blob = await resizeImageToJpeg(f, ancho, calidad);
+      ultimo.push(blob);
+      total += blob.size;
+    }
+    if (total <= presupuestoBytes) return ultimo;
+  }
+  throw new Error(
+    `Las ${files.length} fotos pesan demasiado para guardarlas juntas aun achicadas. Sacá algunas fotos o guardá la sala con menos y agregá el resto después.`,
   );
 }

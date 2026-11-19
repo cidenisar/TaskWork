@@ -3,6 +3,9 @@ import { createClient } from "@/lib/supabase/server";
 import { NuevoRelevamientoSalaForm } from "@/components/salas/nuevo-relevamiento-form";
 import { fetchTodasLasUbicaciones } from "@/lib/ubicaciones/fetch-todas";
 
+// Guardar una sala con muchas fotos sube las fotos y genera el PDF: más tiempo que el mínimo de la plataforma.
+export const maxDuration = 60;
+
 export default async function NuevaSalaPage() {
   await requireProfile();
   const supabase = await createClient();

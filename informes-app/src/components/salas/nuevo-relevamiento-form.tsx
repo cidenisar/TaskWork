@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import { crearSalaAction } from "@/app/(app)/salas/nuevo/actions";
 import { reportarErrorCliente } from "@/lib/client-error-report";
-import { resizeImageToJpeg } from "@/lib/image-resize";
+import { resizeImagesToBudget } from "@/lib/image-resize";
 import { ErrorNote, SuccessNote } from "@/components/notes";
 import { Icon } from "@/components/icon";
 import { VerPdfLink } from "@/components/ver-pdf-link";
@@ -16,6 +16,9 @@ import { HallazgosInspeccionIaSection } from "@/components/inspeccion-ia/hallazg
 import { conVinetas, lineasDeTareas } from "@/lib/tareas/puro";
 import { TareasTextarea } from "@/components/informe-tecnico/tareas-textarea";
 import { SALA_FOTO_GENERAL_MAX, SALA_FOTO_IA_POR_TANDA, SALA_TIPO_CONSTRUCCION_OPCIONES, SALA_TIPO_CONSTRUCCION_LABEL } from "./types";
+
+/** Tope del total de fotos que se mandan al guardar (el pedido completo no puede pasar de ~4,5 MB en Vercel). */
+const PRESUPUESTO_FOTOS_BYTES = 3_500_000;
 
 /**
  * Alta/relevamiento de una Sala/Shelter/Container — a diferencia de
@@ -115,10 +118,9 @@ export function NuevoRelevamientoSalaForm({
       for (let t = 0; t < tandas.length; t++) {
         setIaNote(tandas.length > 1 ? `Analizando fotos… tanda ${t + 1} de ${tandas.length}` : null);
         const fd = new FormData();
-        for (let i = 0; i < tandas[t].length; i++) {
-          const jpeg = await resizeImageToJpeg(tandas[t][i]);
-          fd.append("fotos", jpeg, `sala-${t * SALA_FOTO_IA_POR_TANDA + i + 1}.jpg`);
-        }
+        // Cada tanda también tiene que entrar en un pedido (~4,5 MB): 5 fotos a 1600 px pueden pasarse.
+        const jpegs = await resizeImagesToBudget(tandas[t], PRESUPUESTO_FOTOS_BYTES, [1600, 1280, 1024, 800], 0.8);
+        jpegs.forEach((jpeg, i) => fd.append("fotos", jpeg, `sala-${t * SALA_FOTO_IA_POR_TANDA + i + 1}.jpg`));
         if (tipoConstruccion) fd.append("tipoConstruccion", tipoConstruccion);
         const res = await fetch("/api/salas/leer-foto", { method: "POST", body: fd });
         const data = await res.json().catch(() => ({}));
@@ -198,15 +200,15 @@ export function NuevoRelevamientoSalaForm({
           observaciones,
         }),
       );
-      for (let i = 0; i < fotosGenerales.length; i++) {
-        try {
-          const jpeg = await resizeImageToJpeg(fotosGenerales[i]);
-          fd.append("fotoGeneral", jpeg, `general-${i + 1}.jpg`);
-        } catch (err) {
-          setError(err instanceof Error ? err.message : "No se pudo leer una de las fotos.");
-          setSubmitting(false);
-          return;
-        }
+      // Las fotos van en el mismo pedido que crea la sala y genera el PDF: Vercel rechaza los pedidos de más de
+      // ~4,5 MB, así que se achican hasta que entren juntas (con 14 fotos a tamaño completo no entraban).
+      try {
+        const jpegs = await resizeImagesToBudget(fotosGenerales, PRESUPUESTO_FOTOS_BYTES);
+        jpegs.forEach((jpeg, i) => fd.append("fotoGeneral", jpeg, `general-${i + 1}.jpg`));
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "No se pudo leer una de las fotos.");
+        setSubmitting(false);
+        return;
       }
       const res = await crearSalaAction(fd);
       if (!res.success) {

@@ -112,17 +112,16 @@ export async function crearSalaAction(formData: FormData): Promise<CrearSalaResu
   // Fotos generales (opcional): mismo patrón que Tableros — se suben antes
   // de generar el PDF para poder adjuntarlas ahí.
   const fotosFiles = formData.getAll("fotoGeneral").filter((f): f is File => f instanceof File);
-  const fotosGeneralesBuffers: Buffer[] = [];
-  const fotosGeneralesUrls: string[] = [];
-  for (let i = 0; i < fotosFiles.length; i++) {
-    const buffer = Buffer.from(await fotosFiles[i].arrayBuffer());
-    fotosGeneralesBuffers.push(buffer);
-    const fotoPath = `${profile.id}/salas/${salaId}/general-${i + 1}.jpg`;
-    const { error: fotoUpErr } = await supabase.storage
-      .from("informe-fotos")
-      .upload(fotoPath, buffer, { contentType: "image/jpeg", upsert: true });
-    if (!fotoUpErr) fotosGeneralesUrls.push(fotoPath);
-  }
+  const fotosGeneralesBuffers: Buffer[] = await Promise.all(fotosFiles.map(async (f) => Buffer.from(await f.arrayBuffer())));
+  // Se suben en paralelo (con 14 fotos, una por una era lo que más tardaba); el orden se conserva.
+  const subidas = await Promise.all(
+    fotosGeneralesBuffers.map(async (buffer, i) => {
+      const fotoPath = `${profile.id}/salas/${salaId}/general-${i + 1}.jpg`;
+      const { error: fotoUpErr } = await supabase.storage.from("informe-fotos").upload(fotoPath, buffer, { contentType: "image/jpeg", upsert: true });
+      return fotoUpErr ? null : fotoPath;
+    }),
+  );
+  const fotosGeneralesUrls: string[] = subidas.filter((p): p is string => p !== null);
   if (fotosGeneralesUrls.length > 0) {
     await supabase.from("salas").update({ fotos_generales_urls: fotosGeneralesUrls }).eq("id", salaId);
   }
