@@ -3,7 +3,8 @@ import { createClient } from "@/lib/supabase/server";
 import { getPanelOverview } from "@/lib/panel/overview";
 import { MapaRelevamientosCard } from "@/components/panel/mapa-relevamientos-card";
 import type { PuntoMapaRelevamiento } from "@/components/panel/mapa-relevamientos-inner";
-import { getPuntosMapa } from "@/lib/panel/mapa";
+import { getPuntosMapa, getLugaresSinGps } from "@/lib/panel/mapa";
+import Link from "next/link";
 
 /**
  * Mismo mapa que el de Vista General (comparten MapaRelevamientosCard), pero
@@ -14,9 +15,10 @@ import { getPuntosMapa } from "@/lib/panel/mapa";
 export default async function PanelMapaPage() {
   const profile = await requireProfile();
   const supabase = await createClient();
-  const [overview, puntosCrudos] = await Promise.all([
+  const [overview, puntosCrudos, sinGps] = await Promise.all([
     getPanelOverview(supabase, profile.rol !== "tecnico"),
     getPuntosMapa(supabase),
+    getLugaresSinGps(supabase),
   ]);
 
   const sitioPorId = new Map(overview.sitios.map((s) => [s.id, s]));
@@ -40,6 +42,23 @@ export default async function PanelMapaPage() {
         height="max(420px, calc(100vh - 220px))"
         style={{ marginTop: 0 }}
       />
+
+      {sinGps.length > 0 && (
+        <div className="card">
+          <div className="section-label">Relevados pero sin coordenadas ({sinGps.length})</div>
+          <p className="hint" style={{ margin: "4px 0 8px" }}>
+            Estos lugares tienen cosas relevadas pero no tienen coordenadas, así que no aparecen en el mapa. Entrá a cada uno para
+            cargarlas o corregirlas.
+          </p>
+          <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13 }}>
+            {sinGps.map((l) => (
+              <li key={l.ubicacionId}>
+                <Link href={`/ubicaciones/${l.ubicacionId}`}>{l.label}</Link> — {l.unidades} {l.unidades === 1 ? "unidad" : "unidades"}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }

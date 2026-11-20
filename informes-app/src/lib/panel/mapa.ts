@@ -1,6 +1,7 @@
 import type { createClient } from "@/lib/supabase/server";
 import { fetchTodasLasUbicaciones } from "@/lib/ubicaciones/fetch-todas";
 import { CATEGORIA_EQUIPO_LABEL } from "@/components/equipos/types";
+import { labelUbicacion } from "@/components/ubicaciones/types";
 
 type Supabase = Awaited<ReturnType<typeof createClient>>;
 
@@ -50,4 +51,34 @@ export async function getPuntosMapa(supabase: Supabase): Promise<PuntoMapa[]> {
     agregar(e.id, e.ubicacion_id, "Equipos Individuales", e.texto, e.categoria_equipo, CATEGORIA_EQUIPO_LABEL[e.categoria_equipo]);
 
   return puntos;
+}
+
+/** Un lugar (planta/oficina/sala) que tiene cosas relevadas pero todavía no tiene coordenadas: por eso no aparece en el mapa. */
+export interface LugarSinGps {
+  ubicacionId: string;
+  label: string;
+  /** Cuántas unidades (tableros, racks, torres, equipos, salas) hay ahí sin poder verse en el mapa. */
+  unidades: number;
+}
+
+/** Los lugares con relevamientos pero sin coordenadas — lo que falta corregir para que aparezca en el mapa. */
+export async function getLugaresSinGps(supabase: Supabase): Promise<LugarSinGps[]> {
+  const [ubicaciones, tablerosRes, racksRes, torresRes, equiposRes, salasRes] = await Promise.all([
+    fetchTodasLasUbicaciones(supabase),
+    supabase.from("tableros").select("ubicacion_id"),
+    supabase.from("racks").select("ubicacion_id"),
+    supabase.from("torres_comunicacion").select("ubicacion_id"),
+    supabase.from("equipos").select("ubicacion_id").eq("estado", "activo"),
+    supabase.from("salas").select("ubicacion_id").eq("estado", "activo"),
+  ]);
+  const sinGps = new Map(ubicaciones.filter((u) => u.lat == null || u.lng == null).map((u) => [u.id, u]));
+  const conteo = new Map<string, number>();
+  for (const lista of [tablerosRes.data, racksRes.data, torresRes.data, equiposRes.data, salasRes.data]) {
+    for (const r of lista ?? []) {
+      if (sinGps.has(r.ubicacion_id)) conteo.set(r.ubicacion_id, (conteo.get(r.ubicacion_id) ?? 0) + 1);
+    }
+  }
+  return [...conteo.entries()]
+    .map(([ubicacionId, unidades]) => ({ ubicacionId, label: labelUbicacion(sinGps.get(ubicacionId)!), unidades }))
+    .sort((a, b) => a.label.localeCompare(b.label));
 }

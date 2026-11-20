@@ -1,3 +1,4 @@
+import { CoordenadasSitio } from "@/components/ubicaciones/coordenadas-sitio";
 import { columnasADatosBateria, resumenBateria } from "@/lib/baterias/types";
 import { notFound } from "next/navigation";
 import Link from "next/link";
@@ -58,7 +59,7 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
   // un solo ítem de lista.
   const { data: hermanas } = await supabase
     .from("ubicaciones")
-    .select("id, localidad, planta, oficina")
+    .select("id, localidad, planta, oficina, lat, lng")
     .eq("provincia", ubicacion.provincia)
     .eq("sitio", ubicacion.sitio);
   const siblingIds = (hermanas ?? []).map((h) => h.id);
@@ -358,6 +359,11 @@ export default async function UbicacionDetallePage({ params }: { params: Promise
           {hayVariasPlantas ? ` · ${siblingIds.length} plantas/oficinas agrupadas` : ""}
         </p>
       </div>
+
+      <CoordenadasSitio
+        filas={(hermanas ?? []).map((h) => ({ id: h.id, label: labelPorUbicacionId.get(h.id) ?? ubicacion.sitio, lat: h.lat, lng: h.lng }))}
+        puedeEditar={puedeGestionarBajas(profile.rol)}
+      />
 
       <div className="kpi-grid">
         <div className="kpi-card">

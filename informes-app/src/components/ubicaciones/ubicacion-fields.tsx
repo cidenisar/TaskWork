@@ -4,11 +4,18 @@ import { useMemo, useState } from "react";
 import { Icon } from "@/components/icon";
 import { FilterableSelect } from "@/components/ui/filterable-select";
 import type { Ubicacion } from "./types";
+import { enlaceMapa, formatearCoordenada, parsearLatitud, parsearLongitud } from "@/lib/ubicaciones/coordenadas";
 
 export interface GpsCapturado {
   lat: number;
   lng: number;
   accuracy: number | null;
+  /**
+   * true cuando las coordenadas se escribieron o corrigieron a mano en los campos (no vienen del GPS del dispositivo).
+   * Un GPS automático solo completa las coordenadas de un lugar que no las tiene; uno manual las corrige si quien lo
+   * guarda es Administrador o Supervisor (ver tagGpsSiFalta).
+   */
+  manual?: boolean;
 }
 
 type ResolverGpsResponse =
@@ -107,6 +114,26 @@ export function UbicacionFields({
   const [sitioEl, setSitioEl] = useState<string>(() => estadoInicial("sitio"));
   const [plantaEl, setPlantaEl] = useState<string>(() => estadoInicial("planta"));
   const [oficinaEl, setOficinaEl] = useState<string>(() => estadoInicial("oficina"));
+
+  // Coordenadas que se ven en los campos Latitud/Longitud. null = todavía no se tocó nada: se muestran las que ya
+  // tiene guardadas el lugar elegido (si tiene). Al apretar "Usar mi ubicación" se llenan con las del GPS, y se pueden
+  // corregir a mano.
+  const [coordsEditadas, setCoordsEditadas] = useState<{ lat: string; lng: string } | null>(null);
+  const filaElegida = ubicaciones.find((u) => u.id === ubicacionId);
+  const latGuardada = filaElegida?.lat ?? null;
+  const lngGuardada = filaElegida?.lng ?? null;
+  const latMostrada = coordsEditadas ? coordsEditadas.lat : latGuardada !== null ? formatearCoordenada(latGuardada) : "";
+  const lngMostrada = coordsEditadas ? coordsEditadas.lng : lngGuardada !== null ? formatearCoordenada(lngGuardada) : "";
+  const latNum = parsearLatitud(latMostrada);
+  const lngNum = parsearLongitud(lngMostrada);
+  const coordsInvalidas = (latMostrada.trim() !== "" || lngMostrada.trim() !== "") && (latNum === null || lngNum === null);
+
+  function cambiarCoords(lat: string, lng: string) {
+    setCoordsEditadas({ lat, lng });
+    const la = parsearLatitud(lat);
+    const lo = parsearLongitud(lng);
+    onGpsCapturado(la !== null && lo !== null ? { lat: la, lng: lo, accuracy: null, manual: true } : null);
+  }
 
   const ubicacionesDeLaProvincia = useMemo(
     () => ubicaciones.filter((u) => u.provincia === provinciaFiltro),
@@ -256,6 +283,7 @@ export function UbicacionFields({
     const lng = posicion.coords.longitude;
     const accuracy = Number.isFinite(posicion.coords.accuracy) ? posicion.coords.accuracy : null;
     onGpsCapturado({ lat, lng, accuracy });
+    setCoordsEditadas({ lat: formatearCoordenada(lat), lng: formatearCoordenada(lng) });
     const precisionAviso = accuracy && accuracy > 100 ? ` (precisión del GPS baja: ±${Math.round(accuracy)}m, confirmá bien)` : "";
 
     try {
@@ -309,6 +337,54 @@ export function UbicacionFields({
           </div>
         )}
       </div>
+      <div className="grid2">
+        <div className="field">
+          <label>
+            Latitud <span className="opt">(opcional)</span>
+          </label>
+          <input
+            type="text"
+            inputMode="decimal"
+            placeholder="Ej: -33.123456"
+            value={latMostrada}
+            onChange={(e) => cambiarCoords(e.target.value, lngMostrada)}
+            disabled={disabled}
+          />
+        </div>
+        <div className="field">
+          <label>
+            Longitud <span className="opt">(opcional)</span>
+          </label>
+          <input
+            type="text"
+            inputMode="decimal"
+            placeholder="Ej: -68.456789"
+            value={lngMostrada}
+            onChange={(e) => cambiarCoords(latMostrada, e.target.value)}
+            disabled={disabled}
+          />
+        </div>
+      </div>
+      {coordsInvalidas && (
+        <div className="hint" style={{ marginTop: -6, marginBottom: 8, color: "var(--warn)" }}>
+          Latitud (entre -90 y 90) y longitud (entre -180 y 180) tienen que ser números — con eso incompleto no se guardan.
+        </div>
+      )}
+      {!coordsInvalidas && latNum !== null && lngNum !== null && (
+        <div className="hint" style={{ marginTop: -6, marginBottom: 8 }}>
+          <a href={enlaceMapa(latNum, lngNum)} target="_blank" rel="noopener noreferrer">
+            Ver este punto en el mapa
+          </a>
+          {latGuardada !== null && lngGuardada !== null && coordsEditadas && (latNum !== latGuardada || lngNum !== lngGuardada)
+            ? ` · Este lugar ya tiene guardado ${formatearCoordenada(latGuardada)}, ${formatearCoordenada(lngGuardada)}: si lo cambiás acá, solo se corrige si sos Administrador o Supervisor.`
+            : ""}
+        </div>
+      )}
+      {latGuardada === null && lngGuardada === null && ubicacionId && ubicacionId !== "__new" && !coordsEditadas && (
+        <div className="hint" style={{ marginTop: -6, marginBottom: 8, color: "var(--warn)" }}>
+          Este lugar todavía no tiene coordenadas, así que no aparece en el mapa — apretá «Usar mi ubicación» o escribilas.
+        </div>
+      )}
       <div className="field">
         <label>
           Provincia {requerido ? <span className="req">*</span> : <span className="opt">(opcional)</span>}

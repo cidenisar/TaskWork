@@ -12,6 +12,8 @@ export interface PayloadGps {
   lat: number;
   lng: number;
   accuracy: number | null;
+  /** Escritas o corregidas a mano en los campos Latitud/Longitud (no tomadas del GPS del dispositivo). */
+  manual?: boolean;
 }
 
 /**
@@ -73,8 +75,14 @@ export async function resolverUbicacionId(
  * Si quien cargó capturó GPS en este envío y la Ubicación resultante (nueva
  * o ya existente) todavía no tiene coordenadas guardadas, las guarda ahora
  * — es el "aprendizaje": la próxima vez que alguien esté cerca de ese
- * punto, la app ya va a reconocer el sitio solo. Nunca pisa coordenadas que
- * ya estaban guardadas.
+ * punto, la app ya va a reconocer el sitio solo. Un GPS automático nunca pisa
+ * coordenadas que ya estaban guardadas.
+ *
+ * Excepción: coordenadas escritas/corregidas A MANO (`gps.manual`) en los campos
+ * Latitud/Longitud del formulario. Si el lugar ya tenía otras y quien guarda es
+ * Administrador, Supervisor o Superusuario, se corrigen (el mapa mostraba el
+ * lugar en otro punto). Para cualquier otro rol se conservan las que había —
+ * un técnico no mueve un sitio en el mapa tipeando números.
  *
  * El UPDATE de `ubicaciones` es admin-only por RLS (a propósito: la edición
  * libre de una Ubicación ya existente es cosa de Administrador). Este
@@ -92,8 +100,20 @@ export async function tagGpsSiFalta(
   userId: string,
 ) {
   if (!gps) return;
-  const { data: row } = await supabase.from("ubicaciones").select("lat").eq("id", ubicacionId).single();
-  if (row && row.lat === null) {
+  const { data: row } = await supabase.from("ubicaciones").select("lat, lng").eq("id", ubicacionId).single();
+  if (!row) return;
+
+  const yaTiene = row.lat !== null;
+  let corregir = false;
+  if (yaTiene && gps.manual) {
+    const cambia = Math.abs((row.lat as number) - gps.lat) > 1e-6 || Math.abs((row.lng ?? 0) - gps.lng) > 1e-6;
+    if (cambia) {
+      const { data: perfil } = await createServiceRoleClient().from("profiles").select("rol").eq("id", userId).maybeSingle();
+      corregir = perfil?.rol === "admin" || perfil?.rol === "supervisor" || perfil?.rol === "superusuario";
+    }
+  }
+
+  if (!yaTiene || corregir) {
     const service = createServiceRoleClient();
     await service
       .from("ubicaciones")
