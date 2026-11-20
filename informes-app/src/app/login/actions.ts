@@ -32,7 +32,12 @@ export async function loginAction(_prev: LoginState, formData: FormData): Promis
     return { error: "Esta cuenta fue desactivada. Contactá a un Administrador." };
   }
 
-  redirect(next.startsWith("/") ? next : "/");
+  // "next" sale de un query param (?next=...) controlado por quien armó el
+  // link, no solo por el usuario — startsWith("/") solo no alcanza: algo
+  // como "//evil.com" también empieza con "/" pero el navegador lo entiende
+  // como URL protocol-relative y redirige fuera del sitio (open redirect).
+  const esRutaInterna = next.startsWith("/") && !next.startsWith("//") && !next.startsWith("/\\");
+  redirect(esRutaInterna ? next : "/");
 }
 
 export async function signOutAction() {

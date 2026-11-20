@@ -1,9 +1,11 @@
 "use server";
 
-import Anthropic from "@anthropic-ai/sdk";
+import type Anthropic from "@anthropic-ai/sdk";
 import { requireProfile } from "@/lib/auth";
 import { puedeVerEstadisticas } from "@/lib/types";
 import { createClient } from "@/lib/supabase/server";
+import { crearMensajeIa, hayAlgunaIaConfigurada, mensajeErrorIa } from "@/lib/ai/motor";
+import { verificarLimiteIa } from "@/lib/ai/rate-limit";
 
 export interface VerificacionResult {
   success: boolean;
@@ -24,11 +26,13 @@ export async function verificarFotosInformeAction(informeId: string): Promise<Ve
   if (!puedeVerEstadisticas(profile.rol)) {
     return { success: false, error: "No autorizado." };
   }
-  if (!process.env.ANTHROPIC_API_KEY) {
-    return { success: false, error: "La verificación con IA no está configurada en este entorno (falta ANTHROPIC_API_KEY)." };
+  if (!hayAlgunaIaConfigurada()) {
+    return { success: false, error: "La verificación con IA no está configurada en este entorno (falta la clave de alguna IA)." };
   }
 
   const supabase = await createClient();
+  const limite = await verificarLimiteIa(supabase, profile.id);
+  if (!limite.permitido) return { success: false, error: limite.error };
 
   const { data: informe, error: informeErr } = await supabase
     .from("informes_tecnicos")
@@ -62,8 +66,7 @@ export async function verificarFotosInformeAction(informeId: string): Promise<Ve
   }
 
   try {
-    const client = new Anthropic();
-    const response = await client.messages.create({
+    const response = await crearMensajeIa(supabase, { endpoint: "estadisticas/verificar-fotos", modulo: "estadisticas", userId: profile.id }, {
       model: "claude-opus-5",
       max_tokens: 512,
       output_config: { effort: "low" },
@@ -92,7 +95,7 @@ export async function verificarFotosInformeAction(informeId: string): Promise<Ve
     }
     const parsed = JSON.parse(textBlock.text.trim().replace(/^```json\s*|\s*```$/g, ""));
     return { success: true, coincide: !!parsed.coincide, comentario: String(parsed.comentario || "") };
-  } catch {
-    return { success: false, error: "No se pudo contactar al servicio de IA (o la respuesta no tenía el formato esperado)." };
+  } catch (err) {
+    return { success: false, error: mensajeErrorIa(err) };
   }
 }

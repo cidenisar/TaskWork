@@ -1,7 +1,8 @@
 import { Document, Page, Text, View, Image, StyleSheet } from "@react-pdf/renderer";
 import { BORDER, commonStyles, KeyValueRow, PdfHeader, PdfFooter, formatFechaArg } from "./common";
 import { CATEGORIA_EQUIPO_LABEL, type ResumenEquipamiento } from "@/components/racks/types";
-import type { RackCategoriaEquipo } from "@/lib/database.types";
+import { HALLAZGO_ESTADO_LABEL } from "@/lib/inspeccion-ia/types";
+import type { EstadoChecklist, RackCategoriaEquipo } from "@/lib/database.types";
 
 /**
  * Relevamiento de Equipamiento — inventario de un rack en un sitio/sala/
@@ -27,13 +28,21 @@ export interface RackPdfLectura {
   marcaModelo: string | null;
   posicionU: string | null;
   cantidad: number;
+  bocasDisponibles: number | null;
   estado: string | null;
+  comentario: string | null;
+}
+
+export interface RackPdfHallazgo {
+  texto: string;
+  estado: EstadoChecklist;
   comentario: string | null;
 }
 
 export interface RackPdfProps {
   numeroGeneracion: string;
   denominacion: string;
+  etiquetaYpf: string | null;
   region: string;
   provincia: string;
   localidad: string | null;
@@ -43,13 +52,24 @@ export interface RackPdfProps {
   fecha: string;
   lecturas: RackPdfLectura[];
   resumen: ResumenEquipamiento;
-  fotoGeneralBuffer: Buffer | null;
+  fotosGeneralesBuffers: Buffer[] | null;
+  hallazgos: RackPdfHallazgo[];
   logoBuffer: Buffer | null;
   appName: string;
   realizoNombre: string;
 }
 
-const W = { n: "5%", categoria: "14%", equipo: "22%", marca: "16%", posicion: "9%", cantidad: "7%", estado: "10%", comentario: "17%" };
+const W = {
+  n: "5%",
+  categoria: "13%",
+  equipo: "19%",
+  marca: "14%",
+  posicion: "8%",
+  cantidad: "6%",
+  bocas: "8%",
+  estado: "9%",
+  comentario: "18%",
+};
 
 export function RackPdf(props: RackPdfProps) {
   const {
@@ -64,10 +84,12 @@ export function RackPdf(props: RackPdfProps) {
     fecha,
     lecturas,
     resumen,
-    fotoGeneralBuffer,
+    fotosGeneralesBuffers,
+    hallazgos,
     logoBuffer,
     appName,
     realizoNombre,
+    etiquetaYpf,
   } = props;
   const fechaLabel = formatFechaArg(fecha);
   const documentoLabel = "RELEVAMIENTO DE EQUIPAMIENTO";
@@ -91,6 +113,7 @@ export function RackPdf(props: RackPdfProps) {
         <View style={commonStyles.kvTable}>
           <KeyValueRow k="N° de Generación:" v={numeroGeneracion} />
           <KeyValueRow k="Rack:" v={denominacion} />
+          {etiquetaYpf && <KeyValueRow k="Etiqueta YPF:" v={etiquetaYpf} />}
           <KeyValueRow k="Sitio:" v={sitio} />
           {planta && <KeyValueRow k="Planta:" v={planta} />}
           {oficina && <KeyValueRow k="Oficina:" v={oficina} />}
@@ -112,11 +135,45 @@ export function RackPdf(props: RackPdfProps) {
           )}
         </View>
 
-        {fotoGeneralBuffer && (
+        {fotosGeneralesBuffers && fotosGeneralesBuffers.length > 0 && (
           <>
-            <Text style={commonStyles.sectionTitle}>Foto General del Rack</Text>
-            <View style={{ marginBottom: 6 }}>
-              <Image src={fotoGeneralBuffer} style={commonStyles.photo} />
+            <Text style={commonStyles.sectionTitle}>
+              Foto{fotosGeneralesBuffers.length === 1 ? "" : "s"} General{fotosGeneralesBuffers.length === 1 ? "" : "es"} del Rack
+            </Text>
+            <View style={commonStyles.photoGrid}>
+              {fotosGeneralesBuffers.map((buf, i) => (
+                <View style={commonStyles.photoCell} key={i} wrap={false}>
+                  <Image src={buf} style={commonStyles.photo} />
+                </View>
+              ))}
+            </View>
+          </>
+        )}
+
+        {hallazgos.length > 0 && (
+          <>
+            <Text style={commonStyles.sectionTitle}>Inspección IA</Text>
+            <View style={styles.table}>
+              <View style={styles.headRow} fixed>
+                <Text style={[styles.th, { width: "40%" }]}>Ítem</Text>
+                <Text style={[styles.th, { width: "15%" }]}>Estado</Text>
+                <Text style={[styles.th, { width: "45%" }]}>Comentario</Text>
+              </View>
+              {hallazgos.map((h, i) => (
+                <View style={i === hallazgos.length - 1 ? styles.rowLast : styles.row} key={i} wrap={false}>
+                  <Text style={[styles.td, { width: "40%" }]}>{h.texto}</Text>
+                  <Text
+                    style={[
+                      styles.td,
+                      { width: "15%" },
+                      h.estado === "no_ok" ? { fontFamily: "Helvetica-Bold" } : {},
+                    ]}
+                  >
+                    {HALLAZGO_ESTADO_LABEL[h.estado]}
+                  </Text>
+                  <Text style={[styles.td, { width: "45%" }]}>{h.comentario || "—"}</Text>
+                </View>
+              ))}
             </View>
           </>
         )}
@@ -130,6 +187,7 @@ export function RackPdf(props: RackPdfProps) {
             <Text style={[styles.th, { width: W.marca }]}>Marca/Modelo</Text>
             <Text style={[styles.th, { width: W.posicion }]}>Posición</Text>
             <Text style={[styles.th, { width: W.cantidad, textAlign: "right" }]}>Cant.</Text>
+            <Text style={[styles.th, { width: W.bocas, textAlign: "right" }]}>Bocas disp.</Text>
             <Text style={[styles.th, { width: W.estado }]}>Estado</Text>
             <Text style={[styles.th, { width: W.comentario }]}>Comentario</Text>
           </View>
@@ -141,6 +199,7 @@ export function RackPdf(props: RackPdfProps) {
               <Text style={[styles.td, { width: W.marca }]}>{l.marcaModelo || "—"}</Text>
               <Text style={[styles.td, { width: W.posicion }]}>{l.posicionU || "—"}</Text>
               <Text style={[styles.td, { width: W.cantidad, textAlign: "right" }]}>{l.cantidad}</Text>
+              <Text style={[styles.td, { width: W.bocas, textAlign: "right" }]}>{l.bocasDisponibles ?? "—"}</Text>
               <Text style={[styles.td, { width: W.estado }]}>{l.estado || "—"}</Text>
               <Text style={[styles.td, { width: W.comentario }]}>{l.comentario || "—"}</Text>
             </View>

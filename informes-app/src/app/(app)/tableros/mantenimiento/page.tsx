@@ -3,10 +3,12 @@ import { createClient } from "@/lib/supabase/server";
 import { NuevoMantenimientoForm } from "@/components/tableros/nuevo-mantenimiento-form";
 import { labelUbicacion } from "@/components/ubicaciones/types";
 import type { TableroConCircuitos } from "@/components/tableros/types";
+import type { TableroCategoriaEquipo } from "@/lib/database.types";
 import { fetchTodasLasUbicaciones } from "@/lib/ubicaciones/fetch-todas";
 
-export default async function NuevoMantenimientoPage() {
+export default async function NuevoMantenimientoPage({ searchParams }: { searchParams: Promise<{ tableroId?: string }> }) {
   await requireProfile();
+  const { tableroId } = await searchParams;
   const supabase = await createClient();
 
   const [tablerosRes, circuitosRes, ubicaciones] = await Promise.all([
@@ -14,6 +16,7 @@ export default async function NuevoMantenimientoPage() {
     supabase
       .from("tablero_circuitos")
       .select("id, tablero_id, numero, texto, amp_nominal, categoria_equipo, tipo_circuito")
+      .eq("estado", "activo")
       .order("numero"),
     fetchTodasLasUbicaciones(supabase),
   ]);
@@ -30,6 +33,11 @@ export default async function NuevoMantenimientoPage() {
       ampNominal: c.amp_nominal ?? "",
       categoriaEquipo: c.categoria_equipo,
       tipoCircuito: c.tipo_circuito,
+      cuerpo: "",
+      alimentadoPorUps: false,
+      rolBypassUps: null,
+      padreNumero: null,
+      etiquetaCable: "",
     });
     circuitosPorTablero.set(c.tablero_id, lista);
   }
@@ -45,13 +53,15 @@ export default async function NuevoMantenimientoPage() {
         ubicacionId: t.ubicacion_id,
         ubicacionLabel: labelUbicacion(ubicacion),
         circuitos: circuitosPorTablero.get(t.id) ?? [],
+        equipamientoEsperado: [] as TableroCategoriaEquipo[],
+        tieneBypassUps: false,
       };
     })
     .filter((t): t is TableroConCircuitos => t !== null);
 
   return (
     <div>
-      <NuevoMantenimientoForm tableros={tableros} />
+      <NuevoMantenimientoForm tableros={tableros} tableroIdInicial={tableroId ?? null} />
     </div>
   );
 }

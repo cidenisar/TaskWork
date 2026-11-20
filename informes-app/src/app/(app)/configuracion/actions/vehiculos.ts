@@ -4,7 +4,13 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireAdmin } from "@/lib/auth";
 import { logAudit } from "@/lib/config/audit";
+import { nuevoNumeroGeneracionServiceVehiculo } from "@/lib/mantenimiento/numero-generacion";
+import { renderMantenimientoPdf } from "@/lib/pdf/render";
+import { buildMantenimientoFilename } from "@/lib/pdf/filename";
+import { obtenerDestinatariosAutoEnvio } from "@/lib/email/destinatarios-auto-envio";
+import { enviarPdfPorEmail } from "@/lib/email/enviar-pdf";
 import type { ConfigActionResult } from "./empresa";
+import type { EstadoChecklist } from "@/lib/database.types";
 
 interface VehiculoPayload {
   patente: string;
@@ -15,7 +21,7 @@ interface VehiculoPayload {
 }
 
 function revalidateAll() {
-  revalidatePath("/configuracion");
+  revalidatePath("/panel/vehiculos");
   revalidatePath("/informe-tecnico/nuevo");
 }
 
@@ -101,6 +107,10 @@ interface ServicePayload {
   fecha: string;
   kilometraje: string;
   descripcion: string;
+  /** Control periódico (opcional): lo que quedó en pantalla después de "Leer con IA" en comparar-estado, revisado/corregido por el Admin — ver service-tab.tsx. */
+  estadoGeneral?: string;
+  tieneDanios?: boolean | null;
+  inconsistenciasDetectadas?: string | null;
 }
 
 export async function addServiceAction(formData: FormData): Promise<ConfigActionResult> {
@@ -115,6 +125,25 @@ export async function addServiceAction(formData: FormData): Promise<ConfigAction
   }
 
   const supabase = await createClient();
+
+  const { data: vehiculo } = await supabase.from("catalogo_vehiculos").select("patente, marca_modelo").eq("id", payload.vehiculoId).single();
+
+  let numeroGeneracion = nuevoNumeroGeneracionServiceVehiculo();
+  for (let intento = 0; intento < 5; intento++) {
+    const { data: existente } = await supabase
+      .from("vehiculo_services")
+      .select("id")
+      .eq("numero_generacion", numeroGeneracion)
+      .limit(1)
+      .maybeSingle();
+    if (!existente) break;
+    numeroGeneracion = nuevoNumeroGeneracionServiceVehiculo();
+  }
+
+  const estadoGeneral = payload.estadoGeneral?.trim() || null;
+  const tieneDanios = payload.tieneDanios ?? null;
+  const inconsistenciasDetectadas = payload.inconsistenciasDetectadas?.trim() || null;
+
   const { data: service, error } = await supabase
     .from("vehiculo_services")
     .insert({
@@ -122,6 +151,10 @@ export async function addServiceAction(formData: FormData): Promise<ConfigAction
       fecha: payload.fecha,
       kilometraje: km,
       descripcion: payload.descripcion.trim() || null,
+      numero_generacion: numeroGeneracion,
+      estado_general: estadoGeneral,
+      tiene_danios: tieneDanios,
+      inconsistencias_detectadas: inconsistenciasDetectadas,
       created_by: profile.id,
     })
     .select("id")
@@ -129,15 +162,246 @@ export async function addServiceAction(formData: FormData): Promise<ConfigAction
   if (error || !service) return { success: false, error: error?.message || "No se pudo registrar el service." };
 
   const foto = formData.get("foto");
+  let fotoBuffer: Buffer | null = null;
   if (foto instanceof File && foto.size > 0) {
-    const buffer = Buffer.from(await foto.arrayBuffer());
+    fotoBuffer = Buffer.from(await foto.arrayBuffer());
     const path = `${payload.vehiculoId}/services/${service.id}.jpg`;
-    const { error: upErr } = await supabase.storage.from("vehiculo-docs").upload(path, buffer, { contentType: "image/jpeg", upsert: true });
-    if (!upErr) await supabase.from("vehiculo_services").update({ foto_url: path }).eq("id", service.id);
+    const { error: upErr } = await supabase.storage.from("vehiculo-docs").upload(path, fotoBuffer, { contentType: "image/jpeg", upsert: true });
+    if (!upErr) {
+      await supabase.from("vehiculo_services").update({ foto_url: path }).eq("id", service.id);
+    } else {
+      fotoBuffer = null;
+    }
   }
 
-  const { data: vehiculo } = await supabase.from("catalogo_vehiculos").select("patente").eq("id", payload.vehiculoId).single();
-  await logAudit(supabase, profile, `Registró un service para "${vehiculo?.patente ?? payload.vehiculoId}" (${km.toLocaleString("es-AR")} km)`);
+  // Fotos del control periódico (opcional, distintas de "foto" de arriba,
+  // que es la del trabajo de service en sí) — quedan como la referencia
+  // contra la que se compara el PRÓXIMO control (ver comparar-estado).
+  const fotosExterior = formData.getAll("fotosExterior").filter((f): f is File => f instanceof File && f.size > 0);
+  if (fotosExterior.length > 0) {
+    const urls: string[] = [];
+    for (let i = 0; i < fotosExterior.length; i++) {
+      const buffer = Buffer.from(await fotosExterior[i].arrayBuffer());
+      const path = `${payload.vehiculoId}/control-${service.id}-${i + 1}.jpg`;
+      const { error: upErr } = await supabase.storage.from("vehiculo-docs").upload(path, buffer, { contentType: "image/jpeg", upsert: true });
+      if (!upErr) urls.push(path);
+    }
+    if (urls.length > 0) await supabase.from("vehiculo_services").update({ fotos_exterior_urls: urls }).eq("id", service.id);
+  }
+
+  const contextoLabel = [vehiculo?.patente, vehiculo?.marca_modelo].filter(Boolean).join(" — ") || payload.vehiculoId;
+
+  const { data: config } = await supabase.from("config_general").select("logo_empresa_url").eq("id", 1).single();
+  let logoBuffer: Buffer | null = null;
+  if (config?.logo_empresa_url) {
+    try {
+      const res = await fetch(config.logo_empresa_url);
+      if (res.ok) logoBuffer = Buffer.from(await res.arrayBuffer());
+    } catch {
+      // seguimos sin logo antes que fallar la generación del PDF
+    }
+  }
+
+  const descripcionPdf = [
+    payload.descripcion.trim() || null,
+    estadoGeneral ? `Estado detectado: ${estadoGeneral}` : null,
+    inconsistenciasDetectadas ? `⚠ Distinto respecto del control anterior: ${inconsistenciasDetectadas}` : null,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+
+  const pdfBuffer = await renderMantenimientoPdf({
+    numeroGeneracion,
+    documentoLabel: "SERVICE DE VEHÍCULO",
+    contextoLabel,
+    region: null,
+    provincia: null,
+    localidad: null,
+    sitio: null,
+    planta: null,
+    oficina: null,
+    fecha: payload.fecha,
+    descripcion: descripcionPdf || null,
+    kilometraje: km,
+    proximoMantenimiento: null,
+    checklist: null,
+    fotoBuffer,
+    logoBuffer,
+    appName: "TaskWork",
+    realizoNombre: profile.nombreCompleto,
+  });
+  const pdfFilename = buildMantenimientoFilename({ numeroGeneracion, contexto: contextoLabel });
+  const pdfPath = `${payload.vehiculoId}/services/${service.id}/${pdfFilename}`;
+  const { error: pdfUpErr } = await supabase.storage
+    .from("informes-pdf")
+    .upload(pdfPath, pdfBuffer, { contentType: "application/pdf", upsert: true });
+  if (!pdfUpErr) {
+    await supabase.from("vehiculo_services").update({ pdf_url: pdfPath, pdf_generado_at: new Date().toISOString() }).eq("id", service.id);
+
+    const destinatarios = await obtenerDestinatariosAutoEnvio(supabase);
+    if (destinatarios.length > 0) {
+      await enviarPdfPorEmail({
+        to: destinatarios,
+        asunto: `${inconsistenciasDetectadas ? "⚠ " : ""}Service de Vehículo ${numeroGeneracion} — ${contextoLabel}`,
+        texto: inconsistenciasDetectadas
+          ? `Se registró un service para "${contextoLabel}" (${numeroGeneracion}) — la IA detectó algo distinto respecto del control anterior: ${inconsistenciasDetectadas}. Se adjunta el PDF.`
+          : `Se registró un service para "${contextoLabel}" (${numeroGeneracion}). Se adjunta el PDF.`,
+        pdfBuffer,
+        filename: pdfFilename,
+      });
+    }
+  }
+
+  await logAudit(
+    supabase,
+    profile,
+    `Registró un service para "${vehiculo?.patente ?? payload.vehiculoId}" (${km.toLocaleString("es-AR")} km)` +
+      (inconsistenciasDetectadas ? ` — IA detectó: ${inconsistenciasDetectadas}` : ""),
+  );
   revalidateAll();
+  return { success: true };
+}
+
+interface AltaVehiculoPayload {
+  patente: string;
+  marcaModelo: string;
+  kilometrajeActual: string;
+  estadoGeneral: string;
+  tieneDanios: boolean | null;
+  hallazgos?: { itemId: string; estado: EstadoChecklist; comentario: string }[];
+}
+
+export interface AltaVehiculoResult extends ConfigActionResult {
+  vehiculoId?: string;
+}
+
+/**
+ * Alta de vehículo (IA): mismo flujo de siempre (la IA lee, el Admin
+ * revisa/corrige, los campos finales son los que llegan en el payload,
+ * nunca lo que devolvió la IA sin pasar por acá). Las fotos NO van acá —
+ * se suben aparte, en tandas chicas, con `agregarFotosVehiculoAction` (ver
+ * el comentario de esa función para el motivo: juntar hasta 14 fotos en el
+ * mismo pedido que esto puede superar el límite de tamaño de request que
+ * la plataforma le impone a una función, incluso con `bodySizeLimit` de
+ * Next.js configurado más alto — el pedido se corta antes de llegar acá,
+ * sin crear nada y sin dejar rastro en los logs de la app).
+ */
+export async function altaVehiculoAction(formData: FormData): Promise<AltaVehiculoResult> {
+  const profile = await requireAdmin();
+  const raw = formData.get("payload");
+  if (typeof raw !== "string") return { success: false, error: "Datos inválidos." };
+  const payload: AltaVehiculoPayload = JSON.parse(raw);
+
+  const patente = payload.patente.trim().toUpperCase();
+  if (!patente) return { success: false, error: "Falta la patente." };
+
+  const supabase = await createClient();
+  const { data: vehiculo, error } = await supabase
+    .from("catalogo_vehiculos")
+    .insert({
+      patente,
+      marca_modelo: payload.marcaModelo.trim() || null,
+      kilometraje_actual: payload.kilometrajeActual ? Number(payload.kilometrajeActual) : null,
+      estado_alta: payload.estadoGeneral.trim() || null,
+      tiene_danios_alta: payload.tieneDanios,
+    })
+    .select("id")
+    .single();
+
+  if (error || !vehiculo) {
+    return { success: false, error: error?.code === "23505" ? "Ya existe un vehículo con esa patente." : error?.message };
+  }
+
+  // Inspección IA (opcional): solo los ítems que el Admin confirmó/corrigió
+  // (estado no nulo) — ver catalogo_inspeccion_ia (modulo="vehiculos").
+  if (payload.hallazgos && payload.hallazgos.length > 0) {
+    await supabase.from("inspeccion_ia_hallazgos").insert(
+      payload.hallazgos.map((h) => ({
+        modulo: "vehiculos" as const,
+        registro_id: vehiculo.id,
+        item_id: h.itemId,
+        estado: h.estado,
+        comentario: h.comentario.trim() || null,
+      })),
+    );
+  }
+
+  await logAudit(supabase, profile, `Dio de alta el vehículo "${patente}" (IA)`);
+  revalidateAll();
+  return { success: true, vehiculoId: vehiculo.id };
+}
+
+export interface AgregarFotosVehiculoResult extends ConfigActionResult {
+  subidas?: number;
+}
+
+/**
+ * Sube UNA tanda chica de fotos (el cliente la llama varias veces seguidas,
+ * de a pocas fotos por vez) a la galería del vehículo — nunca todas las
+ * fotos de exterior+interior juntas en un solo pedido. El motivo es un
+ * límite de tamaño de request a nivel de la plataforma de hosting, que no
+ * se puede subir desde la configuración de la app: con varias fotos reales
+ * (hasta 8 de exterior + 6 de interior) el pedido combinado puede superarlo
+ * — ahí el pedido se corta ANTES de ejecutar este código, sin tirar ningún
+ * error capturable ni dejar nada guardado, y en el cliente se ve como un
+ * genérico "unexpected response" sin pista de la causa real. Mandando pocas
+ * fotos por pedido, cada uno queda bien por debajo de cualquier límite
+ * razonable sin importar cuántas fotos saque el técnico en total.
+ */
+export async function agregarFotosVehiculoAction(formData: FormData): Promise<AgregarFotosVehiculoResult> {
+  await requireAdmin();
+  const vehiculoId = formData.get("vehiculoId");
+  const carpetaRaw = formData.get("carpeta");
+  if (typeof vehiculoId !== "string" || !vehiculoId) return { success: false, error: "Falta el vehículo." };
+  if (carpetaRaw !== "exterior" && carpetaRaw !== "interior") return { success: false, error: "Lote de fotos inválido." };
+  const carpeta = carpetaRaw;
+
+  const fotos = formData.getAll("fotos").filter((f): f is File => f instanceof File && f.size > 0);
+  if (fotos.length === 0) return { success: true, subidas: 0 };
+
+  const supabase = await createClient();
+  const { data: actual } = await supabase
+    .from("catalogo_vehiculos")
+    .select("fotos_exterior_urls, fotos_interior_urls")
+    .eq("id", vehiculoId)
+    .single();
+  const yaSubidas: string[] = (carpeta === "exterior" ? actual?.fotos_exterior_urls : actual?.fotos_interior_urls) ?? [];
+
+  const nuevasUrls: string[] = [];
+  for (let i = 0; i < fotos.length; i++) {
+    const buffer = Buffer.from(await fotos[i].arrayBuffer());
+    const path = `${vehiculoId}/${carpeta}-${yaSubidas.length + nuevasUrls.length + 1}.jpg`;
+    const { error: upErr } = await supabase.storage.from("vehiculo-docs").upload(path, buffer, { contentType: "image/jpeg", upsert: true });
+    if (!upErr) nuevasUrls.push(path);
+  }
+  if (nuevasUrls.length === 0) return { success: false, error: "No se pudo subir ninguna foto de esta tanda." };
+
+  const todasLasUrls = [...yaSubidas, ...nuevasUrls];
+  const { error } = await supabase
+    .from("catalogo_vehiculos")
+    .update(carpeta === "exterior" ? { fotos_exterior_urls: todasLasUrls } : { fotos_interior_urls: todasLasUrls })
+    .eq("id", vehiculoId);
+  if (error) return { success: false, error: error.message };
+
+  revalidateAll();
+  return { success: true, subidas: nuevasUrls.length };
+}
+
+/**
+ * Cada cuántos días le toca un control periódico a un vehículo (igual para
+ * toda la flota, mismo criterio que los supuestos de PDM) — ver
+ * lib/config/fleet-alerts.ts.
+ */
+export async function guardarFrecuenciaControlVehiculosAction(frecuenciaDias: string): Promise<ConfigActionResult> {
+  const profile = await requireAdmin();
+  const dias = Number(frecuenciaDias);
+  if (!Number.isFinite(dias) || dias <= 0) return { success: false, error: "La frecuencia tiene que ser un número de días mayor a 0." };
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("config_general").update({ vehiculo_control_frecuencia_dias: Math.round(dias) }).eq("id", 1);
+  if (error) return { success: false, error: error.message };
+
+  await logAudit(supabase, profile, `Actualizó la frecuencia de control periódico de vehículos a ${Math.round(dias)} días`);
+  revalidatePath("/panel/vehiculos");
   return { success: true };
 }

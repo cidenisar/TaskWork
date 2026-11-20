@@ -1,0 +1,214 @@
+"use server";
+
+import { createClient } from "@/lib/supabase/server";
+import { requireProfile } from "@/lib/auth";
+import { nuevoNumeroGeneracionSala } from "@/lib/salas/numero-generacion";
+import { renderSalaPdf } from "@/lib/pdf/render";
+import { buildSalaFilename } from "@/lib/pdf/filename";
+import { resolverUbicacionId, tagGpsSiFalta, type PayloadUbicacionNueva, type PayloadGps } from "@/lib/ubicaciones/resolver";
+import { obtenerDestinatariosAutoEnvio } from "@/lib/email/destinatarios-auto-envio";
+import { enviarPdfPorEmail } from "@/lib/email/enviar-pdf";
+import { lineasDeTareas } from "@/lib/tareas/puro";
+import { SALA_FOTO_GENERAL_MAX } from "@/components/salas/types";
+import type { EstadoChecklist, SalaTipoConstruccion } from "@/lib/database.types";
+
+interface PayloadHallazgo {
+  itemId: string;
+  estado: EstadoChecklist;
+  comentario: string;
+}
+
+export interface CrearSalaPayload {
+  ubicacionId: string | null;
+  ubicacionNueva: PayloadUbicacionNueva | null;
+  gps: PayloadGps | null;
+  denominacion: string;
+  tipoConstruccion: SalaTipoConstruccion;
+  fecha: string;
+  /** Inspección IA: solo los puntos que quien releva confirmó o corrigió. */
+  hallazgos?: PayloadHallazgo[];
+  /** Otras cosas para reparar o mejorar (una por línea; acepta viñetas). */
+  observaciones?: string;
+  /** Rutas (en el bucket informe-fotos) de las fotos que el navegador ya subió: no viajan en el pedido (límite de ~4,5 MB). */
+  fotosTmp?: string[];
+}
+
+export interface CrearSalaResult {
+  success: boolean;
+  error?: string;
+  salaId?: string;
+  numeroGeneracion?: string;
+  pdfUrl?: string | null;
+}
+
+export async function crearSalaAction(formData: FormData): Promise<CrearSalaResult> {
+  const profile = await requireProfile();
+
+  const raw = formData.get("payload");
+  if (typeof raw !== "string") return { success: false, error: "Faltan datos de la sala." };
+  let payload: CrearSalaPayload;
+  try {
+    payload = JSON.parse(raw);
+  } catch {
+    return { success: false, error: "Faltan datos de la sala." };
+  }
+  if (!payload.denominacion.trim()) return { success: false, error: "Falta la denominación de la sala." };
+  if (!payload.tipoConstruccion) return { success: false, error: "Falta el tipo de construcción." };
+  if (!payload.fecha) return { success: false, error: "Falta la fecha." };
+
+  const supabase = await createClient();
+
+  const ubicacion = await resolverUbicacionId(supabase, payload, profile.id, "la sala");
+  if ("error" in ubicacion) return { success: false, error: ubicacion.error };
+  const ubicacionId = ubicacion.id;
+
+  const { data: ubicacionRow, error: ubicacionReadErr } = await supabase
+    .from("ubicaciones")
+    .select("region, provincia, localidad, sitio, planta, oficina")
+    .eq("id", ubicacionId)
+    .single();
+  if (ubicacionReadErr || !ubicacionRow) return { success: false, error: "No se encontró la ubicación." };
+  await tagGpsSiFalta(supabase, ubicacionId, payload.gps, profile.id);
+
+  let numeroGeneracion = nuevoNumeroGeneracionSala();
+  let salaId: string | null = null;
+  for (let attempt = 0; attempt < 5 && !salaId; attempt++) {
+    const { data, error } = await supabase
+      .from("salas")
+      .insert({
+        ubicacion_id: ubicacionId,
+        denominacion: payload.denominacion.trim(),
+        tipo_construccion: payload.tipoConstruccion,
+        numero_generacion: numeroGeneracion,
+        created_by: profile.id,
+      })
+      .select("id")
+      .single();
+    if (error) {
+      if (error.code === "23505") {
+        numeroGeneracion = nuevoNumeroGeneracionSala();
+        continue;
+      }
+      return { success: false, error: `No se pudo guardar la sala: ${error.message}` };
+    }
+    salaId = data!.id;
+  }
+  if (!salaId) return { success: false, error: "No se pudo asignar un número de generación único. Probá de nuevo." };
+
+  // Inspección IA (opcional): puntos confirmados del catálogo y observaciones libres.
+  const observaciones = lineasDeTareas(payload.observaciones);
+  if (payload.hallazgos && payload.hallazgos.length > 0) {
+    await supabase.from("inspeccion_ia_hallazgos").insert(
+      payload.hallazgos.map((h) => ({
+        modulo: "salas" as const,
+        registro_id: salaId!,
+        item_id: h.itemId,
+        estado: h.estado,
+        comentario: h.comentario.trim() || null,
+      })),
+    );
+  }
+  if (observaciones.length > 0) {
+    await supabase.from("salas").update({ observaciones: observaciones.join("\n") }).eq("id", salaId);
+  }
+
+  // Fotos generales (opcional): se leen antes de generar el PDF para poder adjuntarlas ahí.
+  // Las fotos ya las subió el navegador directo al almacenamiento (ruta temporal propia): acá se leen de ahí, se
+  // guardan en su lugar definitivo y se borran las temporales. Solo se aceptan rutas de la carpeta propia del usuario.
+  const prefijoTmp = `${profile.id}/salas/tmp/`;
+  const rutasTmp = (payload.fotosTmp ?? [])
+    .filter((r) => typeof r === "string" && r.startsWith(prefijoTmp) && !r.includes(".."))
+    .slice(0, SALA_FOTO_GENERAL_MAX);
+  const descargadas: (Buffer | null)[] = await Promise.all(
+    rutasTmp.map(async (ruta): Promise<Buffer | null> => {
+      const { data } = await supabase.storage.from("informe-fotos").download(ruta);
+      return data ? Buffer.from(await data.arrayBuffer()) : null;
+    }),
+  );
+  const fotosGeneralesBuffers: Buffer[] = descargadas.filter((b): b is Buffer => b !== null);
+  // Se suben en paralelo a su lugar definitivo (el orden se conserva).
+  const subidas = await Promise.all(
+    fotosGeneralesBuffers.map(async (buffer, i) => {
+      const fotoPath = `${profile.id}/salas/${salaId}/general-${i + 1}.jpg`;
+      const { error: fotoUpErr } = await supabase.storage.from("informe-fotos").upload(fotoPath, buffer, { contentType: "image/jpeg", upsert: true });
+      return fotoUpErr ? null : fotoPath;
+    }),
+  );
+  const fotosGeneralesUrls: string[] = subidas.filter((p): p is string => p !== null);
+  if (rutasTmp.length > 0) await supabase.storage.from("informe-fotos").remove(rutasTmp); // best-effort: las temporales ya no hacen falta
+  if (fotosGeneralesUrls.length > 0) {
+    await supabase.from("salas").update({ fotos_generales_urls: fotosGeneralesUrls }).eq("id", salaId);
+  }
+
+  const { data: config } = await supabase.from("config_general").select("logo_empresa_url").eq("id", 1).single();
+  let logoBuffer: Buffer | null = null;
+  if (config?.logo_empresa_url) {
+    try {
+      const res = await fetch(config.logo_empresa_url);
+      if (res.ok) logoBuffer = Buffer.from(await res.arrayBuffer());
+    } catch {
+      // seguimos sin logo antes que fallar la generación del PDF
+    }
+  }
+
+  const hallazgosConfirmados = (payload.hallazgos ?? []).filter((h) => h.estado);
+  let hallazgosPdf: { texto: string; estado: EstadoChecklist; comentario: string | null }[] = [];
+  if (hallazgosConfirmados.length > 0) {
+    const { data: hallazgosCatalogo } = await supabase
+      .from("catalogo_inspeccion_ia")
+      .select("id, texto")
+      .in(
+        "id",
+        hallazgosConfirmados.map((h) => h.itemId),
+      );
+    const textoPorId = new Map((hallazgosCatalogo ?? []).map((h) => [h.id, h.texto]));
+    hallazgosPdf = hallazgosConfirmados
+      .map((h) => ({ texto: textoPorId.get(h.itemId), estado: h.estado, comentario: h.comentario.trim() || null }))
+      .filter((h): h is { texto: string; estado: EstadoChecklist; comentario: string | null } => !!h.texto);
+  }
+
+  const pdfBuffer = await renderSalaPdf({
+    numeroGeneracion,
+    region: ubicacionRow.region,
+    provincia: ubicacionRow.provincia,
+    localidad: ubicacionRow.localidad,
+    sitio: ubicacionRow.sitio,
+    planta: ubicacionRow.planta,
+    oficina: ubicacionRow.oficina,
+    denominacion: payload.denominacion.trim(),
+    tipoConstruccion: payload.tipoConstruccion,
+    fecha: payload.fecha,
+    fotosGeneralesBuffers: fotosGeneralesBuffers.length > 0 ? fotosGeneralesBuffers : null,
+    hallazgos: hallazgosPdf,
+    observaciones,
+    logoBuffer,
+    appName: "TaskWork",
+    realizoNombre: profile.nombreCompleto,
+  });
+
+  const pdfFilename = buildSalaFilename({ numeroGeneracion, denominacion: payload.denominacion.trim(), sitio: ubicacionRow.sitio });
+  const pdfPath = `${profile.id}/salas/${salaId}/${pdfFilename}`;
+  const { error: pdfUpErr } = await supabase.storage
+    .from("informes-pdf")
+    .upload(pdfPath, pdfBuffer, { contentType: "application/pdf", upsert: true });
+
+  let pdfUrl: string | null = null;
+  if (!pdfUpErr) {
+    await supabase.from("salas").update({ pdf_url: pdfPath, pdf_generado_at: new Date().toISOString() }).eq("id", salaId);
+    const { data: signed } = await supabase.storage.from("informes-pdf").createSignedUrl(pdfPath, 60 * 60);
+    pdfUrl = signed?.signedUrl ?? null;
+
+    const destinatarios = await obtenerDestinatariosAutoEnvio(supabase);
+    if (destinatarios.length > 0) {
+      await enviarPdfPorEmail({
+        to: destinatarios,
+        asunto: `Sala ${numeroGeneracion} — ${payload.denominacion.trim()}`,
+        texto: `Se registró la sala "${payload.denominacion.trim()}" (${numeroGeneracion}). Se adjunta el PDF.`,
+        pdfBuffer,
+        filename: pdfFilename,
+      });
+    }
+  }
+
+  return { success: true, salaId, numeroGeneracion, pdfUrl };
+}

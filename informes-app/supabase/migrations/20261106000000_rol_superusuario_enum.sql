@@ -1,0 +1,26 @@
+-- ============================================================================
+-- Nuevo rol 'superusuario' — por ENCIMA de Admin, no al costado: tiene todo lo
+-- que ya tiene Admin (is_admin()/is_admin_or_supervisor() pasan a incluirlo,
+-- ver la migración siguiente) MÁS las acciones más irreversibles, que Admin
+-- deja de poder hacer:
+-- - Los 9 "Eliminar" de Historial (tableros, racks, torres, equipos, salas,
+--   informes, rendiciones, bajas, entregas a depósito) — ver
+--   vaciarDatosPruebaAction y cada eliminarXAction, que pasan de
+--   requireAdmin() a requireSuperusuario().
+-- - "Vaciar datos de prueba".
+-- - Borrado real de un usuario (nuevo, no existía — hasta ahora solo había
+--   Desactivar/Reactivar).
+--
+-- El motivo de agregarlo como ENUM VALUE nuevo (no una tabla de permisos
+-- aparte) es seguir el mismo patrón ya usado para 'tecnico'/'supervisor'/
+-- 'admin' — todo el resto de la app ya razona sobre `Rol` como un string
+-- literal cerrado, no hay un sistema de permisos granular que valga la pena
+-- generalizar para un solo rol más.
+--
+-- Partido en su propia migración (no junto con las funciones que lo usan)
+-- porque Postgres no permite usar un enum value nuevo en la misma
+-- transacción en la que se lo agrega (error 55P04: "unsafe use of new value
+-- ... New enum values must be committed before they can be used").
+-- ============================================================================
+
+alter type public.rol add value 'superusuario';

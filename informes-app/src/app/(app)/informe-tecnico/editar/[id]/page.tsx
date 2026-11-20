@@ -3,6 +3,7 @@ import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { EditarInformeTecnicoWizard } from "@/components/informe-tecnico/wizard-editar";
 import { fetchTodasLasUbicaciones } from "@/lib/ubicaciones/fetch-todas";
+import { conVinetas, lineasDeTareas } from "@/lib/tareas/puro";
 
 export default async function EditarInformePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -30,7 +31,6 @@ export default async function EditarInformePage({ params }: { params: Promise<{ 
     tecnicosRes,
     torresRes,
     vehiculosCatRes,
-    configRes,
   ] = await Promise.all([
     supabase.from("informe_tecnicos_asignados").select("tecnico_nombre, torre, es_tecnico_seguridad").eq("informe_id", id),
     supabase.from("informe_vehiculos").select("patente, marca_modelo").eq("informe_id", id),
@@ -42,7 +42,6 @@ export default async function EditarInformePage({ params }: { params: Promise<{ 
     supabase.from("profiles").select("nombre_completo, torre").eq("activo", true).order("nombre_completo"),
     supabase.from("catalogo_torres").select("nombre").order("nombre"),
     supabase.from("catalogo_vehiculos").select("patente, marca_modelo").order("patente"),
-    supabase.from("config_general").select("logo_empresa_url").eq("id", 1).single(),
   ]);
 
   // Si el informe ya tiene una Ubicación estructurada (ubicacion_id), se
@@ -75,7 +74,8 @@ export default async function EditarInformePage({ params }: { params: Promise<{ 
           oficinaNueva: "",
           gps: null,
           descripcionTrabajo: informe.descripcion_trabajo ?? "",
-          tareasPendientes: informe.tareas_pendientes ?? "",
+          tareasPendientes: conVinetas(lineasDeTareas(informe.tareas_pendientes)),
+          tareasResueltasIds: [],
         }}
         initialTecnicos={(asignadosRes.data ?? []).map((t) => ({
           nombre: t.tecnico_nombre,
@@ -94,8 +94,8 @@ export default async function EditarInformePage({ params }: { params: Promise<{ 
           tecnicos: (tecnicosRes.data ?? []).map((t) => ({ nombre: t.nombre_completo, torre: t.torre })),
           torres: (torresRes.data ?? []).map((t) => t.nombre),
           vehiculos: (vehiculosCatRes.data ?? []).map((v) => ({ patente: v.patente, marcaModelo: v.marca_modelo })),
+          recursoAlturaConfig: [], // editar un informe no toca materiales (ver wizard-editar.tsx) — no hace falta cargarlo acá
         }}
-        logoUrl={configRes.data?.logo_empresa_url ?? null}
       />
     </div>
   );

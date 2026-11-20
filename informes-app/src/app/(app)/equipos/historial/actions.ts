@@ -1,8 +1,10 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
-import { requireProfile } from "@/lib/auth";
+import { revalidatePath } from "next/cache";
+import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
+import { requireProfile, requireSuperusuario } from "@/lib/auth";
 import { filenameDesdeStoragePath } from "@/lib/pdf/filename";
+import { eliminarRegistroConArchivos, type EliminarResult } from "@/lib/admin/eliminar-registro";
 
 export interface UrlArchivoResult {
   url: string | null;
@@ -48,4 +50,31 @@ export async function obtenerUrlFotoGeneralEquiposAction(relevamientoId: string)
     return { url: null, error: "No se pudo generar el link de la foto." };
   }
   return { url: signed.signedUrl };
+}
+
+/** Solo Administrador. Borra el relevamiento, sus lecturas (cascada por FK) y el PDF/foto del storage. */
+export async function eliminarRelevamientoEquiposAction(relevamientoId: string): Promise<EliminarResult> {
+  const profile = await requireSuperusuario();
+  const service = createServiceRoleClient();
+
+  const { data: relevamiento } = await service
+    .from("equipo_relevamientos")
+    .select("pdf_url, foto_general_url, numero_generacion")
+    .eq("id", relevamientoId)
+    .single();
+
+  const resultado = await eliminarRegistroConArchivos(
+    service,
+    profile,
+    "equipo_relevamientos",
+    relevamientoId,
+    [
+      { bucket: "informes-pdf", path: relevamiento?.pdf_url ?? null },
+      { bucket: "informe-fotos", path: relevamiento?.foto_general_url ?? null },
+    ],
+    `Eliminó el relevamiento de equipos ${relevamiento?.numero_generacion ?? relevamientoId}`,
+  );
+  // Revalida TODA la app — este equipo puede seguir mostrado (stale) en la ficha de sitio, el Panel o el mapa.
+  if (resultado.success) revalidatePath("/", "layout");
+  return resultado;
 }

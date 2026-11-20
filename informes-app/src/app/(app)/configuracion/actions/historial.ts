@@ -33,6 +33,16 @@ export async function setRecordatorioSemanalAction(activo: boolean): Promise<Con
   return { success: true };
 }
 
+export async function setLiberacionAutomaticaAction(activo: boolean): Promise<ConfigActionResult> {
+  const profile = await requireAdmin();
+  const supabase = await createClient();
+  const { error } = await supabase.from("config_general").update({ liberacion_automatica_activa: activo }).eq("id", 1);
+  if (error) return { success: false, error: error.message };
+  await logAudit(supabase, profile, `${activo ? "Activó" : "Desactivó"} la liberación automática de PDFs viejos del storage`);
+  revalidatePath("/configuracion");
+  return { success: true };
+}
+
 export async function setResumenSemanalIaAction(activo: boolean): Promise<ConfigActionResult> {
   const profile = await requireAdmin();
   const supabase = await createClient();

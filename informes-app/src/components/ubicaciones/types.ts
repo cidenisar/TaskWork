@@ -26,3 +26,16 @@ export function labelUbicacion(u: Ubicacion): string {
   }
   return partes.join(" · ");
 }
+
+/**
+ * Solo el nivel más específico (Oficina > Planta > Sitio) — para cuando el
+ * recorrido hasta ahí ya se muestra aparte (breadcrumb de Vista General) y
+ * repetirlo en el título sería redundante.
+ */
+export function labelSitioFino(u: Ubicacion): string {
+  for (const nivel of [u.oficina, u.planta, u.sitio]) {
+    const v = nivel?.trim();
+    if (v) return v;
+  }
+  return u.sitio;
+}
