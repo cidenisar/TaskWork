@@ -187,6 +187,7 @@ export function EditarRelevamientoEquiposForm({
           onOficinaNuevaChange={setOficinaNueva}
           onGpsCapturado={setGps}
           disabled={submitting}
+          mostrarTodosLosNiveles
         />
         <div className="field">
           <label>Fecha</label>

@@ -159,6 +159,7 @@ export function EditarRelevamientoSalaForm({
           onOficinaNuevaChange={setOficinaNueva}
           onGpsCapturado={setGps}
           disabled={submitting}
+          mostrarTodosLosNiveles
         />
       </div>
 

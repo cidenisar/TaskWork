@@ -59,6 +59,7 @@ export function UbicacionFields({
   onGpsCapturado,
   disabled,
   requerido = true,
+  mostrarTodosLosNiveles = false,
 }: {
   ubicaciones: Ubicacion[];
   provincias: string[];
@@ -78,6 +79,12 @@ export function UbicacionFields({
   disabled?: boolean;
   /** false para módulos donde la ubicación es opcional (Informe Técnico, Rendición de Gastos) — no muestra los asteriscos de obligatorio. */
   requerido?: boolean;
+  /**
+   * En las pantallas de edición: muestra SIEMPRE los desplegables de Planta y Oficina (con lo que ya está cargado y la opción
+   * de crear una nueva), aunque el sitio tenga una sola. Sin esto, un sitio con una sola planta/oficina solo muestra un botón
+   * "agregar" y no se ve qué hay cargado ni se puede elegir otra.
+   */
+  mostrarTodosLosNiveles?: boolean;
 }) {
   const [gpsBusy, setGpsBusy] = useState(false);
   const [gpsError, setGpsError] = useState<string | null>(null);
@@ -136,9 +143,13 @@ export function UbicacionFields({
     return lista.sort((a, b) => a.localeCompare(b));
   }, [filasDelSitio]);
 
+  // "" significa dos cosas: "todavía no eligió planta" o "la planta elegida es la fila sin planta cargada". Es la segunda cuando
+  // el sitio tiene una sola planta y es esa fila sin nombre.
+  const plantaDefinida = plantaEl !== "" || (!!sitioEl && sitioEl !== "__new" && plantasDelSitio.length === 1 && plantasDelSitio[0] === SIN_VALOR);
+
   const filasDeLaPlanta = useMemo(
-    () => (plantaEl && plantaEl !== "__new" ? filasDelSitio.filter((u) => (u.planta ?? SIN_VALOR) === plantaEl) : []),
-    [filasDelSitio, plantaEl],
+    () => (plantaDefinida && plantaEl !== "__new" ? filasDelSitio.filter((u) => (u.planta ?? SIN_VALOR) === plantaEl) : []),
+    [filasDelSitio, plantaEl, plantaDefinida],
   );
 
   const oficinasDeLaPlanta = useMemo(() => {
@@ -338,7 +349,7 @@ export function UbicacionFields({
           />
         </div>
       )}
-      {sitioEl && sitioEl !== "__new" && plantasDelSitio.length > 1 && (
+      {sitioEl && sitioEl !== "__new" && (plantasDelSitio.length > 1 || mostrarTodosLosNiveles) && (
         <div className="field">
           <label>Planta</label>
           <FilterableSelect
@@ -353,7 +364,7 @@ export function UbicacionFields({
           />
         </div>
       )}
-      {sitioEl && sitioEl !== "__new" && plantaEl !== "__new" && plantasDelSitio.length <= 1 && oficinaEl !== "__new" && (
+      {sitioEl && sitioEl !== "__new" && plantaEl !== "__new" && plantasDelSitio.length <= 1 && !mostrarTodosLosNiveles && oficinaEl !== "__new" && (
         <div className="field">
           <button type="button" className="ai-btn" disabled={disabled} onClick={() => elegirPlanta("__new")}>
             + Agregar una planta u oficina nueva en este sitio
@@ -403,7 +414,7 @@ export function UbicacionFields({
           )}
         </div>
       )}
-      {plantaEl && plantaEl !== "__new" && oficinasDeLaPlanta.length > 1 && (
+      {plantaDefinida && plantaEl !== "__new" && (oficinasDeLaPlanta.length > 1 || mostrarTodosLosNiveles) && (
         <div className="field">
           <label>Oficina</label>
           <FilterableSelect
@@ -418,7 +429,7 @@ export function UbicacionFields({
           />
         </div>
       )}
-      {plantaEl && plantaEl !== "__new" && oficinaEl !== "__new" && oficinasDeLaPlanta.length <= 1 && (
+      {plantaDefinida && plantaEl !== "__new" && oficinaEl !== "__new" && oficinasDeLaPlanta.length <= 1 && !mostrarTodosLosNiveles && (
         <div className="field">
           <button type="button" className="ai-btn" disabled={disabled} onClick={() => elegirOficina("__new")}>
             + Agregar una oficina nueva en esta planta

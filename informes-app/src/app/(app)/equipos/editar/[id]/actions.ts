@@ -75,7 +75,7 @@ export async function actualizarRelevamientoEquiposAction(
 
   const { data: relevamientoActual, error: fetchErr } = await service
     .from("equipo_relevamientos")
-    .select("numero_generacion, pdf_url, foto_general_url, created_by")
+    .select("numero_generacion, pdf_url, foto_general_url, created_by, ubicacion_id")
     .eq("id", relevamientoId)
     .single();
   if (fetchErr || !relevamientoActual) return { success: false, error: "No se encontró el relevamiento." };
@@ -99,6 +99,19 @@ export async function actualizarRelevamientoEquiposAction(
   if (ubicacionReadErr || !ubicacionRow) return { success: false, error: "No se encontró la ubicación." };
 
   await service.from("equipo_relevamientos").update({ ubicacion_id: ubicacionId, fecha: payload.fecha }).eq("id", relevamientoId);
+
+  // Cambiar la ubicación del relevamiento también tiene que mover sus equipos: la ficha del sitio, Baterías y el resto de la app
+  // los ubican por `equipos.ubicacion_id`, no por el relevamiento. Solo se mueven los que siguen en la ubicación vieja del
+  // relevamiento (uno que ya se reinstaló en otro lado después no se toca).
+  if (relevamientoActual.ubicacion_id !== ubicacionId) {
+    const idsAMover = vigentes.map((l) => l.equipoId);
+    const { error: moverErr } = await service
+      .from("equipos")
+      .update({ ubicacion_id: ubicacionId })
+      .in("id", idsAMover)
+      .eq("ubicacion_id", relevamientoActual.ubicacion_id);
+    if (moverErr) return { success: false, error: `No se pudieron mover los equipos a la ubicación nueva: ${moverErr.message}` };
+  }
 
   for (const l of payload.lecturas) {
     if (l.eliminada) {
