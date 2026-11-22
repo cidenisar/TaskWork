@@ -102,6 +102,10 @@ export interface PanelViajeActivo {
   destino: string;
   fechaHora: string;
   estado: EstadoViaje;
+  /** Cuándo salió — null si no quedó registrado. Para calcular si se demora (ver lib/riesgo-viaje/demora). */
+  iniciadoAt: string | null;
+  /** Hora estimada de llegada — null en las evaluaciones anteriores a ese campo. */
+  llegadaEstimadaAt: string | null;
 }
 
 /** Quién está de guardia AHORA en cada área (General/Infraestructura/Datos/Enlaces) — ver guardiaDe en lib/guardia/cronograma.ts. null = sin asignar. */
@@ -209,7 +213,7 @@ export async function getPanelOverview(supabase: Supabase, incluirVencimientosPe
     supabase.from("bajas_equipamiento").select("id", { count: "exact", head: true }),
     supabase
       .from("evaluaciones_riesgo_viaje")
-      .select("id, vehiculo_id, conductor_nombre, origen, destino, fecha_hora, estado_viaje")
+      .select("id, vehiculo_id, conductor_nombre, origen, destino, fecha_hora, estado_viaje, iniciado_at, llegada_estimada_at")
       .in("estado_viaje", ["iniciado", "en_punto_medio"])
       .order("fecha_hora", { ascending: false }),
     cargarCronograma(supabase),
@@ -425,6 +429,8 @@ export async function getPanelOverview(supabase: Supabase, incluirVencimientosPe
     destino: v.destino,
     fechaHora: v.fecha_hora,
     estado: v.estado_viaje as EstadoViaje,
+    iniciadoAt: v.iniciado_at,
+    llegadaEstimadaAt: v.llegada_estimada_at,
   }));
 
   // Guardia General: quién está de guardia AHORA en cada área — reusa guardiaDe (mismo cálculo que /guardia y /panel/guardia/cronograma), nunca se recalcula de cero.

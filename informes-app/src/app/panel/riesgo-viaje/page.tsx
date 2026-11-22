@@ -10,7 +10,7 @@ export default async function PanelRiesgoViajePage() {
   const { data: evaluaciones } = await supabase
     .from("evaluaciones_riesgo_viaje")
     .select(
-      "id, vehiculo_id, conductor_nombre, fecha_hora, origen, destino, total, nivel_riesgo, estado_viaje, pdf_url, clima_descripcion, iniciado_at, criterio_a_distancia, criterio_b_tiempo_viaje, criterio_c_clima, criterio_d_tipo_ruta, criterio_e_conocimiento, criterio_f_comunicacion, criterio_g_personas_vehiculo, criterio_h_horas_trabajadas",
+      "id, vehiculo_id, conductor_nombre, fecha_hora, origen, destino, total, nivel_riesgo, estado_viaje, pdf_url, clima_descripcion, iniciado_at, llegada_estimada_at, criterio_a_distancia, criterio_b_tiempo_viaje, criterio_c_clima, criterio_d_tipo_ruta, criterio_e_conocimiento, criterio_f_comunicacion, criterio_g_personas_vehiculo, criterio_h_horas_trabajadas",
     )
     .order("fecha_hora", { ascending: true });
 
@@ -32,6 +32,7 @@ export default async function PanelRiesgoViajePage() {
     pdfDisponible: !!e.pdf_url,
     climaDescripcion: e.clima_descripcion,
     iniciadoAt: e.iniciado_at,
+    llegadaEstimadaAt: e.llegada_estimada_at,
     criterios: {
       distancia: e.criterio_a_distancia,
       tiempoViaje: e.criterio_b_tiempo_viaje,

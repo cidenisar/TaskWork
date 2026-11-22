@@ -33,6 +33,7 @@ export async function POST(req: NextRequest) {
   let criterioClima: number | null = null;
   let climaDescripcion: string | null = null;
   let distanciaKm: number | null = null;
+  let llegadaEstimadaAt: string | null = null;
   let origenCoords: { lat: number; lon: number } | null = null;
   let destinoCoords: { lat: number; lon: number } | null = null;
   let geometria: [number, number][] = [];
@@ -53,6 +54,8 @@ export async function POST(req: NextRequest) {
       if (salida && !Number.isNaN(salida.getTime())) {
         const llegadaEstimada = new Date(salida.getTime() + ruta.duracionSeg * 1000);
         criterioTiempoViaje = mapTiempoViajeAValor(salida, llegadaEstimada);
+        // Para precargar la hora estimada de llegada: el tiempo de manejo de la ruta más 1 h de margen (paradas, descanso).
+        llegadaEstimadaAt = new Date(llegadaEstimada.getTime() + 60 * 60_000).toISOString();
       }
     }
 
@@ -76,6 +79,7 @@ export async function POST(req: NextRequest) {
     criterioTiempoViaje,
     criterioClima,
     climaDescripcion,
+    llegadaEstimadaAt,
     criterioPersonasVehiculo,
     origenCoords,
     destinoCoords,

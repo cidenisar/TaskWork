@@ -7,6 +7,7 @@ import { RiesgoBadge, EstadoViajeBadge } from "@/components/riesgo-viaje/badges"
 import { obtenerUrlPdfRiesgoViajeAction, eliminarEvaluacionRiesgoViajeAction } from "@/app/(app)/riesgo-viaje/actions";
 import { Icon } from "@/components/icon";
 import { CRITERIOS_RIESGO_VIAJE, type CriterioKey } from "@/lib/riesgo-viaje/criterios";
+import { calcularDemora, formatearDemora } from "@/lib/riesgo-viaje/demora";
 import type { EstadoViaje, NivelRiesgoViaje } from "@/lib/database.types";
 
 export interface EvaluacionPanelRow {
@@ -23,11 +24,13 @@ export interface EvaluacionPanelRow {
   climaDescripcion: string | null;
   /** Cuándo salió de viaje — null si todavía está "Sin iniciar". Junto con fechaHora, para detectar viajes activos colgados hace demasiado. */
   iniciadoAt: string | null;
+  /** Hora estimada de llegada — null en las evaluaciones anteriores a ese campo. */
+  llegadaEstimadaAt: string | null;
   criterios: Record<CriterioKey, number>;
 }
 
-/** Más de esto sin pasar a "Finalizado" (desde que salió, o desde que se cargó si nunca salió) y se marca como colgado. */
-const UMBRAL_HORAS_COLGADO = 24;
+/** Un viaje cargado que nunca se marcó como "salió" y pasaron más de estas horas desde su fecha programada se marca como colgado. (Los que están en curso se marcan por su hora de llegada — ver lib/riesgo-viaje/demora.) */
+const UMBRAL_HORAS_SIN_INICIAR = 24;
 
 const CRITERIO_KEYS = Object.keys(CRITERIOS_RIESGO_VIAJE) as CriterioKey[];
 
@@ -46,14 +49,15 @@ function Fila({
   onVerPdf,
   onEliminar,
   esSuperusuario,
-  horasColgado,
+  alarma,
 }: {
   e: EvaluacionPanelRow;
   busyId: string | null;
   onVerPdf: (id: string) => void;
   onEliminar: (id: string) => void;
   esSuperusuario: boolean;
-  horasColgado?: number;
+  /** Texto de alarma en rojo/ámbar bajo el título (viaje demorado o colgado). */
+  alarma?: string;
 }) {
   return (
     <div className="hist-item">
@@ -66,9 +70,9 @@ function Fila({
             {e.vehiculoPatente} · {e.conductorNombre} · {fmtFechaCorta(e.fechaHora)}
           </div>
           {e.climaDescripcion && <div className="hist-meta">Pronóstico usado: {e.climaDescripcion}</div>}
-          {horasColgado != null && (
-            <div className="hist-meta" style={{ color: "var(--warn)" }}>
-              Hace {Math.floor(horasColgado)}hs sin actualizar su estado
+          {alarma && (
+            <div className="hist-meta" style={{ color: "var(--danger, #ff3d3d)", fontWeight: 600 }}>
+              {alarma}
             </div>
           )}
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 4 }}>
@@ -137,12 +141,26 @@ export function RiesgoViajePanel({
     [evaluaciones],
   );
 
-  // Colgado: activo (no finalizado) hace más de UMBRAL_HORAS_COLGADO desde que salió — o desde que se cargó, si nunca llegó a salir.
+  // En alarma: un viaje en curso que se pasó de su hora de llegada (o, sin hora cargada, de las horas tope), o uno cargado que
+  // nunca se marcó como salido y ya pasó más de UMBRAL_HORAS_SIN_INICIAR de su fecha programada.
   const colgados = useMemo(
     () =>
       activos
-        .map((e) => ({ e, horas: horasDesde(e.iniciadoAt ?? e.fechaHora) }))
-        .filter(({ horas }) => horas >= UMBRAL_HORAS_COLGADO)
+        .flatMap((e) => {
+          if (e.estadoViaje === "pendiente") {
+            const horas = horasDesde(e.fechaHora);
+            return horas >= UMBRAL_HORAS_SIN_INICIAR ? [{ e, horas, alarma: `Pasaron ${Math.floor(horas)} h de su fecha programada y nunca se marcó que salió` }] : [];
+          }
+          const d = calcularDemora({ estado: e.estadoViaje, llegadaEstimadaAt: e.llegadaEstimadaAt, iniciadoAt: e.iniciadoAt, fechaHora: e.fechaHora });
+          if (!d.demorado) return [];
+          return [
+            {
+              e,
+              horas: d.horasDeDemora,
+              alarma: d.porLlegadaEstimada ? `Se pasó ${formatearDemora(d.horasDeDemora)} de su hora estimada de llegada y no se marcó que llegó` : `Hace ${formatearDemora(d.horasDeDemora)} más del tope de viaje (sin hora de llegada cargada) y no se marcó que llegó`,
+            },
+          ];
+        })
         .sort((a, b) => b.horas - a.horas),
     [activos],
   );
@@ -263,15 +281,15 @@ export function RiesgoViajePanel({
       {colgados.length > 0 && (
         <div className="card" style={{ borderColor: "var(--warn)" }}>
           <div className="section-label" style={{ color: "var(--warn)" }}>
-            <Icon name="warning" size={14} /> {colgados.length} viaje(s) activo(s) hace más de {UMBRAL_HORAS_COLGADO}hs sin actualizar
+            <Icon name="warning" size={14} /> {colgados.length} viaje(s) fuera de horario sin marcar que llegó
           </div>
           <div className="hint" style={{ margin: "-4px 0 10px" }}>
             Pueden ser viajes que ya llegaron pero se olvidaron de marcar &quot;Finalizar&quot;, o algo que haya pasado en el camino — vale
             la pena confirmar con el conductor.
           </div>
           <div className="list-grid">
-            {colgados.map(({ e, horas }) => (
-              <Fila key={e.id} e={e} busyId={busyId} onVerPdf={verPdf} onEliminar={eliminar} esSuperusuario={esSuperusuario} horasColgado={horas} />
+            {colgados.map(({ e, alarma }) => (
+              <Fila key={e.id} e={e} busyId={busyId} onVerPdf={verPdf} onEliminar={eliminar} esSuperusuario={esSuperusuario} alarma={alarma} />
             ))}
           </div>
         </div>

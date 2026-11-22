@@ -20,6 +20,12 @@ export interface VehiculoOpcion {
 }
 
 /** `datetime-local` quiere "YYYY-MM-DDTHH:mm" en hora local, sin zona. */
+/** Un Date al formato que espera <input type="datetime-local"> (hora local del dispositivo). */
+function aInputLocal(d: Date): string {
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
 function ahoraParaInput(): string {
   const d = new Date();
   d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
@@ -47,6 +53,7 @@ export function NuevaEvaluacionRiesgoViajeForm({
   const [acompanantes, setAcompanantes] = useState<string[]>([]);
   const [empresa, setEmpresa] = useState(empresaDefault);
   const [fechaHora, setFechaHora] = useState(ahoraParaInput);
+  const [llegadaEstimada, setLlegadaEstimada] = useState("");
   const [origen, setOrigen] = useState("");
   const [destino, setDestino] = useState("");
   const [puntoMedio, setPuntoMedio] = useState("");
@@ -107,6 +114,8 @@ export function NuevaEvaluacionRiesgoViajeForm({
         clima: data.criterioClima != null ? String(data.criterioClima) : prev.clima,
         personasPorVehiculo: data.criterioPersonasVehiculo != null ? String(data.criterioPersonasVehiculo) : prev.personasPorVehiculo,
       }));
+      // La hora de llegada se precarga con lo que calculó la ruta (si todavía no se escribió una a mano).
+      if (data.llegadaEstimadaAt) setLlegadaEstimada((prev) => prev || aInputLocal(new Date(data.llegadaEstimadaAt)));
       setAvisosAutocompletar(data.avisos ?? []);
       setClimaDescripcion(data.climaDescripcion ?? null);
       setRutaPreview(
@@ -128,6 +137,8 @@ export function NuevaEvaluacionRiesgoViajeForm({
     if (!origen.trim()) return setError("Falta el origen.");
     if (!destino.trim()) return setError("Falta el destino.");
     if (!fechaHora) return setError("Falta la fecha y hora del viaje.");
+    if (!llegadaEstimada) return setError("Falta la hora estimada de llegada — es la que se usa para avisar si el viaje se demora.");
+    if (new Date(llegadaEstimada).getTime() <= new Date(fechaHora).getTime()) return setError("La hora estimada de llegada tiene que ser posterior a la salida.");
     for (const key of CRITERIO_KEYS) {
       if (criterios[key] === "") return setError(`Falta elegir una opción para "${CRITERIOS_RIESGO_VIAJE[key].label}".`);
     }
@@ -140,6 +151,7 @@ export function NuevaEvaluacionRiesgoViajeForm({
       for (const a of acompanantes) fd.append("acompanantes", a);
       fd.append("empresa", empresa.trim());
       fd.append("fechaHora", fechaHora);
+      fd.append("llegadaEstimada", llegadaEstimada);
       fd.append("origen", origen.trim());
       fd.append("destino", destino.trim());
       if (puntoMedio.trim()) fd.append("puntoMedio", puntoMedio.trim());
@@ -190,6 +202,7 @@ export function NuevaEvaluacionRiesgoViajeForm({
     setAcompananteInput("");
     setEmpresa(empresaDefault);
     setFechaHora(ahoraParaInput());
+    setLlegadaEstimada("");
     setOrigen("");
     setDestino("");
     setPuntoMedio("");
@@ -363,6 +376,13 @@ export function NuevaEvaluacionRiesgoViajeForm({
               Fecha y hora del viaje <span className="req">*</span>
             </label>
             <input type="datetime-local" value={fechaHora} onChange={(e) => setFechaHora(e.target.value)} disabled={submitting} />
+          </div>
+          <div className="field">
+            <label>
+              Llegada estimada <span className="req">*</span>
+            </label>
+            <input type="datetime-local" value={llegadaEstimada} onChange={(e) => setLlegadaEstimada(e.target.value)} disabled={submitting} />
+            <div className="hint">Si pasa esta hora y el viaje no se marcó como finalizado, aparece en alarma en Vista General.</div>
           </div>
           <div className="field">
             <label>Empresa</label>

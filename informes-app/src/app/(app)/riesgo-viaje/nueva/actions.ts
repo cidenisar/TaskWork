@@ -39,6 +39,7 @@ export async function crearEvaluacionRiesgoViajeAction(formData: FormData): Prom
   const conductorNombre = String(formData.get("conductorNombre") || "").trim();
   const empresa = String(formData.get("empresa") || "").trim();
   const fechaHora = String(formData.get("fechaHora") || "");
+  const llegadaEstimada = String(formData.get("llegadaEstimada") || "");
   const origen = String(formData.get("origen") || "").trim();
   const destino = String(formData.get("destino") || "").trim();
   const puntoMedio = String(formData.get("puntoMedio") || "").trim() || null;
@@ -51,6 +52,10 @@ export async function crearEvaluacionRiesgoViajeAction(formData: FormData): Prom
   if (!conductorNombre) return { success: false, error: "Falta el conductor." };
   if (!empresa) return { success: false, error: "Falta la empresa." };
   if (!fechaHora) return { success: false, error: "Falta la fecha y hora del viaje." };
+  if (!llegadaEstimada) return { success: false, error: "Falta la hora estimada de llegada." };
+  if (new Date(llegadaEstimada).getTime() <= new Date(fechaHora).getTime()) {
+    return { success: false, error: "La hora estimada de llegada tiene que ser posterior a la salida." };
+  }
   if (!origen) return { success: false, error: "Falta el origen." };
   if (!destino) return { success: false, error: "Falta el destino." };
 
@@ -83,6 +88,7 @@ export async function crearEvaluacionRiesgoViajeAction(formData: FormData): Prom
         conductor_nombre: conductorNombre,
         empresa,
         fecha_hora: new Date(fechaHora).toISOString(),
+        llegada_estimada_at: new Date(llegadaEstimada).toISOString(),
         origen,
         destino,
         punto_medio: puntoMedio,

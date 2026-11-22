@@ -217,6 +217,8 @@ export type EvaluacionRiesgoViajeRow = {
   conductor_nombre: string;
   empresa: string;
   fecha_hora: string;
+  /** Hora estimada de llegada — para avisar si el viaje en curso se demora. null en las evaluaciones anteriores a ese campo. */
+  llegada_estimada_at: string | null;
   origen: string;
   destino: string;
   /** Sugerido (no obligatorio) cuando el criterio de distancia es "Mayor 300 Km". */

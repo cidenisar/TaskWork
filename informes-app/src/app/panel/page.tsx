@@ -11,6 +11,8 @@ import { EstadoViajeBadge } from "@/components/riesgo-viaje/badges";
 import { getNovedadesGuardiaHoy } from "@/lib/panel/novedades-guardia";
 import { cargarResumenTareasPanel } from "@/lib/tareas/resumen-panel";
 import { diasDesde, DIAS_TAREA_VIEJA } from "@/lib/tareas/puro";
+import { calcularDemora, formatearDemora, HORAS_TOPE_SIN_LLEGADA_ESTIMADA } from "@/lib/riesgo-viaje/demora";
+import { StatusDot } from "@/components/icon";
 
 function fmtHoy(): string {
   return new Date().toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
@@ -93,7 +95,12 @@ export default async function PanelPage({ searchParams }: { searchParams: Promis
     profile.rol !== "tecnico" ? cargarResumenTareasPanel(supabase) : Promise.resolve(null),
   ]);
   const ahora = new Date();
-  const { kpis, equipoPorModulo, sitios, vencimientos, mantenimientoPendiente, viajesActivos, guardiaAhora } = overview;
+  const { kpis, equipoPorModulo, sitios, vencimientos, mantenimientoPendiente, viajesActivos: viajesSinOrdenar, guardiaAhora } = overview;
+  // Los viajes que se pasaron de su horario van primero y en alarma.
+  const viajesActivos = viajesSinOrdenar
+    .map((v) => ({ ...v, demora: calcularDemora({ estado: v.estado, llegadaEstimadaAt: v.llegadaEstimadaAt, iniciadoAt: v.iniciadoAt, fechaHora: v.fechaHora }, ahora) }))
+    .sort((a, b) => Number(b.demora.demorado) - Number(a.demora.demorado) || b.demora.horasDeDemora - a.demora.horasDeDemora);
+  const viajesDemorados = viajesActivos.filter((v) => v.demora.demorado).length;
 
   const filtros: FiltrosJerarquia = { region: sp.region, provincia: sp.provincia, localidad: sp.localidad, sitio: sp.sitio };
   const filtrados = filtrarSitios(sitios, filtros);
@@ -200,12 +207,17 @@ export default async function PanelPage({ searchParams }: { searchParams: Promis
               + Nueva evaluación
             </Link>
           </div>
+          {viajesDemorados > 0 && (
+            <div className="venc-badge danger" style={{ marginBottom: 8, display: "inline-flex", alignItems: "center", gap: 6 }}>
+              <StatusDot tone="danger" /> {viajesDemorados} viaje{viajesDemorados === 1 ? "" : "s"} fuera de horario — sin marcar que llegó
+            </div>
+          )}
           {viajesActivos.length === 0 ? (
             <div className="empty-note">No hay viajes en curso en este momento.</div>
           ) : (
             <div>
               {viajesActivos.map((v) => (
-                <div className="panel-venc-row" key={v.id}>
+                <div className="panel-venc-row" key={v.id} style={v.demora.demorado ? { background: "color-mix(in srgb, var(--danger, #ff3d3d) 10%, transparent)" } : undefined}>
                   <div className="panel-venc-info">
                     <div className="panel-venc-nombre">
                       {v.conductorNombre} · {v.patente}
@@ -213,8 +225,20 @@ export default async function PanelPage({ searchParams }: { searchParams: Promis
                     <div className="panel-venc-tipo">
                       {v.origen} → {v.destino} · {fmtFechaHora(v.fechaHora)}
                     </div>
+                    {v.demora.demorado && (
+                      <div className="panel-venc-tipo" style={{ color: "var(--danger, #ff3d3d)", fontWeight: 600 }}>
+                        {v.demora.porLlegadaEstimada
+                          ? `Debía llegar ${fmtFechaHora(v.llegadaEstimadaAt!)} — se pasó ${formatearDemora(v.demora.horasDeDemora)}`
+                          : `Hace más de ${HORAS_TOPE_SIN_LLEGADA_ESTIMADA} h en viaje (sin hora de llegada cargada) — ${formatearDemora(v.demora.horasDeDemora)} de más`}
+                      </div>
+                    )}
                   </div>
-                  <div className="panel-venc-dias">
+                  <div className="panel-venc-dias" style={{ display: "flex", flexDirection: "column", gap: 4, alignItems: "flex-end" }}>
+                    {v.demora.demorado && (
+                      <span className="venc-badge danger">
+                        <StatusDot tone="danger" /> DEMORADO
+                      </span>
+                    )}
                     <EstadoViajeBadge estado={v.estado} />
                   </div>
                 </div>
