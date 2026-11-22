@@ -2,12 +2,20 @@
 
 import { useMemo, useState } from "react";
 import { Icon } from "@/components/icon";
+import { FilterableSelect } from "@/components/ui/filterable-select";
 import type { Ubicacion } from "./types";
+import { enlaceMapa, formatearCoordenada, parsearLatitud, parsearLongitud } from "@/lib/ubicaciones/coordenadas";
 
 export interface GpsCapturado {
   lat: number;
   lng: number;
   accuracy: number | null;
+  /**
+   * true cuando las coordenadas se escribieron o corrigieron a mano en los campos (no vienen del GPS del dispositivo).
+   * Un GPS automático solo completa las coordenadas de un lugar que no las tiene; uno manual las corrige si quien lo
+   * guarda es Administrador o Supervisor (ver tagGpsSiFalta).
+   */
+  manual?: boolean;
 }
 
 type ResolverGpsResponse =
@@ -58,6 +66,7 @@ export function UbicacionFields({
   onGpsCapturado,
   disabled,
   requerido = true,
+  mostrarTodosLosNiveles = false,
 }: {
   ubicaciones: Ubicacion[];
   provincias: string[];
@@ -77,6 +86,12 @@ export function UbicacionFields({
   disabled?: boolean;
   /** false para módulos donde la ubicación es opcional (Informe Técnico, Rendición de Gastos) — no muestra los asteriscos de obligatorio. */
   requerido?: boolean;
+  /**
+   * En las pantallas de edición: muestra SIEMPRE los desplegables de Planta y Oficina (con lo que ya está cargado y la opción
+   * de crear una nueva), aunque el sitio tenga una sola. Sin esto, un sitio con una sola planta/oficina solo muestra un botón
+   * "agregar" y no se ve qué hay cargado ni se puede elegir otra.
+   */
+  mostrarTodosLosNiveles?: boolean;
 }) {
   const [gpsBusy, setGpsBusy] = useState(false);
   const [gpsError, setGpsError] = useState<string | null>(null);
@@ -99,6 +114,26 @@ export function UbicacionFields({
   const [sitioEl, setSitioEl] = useState<string>(() => estadoInicial("sitio"));
   const [plantaEl, setPlantaEl] = useState<string>(() => estadoInicial("planta"));
   const [oficinaEl, setOficinaEl] = useState<string>(() => estadoInicial("oficina"));
+
+  // Coordenadas que se ven en los campos Latitud/Longitud. null = todavía no se tocó nada: se muestran las que ya
+  // tiene guardadas el lugar elegido (si tiene). Al apretar "Usar mi ubicación" se llenan con las del GPS, y se pueden
+  // corregir a mano.
+  const [coordsEditadas, setCoordsEditadas] = useState<{ lat: string; lng: string } | null>(null);
+  const filaElegida = ubicaciones.find((u) => u.id === ubicacionId);
+  const latGuardada = filaElegida?.lat ?? null;
+  const lngGuardada = filaElegida?.lng ?? null;
+  const latMostrada = coordsEditadas ? coordsEditadas.lat : latGuardada !== null ? formatearCoordenada(latGuardada) : "";
+  const lngMostrada = coordsEditadas ? coordsEditadas.lng : lngGuardada !== null ? formatearCoordenada(lngGuardada) : "";
+  const latNum = parsearLatitud(latMostrada);
+  const lngNum = parsearLongitud(lngMostrada);
+  const coordsInvalidas = (latMostrada.trim() !== "" || lngMostrada.trim() !== "") && (latNum === null || lngNum === null);
+
+  function cambiarCoords(lat: string, lng: string) {
+    setCoordsEditadas({ lat, lng });
+    const la = parsearLatitud(lat);
+    const lo = parsearLongitud(lng);
+    onGpsCapturado(la !== null && lo !== null ? { lat: la, lng: lo, accuracy: null, manual: true } : null);
+  }
 
   const ubicacionesDeLaProvincia = useMemo(
     () => ubicaciones.filter((u) => u.provincia === provinciaFiltro),
@@ -135,9 +170,13 @@ export function UbicacionFields({
     return lista.sort((a, b) => a.localeCompare(b));
   }, [filasDelSitio]);
 
+  // "" significa dos cosas: "todavía no eligió planta" o "la planta elegida es la fila sin planta cargada". Es la segunda cuando
+  // el sitio tiene una sola planta y es esa fila sin nombre.
+  const plantaDefinida = plantaEl !== "" || (!!sitioEl && sitioEl !== "__new" && plantasDelSitio.length === 1 && plantasDelSitio[0] === SIN_VALOR);
+
   const filasDeLaPlanta = useMemo(
-    () => (plantaEl && plantaEl !== "__new" ? filasDelSitio.filter((u) => (u.planta ?? SIN_VALOR) === plantaEl) : []),
-    [filasDelSitio, plantaEl],
+    () => (plantaDefinida && plantaEl !== "__new" ? filasDelSitio.filter((u) => (u.planta ?? SIN_VALOR) === plantaEl) : []),
+    [filasDelSitio, plantaEl, plantaDefinida],
   );
 
   const oficinasDeLaPlanta = useMemo(() => {
@@ -244,6 +283,7 @@ export function UbicacionFields({
     const lng = posicion.coords.longitude;
     const accuracy = Number.isFinite(posicion.coords.accuracy) ? posicion.coords.accuracy : null;
     onGpsCapturado({ lat, lng, accuracy });
+    setCoordsEditadas({ lat: formatearCoordenada(lat), lng: formatearCoordenada(lng) });
     const precisionAviso = accuracy && accuracy > 100 ? ` (precisión del GPS baja: ±${Math.round(accuracy)}m, confirmá bien)` : "";
 
     try {
@@ -297,6 +337,54 @@ export function UbicacionFields({
           </div>
         )}
       </div>
+      <div className="grid2">
+        <div className="field">
+          <label>
+            Latitud <span className="opt">(opcional)</span>
+          </label>
+          <input
+            type="text"
+            inputMode="decimal"
+            placeholder="Ej: -33.123456"
+            value={latMostrada}
+            onChange={(e) => cambiarCoords(e.target.value, lngMostrada)}
+            disabled={disabled}
+          />
+        </div>
+        <div className="field">
+          <label>
+            Longitud <span className="opt">(opcional)</span>
+          </label>
+          <input
+            type="text"
+            inputMode="decimal"
+            placeholder="Ej: -68.456789"
+            value={lngMostrada}
+            onChange={(e) => cambiarCoords(latMostrada, e.target.value)}
+            disabled={disabled}
+          />
+        </div>
+      </div>
+      {coordsInvalidas && (
+        <div className="hint" style={{ marginTop: -6, marginBottom: 8, color: "var(--warn)" }}>
+          Latitud (entre -90 y 90) y longitud (entre -180 y 180) tienen que ser números — con eso incompleto no se guardan.
+        </div>
+      )}
+      {!coordsInvalidas && latNum !== null && lngNum !== null && (
+        <div className="hint" style={{ marginTop: -6, marginBottom: 8 }}>
+          <a href={enlaceMapa(latNum, lngNum)} target="_blank" rel="noopener noreferrer">
+            Ver este punto en el mapa
+          </a>
+          {latGuardada !== null && lngGuardada !== null && coordsEditadas && (latNum !== latGuardada || lngNum !== lngGuardada)
+            ? ` · Este lugar ya tiene guardado ${formatearCoordenada(latGuardada)}, ${formatearCoordenada(lngGuardada)}: si lo cambiás acá, solo se corrige si sos Administrador o Supervisor.`
+            : ""}
+        </div>
+      )}
+      {latGuardada === null && lngGuardada === null && ubicacionId && ubicacionId !== "__new" && !coordsEditadas && (
+        <div className="hint" style={{ marginTop: -6, marginBottom: 8, color: "var(--warn)" }}>
+          Este lugar todavía no tiene coordenadas, así que no aparece en el mapa — apretá «Usar mi ubicación» o escribilas.
+        </div>
+      )}
       <div className="field">
         <label>
           Provincia {requerido ? <span className="req">*</span> : <span className="opt">(opcional)</span>}
@@ -325,29 +413,41 @@ export function UbicacionFields({
           <label>
             Sitio {requerido ? <span className="req">*</span> : <span className="opt">(opcional)</span>}
           </label>
-          <select value={sitioEl} onChange={(e) => elegirSitio(e.target.value)} disabled={disabled}>
-            <option value="">Seleccionar sitio...</option>
-            {sitiosDeLaProvincia.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-            <option value="__new">+ Crear sitio nuevo...</option>
-          </select>
+          <FilterableSelect
+            value={sitioEl}
+            onChange={elegirSitio}
+            placeholder="Buscar o elegir sitio..."
+            disabled={disabled}
+            options={[
+              ...sitiosDeLaProvincia.map((s) => ({ value: s, label: s })),
+              { value: "__new", label: "+ Crear sitio nuevo..." },
+            ]}
+          />
         </div>
       )}
-      {sitioEl && sitioEl !== "__new" && plantasDelSitio.length > 1 && (
+      {sitioEl && sitioEl !== "__new" && (plantasDelSitio.length > 1 || mostrarTodosLosNiveles) && (
         <div className="field">
           <label>Planta</label>
-          <select value={plantaEl} onChange={(e) => elegirPlanta(e.target.value)} disabled={disabled}>
-            <option value="">Seleccionar planta...</option>
-            {plantasDelSitio.map((p) => (
-              <option key={p || "__sin"} value={p}>
-                {p || "(sin planta especificada)"}
-              </option>
-            ))}
-            <option value="__new">+ Crear planta nueva...</option>
-          </select>
+          <FilterableSelect
+            value={plantaEl}
+            onChange={elegirPlanta}
+            placeholder="Buscar o elegir planta..."
+            disabled={disabled}
+            options={[
+              ...plantasDelSitio.map((p) => ({ value: p, label: p || "(sin planta especificada)" })),
+              { value: "__new", label: "+ Crear planta nueva..." },
+            ]}
+          />
+        </div>
+      )}
+      {sitioEl && sitioEl !== "__new" && plantaEl !== "__new" && plantasDelSitio.length <= 1 && !mostrarTodosLosNiveles && oficinaEl !== "__new" && (
+        <div className="field">
+          <button type="button" className="ai-btn" disabled={disabled} onClick={() => elegirPlanta("__new")}>
+            + Agregar una planta u oficina nueva en este sitio
+          </button>
+          <div className="hint" style={{ marginTop: 4 }}>
+            Si el lugar donde trabajaste es otro dentro de «{sitioEl}» y no está en la lista, creala acá.
+          </div>
         </div>
       )}
       {plantaEl === "__new" && (
@@ -381,20 +481,35 @@ export function UbicacionFields({
               disabled={disabled}
             />
           </div>
+          {filasDelSitio.length > 0 && (
+            <div className="field">
+              <button type="button" className="ai-btn" disabled={disabled} onClick={() => elegirSitio(sitioEl)}>
+                Cancelar: usar el lugar que ya existe
+              </button>
+            </div>
+          )}
         </div>
       )}
-      {plantaEl && plantaEl !== "__new" && oficinasDeLaPlanta.length > 1 && (
+      {plantaDefinida && plantaEl !== "__new" && (oficinasDeLaPlanta.length > 1 || mostrarTodosLosNiveles) && (
         <div className="field">
           <label>Oficina</label>
-          <select value={oficinaEl} onChange={(e) => elegirOficina(e.target.value)} disabled={disabled}>
-            <option value="">Seleccionar oficina...</option>
-            {oficinasDeLaPlanta.map((o) => (
-              <option key={o || "__sin"} value={o}>
-                {o || "(sin oficina especificada)"}
-              </option>
-            ))}
-            <option value="__new">+ Crear oficina nueva...</option>
-          </select>
+          <FilterableSelect
+            value={oficinaEl}
+            onChange={elegirOficina}
+            placeholder="Buscar o elegir oficina..."
+            disabled={disabled}
+            options={[
+              ...oficinasDeLaPlanta.map((o) => ({ value: o, label: o || "(sin oficina especificada)" })),
+              { value: "__new", label: "+ Crear oficina nueva..." },
+            ]}
+          />
+        </div>
+      )}
+      {plantaDefinida && plantaEl !== "__new" && oficinaEl !== "__new" && oficinasDeLaPlanta.length <= 1 && !mostrarTodosLosNiveles && (
+        <div className="field">
+          <button type="button" className="ai-btn" disabled={disabled} onClick={() => elegirOficina("__new")}>
+            + Agregar una oficina nueva en esta planta
+          </button>
         </div>
       )}
       {oficinaEl === "__new" && (
@@ -412,6 +527,9 @@ export function UbicacionFields({
             onChange={(e) => onOficinaNuevaChange(e.target.value)}
             disabled={disabled}
           />
+          <button type="button" className="ai-btn" style={{ marginTop: 6 }} disabled={disabled} onClick={() => elegirPlantaInterno(plantaEl, filasDelSitio)}>
+            Cancelar: usar la planta que ya existe
+          </button>
         </div>
       )}
       {sitioEl === "__new" && (

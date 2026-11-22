@@ -6,9 +6,8 @@ import { crearRendicionAction } from "@/app/(app)/rendicion-gastos/nueva/actions
 import { Step1Datos } from "./step-1-datos";
 import { EMPTY_RENDICION_FORM, type RendicionFormState } from "./types";
 import { ErrorNote } from "@/components/notes";
-import type { Ubicacion } from "@/components/ubicaciones/types";
 
-export function NuevaRendicionForm({ provincias, ubicaciones }: { provincias: string[]; ubicaciones: Ubicacion[] }) {
+export function NuevaRendicionForm() {
   const router = useRouter();
   const [form, setForm] = useState<RendicionFormState>(EMPTY_RENDICION_FORM);
   const [submitting, setSubmitting] = useState(false);
@@ -43,11 +42,7 @@ export function NuevaRendicionForm({ provincias, ubicaciones }: { provincias: st
           uno, cuando quieras, hasta que hagas el cierre.
         </p>
       </div>
-      <Step1Datos
-        form={form}
-        onChange={patchForm}
-        catalogos={{ provincias, ubicaciones, categoriasGasto: [], tecnicos: [], torres: [] }}
-      />
+      <Step1Datos form={form} onChange={patchForm} />
       {error && <ErrorNote>{error}</ErrorNote>}
       <div className="footer-nav">
         <span />

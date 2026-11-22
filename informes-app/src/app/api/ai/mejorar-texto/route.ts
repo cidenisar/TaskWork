@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
-import Anthropic from "@anthropic-ai/sdk";
+import { crearMensajeIa, hayAlgunaIaConfigurada, mensajeErrorIa } from "@/lib/ai/motor";
 import { requireProfile } from "@/lib/auth";
+import { createClient } from "@/lib/supabase/server";
+import { verificarLimiteIa } from "@/lib/ai/rate-limit";
 
 /**
  * "Mejorar con IA" (spec sección 6.1 / 10, funcionalidad #1): corrige ortografía
@@ -12,29 +14,44 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "No autenticado." }, { status: 401 });
   }
 
-  const { texto } = (await request.json().catch(() => ({}))) as { texto?: string };
+  const { texto, modo } = (await request.json().catch(() => ({}))) as { texto?: string; modo?: "descripcion" | "lista_tareas" };
   if (!texto || !texto.trim()) {
     return NextResponse.json({ error: "No hay texto para mejorar." }, { status: 400 });
   }
 
-  if (!process.env.ANTHROPIC_API_KEY) {
+  if (!hayAlgunaIaConfigurada()) {
     return NextResponse.json(
-      { error: "La mejora con IA no está configurada en este entorno (falta ANTHROPIC_API_KEY)." },
+      { error: "La mejora con IA no está configurada en este entorno (falta la clave de alguna IA)." },
       { status: 503 },
     );
   }
 
+  const supabase = await createClient();
+
+  const limite = await verificarLimiteIa(supabase, profile.id);
+  if (!limite.permitido) {
+    return NextResponse.json({ error: limite.error }, { status: 429 });
+  }
+
   try {
-    const client = new Anthropic();
-    const response = await client.messages.create({
-      model: "claude-opus-5",
+    const response = await crearMensajeIa(supabase, { endpoint: "ai/mejorar-texto", modulo: "mejorar-texto", userId: profile.id, tipo: "texto" }, {
+      model: "claude-opus-5-5",
+      betas: ["server-side-fallback-2026-07-01"],
+      fallbacks: "default",
       max_tokens: 2048,
       output_config: { effort: "low" },
       system:
-        "Corregís ortografía y gramática de descripciones de trabajos técnicos de campo (informes técnicos) " +
-        "y subís el tono a uno profesional. Nunca inventes ni agregues información que no esté en el texto " +
-        "original — solo reescribís lo que ya está. Respondé únicamente con el texto corregido, sin comillas, " +
-        "sin explicaciones ni comentarios adicionales.",
+        modo === "lista_tareas"
+          ? "Corregís ortografía y gramática de una lista de tareas pendientes de un informe técnico de campo, " +
+            "una por línea, y subís el tono a uno profesional. Mantenés EXACTAMENTE una línea por tarea, en el " +
+            "mismo orden, sin fusionar líneas en un párrafo ni agregar numeración o viñetas propias (el PDF ya " +
+            "las agrega). Nunca inventes ni agregues tareas que no estén en el texto original — solo reescribís " +
+            "lo que ya está. Respondé únicamente con la lista corregida, sin comillas, sin explicaciones ni " +
+            "comentarios adicionales."
+          : "Corregís ortografía y gramática de descripciones de trabajos técnicos de campo (informes técnicos) " +
+            "y subís el tono a uno profesional. Nunca inventes ni agregues información que no esté en el texto " +
+            "original — solo reescribís lo que ya está. Respondé únicamente con el texto corregido, sin comillas, " +
+            "sin explicaciones ni comentarios adicionales.",
       messages: [{ role: "user", content: texto }],
     });
 
@@ -44,7 +61,7 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({ mejorado: textBlock.text.trim() });
-  } catch {
-    return NextResponse.json({ error: "No se pudo contactar al servicio de IA." }, { status: 502 });
+  } catch (err) {
+    return NextResponse.json({ error: mensajeErrorIa(err) }, { status: 502 });
   }
 }
