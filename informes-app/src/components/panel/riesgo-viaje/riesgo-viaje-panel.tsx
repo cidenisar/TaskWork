@@ -7,6 +7,7 @@ import { RiesgoBadge, EstadoViajeBadge } from "@/components/riesgo-viaje/badges"
 import { obtenerUrlPdfRiesgoViajeAction, eliminarEvaluacionRiesgoViajeAction } from "@/app/(app)/riesgo-viaje/actions";
 import { Icon } from "@/components/icon";
 import { CerrarViajeButton } from "@/components/riesgo-viaje/cerrar-viaje-button";
+import { LineaTiempoViaje } from "@/components/riesgo-viaje/linea-tiempo";
 import { CRITERIOS_RIESGO_VIAJE, type CriterioKey } from "@/lib/riesgo-viaje/criterios";
 import { calcularDemora, formatearDemora } from "@/lib/riesgo-viaje/demora";
 import type { EstadoViaje, NivelRiesgoViaje } from "@/lib/database.types";
@@ -27,6 +28,9 @@ export interface EvaluacionPanelRow {
   iniciadoAt: string | null;
   /** Hora estimada de llegada — null en las evaluaciones anteriores a ese campo. */
   llegadaEstimadaAt: string | null;
+  puntoMedioAt: string | null;
+  finalizadoAt: string | null;
+  tienePuntoMedio: boolean;
   criterios: Record<CriterioKey, number>;
 }
 
@@ -80,6 +84,17 @@ function Fila({
             <RiesgoBadge nivel={e.nivelRiesgo} total={e.total} />
             <EstadoViajeBadge estado={e.estadoViaje} />
           </div>
+          <LineaTiempoViaje
+            v={{
+              estado: e.estadoViaje,
+              fechaHora: e.fechaHora,
+              iniciadoAt: e.iniciadoAt,
+              puntoMedioAt: e.puntoMedioAt,
+              finalizadoAt: e.finalizadoAt,
+              llegadaEstimadaAt: e.llegadaEstimadaAt,
+              tienePuntoMedio: e.tienePuntoMedio,
+            }}
+          />
         </div>
       </div>
       <div className="hist-actions">

@@ -6,6 +6,7 @@ import { CerrarViajeButton } from "./cerrar-viaje-button";
 import { linkWhatsappGrupo, linkWhatsappIndividual } from "@/lib/guardia/whatsapp";
 import { Icon } from "@/components/icon";
 import { RiesgoBadge, EstadoViajeBadge } from "./badges";
+import { LineaTiempoViaje } from "./linea-tiempo";
 import type { EstadoViaje, NivelRiesgoViaje } from "@/lib/database.types";
 
 export interface EvaluacionRiesgoViajeRow {
@@ -26,6 +27,12 @@ export interface EvaluacionRiesgoViajeRow {
   esPropia: boolean;
   /** Pronóstico real del destino para la fecha del viaje — null si no se pudo obtener al momento de crearla. */
   climaDescripcion: string | null;
+  /** Horarios reales del viaje — null si ese paso no se marcó. */
+  iniciadoAt: string | null;
+  puntoMedioAt: string | null;
+  finalizadoAt: string | null;
+  /** Hora estimada de llegada — null en las evaluaciones anteriores a ese campo. */
+  llegadaEstimadaAt: string | null;
 }
 
 const SIGUIENTE_ACCION: Record<EstadoViaje, { accion: "iniciar" | "marcar_punto_medio" | "finalizar"; label: string } | null> = {
@@ -80,7 +87,10 @@ export function HistorialRiesgoViaje({ evaluaciones: inicial, esAdmin }: { evalu
       marcar_punto_medio: "en_punto_medio",
       finalizar: "finalizado",
     } as const;
-    setEvaluaciones((prev) => prev.map((e) => (e.id === id ? { ...e, estadoViaje: estadoSiguiente[accion] } : e)));
+    // También se guarda la hora en que se marcó el paso, así se ve en seguida sin recargar la pantalla.
+    const ahoraIso = new Date().toISOString();
+    const campoHora = { iniciar: "iniciadoAt", marcar_punto_medio: "puntoMedioAt", finalizar: "finalizadoAt" } as const;
+    setEvaluaciones((prev) => prev.map((e) => (e.id === id ? { ...e, estadoViaje: estadoSiguiente[accion], [campoHora[accion]]: ahoraIso } : e)));
 
     // Al iniciar el viaje, además del push a la guardia general (ya lo dispara la acción), se ofrece avisar por WhatsApp — igual que al registrar una llamada de guardia: el link lo abre quien dispara el aviso.
     if (accion === "iniciar" && res.avisoWhatsapp) {
@@ -135,6 +145,17 @@ export function HistorialRiesgoViaje({ evaluaciones: inicial, esAdmin }: { evalu
                         <RiesgoBadge nivel={e.nivelRiesgo} total={e.total} />
                         <EstadoViajeBadge estado={e.estadoViaje} />
                       </div>
+                      <LineaTiempoViaje
+                        v={{
+                          estado: e.estadoViaje,
+                          fechaHora: e.fechaHora,
+                          iniciadoAt: e.iniciadoAt,
+                          puntoMedioAt: e.puntoMedioAt,
+                          finalizadoAt: e.finalizadoAt,
+                          llegadaEstimadaAt: e.llegadaEstimadaAt,
+                          tienePuntoMedio: e.tienePuntoMedio,
+                        }}
+                      />
                     </div>
                   </div>
                   <div className="hist-actions" style={{ flexDirection: "column", alignItems: "stretch", gap: 6 }}>
@@ -162,7 +183,7 @@ export function HistorialRiesgoViaje({ evaluaciones: inicial, esAdmin }: { evalu
                       <CerrarViajeButton
                         evaluacionId={e.id}
                         label="Ya llegó (cerrar)"
-                        onCerrado={() => setEvaluaciones((prev) => prev.map((x) => (x.id === e.id ? { ...x, estadoViaje: "finalizado" } : x)))}
+                        onCerrado={() => setEvaluaciones((prev) => prev.map((x) => (x.id === e.id ? { ...x, estadoViaje: "finalizado", finalizadoAt: new Date().toISOString() } : x)))}
                       />
                     )}
                   </div>

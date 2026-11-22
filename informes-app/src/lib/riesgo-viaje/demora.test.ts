@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { calcularDemora, formatearDemora } from "./demora";
+import { calcularDemora, formatearDemora, evaluarCierre, formatearMinutos } from "./demora";
 
 const t = (iso: string) => new Date(iso);
 const base = { llegadaEstimadaAt: null, iniciadoAt: "2026-11-20T08:00:00Z", fechaHora: "2026-11-20T08:00:00Z" } as const;
@@ -37,4 +37,30 @@ test("formatea la demora", () => {
   assert.equal(formatearDemora(0.4), "menos de 1 h");
   assert.equal(formatearDemora(20.9), "20 h");
   assert.equal(formatearDemora(72), "3 días");
+});
+
+test("evaluarCierre: en horario, fuera de horario y sin hora estimada", () => {
+  const base = { iniciadoAt: "2026-11-20T08:00:00Z", llegadaEstimadaAt: "2026-11-20T14:00:00Z" };
+  const enHorario = evaluarCierre({ ...base, finalizadoAt: "2026-11-20T14:10:00Z" });
+  assert.equal(enHorario.fueraDeHorario, false);
+  assert.equal(enHorario.diferenciaMin, 10);
+  assert.equal(enHorario.duracionMin, 370);
+  const tarde = evaluarCierre({ ...base, finalizadoAt: "2026-11-20T16:15:00Z" });
+  assert.equal(tarde.fueraDeHorario, true);
+  assert.equal(tarde.diferenciaMin, 135);
+  const temprano = evaluarCierre({ ...base, finalizadoAt: "2026-11-20T13:00:00Z" });
+  assert.equal(temprano.fueraDeHorario, false);
+  assert.equal(temprano.diferenciaMin, -60);
+  const sinEstimada = evaluarCierre({ iniciadoAt: "2026-11-20T08:00:00Z", llegadaEstimadaAt: null, finalizadoAt: "2026-11-20T20:00:00Z" });
+  assert.equal(sinEstimada.fueraDeHorario, null);
+  assert.equal(sinEstimada.duracionMin, 720);
+  assert.deepEqual(evaluarCierre({ iniciadoAt: null, llegadaEstimadaAt: null, finalizadoAt: null }), { fueraDeHorario: null, diferenciaMin: null, duracionMin: null });
+});
+
+test("formatearMinutos", () => {
+  assert.equal(formatearMinutos(45), "45 min");
+  assert.equal(formatearMinutos(135), "2 h 15 min");
+  assert.equal(formatearMinutos(120), "2 h");
+  assert.equal(formatearMinutos(1500), "1 d 1 h");
+  assert.equal(formatearMinutos(-60), "1 h");
 });

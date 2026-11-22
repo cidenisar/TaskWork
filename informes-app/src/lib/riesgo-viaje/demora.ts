@@ -56,3 +56,45 @@ export function formatearDemora(horas: number): string {
   if (horas >= 48) return `${Math.floor(horas / 24)} días`;
   return `${Math.floor(horas)} h`;
 }
+
+export interface ResultadoCierre {
+  /** true si finalizó más tarde que su hora estimada de llegada (más la tolerancia); false si estuvo en horario; null si no hay hora estimada contra qué comparar. */
+  fueraDeHorario: boolean | null;
+  /** Minutos entre la hora estimada de llegada y cuando se marcó finalizado: positivo = después de lo estimado, negativo = antes. null sin hora estimada. */
+  diferenciaMin: number | null;
+  /** Minutos entre que salió y que se marcó finalizado. null si no quedó registrada la salida. */
+  duracionMin: number | null;
+}
+
+/**
+ * Cómo terminó un viaje ya finalizado: si se pasó de su horario y cuánto duró.
+ * Ojo: `finalizadoAt` es cuándo se MARCÓ como finalizado, que puede ser después
+ * de que realmente llegó (si se olvidaron de marcarlo y lo cerró otra persona).
+ */
+export function evaluarCierre(v: { finalizadoAt: string | null; llegadaEstimadaAt: string | null; iniciadoAt: string | null }): ResultadoCierre {
+  const fin = v.finalizadoAt ? new Date(v.finalizadoAt).getTime() : NaN;
+  const sinDatos: ResultadoCierre = { fueraDeHorario: null, diferenciaMin: null, duracionMin: null };
+  if (!Number.isFinite(fin)) return sinDatos;
+
+  const inicio = v.iniciadoAt ? new Date(v.iniciadoAt).getTime() : NaN;
+  const duracionMin = Number.isFinite(inicio) ? Math.round((fin - inicio) / 60_000) : null;
+
+  const estimada = v.llegadaEstimadaAt ? new Date(v.llegadaEstimadaAt).getTime() : NaN;
+  if (!Number.isFinite(estimada)) return { fueraDeHorario: null, diferenciaMin: null, duracionMin };
+  const diferenciaMin = Math.round((fin - estimada) / 60_000);
+  return { fueraDeHorario: diferenciaMin > TOLERANCIA_DEMORA_MIN, diferenciaMin, duracionMin };
+}
+
+/** 135 → "2 h 15 min", 45 → "45 min", 1500 → "1 d 1 h". */
+export function formatearMinutos(min: number): string {
+  const m = Math.abs(Math.round(min));
+  if (m < 60) return `${m} min`;
+  if (m < 24 * 60) {
+    const h = Math.floor(m / 60);
+    const r = m % 60;
+    return r === 0 ? `${h} h` : `${h} h ${r} min`;
+  }
+  const d = Math.floor(m / (24 * 60));
+  const h = Math.floor((m % (24 * 60)) / 60);
+  return h === 0 ? `${d} d` : `${d} d ${h} h`;
+}
