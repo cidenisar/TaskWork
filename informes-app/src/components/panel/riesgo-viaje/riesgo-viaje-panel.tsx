@@ -6,6 +6,7 @@ import { BarList } from "@/components/estadisticas/bar-list";
 import { RiesgoBadge, EstadoViajeBadge } from "@/components/riesgo-viaje/badges";
 import { obtenerUrlPdfRiesgoViajeAction, eliminarEvaluacionRiesgoViajeAction } from "@/app/(app)/riesgo-viaje/actions";
 import { Icon } from "@/components/icon";
+import { CerrarViajeButton } from "@/components/riesgo-viaje/cerrar-viaje-button";
 import { CRITERIOS_RIESGO_VIAJE, type CriterioKey } from "@/lib/riesgo-viaje/criterios";
 import { calcularDemora, formatearDemora } from "@/lib/riesgo-viaje/demora";
 import type { EstadoViaje, NivelRiesgoViaje } from "@/lib/database.types";
@@ -82,6 +83,7 @@ function Fila({
         </div>
       </div>
       <div className="hist-actions">
+        {e.estadoViaje !== "finalizado" && <CerrarViajeButton evaluacionId={e.id} />}
         <button
           type="button"
           className="icon-btn"

@@ -5,6 +5,7 @@ import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { requireProfile, requireSuperusuario } from "@/lib/auth";
 import { filenameDesdeStoragePath } from "@/lib/pdf/filename";
 import { eliminarRegistroConArchivos, type EliminarResult } from "@/lib/admin/eliminar-registro";
+import { logAudit } from "@/lib/config/audit";
 import { cargarGuardiaGeneralActual } from "@/lib/guardia/datos";
 import { notificar } from "@/lib/guardia/notificar";
 import type { EstadoViaje } from "@/lib/database.types";
@@ -51,7 +52,7 @@ export async function obtenerUrlPdfRiesgoViajeAction(evaluacionId: string): Prom
  */
 export async function actualizarEstadoViajeAction(
   evaluacionId: string,
-  accion: "iniciar" | "marcar_punto_medio" | "finalizar",
+  accion: "iniciar" | "marcar_punto_medio" | "finalizar" | "cerrar",
 ): Promise<ActualizarEstadoViajeResult> {
   const profile = await requireProfile();
   const supabase = await createClient();
@@ -66,6 +67,25 @@ export async function actualizarEstadoViajeAction(
   const esDueño = evaluacion.created_by === profile.id;
   const esAdmin = profile.rol === "admin" || profile.rol === "supervisor" || profile.rol === "superusuario";
   if (!esDueño && !esAdmin) return { success: false, error: "No podés actualizar este viaje." };
+
+  // "cerrar": marca el viaje como finalizado desde cualquier paso (sin iniciar, en viaje o en punto medio), sin tener que pasar por
+  // los pasos intermedios. Es para el viaje que ya llegó (o quedó colgado) y nadie lo cerró: lo puede hacer quien lo cargó o un
+  // Administrador/Supervisor/Superusuario, y cuando lo cierra otra persona queda en auditoría.
+  if (accion === "cerrar") {
+    if (evaluacion.estado_viaje === "finalizado") return { success: false, error: "Este viaje ya está finalizado." };
+    const { error: errorCerrar } = await supabase
+      .from("evaluaciones_riesgo_viaje")
+      .update({ estado_viaje: "finalizado", finalizado_at: new Date().toISOString() })
+      .eq("id", evaluacionId);
+    if (errorCerrar) return { success: false, error: errorCerrar.message };
+    if (!esDueño) {
+      await logAudit(supabase, profile, `Cerró el viaje ${evaluacion.numero_generacion} (${evaluacion.origen} → ${evaluacion.destino}, ${evaluacion.conductor_nombre}) que estaba "${evaluacion.estado_viaje}"`);
+    }
+    revalidatePath("/riesgo-viaje/historial");
+    revalidatePath("/panel/riesgo-viaje");
+    revalidatePath("/panel");
+    return { success: true };
+  }
 
   const tienePuntoMedio = Boolean(evaluacion.punto_medio);
   const siguiente: Partial<Record<EstadoViaje, { estado: EstadoViaje; campoFecha: "iniciado_at" | "punto_medio_at" | "finalizado_at" }>> = {
@@ -99,6 +119,7 @@ export async function actualizarEstadoViajeAction(
 
   revalidatePath("/riesgo-viaje/historial");
   revalidatePath("/panel/riesgo-viaje");
+  revalidatePath("/panel");
 
   let avisoWhatsapp: ActualizarEstadoViajeResult["avisoWhatsapp"];
   if (accion === "iniciar") {

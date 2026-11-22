@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { obtenerUrlPdfRiesgoViajeAction, actualizarEstadoViajeAction } from "@/app/(app)/riesgo-viaje/actions";
+import { CerrarViajeButton } from "./cerrar-viaje-button";
 import { linkWhatsappGrupo, linkWhatsappIndividual } from "@/lib/guardia/whatsapp";
 import { Icon } from "@/components/icon";
 import { RiesgoBadge, EstadoViajeBadge } from "./badges";
@@ -155,6 +156,14 @@ export function HistorialRiesgoViaje({ evaluaciones: inicial, esAdmin }: { evalu
                       >
                         {busyId === e.id ? "..." : siguiente!.label}
                       </button>
+                    )}
+                    {/* Para cerrar un viaje que ya llegó sin pasar por cada paso (sin iniciar / en viaje con punto medio). */}
+                    {puedeAvanzar && siguiente!.accion !== "finalizar" && e.estadoViaje !== "finalizado" && (
+                      <CerrarViajeButton
+                        evaluacionId={e.id}
+                        label="Ya llegó (cerrar)"
+                        onCerrado={() => setEvaluaciones((prev) => prev.map((x) => (x.id === e.id ? { ...x, estadoViaje: "finalizado" } : x)))}
+                      />
                     )}
                   </div>
                 </div>

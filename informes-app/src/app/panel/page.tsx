@@ -8,6 +8,7 @@ import { JerarquiaNodos } from "@/components/panel/jerarquia-nodos";
 import { JerarquiaSitioPicker } from "@/components/panel/jerarquia-sitio-picker";
 import { SitioDetalleCard } from "@/components/panel/sitio-detalle-card";
 import { EstadoViajeBadge } from "@/components/riesgo-viaje/badges";
+import { CerrarViajeButton } from "@/components/riesgo-viaje/cerrar-viaje-button";
 import { getNovedadesGuardiaHoy } from "@/lib/panel/novedades-guardia";
 import { cargarResumenTareasPanel } from "@/lib/tareas/resumen-panel";
 import { diasDesde, DIAS_TAREA_VIEJA } from "@/lib/tareas/puro";
@@ -101,6 +102,8 @@ export default async function PanelPage({ searchParams }: { searchParams: Promis
     .map((v) => ({ ...v, demora: calcularDemora({ estado: v.estado, llegadaEstimadaAt: v.llegadaEstimadaAt, iniciadoAt: v.iniciadoAt, fechaHora: v.fechaHora }, ahora) }))
     .sort((a, b) => Number(b.demora.demorado) - Number(a.demora.demorado) || b.demora.horasDeDemora - a.demora.horasDeDemora);
   const viajesDemorados = viajesActivos.filter((v) => v.demora.demorado).length;
+  // Cerrar el seguimiento de un viaje: quien lo cargó o Admin/Supervisor/Superusuario — acá solo se ofrece a estos últimos (la acción valida igual).
+  const puedeCerrarViajes = profile.rol === "admin" || profile.rol === "supervisor" || profile.rol === "superusuario";
 
   const filtros: FiltrosJerarquia = { region: sp.region, provincia: sp.provincia, localidad: sp.localidad, sitio: sp.sitio };
   const filtrados = filtrarSitios(sitios, filtros);
@@ -240,6 +243,7 @@ export default async function PanelPage({ searchParams }: { searchParams: Promis
                       </span>
                     )}
                     <EstadoViajeBadge estado={v.estado} />
+                    {puedeCerrarViajes && <CerrarViajeButton evaluacionId={v.id} />}
                   </div>
                 </div>
               ))}
